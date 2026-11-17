@@ -1,7 +1,9 @@
 import type { AdminTrendPoint } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
 
 interface TrendChartProps {
   data: AdminTrendPoint[];
+  mode?: AdminDataMode;
 }
 
 const WIDTH = 760;
@@ -36,7 +38,7 @@ function areaPath(points: Array<{ x: number; y: number }>): string {
   return `${linePath(points)} L ${points.at(-1)?.x ?? 0} ${baseline} L ${points[0]?.x ?? 0} ${baseline} Z`;
 }
 
-export function TrendChart({ data }: TrendChartProps) {
+export function TrendChart({ data, mode = "fixture" }: TrendChartProps) {
   const users = normalizePoints(data.map((point) => point.users));
   const workspaces = normalizePoints(data.map((point) => point.workspaces));
   const labelIndexes = new Set([
@@ -57,7 +59,9 @@ export function TrendChart({ data }: TrendChartProps) {
           <span aria-hidden="true" className="size-1.5 rounded-pill bg-accent-orange" />
           工作区
         </span>
-        <span className="ml-auto font-mono text-[9px] text-stone">12 DAYS / FIXTURE</span>
+        <span className="ml-auto font-mono text-[9px] uppercase text-stone">
+          {data.length} {data.length === 1 ? "SNAPSHOT" : "DAYS"} / {mode}
+        </span>
       </div>
       <div className="overflow-hidden rounded-control border border-hairline bg-black/30">
         <svg

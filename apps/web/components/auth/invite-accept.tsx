@@ -4,10 +4,14 @@ import { Badge, Button, Separator } from "@roamlog/ui";
 import { Check, ShieldCheck, Users, X } from "lucide-react";
 import { useState } from "react";
 
+import { authErrorMessage } from "@/lib/api/auth";
+import { useDataAdapter, useDataMode } from "@/lib/data-provider";
+
 interface InviteAcceptProps {
   workspaceName: string;
   inviterName: string;
   role: "editor" | "viewer" | "admin";
+  token?: string;
 }
 
 const roleDescriptions = {
@@ -16,8 +20,34 @@ const roleDescriptions = {
   viewer: "可以阅读全部共享内容，并参与评论。",
 } as const;
 
-export function InviteAccept({ workspaceName, inviterName, role }: InviteAcceptProps) {
+export function InviteAccept({ workspaceName, inviterName, role, token }: InviteAcceptProps) {
+  const mode = useDataMode();
+  const adapter = useDataAdapter();
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleAccept() {
+    if (mode === "mock") {
+      setNotice("接受邀请的接口占位已记录。真实邀请校验将在身份后端接入后启用。");
+      return;
+    }
+    if (!token) {
+      setError("邀请链接缺少 token。请向 Workspace 管理员索取新的邀请。");
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    try {
+      await adapter.acceptInvitation(token);
+      setNotice("邀请已接受，正在进入 Workspace…");
+      window.setTimeout(() => window.location.assign("/"), 800);
+    } catch (cause) {
+      setError(authErrorMessage(cause));
+      setPending(false);
+    }
+  }
 
   return (
     <div>
@@ -64,25 +94,39 @@ export function InviteAccept({ workspaceName, inviterName, role }: InviteAcceptP
         </p>
       ) : null}
 
+      {error ? (
+        <p
+          role="alert"
+          className="mt-4 rounded-control border border-accent-red/25 bg-accent-red/5 px-3 py-2.5 text-xs leading-5 text-accent-red"
+        >
+          {error}
+        </p>
+      ) : null}
+
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
         <Button
           type="button"
           variant="primary"
           size="lg"
           className="flex-1"
-          onClick={() =>
-            setNotice("接受邀请的接口占位已记录。真实邀请校验将在身份后端接入后启用。")
-          }
+          onClick={() => void handleAccept()}
+          disabled={pending}
         >
           <Check aria-hidden="true" />
-          接受邀请
+          {pending ? "正在加入…" : "接受邀请"}
         </Button>
         <Button
           type="button"
           variant="outline"
           size="lg"
           className="flex-1"
-          onClick={() => setNotice("已记录谢绝选择；当前不会向服务端发送状态。")}
+          onClick={() =>
+            setNotice(
+              mode === "mock"
+                ? "已记录谢绝选择；当前不会向服务端发送状态。"
+                : "已记录谢绝选择；关闭页面即可，服务端不会加入该 Workspace。",
+            )
+          }
         >
           <X aria-hidden="true" />
           谢绝

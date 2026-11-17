@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, Instrument_Serif, Noto_Sans_SC, Noto_Serif_SC } from
 
 import "./globals.css";
 
+import { AdminProviders } from "../components/providers";
+
 const geist = Geist({
   subsets: ["latin"],
   variable: "--font-geist",
@@ -56,7 +58,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body
         className={`${geist.variable} ${geistMono.variable} ${instrument.variable} ${notoSerif.variable} ${notoSans.variable} min-h-dvh bg-canvas text-body antialiased`}
       >
-        {children}
+        <AdminProviders>{children}</AdminProviders>
       </body>
     </html>
   );

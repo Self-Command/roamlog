@@ -10,6 +10,7 @@ import { AdminNotificationsSheet } from "./admin-notifications-sheet";
 import { AdminSidebar } from "./admin-sidebar";
 import { AdminTopbar } from "./admin-topbar";
 import { MockSessionProvider } from "./mock-session-provider";
+import { AdminModeBanner } from "../admin-ui/admin-mode-banner";
 
 interface AdminShellProps {
   activePath: string;
@@ -63,6 +64,7 @@ function AdminShellFrame({ activePath, children }: Omit<AdminShellProps, "sessio
           id="admin-main-content"
           className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
         >
+          <AdminModeBanner />
           {children}
         </main>
       </div>

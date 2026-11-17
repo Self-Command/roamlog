@@ -5,14 +5,20 @@ import { CalendarDays, Save, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
+import { isForbidden } from "@/lib/api";
+import { useDataMode } from "@/lib/data-provider";
+import { useCreateTripMutation } from "@/lib/query";
 import { validateRequired } from "@/lib/validation";
 
 interface NewTripShellProps {
   workspaceSlug: string;
+  workspaceId: string;
   workspaceName: string;
 }
 
-export function NewTripShell({ workspaceSlug, workspaceName }: NewTripShellProps) {
+export function NewTripShell({ workspaceSlug, workspaceId, workspaceName }: NewTripShellProps) {
+  const mode = useDataMode();
+  const createTrip = useCreateTripMutation();
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -20,8 +26,9 @@ export function NewTripShell({ workspaceSlug, workspaceName }: NewTripShellProps
   const [titleError, setTitleError] = useState<string>();
   const [dateError, setDateError] = useState<string>();
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextTitleError = validateRequired(title, "请输入旅行标题");
     const nextDateError =
@@ -32,11 +39,41 @@ export function NewTripShell({ workspaceSlug, workspaceName }: NewTripShellProps
           : undefined;
     setTitleError(nextTitleError);
     setDateError(nextDateError);
-    setNotice(
-      nextTitleError || nextDateError
-        ? null
-        : "表单骨架已通过本地校验。真实旅行创建、停靠点和封面写入将在 Wave 1 接入。",
-    );
+    setError(null);
+    if (nextTitleError || nextDateError) {
+      setNotice(null);
+      return;
+    }
+
+    if (mode === "mock") {
+      setNotice("表单骨架已通过本地校验。真实旅行创建、停靠点和封面写入将在 Wave 1 接入。");
+      return;
+    }
+
+    try {
+      const trip = await createTrip.mutateAsync({
+        workspaceId,
+        input: {
+          title: title.trim(),
+          summary: summary.trim(),
+          status: "planning",
+          startDate,
+          endDate,
+          origin: "未填写",
+          destinations: ["未填写"],
+          countryCodes: [],
+          tags: [],
+          guestNames: [],
+          budgetAmountMinor: null,
+          budgetCurrency: null,
+          visibility: "workspace",
+          favorite: false,
+        },
+      });
+      window.location.assign(`/w/${workspaceSlug}/trips/${trip.id}`);
+    } catch (cause) {
+      setError(isForbidden(cause) ? "你的角色不能创建旅行。" : "旅行创建失败，请检查表单。");
+    }
   }
 
   return (
@@ -44,7 +81,11 @@ export function NewTripShell({ workspaceSlug, workspaceName }: NewTripShellProps
       <PageHeader
         eyebrow={`${workspaceName.toUpperCase()} / NEW TRIP`}
         title="新建旅行"
-        description="先填写最小信息，右侧预览会随输入更新。当前不会写入数据库。"
+        description={
+          mode === "api"
+            ? "填写最小信息后直接创建旅行；停靠点和封面可在详情页继续补充。"
+            : "先填写最小信息，右侧预览会随输入更新。当前 mock 预览不会写入数据库。"
+        }
         actions={
           <Button asChild variant="outline">
             <Link href={`/w/${workspaceSlug}/trips`}>返回旅行库</Link>
@@ -123,6 +164,14 @@ export function NewTripShell({ workspaceSlug, workspaceName }: NewTripShellProps
               className="mt-5 rounded-control border border-accent-green/20 bg-accent-green/5 px-3 py-2.5 text-xs leading-5 text-accent-green"
             >
               {notice}
+            </p>
+          ) : null}
+          {error ? (
+            <p
+              role="alert"
+              className="mt-4 rounded-control border border-accent-red/25 bg-accent-red/5 px-3 py-2 text-xs text-accent-red"
+            >
+              {error}
             </p>
           ) : null}
 

@@ -5,16 +5,28 @@ import { useState } from "react";
 
 import { Badge, Button, FormField, Input, Separator } from "@roamlog/ui";
 
+import {
+  authErrorMessage,
+  generatedAdminAuthTransport,
+  type AdminAuthTransport,
+} from "../../lib/admin-auth";
+import { getAdminDataMode, type AdminDataMode } from "../../lib/admin-data-mode";
+
 interface LoginPanelProps {
   onAuthenticated?: () => void;
+  mode?: AdminDataMode;
+  transport?: AdminAuthTransport;
 }
 
-export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
+export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps) {
+  const activeMode = mode ?? getAdminDataMode();
+  const auth = transport ?? generatedAdminAuthTransport;
   const [step, setStep] = useState<"credentials" | "two-factor">("credentials");
   const [email, setEmail] = useState("lin.zhixia@roamlog.local");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function completeAuthentication() {
     if (onAuthenticated) {
@@ -41,7 +53,9 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
                 <p className="type-eyebrow mt-1 text-[8px] text-ash">platform control</p>
               </div>
             </div>
-            <Badge tone="neutral">LOGIN PLACEHOLDER</Badge>
+            <Badge tone={activeMode === "api" ? "green" : "neutral"}>
+              {activeMode === "api" ? "LIVE API AUTH" : "LOGIN PLACEHOLDER"}
+            </Badge>
           </header>
 
           <div className="flex flex-1 items-center py-12">
@@ -53,7 +67,9 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
               <p className="mt-4 max-w-sm text-[13px] leading-6 text-muted">
                 {step === "credentials"
                   ? "访问用户、Workspace、审计和运营工具。所有后台操作均按平台角色与审计规则约束。"
-                  : "输入 6 位 TOTP 验证码完成验证。当前为本地交互占位，不校验真实凭据。"}
+                  : activeMode === "api"
+                    ? "输入验证器应用中的 6 位 TOTP 验证码完成 Better Auth challenge。"
+                    : "输入 6 位 TOTP 验证码完成验证。当前为本地交互占位，不校验真实凭据。"}
               </p>
 
               <Separator className="my-7" />
@@ -61,14 +77,41 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
               {step === "credentials" ? (
                 <form
                   className="space-y-4"
-                  onSubmit={(event) => {
+                  onSubmit={async (event) => {
                     event.preventDefault();
                     if (!email.trim() || !password.trim()) {
                       setMessage("请输入管理员邮箱和密码。");
                       return;
                     }
                     setMessage("");
-                    setStep("two-factor");
+                    if (activeMode === "fixture") {
+                      setStep("two-factor");
+                      return;
+                    }
+                    setIsSubmitting(true);
+                    try {
+                      const response = await auth.signIn({
+                        email: email.trim(),
+                        password,
+                      });
+                      if (response.status >= 400) {
+                        setMessage(authErrorMessage(response));
+                        return;
+                      }
+                      if (response.data.twoFactorRedirect === true) {
+                        setStep("two-factor");
+                      } else {
+                        completeAuthentication();
+                      }
+                    } catch (error) {
+                      setMessage(
+                        error instanceof Error
+                          ? error.message
+                          : "无法连接认证服务，请检查 API 状态。",
+                      );
+                    } finally {
+                      setIsSubmitting(false);
+                    }
                   }}
                 >
                   <FormField id="admin-email" label="管理员邮箱" required>
@@ -84,14 +127,18 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
                     id="admin-password"
                     label="密码"
                     required
-                    hint="占位表单不会创建 session，也不会发送网络请求。"
+                    hint={
+                      activeMode === "api"
+                        ? "通过同源 /v1/auth 代理登录，session cookie 为 httpOnly。"
+                        : "占位表单不会创建 session，也不会发送网络请求。"
+                    }
                   >
                     <Input
                       autoComplete="current-password"
                       type="password"
                       value={password}
                       onChange={(event) => setPassword(event.currentTarget.value)}
-                      placeholder="输入任意本地占位密码"
+                      placeholder={activeMode === "api" ? "输入账户密码" : "输入任意本地占位密码"}
                     />
                   </FormField>
 
@@ -101,22 +148,55 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
                     </p>
                   ) : null}
 
-                  <Button type="submit" variant="primary" className="w-full">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    className="w-full"
+                    disabled={isSubmitting}
+                  >
                     <KeyRound aria-hidden="true" />
-                    继续验证
+                    {isSubmitting ? "正在验证…" : "继续验证"}
                   </Button>
+                  {activeMode === "api" ? (
+                    <a
+                      href="/admin/2fa/enroll"
+                      className="block rounded-control text-center text-[11px] text-muted underline-offset-4 outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-ink"
+                    >
+                      已登录但尚未绑定验证器？完成 2FA 注册
+                    </a>
+                  ) : null}
                 </form>
               ) : (
                 <form
                   className="space-y-4"
-                  onSubmit={(event) => {
+                  onSubmit={async (event) => {
                     event.preventDefault();
                     if (!/^\d{6}$/.test(code)) {
                       setMessage("请输入 6 位数字验证码。");
                       return;
                     }
                     setMessage("");
-                    completeAuthentication();
+                    if (activeMode === "fixture") {
+                      completeAuthentication();
+                      return;
+                    }
+                    setIsSubmitting(true);
+                    try {
+                      const response = await auth.verifyTotp(code);
+                      if (response.status >= 400) {
+                        setMessage(authErrorMessage(response));
+                        return;
+                      }
+                      completeAuthentication();
+                    } catch (error) {
+                      setMessage(
+                        error instanceof Error
+                          ? error.message
+                          : "无法连接认证服务，请检查 API 状态。",
+                      );
+                    } finally {
+                      setIsSubmitting(false);
+                    }
                   }}
                 >
                   <div className="rounded-control border border-hairline-strong bg-surface-1 p-3">
@@ -127,7 +207,11 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
                     id="admin-totp"
                     label="6 位验证码"
                     required
-                    hint="本地占位：输入任意 6 位数字即可进入后台。"
+                    hint={
+                      activeMode === "api"
+                        ? "输入验证器中的动态验证码。"
+                        : "本地占位：输入任意 6 位数字即可进入后台。"
+                    }
                   >
                     <Input
                       autoComplete="one-time-code"
@@ -153,10 +237,10 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
                     type="submit"
                     variant="primary"
                     className="w-full"
-                    disabled={code.length !== 6}
+                    disabled={code.length !== 6 || isSubmitting}
                   >
                     <ShieldCheck aria-hidden="true" />
-                    进入控制台
+                    {isSubmitting ? "正在验证…" : "进入控制台"}
                   </Button>
                   <Button
                     type="button"
@@ -178,7 +262,9 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-4">
             <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-              Better Auth placeholder / no real session
+              {activeMode === "api"
+                ? "Better Auth / same-origin /v1 proxy"
+                : "Better Auth placeholder / no real session"}
             </p>
             <p className="font-mono text-[9px] text-stone">ADMIN :3001</p>
           </footer>
@@ -218,15 +304,17 @@ export function LoginPanel({ onAuthenticated }: LoginPanelProps) {
             <div className="mt-3 space-y-2 font-mono text-[9px] text-muted">
               <div className="flex justify-between gap-3">
                 <span>API</span>
-                <span className="text-accent-yellow">NOT CONNECTED</span>
+                <span className={activeMode === "api" ? "text-accent-green" : "text-accent-yellow"}>
+                  {activeMode === "api" ? "SAME-ORIGIN PROXY" : "NOT CONNECTED"}
+                </span>
               </div>
               <div className="flex justify-between gap-3">
-                <span>MSW fixtures</span>
-                <span className="text-ink">ADMIN LOCAL</span>
+                <span>Data mode</span>
+                <span className="text-ink">{activeMode.toUpperCase()}</span>
               </div>
               <div className="flex justify-between gap-3">
                 <span>Audit writes</span>
-                <span className="text-ink">MOCK ONLY</span>
+                <span className="text-ink">{activeMode === "api" ? "BACKEND" : "MOCK ONLY"}</span>
               </div>
             </div>
           </div>

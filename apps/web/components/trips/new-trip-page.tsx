@@ -36,5 +36,11 @@ export function NewTripPage({ workspaceSlug }: { workspaceSlug: string }) {
     );
   }
 
-  return <NewTripShell workspaceSlug={workspaceSlug} workspaceName={workspace.name} />;
+  return (
+    <NewTripShell
+      workspaceSlug={workspaceSlug}
+      workspaceId={workspace.id}
+      workspaceName={workspace.name}
+    />
+  );
 }

@@ -25,6 +25,7 @@ export default function ForgotPasswordPage() {
       <EmailLinkForm
         submitLabel="发送重置链接"
         successMessage="如果该邮箱存在，重置链接会发送到收件箱。当前为占位状态，不会发送邮件。"
+        intent="reset"
       />
     </AuthPageFrame>
   );

@@ -16,7 +16,7 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebarProps) {
-  const { session, setRole } = useAdminSession();
+  const { session, setRole, isRoleLocked } = useAdminSession();
 
   return (
     <aside
@@ -127,11 +127,14 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
             </span>
           </div>
           <label className="mt-3 block">
-            <span className="type-eyebrow">模拟平台角色</span>
+            <span className="type-eyebrow">
+              {isRoleLocked ? "平台角色（后端）" : "模拟平台角色"}
+            </span>
             <Select
               aria-label="模拟平台角色"
               className="mt-1.5 h-8 text-[11px]"
               value={session.role}
+              disabled={isRoleLocked}
               onChange={(event) => {
                 const nextRole = event.currentTarget.value;
                 if (
@@ -151,6 +154,11 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
               ))}
             </Select>
           </label>
+          <p className="mt-2 text-[9px] leading-4 text-stone">
+            {isRoleLocked
+              ? "API 模式下平台角色由 /v1/me 与后端 guard 决定。"
+              : "角色切换仅用于本地 fixture 预览，不修改真实权限。"}
+          </p>
           <a
             href="/login"
             onClick={onNavigate}

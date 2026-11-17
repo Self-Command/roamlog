@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { DATA_MODE } from "@/lib/data-mode";
+import { TripDetailLive } from "@/components/trips/trip-detail-live";
 import { TripDetail } from "@/components/trips/trip-detail";
 
 export const metadata: Metadata = {
@@ -12,5 +14,9 @@ export default async function TripDetailPage({
   params: Promise<{ workspaceSlug: string; tripId: string }>;
 }) {
   const { workspaceSlug, tripId } = await params;
-  return <TripDetail workspaceSlug={workspaceSlug} tripId={tripId} />;
+  return DATA_MODE === "api" ? (
+    <TripDetailLive workspaceSlug={workspaceSlug} tripId={tripId} />
+  ) : (
+    <TripDetail workspaceSlug={workspaceSlug} tripId={tripId} />
+  );
 }

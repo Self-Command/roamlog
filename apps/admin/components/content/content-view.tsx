@@ -20,6 +20,9 @@ import {
 } from "@roamlog/ui";
 
 import type { AdminConsoleRole } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
+import { AdminMutationError } from "../../lib/admin-api-error";
+import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
 import {
@@ -36,12 +39,13 @@ import { BulkSelectionBar } from "../admin-ui/bulk-selection-bar";
 import { DestructiveActionDialog } from "../admin-ui/destructive-action-dialog";
 
 type ModerationAction =
-  | { kind: "delete"; items: AdminContentItem[] }
-  | { kind: "restore"; items: AdminContentItem[] };
+  { kind: "delete"; items: AdminContentItem[] } | { kind: "restore"; items: AdminContentItem[] };
 
 interface ContentViewProps {
   role: AdminConsoleRole;
   items?: readonly AdminContentItem[];
+  mode?: AdminDataMode;
+  mutations?: AdminMutationPort;
 }
 
 const visibilityLabels: Record<TripVisibility, string> = {
@@ -56,7 +60,12 @@ const statusTones: Record<ContentModerationStatus, "green" | "yellow" | "red"> =
   deleted: "red",
 };
 
-export function ContentView({ role, items = MOCK_ADMIN_CONTENT }: ContentViewProps) {
+export function ContentView({
+  role,
+  items = MOCK_ADMIN_CONTENT,
+  mode = "fixture",
+  mutations,
+}: ContentViewProps) {
   const [records, setRecords] = useState<readonly AdminContentItem[]>(items);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"all" | ContentKind>("all");
@@ -117,16 +126,37 @@ export function ContentView({ role, items = MOCK_ADMIN_CONTENT }: ContentViewPro
     return action.items.length === 1 && first ? first.title : `${action.items.length} 条内容`;
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!pendingAction) {
       return;
     }
 
-    const ids = new Set(pendingAction.items.map((item) => item.id));
+    const actionRecord = pendingAction;
+    if (mode === "api" && mutations) {
+      try {
+        await Promise.all(
+          actionRecord.items.map((item) =>
+            actionRecord.kind === "delete"
+              ? mutations.deleteContent(item.kind, item.id)
+              : mutations.restoreContent(item.kind, item.id),
+          ),
+        );
+      } catch (error) {
+        setStatusMessage(
+          error instanceof AdminMutationError
+            ? `操作失败：${error.failure.code} · ${error.failure.detail}`
+            : "操作失败，请检查 API 与权限后重试。",
+        );
+        setPendingAction(null);
+        return;
+      }
+    }
+
+    const ids = new Set(actionRecord.items.map((item) => item.id));
     const nextStatus: ContentModerationStatus =
-      pendingAction.kind === "delete" ? "deleted" : "published";
+      actionRecord.kind === "delete" ? "deleted" : "published";
     const action =
-      pendingAction.kind === "delete" ? "admin.content.delete" : "admin.content.restore";
+      actionRecord.kind === "delete" ? "admin.content.delete" : "admin.content.restore";
 
     setRecords((current) =>
       current.map((item) =>
@@ -136,23 +166,25 @@ export function ContentView({ role, items = MOCK_ADMIN_CONTENT }: ContentViewPro
       ),
     );
     setSelectedIds(new Set());
-    const firstItem = pendingAction.items[0];
-    recordMockAuditEvent({
-      action,
-      targetType: "content",
-      targetId: pendingAction.items.length === 1 && firstItem ? firstItem.id : "batch",
-      targetName: actionTarget(pendingAction),
-      metadata: {
-        mock: true,
-        count: pendingAction.items.length,
-        previousRole: role,
-        nextStatus,
-      },
-    });
+    const firstItem = actionRecord.items[0];
+    if (mode === "fixture") {
+      recordMockAuditEvent({
+        action,
+        targetType: "content",
+        targetId: actionRecord.items.length === 1 && firstItem ? firstItem.id : "batch",
+        targetName: actionTarget(actionRecord),
+        metadata: {
+          mock: true,
+          count: actionRecord.items.length,
+          previousRole: role,
+          nextStatus,
+        },
+      });
+    }
     setStatusMessage(
-      `${action} · ${pendingAction.kind === "delete" ? "已软删除" : "已恢复"}：${actionTarget(
-        pendingAction,
-      )}`,
+      `${action} · ${actionRecord.kind === "delete" ? "已软删除" : "已恢复"}：${actionTarget(
+        actionRecord,
+      )}${mode === "api" ? "（后端审计已写入）" : ""}`,
     );
     setPendingAction(null);
   }
@@ -161,13 +193,12 @@ export function ContentView({ role, items = MOCK_ADMIN_CONTENT }: ContentViewPro
     pendingAction?.kind === "delete"
       ? {
           title: "删除内容",
-          description:
-            "内容进入软删除状态，仍可在后台恢复。删除后公开分享链接将立即失效；当前演示只写入本地 fixture 与模拟审计。",
+          description: "内容进入软删除状态，仍可在后台恢复。删除后公开分享链接将立即失效。",
           confirmLabel: "确认删除",
         }
       : {
           title: "恢复内容",
-          description: "恢复后将重新对原可见范围开放。当前演示只写入本地 fixture 与模拟审计。",
+          description: "恢复后将重新对原可见范围开放，操作由后端执行并写入审计。",
           confirmLabel: "确认恢复",
         };
 
@@ -298,7 +329,7 @@ export function ContentView({ role, items = MOCK_ADMIN_CONTENT }: ContentViewPro
           <div>
             <h2 className="text-[13px] font-medium text-ink">内容列表</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              trips / entries / comments · fixture
+              trips / entries / comments · {mode}
             </p>
           </div>
           <Badge tone="neutral">{filteredItems.length} rows</Badge>
@@ -390,7 +421,9 @@ export function ContentView({ role, items = MOCK_ADMIN_CONTENT }: ContentViewPro
                       <span className="block max-w-[170px] truncate text-[11px] text-body">
                         {item.workspaceName}
                       </span>
-                      <span className="block font-mono text-[9px] text-muted">{item.authorName}</span>
+                      <span className="block font-mono text-[9px] text-muted">
+                        {item.authorName}
+                      </span>
                     </td>
                     <td className="px-3 py-1.5">
                       <Badge tone={item.visibility === "public_link" ? "orange" : "slate"}>
@@ -501,7 +534,9 @@ export function ContentView({ role, items = MOCK_ADMIN_CONTENT }: ContentViewPro
                 </div>
               ) : null}
               <p className="mt-6 text-[11px] leading-5 text-muted">
-                内容详情与分享链接均来自 fixture；当前不读取真实数据库，也不会修改生产内容。
+                {mode === "api"
+                  ? "内容详情来自 Admin API；删除与恢复 mutation 由后端权限与审计规则约束。"
+                  : "内容详情与分享链接均来自 fixture；当前不读取真实数据库，也不会修改生产内容。"}
               </p>
             </>
           ) : null}

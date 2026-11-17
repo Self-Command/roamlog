@@ -1,14 +1,27 @@
 "use client";
 
 import { AdminConsoleRoleAware } from "../../../components/admin-shell/admin-console-role-aware";
+import { AdminDataBoundary } from "../../../components/admin-ui/admin-data-boundary";
 import { MediaView } from "../../../components/media/media-view";
-import { getAdminDataSource } from "../../../lib/admin-data-source";
+import { useAdminMediaResource, useAdminMutationPort } from "../../../lib/admin-data-source";
 
 export default function AdminMediaPage() {
-  const source = getAdminDataSource();
+  const resource = useAdminMediaResource();
+  const mutations = useAdminMutationPort();
   return (
     <AdminConsoleRoleAware>
-      {(role) => <MediaView role={role} media={source.listMedia()} />}
+      {(role) => (
+        <AdminDataBoundary resource={resource}>
+          {(media) => (
+            <MediaView
+              role={role}
+              media={media}
+              mode={resource.mode}
+              mutations={resource.mode === "api" ? mutations : undefined}
+            />
+          )}
+        </AdminDataBoundary>
+      )}
     </AdminConsoleRoleAware>
   );
 }

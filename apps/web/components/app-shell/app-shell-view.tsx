@@ -237,6 +237,7 @@ export function AppShellView({
         open={commandOpen}
         onOpenChange={setCommandOpen}
         workspaceSlug={currentWorkspace.slug}
+        workspaceId={currentWorkspace.id}
         nextTrip={nextTrip}
       />
     </div>

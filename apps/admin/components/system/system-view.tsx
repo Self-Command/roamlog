@@ -5,18 +5,16 @@ import { Activity, Clock3, GitCommitHorizontal, ServerCog } from "lucide-react";
 import { Badge } from "@roamlog/ui";
 
 import type { AdminConsoleRole } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
 import { formatDateTime } from "../../lib/format";
-import {
-  MOCK_ADMIN_SYSTEM,
-  formatUptime,
-  type AdminSystemSnapshot,
-} from "../../lib/ops-fixtures";
+import { MOCK_ADMIN_SYSTEM, formatUptime, type AdminSystemSnapshot } from "../../lib/ops-fixtures";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "../dashboard/admin-metric-card";
 
 interface SystemViewProps {
   role: AdminConsoleRole;
   snapshot?: AdminSystemSnapshot;
+  mode?: AdminDataMode;
 }
 
 const checkTones = {
@@ -31,7 +29,11 @@ const checkLabels = {
   down: "Down",
 } as const;
 
-export function SystemView({ role, snapshot = MOCK_ADMIN_SYSTEM }: SystemViewProps) {
+export function SystemView({
+  role,
+  snapshot = MOCK_ADMIN_SYSTEM,
+  mode = "fixture",
+}: SystemViewProps) {
   const readOnly = role === "analyst";
 
   return (
@@ -39,14 +41,16 @@ export function SystemView({ role, snapshot = MOCK_ADMIN_SYSTEM }: SystemViewPro
       <AdminPageHeader
         eyebrow="PLATFORM / SYSTEM"
         title="系统健康"
-        description="检查 API、Worker、数据库、Redis、对象存储与迁移版本。当前读数为本地 fixture 快照。"
+        description={
+          mode === "api"
+            ? "检查 API、数据库、Redis 与对象存储的实时健康结果。"
+            : "检查 API、Worker、数据库、Redis、对象存储与迁移版本。当前读数为本地 fixture 快照。"
+        }
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
             <p className="type-eyebrow">环境</p>
-            <p className="mt-1 font-mono text-[10px] uppercase text-body">
-              {snapshot.environment}
-            </p>
+            <p className="mt-1 font-mono text-[10px] uppercase text-body">{snapshot.environment}</p>
           </div>
         }
       />
@@ -76,7 +80,7 @@ export function SystemView({ role, snapshot = MOCK_ADMIN_SYSTEM }: SystemViewPro
         <AdminMetricCard
           label="最近构建"
           value={formatDateTime(snapshot.buildTime)}
-          detail="fixture build metadata"
+          detail={`${mode} build metadata`}
           tone="orange"
           icon={Activity}
         />
@@ -88,7 +92,7 @@ export function SystemView({ role, snapshot = MOCK_ADMIN_SYSTEM }: SystemViewPro
             <div>
               <h2 className="text-[13px] font-medium text-ink">依赖健康检查</h2>
               <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                readiness / fixture probes
+                readiness / {mode} probes
               </p>
             </div>
             <Badge tone="green">3 / 4 up</Badge>
@@ -163,7 +167,7 @@ export function SystemView({ role, snapshot = MOCK_ADMIN_SYSTEM }: SystemViewPro
           <div>
             <h2 className="text-[13px] font-medium text-ink">数据库迁移</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              prisma migrate status · fixture
+              prisma migrate status · {mode}
             </p>
           </div>
           <Badge tone="green">Up to date</Badge>
@@ -190,9 +194,7 @@ export function SystemView({ role, snapshot = MOCK_ADMIN_SYSTEM }: SystemViewPro
             <tbody className="divide-y divide-hairline">
               {snapshot.migrations.map((migration) => (
                 <tr key={migration.version} className="h-11">
-                  <td className="px-3 py-2 font-mono text-[10px] text-body">
-                    {migration.version}
-                  </td>
+                  <td className="px-3 py-2 font-mono text-[10px] text-body">{migration.version}</td>
                   <td className="px-3 py-2 text-[11px] text-muted">{migration.name}</td>
                   <td className="px-3 py-2 font-mono text-[10px] text-muted">
                     {formatDateTime(migration.appliedAt)}

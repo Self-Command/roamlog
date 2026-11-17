@@ -4,9 +4,21 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Gauge, Pause, Play, RotateCcw, ShieldAlert } from "lucide-react";
 
 import { canPlatform } from "@roamlog/contracts";
-import { Badge, Button, EmptyState, Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@roamlog/ui";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@roamlog/ui";
 
 import type { AdminConsoleRole } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
+import { AdminMutationError } from "../../lib/admin-api-error";
+import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
 import {
@@ -29,12 +41,16 @@ interface QueuesViewProps {
   role: AdminConsoleRole;
   queues?: readonly AdminQueueSummary[];
   failedJobs?: readonly AdminFailedJob[];
+  mode?: AdminDataMode;
+  mutations?: AdminMutationPort;
 }
 
 export function QueuesView({
   role,
   queues = MOCK_ADMIN_QUEUES,
   failedJobs = MOCK_ADMIN_FAILED_JOBS,
+  mode = "fixture",
+  mutations,
 }: QueuesViewProps) {
   const [queueRecords, setQueueRecords] = useState<readonly AdminQueueSummary[]>(queues);
   const [jobRecords, setJobRecords] = useState<readonly AdminFailedJob[]>(failedJobs);
@@ -43,7 +59,7 @@ export function QueuesView({
   const [statusMessage, setStatusMessage] = useState("");
 
   const canRetry = canPlatform(role, "admin:jobs:retry");
-  const canManageQueue = canPlatform(role, "admin:jobs:manage");
+  const canManageQueue = mode === "fixture" && canPlatform(role, "admin:jobs:manage");
   const readOnly = role === "analyst";
   const totalFailed = queueRecords.reduce((total, queue) => total + queue.failed, 0);
   const totalWaiting = queueRecords.reduce((total, queue) => total + queue.waiting, 0);
@@ -86,31 +102,45 @@ export function QueuesView({
             }
           : {
               title: "清空队列",
-              description:
-                "该队列的失败任务将被永久移除，等待与活跃任务保持不变。此操作只修改本地 fixture 并记录 mock audit。",
+              description: "该队列的失败任务将被永久移除，等待与活跃任务保持不变。",
               confirmLabel: "确认清空",
               label: "输入队列名称确认",
             };
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!pendingAction) {
       return;
     }
     if (pendingAction.kind === "retry") {
       const job = pendingAction.job;
+      if (mode === "api" && mutations) {
+        try {
+          await mutations.retryJob(job.queue, job.id);
+        } catch (error) {
+          setStatusMessage(
+            error instanceof AdminMutationError
+              ? `重试失败：${error.failure.code} · ${error.failure.detail}`
+              : "重试失败，请检查 API 与权限后重试。",
+          );
+          setPendingAction(null);
+          return;
+        }
+      }
       setJobRecords((current) => current.filter((item) => item.id !== job.id));
       setQueueRecords((current) =>
         current.map((queue) =>
           queue.name === job.queue ? { ...queue, failed: Math.max(0, queue.failed - 1) } : queue,
         ),
       );
-      recordMockAuditEvent({
-        action: "admin.jobs.retry",
-        targetType: "job",
-        targetId: job.id,
-        targetName: job.name,
-        metadata: { mock: true, queue: job.queue, attempts: job.attempts },
-      });
+      if (mode === "fixture") {
+        recordMockAuditEvent({
+          action: "admin.jobs.retry",
+          targetType: "job",
+          targetId: job.id,
+          targetName: job.name,
+          metadata: { mock: true, queue: job.queue, attempts: job.attempts },
+        });
+      }
       setStatusMessage(`已重新入队：${job.id}`);
     } else if (pendingAction.kind === "clear") {
       const queue = pendingAction.queue;
@@ -150,7 +180,7 @@ export function QueuesView({
       <AdminPageHeader
         eyebrow="DELIVERY / BULLMQ"
         title="队列"
-        description="检查各队列等待、活跃与失败任务，查看失败原因；admin 可重试失败任务，暂停、恢复与清空队列由 super_admin 管理。"
+        description="检查各队列等待、活跃与失败任务，查看失败原因。Admin API 当前提供失败任务读取与重试；队列暂停/清空仍待后端契约补齐。"
         readOnly={readOnly}
         actions={
           <div className="flex items-center gap-2 rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -202,9 +232,11 @@ export function QueuesView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          {!canRetry
-            ? "Support / Analyst 可读取队列指标与失败原因；重试、暂停与清空操作保持可见但禁用。"
-            : "Admin 可重试失败任务；暂停、恢复与清空队列属于 super_admin 专属操作。"}
+          {mode === "api"
+            ? "API 模式：失败任务重试已接入真实 mutation；队列暂停、恢复与清空在 Admin API 契约补齐前保持禁用。"
+            : !canRetry
+              ? "Support / Analyst 可读取队列指标与失败原因；重试、暂停与清空操作保持可见但禁用。"
+              : "Admin 可重试失败任务；暂停、恢复与清空队列属于 super_admin 专属操作。"}
         </div>
       ) : null}
 
@@ -251,11 +283,7 @@ export function QueuesView({
                   size="sm"
                   aria-label={`清空队列 ${queue.name}`}
                   disabled={!canManageQueue || queue.failed === 0}
-                  title={
-                    canManageQueue
-                      ? "清空该队列的失败任务"
-                      : "仅 super_admin 可清空队列"
-                  }
+                  title={canManageQueue ? "清空该队列的失败任务" : "仅 super_admin 可清空队列"}
                   onClick={() => setPendingAction({ kind: "clear", queue })}
                 >
                   清空
@@ -293,7 +321,7 @@ export function QueuesView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">失败任务</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              failed / dead-letter review · fixture
+              failed / dead-letter review · {mode}
             </p>
           </div>
           <Badge tone={jobRecords.length > 0 ? "red" : "green"}>{jobRecords.length} jobs</Badge>
@@ -303,7 +331,7 @@ export function QueuesView({
           <EmptyState
             icon={AlertTriangle}
             title="没有失败任务"
-            description="当前 fixture 中所有失败任务均已处理。"
+            description={`当前 ${mode} 数据中没有待处理失败任务。`}
             className="m-4"
           />
         ) : (
@@ -406,7 +434,9 @@ export function QueuesView({
               <div className="flex flex-wrap gap-2">
                 <Badge tone="red">Failed</Badge>
                 <Badge tone="neutral">{detailJob.attempts} attempts</Badge>
-                <Badge tone="slate">{queueByJob.get(detailJob.queue)?.label ?? detailJob.queue}</Badge>
+                <Badge tone="slate">
+                  {queueByJob.get(detailJob.queue)?.label ?? detailJob.queue}
+                </Badge>
               </div>
               <div className="mt-6 space-y-4">
                 <div className="rounded-control border border-accent-red/25 bg-accent-red/5 p-3">

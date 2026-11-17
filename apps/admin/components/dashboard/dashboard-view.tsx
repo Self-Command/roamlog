@@ -4,6 +4,7 @@ import { Badge, Progress } from "@roamlog/ui";
 
 import type { AdminConsoleRole } from "../../lib/fixtures";
 import type { AdminDashboardData } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
 import { formatBytes, formatCount, formatDateTime } from "../../lib/format";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "./admin-metric-card";
@@ -12,9 +13,10 @@ import { TrendChart } from "./trend-chart";
 interface DashboardViewProps {
   role: AdminConsoleRole;
   data: AdminDashboardData;
+  mode?: AdminDataMode;
 }
 
-export function DashboardView({ role, data }: DashboardViewProps) {
+export function DashboardView({ role, data, mode = "fixture" }: DashboardViewProps) {
   const failedJobs = data.metrics.queues.reduce((total, queue) => total + queue.failed, 0);
   const delivered = data.emailHealth.delivered;
   const deliveryTotal =
@@ -30,7 +32,11 @@ export function DashboardView({ role, data }: DashboardViewProps) {
       <AdminPageHeader
         eyebrow="PLATFORM / OVERVIEW"
         title="平台总览"
-        description="运营指标、后台队列与邮件健康。数字来自本地 fixture，用于验证后台布局与数据密度。"
+        description={
+          mode === "api"
+            ? "运营指标、后台队列与邮件健康。数字来自真实 Admin API；仅有当前快照时趋势显示单点。"
+            : "运营指标、后台队列与邮件健康。数字来自本地 fixture，用于验证后台布局与数据密度。"
+        }
         readOnly={role === "analyst"}
         actions={
           <div className="text-right">
@@ -99,9 +105,9 @@ export function DashboardView({ role, data }: DashboardViewProps) {
                 用户与工作区趋势
               </h2>
             </div>
-            <Badge tone="neutral">fixture</Badge>
+            <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
           </div>
-          <TrendChart data={data.trend} />
+          <TrendChart data={data.trend} mode={mode} />
         </section>
 
         <section className="rounded-card border border-hairline-strong bg-surface-1 p-5 xl:col-span-2">

@@ -7,6 +7,9 @@ import type { AdminWorkspaceDetail } from "@roamlog/contracts";
 import { Badge, Button, Checkbox, Switch } from "@roamlog/ui";
 
 import { MOCK_ADMIN_WORKSPACES, type AdminConsoleRole } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
+import { AdminMutationError } from "../../lib/admin-api-error";
+import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
 import { MOCK_ADMIN_FLAGS, type AdminFlagRecord } from "../../lib/ops-fixtures";
@@ -17,6 +20,8 @@ interface FlagsViewProps {
   role: AdminConsoleRole;
   flags?: readonly AdminFlagRecord[];
   workspaces?: readonly AdminWorkspaceDetail[];
+  mode?: AdminDataMode;
+  mutations?: AdminMutationPort;
 }
 
 interface FlagDraft {
@@ -46,6 +51,8 @@ export function FlagsView({
   role,
   flags = MOCK_ADMIN_FLAGS,
   workspaces = MOCK_ADMIN_WORKSPACES,
+  mode = "fixture",
+  mutations,
 }: FlagsViewProps) {
   const [records, setRecords] = useState<readonly AdminFlagRecord[]>(flags);
   const [drafts, setDrafts] = useState<Record<string, FlagDraft>>(() =>
@@ -66,7 +73,10 @@ export function FlagsView({
   function updateDraft(key: string, patch: Partial<FlagDraft>) {
     setDrafts((current) => ({
       ...current,
-      [key]: { ...(current[key] ?? { enabled: false, rolloutPercentage: 0, workspaceAllowlist: [] }), ...patch },
+      [key]: {
+        ...(current[key] ?? { enabled: false, rolloutPercentage: 0, workspaceAllowlist: [] }),
+        ...patch,
+      },
     }));
   }
 
@@ -82,10 +92,27 @@ export function FlagsView({
     });
   }
 
-  function saveFlag(flag: AdminFlagRecord) {
+  async function saveFlag(flag: AdminFlagRecord) {
     const draft = drafts[flag.key];
     if (!canUpdate || !draft) {
       return;
+    }
+    if (mode === "api" && mutations) {
+      try {
+        await mutations.updateFlag(flag.key, {
+          description: flag.description,
+          enabled: draft.enabled,
+          rolloutPercentage: draft.rolloutPercentage,
+          workspaceAllowlist: draft.workspaceAllowlist,
+        });
+      } catch (error) {
+        setStatusMessage(
+          error instanceof AdminMutationError
+            ? `保存失败：${error.failure.code} · ${error.failure.detail}`
+            : "保存失败，请检查 API 与权限后重试。",
+        );
+        return;
+      }
     }
     const now = new Date().toISOString();
     setRecords((current) =>
@@ -102,19 +129,21 @@ export function FlagsView({
           : item,
       ),
     );
-    recordMockAuditEvent({
-      action: "admin.flags.update",
-      targetType: "feature_flag",
-      targetId: flag.key,
-      targetName: flag.label,
-      metadata: {
-        mock: true,
-        key: flag.key,
-        enabled: draft.enabled,
-        rolloutPercentage: draft.rolloutPercentage,
-        allowlistCount: draft.workspaceAllowlist.length,
-      },
-    });
+    if (mode === "fixture") {
+      recordMockAuditEvent({
+        action: "admin.flags.update",
+        targetType: "feature_flag",
+        targetId: flag.key,
+        targetName: flag.label,
+        metadata: {
+          mock: true,
+          key: flag.key,
+          enabled: draft.enabled,
+          rolloutPercentage: draft.rolloutPercentage,
+          allowlistCount: draft.workspaceAllowlist.length,
+        },
+      });
+    }
     setStatusMessage(
       `已保存 ${flag.key}：${draft.enabled ? "开启" : "关闭"} / ${draft.rolloutPercentage}%`,
     );
@@ -125,7 +154,7 @@ export function FlagsView({
       <AdminPageHeader
         eyebrow="PLATFORM / FEATURE FLAGS"
         title="功能开关"
-        description="管理全局开关、灰度比例和 Workspace 白名单。保存会写入本地 fixture 并生成模拟审计；仅 super_admin 可修改。"
+        description="管理全局开关、灰度比例和 Workspace 白名单。仅 super_admin 可修改，写入由后端审计。"
         readOnly={readOnly}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -217,7 +246,9 @@ export function FlagsView({
                     value={draft.rolloutPercentage}
                     disabled={!canUpdate}
                     onChange={(event) =>
-                      updateDraft(flag.key, { rolloutPercentage: Number(event.currentTarget.value) })
+                      updateDraft(flag.key, {
+                        rolloutPercentage: Number(event.currentTarget.value),
+                      })
                     }
                     className="mt-3 h-2 w-full cursor-pointer appearance-none rounded-pill border border-hairline-strong bg-surface-2 accent-ink disabled:cursor-not-allowed disabled:opacity-50"
                   />
@@ -313,7 +344,10 @@ export function FlagsView({
           <h2 className="text-[12px] font-medium text-ink">灰度与白名单同时生效</h2>
           <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
             全局关闭时任何白名单都不生效；开启后，白名单 Workspace 始终命中，其余 Workspace
-            按百分比参与灰度。真实实现需由后端 feature-flag 服务提供同样语义，当前页面只演示交互。
+            按百分比参与灰度。
+            {mode === "api"
+              ? "本页保存会调用真实 Admin flag mutation。"
+              : "当前 fixture 页面只演示交互。"}
           </p>
         </div>
       </section>

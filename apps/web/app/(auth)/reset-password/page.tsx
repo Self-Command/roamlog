@@ -7,7 +7,13 @@ export const metadata: Metadata = {
   title: "重置密码",
 };
 
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
+  const { token } = await searchParams;
+
   return (
     <AuthPageFrame
       eyebrow="CHOOSE A NEW PASSWORD"
@@ -22,7 +28,7 @@ export default function ResetPasswordPage() {
         </p>
       }
     >
-      <ResetPasswordForm />
+      <ResetPasswordForm token={token} />
     </AuthPageFrame>
   );
 }

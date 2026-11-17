@@ -22,6 +22,9 @@ import {
 } from "@roamlog/ui";
 
 import type { AdminConsoleRole } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
+import { AdminMutationError } from "../../lib/admin-api-error";
+import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
 import { MOCK_ADMIN_EMAILS, type AdminEmailRecord } from "../../lib/ops-fixtures";
@@ -32,6 +35,8 @@ import { AdminMetricCard } from "../dashboard/admin-metric-card";
 interface EmailsViewProps {
   role: AdminConsoleRole;
   emails?: readonly AdminEmailRecord[];
+  mode?: AdminDataMode;
+  mutations?: AdminMutationPort;
 }
 
 const emailStatusLabels: Record<EmailStatus, string> = {
@@ -52,7 +57,12 @@ const emailStatusTones: Record<EmailStatus, "neutral" | "blue" | "green" | "red"
   failed: "red",
 };
 
-export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps) {
+export function EmailsView({
+  role,
+  emails = MOCK_ADMIN_EMAILS,
+  mode = "fixture",
+  mutations,
+}: EmailsViewProps) {
   const [records, setRecords] = useState<readonly AdminEmailRecord[]>(emails);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | EmailStatus>("all");
@@ -64,7 +74,7 @@ export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps
   const [testError, setTestError] = useState("");
 
   const canResend = canPlatform(role, "admin:emails:resend");
-  const canSendTest = role === "admin" || role === "super_admin";
+  const canSendTest = mode === "fixture" && (role === "admin" || role === "super_admin");
   const readOnly = role === "analyst";
 
   const templateOptions = useMemo(
@@ -93,9 +103,21 @@ export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps
   const complained = records.filter((email) => email.status === "complained").length;
   const failed = records.filter((email) => email.status === "failed").length;
 
-  function resendEmail(record: AdminEmailRecord) {
+  async function resendEmail(record: AdminEmailRecord) {
     if (!canResend) {
       return;
+    }
+    if (mode === "api" && mutations) {
+      try {
+        await mutations.resendEmail(record.id);
+      } catch (error) {
+        setStatusMessage(
+          error instanceof AdminMutationError
+            ? `重发失败：${error.failure.code} · ${error.failure.detail}`
+            : "重发失败，请检查 API 与权限后重试。",
+        );
+        return;
+      }
     }
     const now = new Date().toISOString();
     setRecords((current) =>
@@ -105,13 +127,15 @@ export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps
           : email,
       ),
     );
-    recordMockAuditEvent({
-      action: "admin.email.resend",
-      targetType: "email_log",
-      targetId: record.id,
-      targetName: record.to,
-      metadata: { mock: true, template: record.template, previousStatus: record.status },
-    });
+    if (mode === "fixture") {
+      recordMockAuditEvent({
+        action: "admin.email.resend",
+        targetType: "email_log",
+        targetId: record.id,
+        targetName: record.to,
+        metadata: { mock: true, template: record.template, previousStatus: record.status },
+      });
+    }
     setStatusMessage(`已重新加入队列：${record.to}`);
   }
 
@@ -153,14 +177,20 @@ export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps
       <AdminPageHeader
         eyebrow="DELIVERY / EMAIL"
         title="邮件"
-        description="检查 Resend 投递状态、退信与投诉，重发失败邮件，并通过本地 fixture 验证运营流程。"
+        description="检查 Resend 投递状态、退信与投诉，并重发失败邮件。"
         readOnly={readOnly}
         actions={
           <Button
             variant="ghost"
             size="sm"
             disabled={!canSendTest}
-            title={canSendTest ? "发送测试邮件" : "仅 Admin 及以上可发送测试邮件"}
+            title={
+              canSendTest
+                ? "发送测试邮件"
+                : mode === "api"
+                  ? "API 契约暂未提供测试邮件入口"
+                  : "仅 Admin 及以上可发送测试邮件"
+            }
             onClick={() => setTestDialogOpen(true)}
           >
             <Send aria-hidden="true" />
@@ -173,7 +203,7 @@ export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps
         <AdminMetricCard
           label="已送达"
           value={String(delivered)}
-          detail="fixture delivery events"
+          detail={mode === "api" ? "API delivery events" : "fixture delivery events"}
           tone="green"
           icon={MailCheck}
         />
@@ -262,10 +292,10 @@ export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps
           <div>
             <h2 className="text-[13px] font-medium text-ink">投递日志</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              resend / fixture webhook state
+              resend / {mode} webhook state
             </p>
           </div>
-          <Badge tone="neutral">fixture</Badge>
+          <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
         </div>
 
         {filteredEmails.length === 0 ? (
@@ -363,7 +393,9 @@ export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps
             <p className="type-eyebrow">RESEND / TEST</p>
             <DialogTitle>发送测试邮件</DialogTitle>
             <DialogDescription>
-              测试邮件只写入本地 fixture 投递日志并记录模拟审计，不会调用真实 Resend API。
+              {mode === "api"
+                ? "当前 Admin API 契约未提供测试邮件入口，API 模式下该操作保持禁用。"
+                : "测试邮件只写入本地 fixture 投递日志并记录模拟审计，不会调用真实 Resend API。"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -388,7 +420,9 @@ export function EmailsView({ role, emails = MOCK_ADMIN_EMAILS }: EmailsViewProps
             <FormField id="test-email-body" label="正文预览">
               <Textarea
                 readOnly
-                value={"这是 Roamlog 后台的测试邮件。\n\n若你收到此邮件，说明本地 Resend 配置可被运营端触发。"}
+                value={
+                  "这是 Roamlog 后台的测试邮件。\n\n若你收到此邮件，说明本地 Resend 配置可被运营端触发。"
+                }
               />
             </FormField>
           </div>

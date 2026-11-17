@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@roamlog/api-client": "workspace:*",
     "@roamlog/api-mocks": "workspace:*",
     "@roamlog/contracts": "workspace:*",
     "@roamlog/ui": "workspace:*",

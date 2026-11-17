@@ -1,19 +1,27 @@
 "use client";
 
 import { AdminConsoleRoleAware } from "../../../components/admin-shell/admin-console-role-aware";
+import { AdminDataBoundary } from "../../../components/admin-ui/admin-data-boundary";
 import { QueuesView } from "../../../components/queues/queues-view";
-import { getAdminDataSource } from "../../../lib/admin-data-source";
+import { useAdminMutationPort, useAdminQueuesResource } from "../../../lib/admin-data-source";
 
 export default function AdminQueuesPage() {
-  const source = getAdminDataSource();
+  const resource = useAdminQueuesResource();
+  const mutations = useAdminMutationPort();
   return (
     <AdminConsoleRoleAware>
       {(role) => (
-        <QueuesView
-          role={role}
-          queues={source.listQueues()}
-          failedJobs={source.listFailedJobs()}
-        />
+        <AdminDataBoundary resource={resource}>
+          {({ queues, failedJobs }) => (
+            <QueuesView
+              role={role}
+              queues={queues}
+              failedJobs={failedJobs}
+              mode={resource.mode}
+              mutations={resource.mode === "api" ? mutations : undefined}
+            />
+          )}
+        </AdminDataBoundary>
       )}
     </AdminConsoleRoleAware>
   );

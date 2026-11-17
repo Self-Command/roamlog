@@ -13,10 +13,14 @@ import {
 import { ArrowUpRight, CalendarDays, Compass, Search, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { useDataMode } from "@/lib/data-provider";
+import { useSearchQuery } from "@/lib/query";
+
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaceSlug: string;
+  workspaceId?: string;
   nextTrip?: Trip;
 }
 
@@ -24,8 +28,10 @@ export function CommandPalette({
   open,
   onOpenChange,
   workspaceSlug,
+  workspaceId,
   nextTrip,
 }: CommandPaletteProps) {
+  const mode = useDataMode();
   const [query, setQuery] = useState("");
   const commands = useMemo(
     () => [
@@ -64,7 +70,9 @@ export function CommandPalette({
         <DialogHeader className="mb-0 border-b border-hairline px-5 py-4 pr-14">
           <DialogTitle className="font-serif text-2xl">搜索与快捷命令</DialogTitle>
           <DialogDescription>
-            命令面板目前是本地骨架，只连接到已存在的页面与 mock 旅行数据。
+            {mode === "api"
+              ? "命令面板同时搜索真实 API 的旅行、日志与评论。"
+              : "命令面板目前是本地骨架，只连接到已存在的页面与 mock 旅行数据。"}
           </DialogDescription>
         </DialogHeader>
 
@@ -86,6 +94,15 @@ export function CommandPalette({
         </div>
 
         <div className="space-y-1 p-2">
+          {mode === "api" ? (
+            <CommandSearchResults
+              workspaceSlug={workspaceSlug}
+              workspaceId={workspaceId}
+              query={query.trim()}
+              open={open}
+              onNavigate={() => onOpenChange(false)}
+            />
+          ) : null}
           {visibleCommands.length > 0 ? (
             visibleCommands.map((command) => {
               const Icon = command.icon;
@@ -118,5 +135,61 @@ export function CommandPalette({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CommandSearchResults({
+  workspaceSlug,
+  workspaceId,
+  query,
+  open,
+  onNavigate,
+}: {
+  workspaceSlug: string;
+  workspaceId?: string;
+  query: string;
+  open: boolean;
+  onNavigate: () => void;
+}) {
+  const searchQuery = useSearchQuery(
+    workspaceId,
+    query.length >= 2 ? { q: query, type: "all", limit: 8 } : undefined,
+    open,
+  );
+  const results = searchQuery.data
+    ? [
+        ...searchQuery.data.trips,
+        ...searchQuery.data.entries,
+        ...searchQuery.data.comments,
+      ].slice(0, 8)
+    : [];
+
+  if (results.length === 0) return null;
+
+  return (
+    <div className="mb-2 border-b border-hairline pb-2">
+      <p className="type-eyebrow px-3 py-1.5">SEARCH RESULTS</p>
+      {results.map((result) => (
+        <a
+          key={`${result.type}-${result.id}`}
+          href={
+            result.type === "trip"
+              ? `/w/${workspaceSlug}/trips/${result.id}`
+              : result.type === "person"
+                ? `/w/${workspaceSlug}/members`
+                : `/w/${workspaceSlug}/journal`
+          }
+          onClick={onNavigate}
+          className="flex min-h-14 items-center gap-3 rounded-control px-3 py-2.5 outline-none transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ink"
+        >
+          <Badge tone="neutral">{result.type}</Badge>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm text-ink">{result.title}</span>
+            <span className="block truncate text-xs text-muted">{result.snippet}</span>
+          </span>
+          <ArrowUpRight aria-hidden="true" className="size-4 shrink-0 text-stone" />
+        </a>
+      ))}
+    </div>
   );
 }

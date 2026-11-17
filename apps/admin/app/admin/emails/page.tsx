@@ -1,14 +1,27 @@
 "use client";
 
 import { AdminConsoleRoleAware } from "../../../components/admin-shell/admin-console-role-aware";
+import { AdminDataBoundary } from "../../../components/admin-ui/admin-data-boundary";
 import { EmailsView } from "../../../components/emails/emails-view";
-import { getAdminDataSource } from "../../../lib/admin-data-source";
+import { useAdminEmailsResource, useAdminMutationPort } from "../../../lib/admin-data-source";
 
 export default function AdminEmailsPage() {
-  const source = getAdminDataSource();
+  const resource = useAdminEmailsResource();
+  const mutations = useAdminMutationPort();
   return (
     <AdminConsoleRoleAware>
-      {(role) => <EmailsView role={role} emails={source.listEmails()} />}
+      {(role) => (
+        <AdminDataBoundary resource={resource}>
+          {(emails) => (
+            <EmailsView
+              role={role}
+              emails={emails}
+              mode={resource.mode}
+              mutations={resource.mode === "api" ? mutations : undefined}
+            />
+          )}
+        </AdminDataBoundary>
+      )}
     </AdminConsoleRoleAware>
   );
 }

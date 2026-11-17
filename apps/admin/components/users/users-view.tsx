@@ -20,6 +20,9 @@ import {
 } from "@roamlog/ui";
 
 import { getAdminDataSource } from "../../lib/admin-data-source";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
+import { AdminMutationError } from "../../lib/admin-api-error";
+import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES, type AdminConsoleRole } from "../../lib/fixtures";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
@@ -58,6 +61,8 @@ function isBulkUserAction(action: UserAction): action is BulkUserAction {
 interface UsersViewProps {
   role: AdminConsoleRole;
   users?: readonly AdminUserDetail[];
+  mode?: AdminDataMode;
+  mutations?: AdminMutationPort;
 }
 
 const userActionCopy: Record<
@@ -78,7 +83,7 @@ const userActionCopy: Record<
   },
   delete: {
     title: "删除用户",
-    description: "用户进入软删除状态，后续需由管理员恢复。此骨架不会调用真实 API。",
+    description: "用户进入软删除状态，后续需由管理员恢复。操作由后端执行并写入审计。",
     confirmLabel: "确认删除",
     action: "admin.user.delete",
   },
@@ -90,7 +95,7 @@ const userActionCopy: Record<
   },
   "force-logout": {
     title: "强制登出",
-    description: "撤销该用户的全部活跃会话。当前演示只记录 mock 事件。",
+    description: "撤销该用户的全部活跃会话，操作由后端执行并写入审计。",
     confirmLabel: "确认登出",
     action: "admin.user.force-logout",
   },
@@ -102,25 +107,25 @@ const userActionCopy: Record<
   },
   "bulk-suspend": {
     title: "批量暂停账户",
-    description: "所选账户会进入暂停状态。当前演示只更新本地 fixture 并记录 mock 审计事件。",
+    description: "所选账户会进入暂停状态，操作由后端执行并写入审计。",
     confirmLabel: "确认批量暂停",
     action: "admin.user.bulk-suspend",
   },
   "bulk-restore": {
     title: "批量恢复账户",
-    description: "所选已暂停账户会恢复访问。当前演示只更新本地 fixture 并记录 mock 审计事件。",
+    description: "所选已暂停账户会恢复访问，操作由后端执行并写入审计。",
     confirmLabel: "确认批量恢复",
     action: "admin.user.bulk-restore",
   },
   "bulk-delete": {
     title: "批量删除账户",
-    description: "所选账户进入软删除状态，需由管理员恢复。当前演示只更新本地 fixture。",
+    description: "所选账户进入软删除状态，需由管理员恢复。操作由后端执行并写入审计。",
     confirmLabel: "确认批量删除",
     action: "admin.user.bulk-delete",
   },
 };
 
-export function UsersView({ role, users }: UsersViewProps) {
+export function UsersView({ role, users, mode = "fixture", mutations }: UsersViewProps) {
   const sourceUsers = users ?? getAdminDataSource().listUsers();
   const [records, setRecords] = useState<readonly AdminUserDetail[]>(sourceUsers);
   const [query, setQuery] = useState("");
@@ -180,84 +185,121 @@ export function UsersView({ role, users }: UsersViewProps) {
     return isBulkUserAction(action) ? `${action.users.length} 位用户` : action.user.name;
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!pendingAction) {
       return;
     }
 
-    const copy = userActionCopy[pendingAction.kind];
+    const action = pendingAction;
+    const copy = userActionCopy[action.kind];
 
-    if (isBulkUserAction(pendingAction)) {
-      const ids = new Set(pendingAction.users.map((user) => user.id));
+    if (mode === "api" && mutations) {
+      try {
+        if (isBulkUserAction(action)) {
+          await Promise.all(
+            action.users.map((user) =>
+              action.kind === "bulk-delete"
+                ? mutations.deleteUser(user.id)
+                : mutations.updateUser(user.id, {
+                    status: action.kind === "bulk-restore" ? "active" : "suspended",
+                  }),
+            ),
+          );
+        } else if (action.kind === "suspend" || action.kind === "restore") {
+          await mutations.updateUser(action.user.id, {
+            status: action.kind === "suspend" ? "suspended" : "active",
+          });
+        } else if (action.kind === "delete") {
+          await mutations.deleteUser(action.user.id);
+        } else if (action.kind === "change-role") {
+          await mutations.updateUser(action.user.id, { platformRole: nextRole });
+        } else if (action.kind === "force-logout") {
+          await mutations.forceLogoutUser(action.user.id);
+        } else if (action.kind === "reset-2fa") {
+          await mutations.resetUserTwoFactor(action.user.id);
+        }
+      } catch (error) {
+        setStatusMessage(
+          error instanceof AdminMutationError
+            ? `操作失败：${error.failure.code} · ${error.failure.detail}`
+            : "操作失败，请检查 API 与权限后重试。",
+        );
+        setPendingAction(null);
+        return;
+      }
+    }
+
+    if (isBulkUserAction(action)) {
+      const ids = new Set(action.users.map((user) => user.id));
       setRecords((current) =>
         current.map((user) =>
           ids.has(user.id)
             ? {
                 ...user,
                 status:
-                  pendingAction.kind === "bulk-restore"
+                  action.kind === "bulk-restore"
                     ? "active"
-                    : pendingAction.kind === "bulk-delete"
+                    : action.kind === "bulk-delete"
                       ? "deleted"
                       : "suspended",
-                activeSessionCount:
-                  pendingAction.kind === "bulk-restore" ? user.activeSessionCount : 0,
+                activeSessionCount: action.kind === "bulk-restore" ? user.activeSessionCount : 0,
               }
             : user,
         ),
       );
       setSelectedIds(new Set());
-    } else if (pendingAction.kind === "suspend" || pendingAction.kind === "restore") {
-      const nextStatus: AccountStatus = pendingAction.kind === "suspend" ? "suspended" : "active";
+    } else if (action.kind === "suspend" || action.kind === "restore") {
+      const nextStatus: AccountStatus = action.kind === "suspend" ? "suspended" : "active";
       setRecords((current) =>
         current.map((user) =>
-          user.id === pendingAction.user.id
+          user.id === action.user.id
             ? {
                 ...user,
                 status: nextStatus,
-                activeSessionCount: pendingAction.kind === "suspend" ? 0 : user.activeSessionCount,
+                activeSessionCount: action.kind === "suspend" ? 0 : user.activeSessionCount,
               }
             : user,
         ),
       );
-    } else if (pendingAction.kind === "delete") {
+    } else if (action.kind === "delete") {
       setRecords((current) =>
         current.map((user) =>
-          user.id === pendingAction.user.id
-            ? { ...user, status: "deleted", activeSessionCount: 0 }
-            : user,
+          user.id === action.user.id ? { ...user, status: "deleted", activeSessionCount: 0 } : user,
         ),
       );
-    } else if (pendingAction.kind === "change-role") {
+    } else if (action.kind === "change-role") {
       setRecords((current) =>
         current.map((user) =>
-          user.id === pendingAction.user.id ? { ...user, platformRole: nextRole } : user,
+          user.id === action.user.id ? { ...user, platformRole: nextRole } : user,
         ),
       );
     }
 
-    recordMockAuditEvent({
-      action: copy.action,
-      targetType: "user",
-      targetId:
-        isBulkUserAction(pendingAction)
-          ? `batch-${pendingAction.users.length}`
-          : pendingAction.user.id,
-      targetName: actionTargetName(pendingAction),
-      metadata: {
-        previousRole: role,
-        mock: true,
-        ...(pendingAction.kind === "change-role" ? { nextRole } : {}),
-      },
-    });
+    if (mode === "fixture") {
+      recordMockAuditEvent({
+        action: copy.action,
+        targetType: "user",
+        targetId: isBulkUserAction(action) ? `batch-${action.users.length}` : action.user.id,
+        targetName: actionTargetName(action),
+        metadata: {
+          previousRole: role,
+          mock: true,
+          ...(action.kind === "change-role" ? { nextRole } : {}),
+        },
+      });
+    }
 
-    setStatusMessage(`模拟审计事件已记录：${copy.action}`);
+    setStatusMessage(
+      mode === "api"
+        ? `已提交：${copy.action}（审计由后端写入）`
+        : `模拟审计事件已记录：${copy.action}`,
+    );
     setPendingAction(null);
   }
 
   const copy = pendingAction ? userActionCopy[pendingAction.kind] : null;
   const bulkUsers = records.filter((user) => selectedIds.has(user.id));
-  const userContext = detailUser ? getUserContext(detailUser.id) : null;
+  const userContext = mode === "fixture" && detailUser ? getUserContext(detailUser.id) : null;
 
   return (
     <div className="space-y-5">
@@ -339,9 +381,7 @@ export function UsersView({ role, users }: UsersViewProps) {
             <Button
               variant="ghost"
               size="sm"
-              disabled={
-                !canRestore || !bulkUsers.some((user) => user.status === "suspended")
-              }
+              disabled={!canRestore || !bulkUsers.some((user) => user.status === "suspended")}
               title={canRestore ? "批量恢复所选账户" : "当前平台角色不可恢复账户"}
               onClick={() => openAction({ kind: "bulk-restore", users: bulkUsers })}
             >
@@ -377,7 +417,7 @@ export function UsersView({ role, users }: UsersViewProps) {
               users / cursor page 1
             </p>
           </div>
-          <Badge tone="neutral">fixture</Badge>
+          <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
         </div>
 
         {filteredUsers.length === 0 ? (
@@ -474,7 +514,7 @@ export function UsersView({ role, users }: UsersViewProps) {
                       {user.emailVerified ? "VERIFIED" : "PENDING"}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
-                      {user.activeSessionCount}
+                      {mode === "api" ? "—" : user.activeSessionCount}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
                       {formatDateTime(user.lastActiveAt)}
@@ -548,7 +588,7 @@ export function UsersView({ role, users }: UsersViewProps) {
           {detailUser ? (
             <>
               <SheetHeader>
-                <p className="type-eyebrow">USER DETAIL / FIXTURE</p>
+                <p className="type-eyebrow">USER DETAIL / {mode.toUpperCase()}</p>
                 <SheetTitle>{detailUser.name}</SheetTitle>
                 <SheetDescription>{detailUser.email}</SheetDescription>
               </SheetHeader>
@@ -569,7 +609,9 @@ export function UsersView({ role, users }: UsersViewProps) {
                 ].map(([label, value]) => (
                   <div key={label} className="bg-surface-1 p-3">
                     <dt className="type-eyebrow">{label}</dt>
-                    <dd className="mt-1.5 font-serif text-2xl text-ink">{value}</dd>
+                    <dd className="mt-1.5 font-serif text-2xl text-ink">
+                      {mode === "api" ? "—" : value}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -581,7 +623,7 @@ export function UsersView({ role, users }: UsersViewProps) {
                       活跃会话
                     </h3>
                     <span className="font-mono text-[9px] text-muted">
-                      {userContext?.sessions.length ?? 0} records
+                      {mode === "api" ? "—" : `${userContext?.sessions.length ?? 0} records`}
                     </span>
                   </div>
                   {userContext && userContext.sessions.length > 0 ? (
@@ -599,7 +641,11 @@ export function UsersView({ role, users }: UsersViewProps) {
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-[11px] text-muted">没有活跃会话。</p>
+                    <p className="mt-2 text-[11px] text-muted">
+                      {mode === "api"
+                        ? "当前 Admin API 列表响应未提供会话明细。"
+                        : "没有活跃会话。"}
+                    </p>
                   )}
                 </section>
 
@@ -609,7 +655,7 @@ export function UsersView({ role, users }: UsersViewProps) {
                       Workspace 成员关系
                     </h3>
                     <span className="font-mono text-[9px] text-muted">
-                      {userContext?.memberships.length ?? 0} records
+                      {mode === "api" ? "—" : `${userContext?.memberships.length ?? 0} records`}
                     </span>
                   </div>
                   {userContext && userContext.memberships.length > 0 ? (
@@ -632,7 +678,11 @@ export function UsersView({ role, users }: UsersViewProps) {
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-[11px] text-muted">没有 Workspace 成员关系。</p>
+                    <p className="mt-2 text-[11px] text-muted">
+                      {mode === "api"
+                        ? "当前 Admin API 列表响应未提供 Workspace 成员关系明细。"
+                        : "没有 Workspace 成员关系。"}
+                    </p>
                   )}
                 </section>
               </div>
@@ -664,7 +714,9 @@ export function UsersView({ role, users }: UsersViewProps) {
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  Sheet 与确认对话框均只操作本地 fixture；不会发送真实暂停、删除或认证请求。
+                  {mode === "api"
+                    ? "API 模式下操作会发送真实 Admin mutation，并由后端权限与审计规则约束。"
+                    : "Sheet 与确认对话框均只操作本地 fixture；不会发送真实暂停、删除或认证请求。"}
                 </p>
               </div>
             </>
@@ -679,9 +731,7 @@ export function UsersView({ role, users }: UsersViewProps) {
         description={copy?.description ?? ""}
         targetName={pendingAction ? actionTargetName(pendingAction) : ""}
         confirmationLabel={
-          pendingAction && isBulkUserAction(pendingAction)
-            ? "输入选中数量确认"
-            : "输入用户姓名确认"
+          pendingAction && isBulkUserAction(pendingAction) ? "输入选中数量确认" : "输入用户姓名确认"
         }
         confirmActionLabel={copy?.confirmLabel ?? "确认"}
         onConfirm={confirmAction}

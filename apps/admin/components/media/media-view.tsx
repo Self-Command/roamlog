@@ -8,6 +8,9 @@ import type { MediaStatus } from "@roamlog/contracts";
 import { Badge, Button, EmptyState, Input, Select, Switch } from "@roamlog/ui";
 
 import type { AdminConsoleRole } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
+import { AdminMutationError } from "../../lib/admin-api-error";
+import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { formatBytes, formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
 import { MOCK_ADMIN_MEDIA, type AdminMediaItem } from "../../lib/ops-fixtures";
@@ -19,6 +22,8 @@ import { DestructiveActionDialog } from "../admin-ui/destructive-action-dialog";
 interface MediaViewProps {
   role: AdminConsoleRole;
   media?: readonly AdminMediaItem[];
+  mode?: AdminDataMode;
+  mutations?: AdminMutationPort;
 }
 
 const mediaStatusLabels: Record<MediaStatus, string> = {
@@ -42,7 +47,12 @@ const previewGradients = [
   "from-[#353047] via-[#18151f] to-[#0b0a0d]",
 ];
 
-export function MediaView({ role, media = MOCK_ADMIN_MEDIA }: MediaViewProps) {
+export function MediaView({
+  role,
+  media = MOCK_ADMIN_MEDIA,
+  mode = "fixture",
+  mutations,
+}: MediaViewProps) {
   const [records, setRecords] = useState<readonly AdminMediaItem[]>(media);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | MediaStatus>("all");
@@ -74,19 +84,34 @@ export function MediaView({ role, media = MOCK_ADMIN_MEDIA }: MediaViewProps) {
     });
   }, [orphansOnly, query, records, status]);
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!pendingDelete) {
       return;
     }
     const target = pendingDelete;
+    if (mode === "api" && mutations) {
+      try {
+        await mutations.deleteMedia(target.id);
+      } catch (error) {
+        setStatusMessage(
+          error instanceof AdminMutationError
+            ? `删除失败：${error.failure.code} · ${error.failure.detail}`
+            : "删除失败，请检查 API 与权限后重试。",
+        );
+        setPendingDelete(null);
+        return;
+      }
+    }
     setRecords((current) => current.filter((item) => item.id !== target.id));
-    recordMockAuditEvent({
-      action: "admin.media.delete",
-      targetType: "media",
-      targetId: target.id,
-      targetName: target.fileName,
-      metadata: { mock: true, sizeBytes: target.sizeBytes, orphan: target.usage === "orphan" },
-    });
+    if (mode === "fixture") {
+      recordMockAuditEvent({
+        action: "admin.media.delete",
+        targetType: "media",
+        targetId: target.id,
+        targetName: target.fileName,
+        metadata: { mock: true, sizeBytes: target.sizeBytes, orphan: target.usage === "orphan" },
+      });
+    }
     setStatusMessage(`已删除媒体：${target.fileName}`);
     setPendingDelete(null);
   }
@@ -96,7 +121,11 @@ export function MediaView({ role, media = MOCK_ADMIN_MEDIA }: MediaViewProps) {
       <AdminPageHeader
         eyebrow="CONTENT & ASSETS / MEDIA"
         title="媒体库"
-        description="检查存储用量、处理状态与孤儿对象，清理未关联媒体。所有预览、用量与删除均为本地 fixture 演示。"
+        description={
+          mode === "api"
+            ? "检查存储用量、处理状态与孤儿对象。用量与删除由真实 Admin API 提供。"
+            : "检查存储用量、处理状态与孤儿对象，清理未关联媒体。所有预览、用量与删除均为本地 fixture 演示。"
+        }
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -110,7 +139,7 @@ export function MediaView({ role, media = MOCK_ADMIN_MEDIA }: MediaViewProps) {
         <AdminMetricCard
           label="对象总量"
           value={String(records.length)}
-          detail={`${formatBytes(totalBytes)} fixture 用量`}
+          detail={`${formatBytes(totalBytes)} ${mode === "api" ? "API 用量" : "fixture 用量"}`}
           tone="blue"
           icon={HardDrive}
         />
@@ -215,7 +244,9 @@ export function MediaView({ role, media = MOCK_ADMIN_MEDIA }: MediaViewProps) {
                       {item.workspaceName} · {formatBytes(item.sizeBytes)}
                     </p>
                   </div>
-                  <Badge tone={mediaStatusTones[item.status]}>{mediaStatusLabels[item.status]}</Badge>
+                  <Badge tone={mediaStatusTones[item.status]}>
+                    {mediaStatusLabels[item.status]}
+                  </Badge>
                 </div>
                 <p className="mt-2 min-h-8 text-[10px] leading-4 text-muted">
                   {item.caption ?? "未添加说明"}
@@ -254,7 +285,7 @@ export function MediaView({ role, media = MOCK_ADMIN_MEDIA }: MediaViewProps) {
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
         title="删除媒体"
-        description="媒体对象及其派生版本会从对象存储移除。此操作在真实 API 接入后不可自动恢复；当前演示只更新 fixture 并记录 mock 审计。"
+        description="媒体对象进入软删除状态；后续清理任务会处理派生版本。"
         targetName={pendingDelete?.fileName ?? ""}
         confirmationLabel="输入文件名确认"
         confirmActionLabel="确认删除"

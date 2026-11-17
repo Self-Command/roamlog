@@ -12,7 +12,13 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
 
   return (
     <AuthShell>
-      <InviteAccept key={token} workspaceName="Roamlog Crew" inviterName="林墨" role="editor" />
+      <InviteAccept
+        key={token}
+        token={token}
+        workspaceName="Roamlog Workspace"
+        inviterName="你的同行者"
+        role="editor"
+      />
     </AuthShell>
   );
 }

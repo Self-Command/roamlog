@@ -120,7 +120,7 @@ export function AdminTopbar({
               <p className="text-[11px] leading-none text-ink">{session.name}</p>
               <p className="mt-1 flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.08em] text-muted">
                 <ShieldCheck aria-hidden="true" className="size-2.5 text-accent-green" />
-                2FA active
+                {session.twoFactorEnabled ? "2FA active" : "2FA gated"}
               </p>
             </div>
           </div>

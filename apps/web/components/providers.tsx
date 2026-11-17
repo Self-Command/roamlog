@@ -1,13 +1,22 @@
 "use client";
 
 import { Button, TooltipProvider } from "@roamlog/ui";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { isUnauthorized } from "@/lib/api";
+import { DATA_MODE } from "@/lib/data-mode";
+import { DataProvider } from "@/lib/data-provider";
 import { startMockWorker } from "@/lib/msw";
 import { DemoDataProvider } from "@/lib/demo-store";
+import { useSessionQuery } from "@/lib/query";
 
-const mocksEnabled = process.env.NODE_ENV !== "production";
+const mocksEnabled = DATA_MODE === "mock" && process.env.NODE_ENV !== "production";
 
 type MockState = "starting" | "ready" | "failed";
 
@@ -19,6 +28,16 @@ export function Providers({ children }: ProvidersProps) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        queryCache: new QueryCache({
+          onError: (error) => {
+            if (isUnauthorized(error)) redirectToLogin();
+          },
+        }),
+        mutationCache: new MutationCache({
+          onError: (error) => {
+            if (isUnauthorized(error)) redirectToLogin();
+          },
+        }),
         defaultOptions: {
           queries: {
             staleTime: 30_000,
@@ -95,8 +114,34 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>
-        <DemoDataProvider>{children}</DemoDataProvider>
+        <DataProvider>
+          {DATA_MODE === "api" ? <SessionBootstrap /> : null}
+          <DemoDataProvider>{children}</DemoDataProvider>
+        </DataProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
+}
+
+function SessionBootstrap() {
+  useSessionQuery();
+  return null;
+}
+
+function redirectToLogin() {
+  if (typeof window === "undefined") return;
+  const pathname = window.location.pathname;
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/verify-email") ||
+    pathname.startsWith("/invite")
+  ) {
+    return;
+  }
+
+  const next = `${window.location.pathname}${window.location.search}`;
+  window.location.assign(`/login?next=${encodeURIComponent(next)}`);
 }

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function InviteAcceptPage() {
   return (
     <AuthShell>
-      <InviteAccept workspaceName="Roamlog Crew" inviterName="林墨" role="editor" />
+      <InviteAccept workspaceName="Roamlog Workspace" inviterName="你的同行者" role="editor" />
     </AuthShell>
   );
 }

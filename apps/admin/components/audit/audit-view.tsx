@@ -9,6 +9,7 @@ import { Badge, Button, EmptyState, Input, Select } from "@roamlog/ui";
 
 import { getAdminDataSource } from "../../lib/admin-data-source";
 import { MOCK_ADMIN_USERS, type AdminConsoleRole } from "../../lib/fixtures";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
 import { formatDateTime } from "../../lib/format";
 import { readMockAuditEvents } from "../../lib/mock-audit-reader";
 import type { MockAuditEvent } from "../../lib/mock-audit";
@@ -18,6 +19,7 @@ import { AdminPageHeader } from "../admin-ui/admin-page-header";
 interface AuditViewProps {
   role: AdminConsoleRole;
   entries?: readonly AuditLog[];
+  mode?: AdminDataMode;
 }
 
 const actorTypeLabels: Record<AuditLog["actorType"], string> = {
@@ -26,9 +28,16 @@ const actorTypeLabels: Record<AuditLog["actorType"], string> = {
   system: "System",
 };
 
-function actorName(actorId: string | null, actorType: AuditLog["actorType"]): string {
+function actorName(
+  actorId: string | null,
+  actorType: AuditLog["actorType"],
+  mode: AdminDataMode,
+): string {
   if (actorType === "system") {
     return "System worker";
+  }
+  if (mode === "api") {
+    return actorId ? `actor ${actorId.slice(-8)}` : "未知操作者";
   }
   return MOCK_ADMIN_USERS.find((user) => user.id === actorId)?.name ?? "未知管理员";
 }
@@ -37,7 +46,7 @@ function escapeCsvValue(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-export function AuditView({ role, entries }: AuditViewProps) {
+export function AuditView({ role, entries, mode = "fixture" }: AuditViewProps) {
   const sourceEntries = entries ?? getAdminDataSource().listAuditLogs();
   const [query, setQuery] = useState("");
   const [actorType, setActorType] = useState<"all" | AuditLog["actorType"]>("all");
@@ -67,6 +76,7 @@ export function AuditView({ role, entries }: AuditViewProps) {
         `${entry.action} ${entry.targetType} ${entry.actorId ?? ""} ${actorName(
           entry.actorId,
           entry.actorType,
+          mode,
         )}`
           .toLocaleLowerCase("zh-CN")
           .includes(normalizedQuery);
@@ -74,9 +84,9 @@ export function AuditView({ role, entries }: AuditViewProps) {
       const matchesActorId =
         actorFilter === "all" ||
         (actorFilter === "system" ? entry.actorType === "system" : entry.actorId === actorFilter);
-      const matchesTarget =
-        targetTypeFilter === "all" || entry.targetType === targetTypeFilter;
-      const matchesIp = !normalizedIp || (entry.ip ?? "").toLocaleLowerCase("zh-CN").includes(normalizedIp);
+      const matchesTarget = targetTypeFilter === "all" || entry.targetType === targetTypeFilter;
+      const matchesIp =
+        !normalizedIp || (entry.ip ?? "").toLocaleLowerCase("zh-CN").includes(normalizedIp);
       const entryDate = entry.createdAt.slice(0, 10);
       const matchesFrom = !fromDate || entryDate >= fromDate;
       const matchesTo = !toDate || entryDate <= toDate;
@@ -97,6 +107,7 @@ export function AuditView({ role, entries }: AuditViewProps) {
     ipQuery,
     query,
     sourceEntries,
+    mode,
     targetTypeFilter,
     toDate,
   ]);
@@ -133,10 +144,10 @@ export function AuditView({ role, entries }: AuditViewProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "roamlog-admin-audit-fixture.csv";
+    link.download = `roamlog-admin-audit-${mode}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    setStatusMessage(`已导出 ${filteredEntries.length} 条 fixture 审计事件。`);
+    setStatusMessage(`已导出 ${filteredEntries.length} 条 ${mode} 审计事件。`);
   }
 
   return (
@@ -144,7 +155,11 @@ export function AuditView({ role, entries }: AuditViewProps) {
       <AdminPageHeader
         eyebrow="TRUST & SAFETY / AUDIT"
         title="审计日志"
-        description="只追加的管理后台操作记录。当前页面读取本地 fixture；真实日志接入 API 后保持同一展示与筛选结构。"
+        description={
+          mode === "api"
+            ? "只追加的管理后台操作记录，读取真实 Admin API。"
+            : "只追加的管理后台操作记录。当前页面读取本地 fixture；真实日志接入 API 后保持同一展示与筛选结构。"
+        }
         readOnly={role === "analyst"}
         actions={
           <div className="flex flex-col items-end gap-1">
@@ -266,7 +281,7 @@ export function AuditView({ role, entries }: AuditViewProps) {
                 immutable / newest first
               </p>
             </div>
-            <Badge tone="neutral">fixture</Badge>
+            <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
           </div>
 
           {filteredEntries.length === 0 ? (
@@ -299,7 +314,7 @@ export function AuditView({ role, entries }: AuditViewProps) {
                       </div>
                       <p className="mt-1.5 text-[11px] text-muted">
                         <span className="text-body">
-                          {actorName(entry.actorId, entry.actorType)}
+                          {actorName(entry.actorId, entry.actorType, mode)}
                         </span>{" "}
                         对 {entry.targetType} / {entry.targetId.slice(-8)} 执行了操作
                       </p>
@@ -325,34 +340,35 @@ export function AuditView({ role, entries }: AuditViewProps) {
         </section>
 
         <aside className="space-y-4">
-          <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">LOCAL SESSION</p>
-            <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">
-              最近本地模拟操作
-            </h2>
-            {mockEvents.length === 0 ? (
-              <p className="mt-2 text-[11px] leading-5 text-muted">
-                在用户或工作区页面执行带确认的操作后，事件会显示在这里。
-              </p>
-            ) : (
-              <ol className="mt-3 divide-y divide-hairline border-y border-hairline">
-                {mockEvents.slice(0, 5).map((event) => (
-                  <li key={event.id} className="py-2.5">
-                    <p className="font-mono text-[9px] text-body">{event.action}</p>
-                    <p className="mt-1 truncate text-[10px] text-muted">
-                      {event.targetName} · {formatDateTime(event.createdAt)}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+          {mode === "fixture" ? (
+            <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
+              <p className="type-eyebrow">LOCAL SESSION</p>
+              <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">
+                最近本地模拟操作
+              </h2>
+              {mockEvents.length === 0 ? (
+                <p className="mt-2 text-[11px] leading-5 text-muted">
+                  在用户或工作区页面执行带确认的操作后，事件会显示在这里。
+                </p>
+              ) : (
+                <ol className="mt-3 divide-y divide-hairline border-y border-hairline">
+                  {mockEvents.slice(0, 5).map((event) => (
+                    <li key={event.id} className="py-2.5">
+                      <p className="font-mono text-[9px] text-body">{event.action}</p>
+                      <p className="mt-1 truncate text-[10px] text-muted">
+                        {event.targetName} · {formatDateTime(event.createdAt)}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          ) : null}
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
             <p className="type-eyebrow">Immutability</p>
             <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">只追加审计</h2>
             <p className="mt-2 text-[11px] leading-5 text-muted">
-              管理器不可编辑或删除审计事件。当前页面不提供任何修改入口，只提供筛选与 fixture CSV
-              导出。
+              管理器不可编辑或删除审计事件。当前页面不提供任何修改入口，只提供筛选与 CSV 导出。
             </p>
           </section>
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">

@@ -13,6 +13,7 @@ import {
 } from "@roamlog/ui";
 
 import { getAdminDataSource } from "../../lib/admin-data-source";
+import { getAdminDataMode } from "../../lib/admin-data-mode";
 import { ADMIN_NAV_GROUPS } from "./admin-nav";
 
 interface AdminCommandPaletteProps {
@@ -31,6 +32,7 @@ interface SearchResult {
 export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteProps) {
   const [query, setQuery] = useState("");
   const dataSource = getAdminDataSource();
+  const dataMode = getAdminDataMode();
 
   const results = useMemo<SearchResult[]>(() => {
     const pages = ADMIN_NAV_GROUPS.flatMap((group) => group.items)
@@ -43,24 +45,30 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
         type: "page" as const,
       }));
 
-    const users = dataSource.listUsers().map((user) => ({
-      id: `user-${user.id}`,
-      label: user.name,
-      detail: `${user.email} · ${user.platformRole}`,
-      href: `/admin/users?user=${user.id}`,
-      type: "user" as const,
-    }));
+    const users =
+      dataMode === "fixture"
+        ? dataSource.listUsers().map((user) => ({
+            id: `user-${user.id}`,
+            label: user.name,
+            detail: `${user.email} · ${user.platformRole}`,
+            href: `/admin/users?user=${user.id}`,
+            type: "user" as const,
+          }))
+        : [];
 
-    const workspaces = dataSource.listWorkspaces().map((workspace) => ({
-      id: `workspace-${workspace.id}`,
-      label: workspace.name,
-      detail: `${workspace.slug} · ${workspace.memberCount} 位成员`,
-      href: `/admin/workspaces?workspace=${workspace.id}`,
-      type: "workspace" as const,
-    }));
+    const workspaces =
+      dataMode === "fixture"
+        ? dataSource.listWorkspaces().map((workspace) => ({
+            id: `workspace-${workspace.id}`,
+            label: workspace.name,
+            detail: `${workspace.slug} · ${workspace.memberCount} 位成员`,
+            href: `/admin/workspaces?workspace=${workspace.id}`,
+            type: "workspace" as const,
+          }))
+        : [];
 
     return [...pages, ...users, ...workspaces];
-  }, [dataSource]);
+  }, [dataMode, dataSource]);
 
   const filtered = results.filter((result) => {
     const needle = query.trim().toLocaleLowerCase("zh-CN");
@@ -84,7 +92,9 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
         <DialogHeader className="border-b border-hairline px-5 py-4">
           <DialogTitle className="text-xl">全局搜索</DialogTitle>
           <DialogDescription>
-            搜索后台页面、用户和工作区。当前结果来自本地 fixture。
+            {dataMode === "api"
+              ? "搜索后台页面；用户与 Workspace 实体搜索由对应列表页的 API 筛选完成。"
+              : "搜索后台页面、用户和工作区。当前结果来自本地 fixture。"}
           </DialogDescription>
         </DialogHeader>
         <div className="border-b border-hairline px-5 py-4">

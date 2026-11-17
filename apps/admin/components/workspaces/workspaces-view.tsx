@@ -19,7 +19,9 @@ import {
   SheetTitle,
 } from "@roamlog/ui";
 
-import { getAdminDataSource } from "../../lib/admin-data-source";
+import { getAdminDataSource, type AdminMutationPort } from "../../lib/admin-data-source";
+import type { AdminDataMode } from "../../lib/admin-data-mode";
+import { AdminMutationError } from "../../lib/admin-api-error";
 import type { AdminConsoleRole } from "../../lib/fixtures";
 import { formatBytes, formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
@@ -63,7 +65,7 @@ const actionCopy: Record<
   },
   restore: {
     title: "恢复工作区",
-    description: "Workspace 将重新对成员开放。当前演示只更新本地 fixture。",
+    description: "Workspace 将重新对成员开放，操作由后端执行并写入审计。",
     confirmLabel: "确认恢复",
     action: "admin.workspace.restore",
   },
@@ -75,19 +77,19 @@ const actionCopy: Record<
   },
   "bulk-suspend": {
     title: "批量暂停工作区",
-    description: "所选 Workspace 会暂停访问。当前演示不会调用真实 API。",
+    description: "所选 Workspace 会暂停访问，操作由后端执行并写入审计。",
     confirmLabel: "确认批量暂停",
     action: "admin.workspace.bulk-suspend",
   },
   "bulk-restore": {
     title: "批量恢复工作区",
-    description: "所选 Workspace 会恢复访问。当前演示不会调用真实 API。",
+    description: "所选 Workspace 会恢复访问，操作由后端执行并写入审计。",
     confirmLabel: "确认批量恢复",
     action: "admin.workspace.bulk-restore",
   },
   "bulk-delete": {
     title: "批量删除工作区",
-    description: "所选 Workspace 进入软删除状态。当前演示不会调用真实 API。",
+    description: "所选 Workspace 进入软删除状态，操作由后端执行并写入审计。",
     confirmLabel: "确认批量删除",
     action: "admin.workspace.bulk-delete",
   },
@@ -96,9 +98,16 @@ const actionCopy: Record<
 interface WorkspacesViewProps {
   role: AdminConsoleRole;
   workspaces?: readonly AdminWorkspaceDetail[];
+  mode?: AdminDataMode;
+  mutations?: AdminMutationPort;
 }
 
-export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
+export function WorkspacesView({
+  role,
+  workspaces,
+  mode = "fixture",
+  mutations,
+}: WorkspacesViewProps) {
   const sourceWorkspaces = workspaces ?? getAdminDataSource().listWorkspaces();
   const [records, setRecords] = useState<readonly AdminWorkspaceDetail[]>(sourceWorkspaces);
   const [query, setQuery] = useState("");
@@ -149,23 +158,54 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
       : action.workspace.name;
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!pendingAction) {
       return;
     }
 
-    const copy = actionCopy[pendingAction.kind];
+    const action = pendingAction;
+    const copy = actionCopy[action.kind];
 
-    if (isBulkWorkspaceAction(pendingAction)) {
-      const ids = new Set(pendingAction.workspaces.map((workspace) => workspace.id));
+    if (mode === "api" && mutations) {
+      try {
+        if (isBulkWorkspaceAction(action)) {
+          await Promise.all(
+            action.workspaces.map((workspace) =>
+              action.kind === "bulk-delete"
+                ? mutations.deleteWorkspace(workspace.id)
+                : mutations.updateWorkspace(workspace.id, {
+                    status: action.kind === "bulk-restore" ? "active" : "suspended",
+                  }),
+            ),
+          );
+        } else if (action.kind === "suspend" || action.kind === "restore") {
+          await mutations.updateWorkspace(action.workspace.id, {
+            status: action.kind === "suspend" ? "suspended" : "active",
+          });
+        } else {
+          await mutations.deleteWorkspace(action.workspace.id);
+        }
+      } catch (error) {
+        setStatusMessage(
+          error instanceof AdminMutationError
+            ? `操作失败：${error.failure.code} · ${error.failure.detail}`
+            : "操作失败，请检查 API 与权限后重试。",
+        );
+        setPendingAction(null);
+        return;
+      }
+    }
+
+    if (isBulkWorkspaceAction(action)) {
+      const ids = new Set(action.workspaces.map((workspace) => workspace.id));
       setRecords((current) =>
         current.map((workspace) =>
           ids.has(workspace.id)
             ? {
                 ...workspace,
-                status: (pendingAction.kind === "bulk-restore"
+                status: (action.kind === "bulk-restore"
                   ? "active"
-                  : pendingAction.kind === "bulk-delete"
+                  : action.kind === "bulk-delete"
                     ? "deleted"
                     : "suspended") as AccountStatus,
               }
@@ -173,43 +213,43 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
         ),
       );
       setSelectedIds(new Set());
-    } else if (pendingAction.kind === "suspend" || pendingAction.kind === "restore") {
-      const nextStatus: AccountStatus = pendingAction.kind === "suspend" ? "suspended" : "active";
+    } else if (action.kind === "suspend" || action.kind === "restore") {
+      const nextStatus: AccountStatus = action.kind === "suspend" ? "suspended" : "active";
       setRecords((current) =>
         current.map((workspace) =>
-          workspace.id === pendingAction.workspace.id
-            ? { ...workspace, status: nextStatus }
-            : workspace,
+          workspace.id === action.workspace.id ? { ...workspace, status: nextStatus } : workspace,
         ),
       );
     } else {
       setRecords((current) =>
         current.map((workspace) =>
-          workspace.id === pendingAction.workspace.id
-            ? { ...workspace, status: "deleted" }
-            : workspace,
+          workspace.id === action.workspace.id ? { ...workspace, status: "deleted" } : workspace,
         ),
       );
     }
 
-    recordMockAuditEvent({
-      action: copy.action,
-      targetType: "workspace",
-      targetId:
-        isBulkWorkspaceAction(pendingAction)
-          ? `batch-${pendingAction.workspaces.length}`
-          : pendingAction.workspace.id,
-      targetName: actionTarget(pendingAction),
-      metadata: { previousRole: role, mock: true },
-    });
-    setStatusMessage(`模拟审计事件已记录：${copy.action}`);
+    if (mode === "fixture") {
+      recordMockAuditEvent({
+        action: copy.action,
+        targetType: "workspace",
+        targetId: isBulkWorkspaceAction(action)
+          ? `batch-${action.workspaces.length}`
+          : action.workspace.id,
+        targetName: actionTarget(action),
+        metadata: { previousRole: role, mock: true },
+      });
+    }
+    setStatusMessage(
+      mode === "api"
+        ? `已提交：${copy.action}（审计由后端写入）`
+        : `模拟审计事件已记录：${copy.action}`,
+    );
     setPendingAction(null);
   }
 
   const copy = pendingAction ? actionCopy[pendingAction.kind] : null;
-  const workspaceContext = detailWorkspace
-    ? getWorkspaceContext(detailWorkspace.id)
-    : null;
+  const workspaceContext =
+    mode === "fixture" && detailWorkspace ? getWorkspaceContext(detailWorkspace.id) : null;
 
   return (
     <div className="space-y-5">
@@ -222,7 +262,9 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
             <p className="type-eyebrow">活跃成员总量</p>
             <p className="mt-1 font-mono text-[11px] text-body">
-              {records.reduce((total, workspace) => total + workspace.memberCount, 0)}
+              {mode === "api"
+                ? "—"
+                : records.reduce((total, workspace) => total + workspace.memberCount, 0)}
             </p>
           </div>
         }
@@ -292,8 +334,7 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
               variant="ghost"
               size="sm"
               disabled={
-                !canRestore ||
-                !bulkWorkspaces.some((workspace) => workspace.status === "suspended")
+                !canRestore || !bulkWorkspaces.some((workspace) => workspace.status === "suspended")
               }
               onClick={() => setPendingAction({ kind: "bulk-restore", workspaces: bulkWorkspaces })}
             >
@@ -326,10 +367,10 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
           <div>
             <h2 className="text-[13px] font-medium text-ink">Workspace 列表</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              tenants / fixture page 1
+              tenants / {mode} page 1
             </p>
           </div>
-          <Badge tone="neutral">fixture</Badge>
+          <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
         </div>
 
         {filteredWorkspaces.length === 0 ? (
@@ -436,13 +477,13 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
                       </span>
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
-                      {workspace.memberCount}
+                      {mode === "api" ? "—" : workspace.memberCount}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
-                      {workspace.tripCount}
+                      {mode === "api" ? "—" : workspace.tripCount}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
-                      {workspace.entryCount}
+                      {mode === "api" ? "—" : workspace.entryCount}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
                       {formatDateTime(workspace.updatedAt)}
@@ -502,7 +543,7 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
           {detailWorkspace ? (
             <>
               <SheetHeader>
-                <p className="type-eyebrow">WORKSPACE DETAIL / FIXTURE</p>
+                <p className="type-eyebrow">WORKSPACE DETAIL / {mode.toUpperCase()}</p>
                 <SheetTitle>{detailWorkspace.name}</SheetTitle>
                 <SheetDescription>{detailWorkspace.slug}</SheetDescription>
               </SheetHeader>
@@ -521,7 +562,9 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
                 ].map(([label, value]) => (
                   <div key={label} className="bg-surface-1 p-3">
                     <dt className="type-eyebrow">{label}</dt>
-                    <dd className="mt-1.5 font-serif text-2xl text-ink">{value}</dd>
+                    <dd className="mt-1.5 font-serif text-2xl text-ink">
+                      {mode === "api" ? "—" : value}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -538,13 +581,15 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
                 <div className="bg-surface-1 p-3">
                   <p className="type-eyebrow">存储用量</p>
                   <p className="mt-1.5 font-serif text-xl text-ink">
-                    {formatBytes(workspaceContext?.storageBytes ?? 0)}
+                    {mode === "api" ? "—" : formatBytes(workspaceContext?.storageBytes ?? 0)}
                   </p>
                 </div>
                 <div className="bg-surface-1 p-3">
                   <p className="type-eyebrow">成员总数</p>
                   <p className="mt-1.5 font-serif text-xl text-ink">
-                    {workspaceContext?.members.length ?? detailWorkspace.memberCount}
+                    {mode === "api"
+                      ? "—"
+                      : (workspaceContext?.members.length ?? detailWorkspace.memberCount)}
                   </p>
                 </div>
               </div>
@@ -555,7 +600,7 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
                     成员
                   </h3>
                   <span className="font-mono text-[9px] text-muted">
-                    {workspaceContext?.members.length ?? 0} records
+                    {mode === "api" ? "—" : `${workspaceContext?.members.length ?? 0} records`}
                   </span>
                 </div>
                 {workspaceContext && workspaceContext.members.length > 0 ? (
@@ -571,13 +616,17 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
                           <Badge tone="slate">{member.role}</Badge>
-                          {member.status === "suspended" ? <Badge tone="yellow">Suspended</Badge> : null}
+                          {member.status === "suspended" ? (
+                            <Badge tone="yellow">Suspended</Badge>
+                          ) : null}
                         </div>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-[11px] text-muted">没有成员记录。</p>
+                  <p className="mt-2 text-[11px] text-muted">
+                    {mode === "api" ? "当前 Admin API 列表响应未提供成员明细。" : "没有成员记录。"}
+                  </p>
                 )}
               </section>
 
@@ -587,7 +636,7 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
                     最近旅行
                   </h3>
                   <span className="font-mono text-[9px] text-muted">
-                    {workspaceContext?.recentTrips.length ?? 0} records
+                    {mode === "api" ? "—" : `${workspaceContext?.recentTrips.length ?? 0} records`}
                   </span>
                 </div>
                 {workspaceContext && workspaceContext.recentTrips.length > 0 ? (
@@ -607,7 +656,11 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-[11px] text-muted">没有近期旅行记录。</p>
+                  <p className="mt-2 text-[11px] text-muted">
+                    {mode === "api"
+                      ? "当前 Admin API 列表响应未提供近期旅行明细。"
+                      : "没有近期旅行记录。"}
+                  </p>
                 )}
               </section>
 

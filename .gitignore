@@ -33,6 +33,7 @@ Thumbs.db
 playwright-report/
 test-results/
 screenshots/
+e2e/screenshots/
 .nyc_output/
 
 # Local data
