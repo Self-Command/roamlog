@@ -22,6 +22,7 @@ import {
 import { RequirePermission } from "../../common/guards/require-permission.decorator.js";
 import { RolesGuard } from "../../common/guards/roles.guard.js";
 import { TenantGuard } from "../../common/guards/tenant.guard.js";
+import { MediaPresignRateLimitGuard } from "../../common/security/media-presign-rate-limit.guard.js";
 import { parseRequest } from "../../common/services/request-validation.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
@@ -39,7 +40,7 @@ export class MediaController {
 
   @Post("workspaces/:workspaceId/media/presign")
   @RequirePermission("media:presign", "media")
-  @UseGuards(TenantGuard, RolesGuard)
+  @UseGuards(MediaPresignRateLimitGuard, TenantGuard, RolesGuard)
   presign(
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,

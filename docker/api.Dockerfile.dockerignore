@@ -1,0 +1,15 @@
+.git
+.github
+.data
+.e2e-live
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/test-results
+**/playwright-report
+**/screenshots
+**/.env
+**/.env.*
+**/*.log

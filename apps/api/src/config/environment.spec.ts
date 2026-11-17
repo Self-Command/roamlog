@@ -30,6 +30,30 @@ describe("validateEnvironment", () => {
     expect(result.CORS_ORIGINS).toEqual(["http://localhost:3000", "http://localhost:3001"]);
     expect(result).toMatchObject({
       RESEND_API_KEY: "re_test_preserved",
+      AUTH_RATE_LIMIT_MAX: 10,
+      PUBLIC_SHARE_RATE_LIMIT_MAX: 60,
+      PUBLIC_SHARE_PASSWORD_RATE_LIMIT_MAX: 20,
+      MEDIA_PRESIGN_RATE_LIMIT_MAX: 20,
+      RATE_LIMIT_WINDOW_SECONDS: 60,
+    });
+  });
+
+  it("accepts configurable rate-limit thresholds", () => {
+    const result = validateEnvironment({
+      ...baseEnvironment,
+      AUTH_RATE_LIMIT_MAX: "7",
+      PUBLIC_SHARE_RATE_LIMIT_MAX: "45",
+      PUBLIC_SHARE_PASSWORD_RATE_LIMIT_MAX: "5",
+      MEDIA_PRESIGN_RATE_LIMIT_MAX: "12",
+      RATE_LIMIT_WINDOW_SECONDS: "120",
+    });
+
+    expect(result).toMatchObject({
+      AUTH_RATE_LIMIT_MAX: 7,
+      PUBLIC_SHARE_RATE_LIMIT_MAX: 45,
+      PUBLIC_SHARE_PASSWORD_RATE_LIMIT_MAX: 5,
+      MEDIA_PRESIGN_RATE_LIMIT_MAX: 12,
+      RATE_LIMIT_WINDOW_SECONDS: 120,
     });
   });
 

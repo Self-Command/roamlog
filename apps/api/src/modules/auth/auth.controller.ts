@@ -1,6 +1,7 @@
-import { All, Controller, Inject, Req, Res } from "@nestjs/common";
+import { All, Controller, Inject, Req, Res, UseGuards } from "@nestjs/common";
 import type { Request, Response } from "express";
 
+import { AuthMutationRateLimitGuard } from "../../common/security/auth-mutation-rate-limit.guard.js";
 import { redactUrlPathForLogging } from "../../common/services/log-redaction.js";
 import { AppConfigService } from "../../config/app-config.service.js";
 import { AuthService } from "./auth.service.js";
@@ -65,6 +66,7 @@ function webHeaders(request: Request): Headers {
 }
 
 @Controller("auth")
+@UseGuards(AuthMutationRateLimitGuard)
 export class AuthController {
   constructor(
     @Inject(AuthService) private readonly auth: AuthService,

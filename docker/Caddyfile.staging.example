@@ -1,0 +1,48 @@
+# Example TLS ingress for staging. Replace domains and the operator email
+# before use. Keep headers aligned with the CSP tests for the deployed build.
+
+{
+	admin off
+	email ops@roamlog.app
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(self), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-site"
+		-Server
+	}
+}
+
+(next_csp) {
+	header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; worker-src 'self' blob:; media-src 'self' blob: https:"
+}
+
+app.staging.roamlog.app {
+	import security_headers
+	import next_csp
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:13000
+}
+
+admin.staging.roamlog.app {
+	import security_headers
+	import next_csp
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:13001
+}
+
+api.staging.roamlog.app {
+	import security_headers
+	encode zstd gzip
+
+	@metrics path /v1/metrics
+	respond @metrics 404
+
+	reverse_proxy 127.0.0.1:14000
+}

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { DEFAULT_EMAIL_FROM, renderSampleEmails } from "./render.js";
@@ -15,6 +16,13 @@ interface MailpitAddress {
 interface MailpitMessageList {
   total?: number;
   messages_count?: number;
+  messages?: MailpitMessage[];
+}
+
+interface MailpitMessage {
+  ID: string;
+  Subject: string;
+  To: Array<{ Address?: string; Email?: string; Name?: string }>;
 }
 
 function loadLocalEnvironment(): string | undefined {
@@ -86,6 +94,7 @@ export async function runEmailSmoke(): Promise<Record<string, unknown>> {
   await request(`${baseUrl}/livez`);
   const emails = await renderSampleEmails();
   const sent: Array<{ template: string; subject: string; id: string }> = [];
+  const runTag = `roamlog-smoke-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
   for (const email of emails) {
     const response = await request(`${baseUrl}/api/v1/send`, {
@@ -99,7 +108,7 @@ export async function runEmailSmoke(): Promise<Record<string, unknown>> {
         Subject: email.subject,
         HTML: email.html,
         Text: email.text,
-        Tags: ["roamlog-smoke"],
+        Tags: [runTag],
         Headers: {
           "X-Roamlog-Smoke": email.id,
         },
@@ -116,12 +125,42 @@ export async function runEmailSmoke(): Promise<Record<string, unknown>> {
   const messagesResponse = await request(`${baseUrl}/api/v1/messages`);
   const messages = (await messagesResponse.json()) as MailpitMessageList;
   const total = messages.total ?? messages.messages_count ?? 0;
+  const mailboxMessages = messages.messages ?? [];
+  const verified: Array<{ template: string; id: string; subject: string; recipient: string }> = [];
+  for (const email of sent) {
+    const captured = mailboxMessages.find((message) => message.ID === email.id);
+    if (!captured) {
+      throw new Error(`Mailpit did not retain the ${email.template} message (${email.id}).`);
+    }
+    if (captured.Subject !== email.subject) {
+      throw new Error(
+        `Mailpit subject mismatch for ${email.template}: expected "${email.subject}", received "${captured.Subject}".`,
+      );
+    }
+    if (
+      !captured.To.some(
+        (address) => address.Address === recipient.Email || address.Email === recipient.Email,
+      )
+    ) {
+      throw new Error(
+        `Mailpit did not record ${recipient.Email} as a recipient of ${email.template}.`,
+      );
+    }
+    verified.push({
+      template: email.template,
+      id: captured.ID,
+      subject: captured.Subject,
+      recipient: recipient.Email,
+    });
+  }
 
   return {
     mailpitUrl: baseUrl,
     environmentFile,
+    runTag,
     sent,
     mailboxTotal: total,
+    verified,
   };
 }
 

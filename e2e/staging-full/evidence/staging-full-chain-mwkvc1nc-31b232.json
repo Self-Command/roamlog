@@ -1,0 +1,201 @@
+{
+  "taskId": "STG-FULL-CHAIN",
+  "status": "passed",
+  "runId": "mwkvc1nc-31b232",
+  "startedAt": "2026-11-17T15:49:58.488Z",
+  "finishedAt": "2026-11-17T15:50:18.326Z",
+  "durationMs": 22044,
+  "environment": {
+    "apiPort": 4300,
+    "postgresPort": 55439,
+    "postgresSchema": "public",
+    "postgresEngine": "PostgreSQL 17.11 on x86_64-windows, compiled by msvc-19.44.35228, 64-bit",
+    "redisPrefix": "staging-full-mwkvc1nc-31b232",
+    "redisUrl": "redis://127.0.0.1:6379",
+    "s3Endpoint": "http://127.0.0.1:9000",
+    "s3Bucket": "roamlog-test",
+    "mailpitUrl": "http://127.0.0.1:8025",
+    "artifactsDirectory": "e2e/staging-full/artifacts/runs/mwkvc1nc-31b232"
+  },
+  "checks": {
+    "stagingServices": {
+      "redis": true,
+      "minio": true,
+      "mailpit": true,
+      "restarted": false
+    },
+    "bucket": {
+      "status": "ready",
+      "bucket": "roamlog-test",
+      "log": "artifacts/runs/mwkvc1nc-31b232/bucket-bootstrap.log"
+    },
+    "postgres": {
+      "status": "started",
+      "port": 55439,
+      "dataDirectory": "e2e/staging-full/artifacts/runs/mwkvc1nc-31b232/pgdata"
+    },
+    "migrations": {
+      "status": "applied",
+      "command": "pnpm --filter @roamlog/db exec prisma migrate deploy",
+      "log": "e2e/staging-full/artifacts/runs/mwkvc1nc-31b232/prisma-migrate.log"
+    },
+    "database": {
+      "status": "connected",
+      "schema": "public",
+      "version": "PostgreSQL 17.11 on x86_64-windows, compiled by msvc-19.44.35228, 64-bit"
+    },
+    "apiReadiness": {
+      "status": "ok",
+      "httpStatus": 200,
+      "checks": {
+        "database": {
+          "status": "up",
+          "latencyMs": 99
+        },
+        "redis": {
+          "status": "up",
+          "latencyMs": 79
+        },
+        "storage": {
+          "status": "up",
+          "latencyMs": 76
+        }
+      }
+    },
+    "worker": {
+      "status": "ready",
+      "stdout": "e2e/staging-full/artifacts/runs/mwkvc1nc-31b232/worker.stdout.log",
+      "stderr": "e2e/staging-full/artifacts/runs/mwkvc1nc-31b232/worker.stderr.log"
+    },
+    "auth": {
+      "status": "authenticated",
+      "signUpHttpStatus": 200,
+      "signInHttpStatus": 200,
+      "userId": "01a1ea33-9096-7bf3-a98b-d75580d13083",
+      "emailVerified": true,
+      "platformRole": "admin",
+      "sessionCookie": "[present]"
+    },
+    "fixtures": {
+      "status": "seeded",
+      "workspaceId": "01a1ea33-9141-73a9-9316-c621f62f77f3",
+      "tripId": "01a1ea33-9141-79c2-b1d9-1907d4b03cb7",
+      "journalEntryId": "01a1ea33-9141-76ff-914b-e8709c6011c2",
+      "emailLogId": "01a1ea33-9141-7f0d-a477-df6ae9f06690"
+    },
+    "mediaFailure": {
+      "status": "failed",
+      "error": "Uploaded object is not a supported image (magic bytes mismatch)"
+    },
+    "media": {
+      "status": "ready",
+      "mediaId": "01a1ea33-9203-7a7d-9151-ab81bf394840",
+      "initialPutHttpStatus": 200,
+      "retryPutHttpStatus": 200,
+      "failureWasObserved": true,
+      "automaticRetryJobId": "media-process-794b3c91d791516288cb9768af8da94b",
+      "automaticRetryAttemptsObserved": [
+        1,
+        2
+      ],
+      "automaticRetryFailedEventObserved": 1,
+      "automaticRetryCompletedEventObserved": 1,
+      "width": 1600,
+      "height": 900,
+      "blurhashLength": 27,
+      "variantNames": [
+        "large",
+        "largeJpeg",
+        "medium",
+        "mediumJpeg",
+        "original",
+        "thumb",
+        "thumbJpeg"
+      ],
+      "signedOriginalReadHttpStatus": 200,
+      "originalSha256": "3e881da78c81447062f7441e538c4917c4a43f25e839292b47dc24287e4f6340",
+      "originalRoundTrip": true,
+      "signedThumbnailReadHttpStatus": 200,
+      "signedThumbnailContentType": "image/webp",
+      "anonymousReadHttpStatus": 403,
+      "repeatedCompletionStatus": "ready",
+      "mediaJobCount": 1
+    },
+    "email": {
+      "status": "sent",
+      "emailLogId": "01a1ea33-ab78-74ba-b70d-e8fd2fd478fd",
+      "emailJobId": "email-resend-436e1ecda90a4614c096fc9fb18863e5",
+      "providerId": "0oYGu3QS88tZUzQV2HgUiQ",
+      "providerIdMatchesMailpit": true,
+      "mailpitMessageId": "0oYGu3QS88tZUzQV2HgUiQ",
+      "mailpitSubject": "验证你的 Roamlog 邮箱",
+      "recipient": "staging-full-mwkvc1nc-31b232-worker@roamlog.test",
+      "recipientWasRetained": true,
+      "mailboxTotal": 50
+    },
+    "export": {
+      "status": "ready",
+      "exportId": "01a1ea33-ad8d-7749-a4e8-76e7562726eb",
+      "idempotentReplaySameId": true,
+      "exportJobId": "export-968d02bc1e056fa8f64d3534bb3ab015",
+      "storageKey": "exports/01a1ea33-9141-73a9-9316-c621f62f77f3/01a1ea33-ad8d-7749-a4e8-76e7562726eb/export.zip",
+      "signedDownloadHttpStatus": 200,
+      "zipBytes": 3514504,
+      "zipEntries": [
+        "README.txt",
+        "expenses.csv",
+        "itinerary.csv",
+        "journal.md",
+        "packing.csv",
+        "photos/01a1ea33-9203-7a7d-9151-ab81bf394840-original.png",
+        "trip.json"
+      ],
+      "pdf": "not-applicable",
+      "ttlMilliseconds": 604800000,
+      "ttlDays": 7,
+      "expiresAt": "2026-11-24T15:50:17.943Z",
+      "completedAt": "2026-11-17T15:50:17.943Z",
+      "photoRoundTrip": true,
+      "anonymousReadHttpStatus": 403
+    },
+    "queueBoundary": {
+      "status": "verified",
+      "apiIngress": "jobs:ingress",
+      "redisPrefix": "staging-full-mwkvc1nc-31b232",
+      "workerConsumers": [
+        "media",
+        "email",
+        "export"
+      ]
+    }
+  },
+  "cleanup": {
+    "apiTermination": {
+      "exitCode": null,
+      "signalCode": "SIGTERM"
+    },
+    "workerTermination": {
+      "exitCode": null,
+      "signalCode": "SIGTERM"
+    },
+    "s3": {
+      "attempted": 8,
+      "deleted": 8,
+      "failures": []
+    },
+    "redis": {
+      "keyPrefix": "staging-full-mwkvc1nc-31b232",
+      "deletedKeys": 26
+    }
+  },
+  "notExecuted": [
+    "Resend or external SMTP delivery (Mailpit is the local sink)",
+    "Production TLS, OAuth, object-storage IAM, or cross-host networking",
+    "Docker-managed PostgreSQL/MinIO services (this run uses local binaries and an isolated database)",
+    "Desktop/mobile UI verification (this task exercises backend and worker paths)"
+  ],
+  "databaseSession": {
+    "schema": "public",
+    "search_path": "public"
+  }
+}

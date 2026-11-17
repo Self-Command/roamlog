@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { SecurityModule } from "./common/security/security.module.js";
 import { AppConfigModule } from "./config/app-config.module.js";
 import { SanitizeModule } from "./common/services/sanitize.module.js";
 import { ActivitiesModule } from "./modules/activities/activities.module.js";
@@ -32,6 +33,7 @@ import { WorkspacesModule } from "./modules/workspaces/workspaces.module.js";
 @Module({
   imports: [
     AppConfigModule,
+    SecurityModule,
     SanitizeModule,
     ObservabilityModule,
     PrismaModule,

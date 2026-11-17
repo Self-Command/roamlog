@@ -1,0 +1,124 @@
+name: Release gate
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and verify images without pushing to GHCR"
+        required: true
+        default: true
+        type: boolean
+      image_tag:
+        description: "Extra image tag for a manually published staging build"
+        required: false
+        default: staging
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    name: Reuse CI quality gate
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    name: Build ${{ matrix.component }} image
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - component: api
+            dockerfile: docker/api.Dockerfile
+            target: runtime
+          - component: migrate
+            dockerfile: docker/api.Dockerfile
+            target: migrate
+          - component: worker
+            dockerfile: docker/worker.Dockerfile
+            target: runtime
+          - component: web
+            dockerfile: docker/web.Dockerfile
+            target: runtime
+          - component: admin
+            dockerfile: docker/admin.Dockerfile
+            target: runtime
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve lowercase GHCR image name
+        id: image
+        run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/${{ matrix.component }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: >-
+          ${{
+            (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) ||
+            (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+          }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=${{ inputs.image_tag || 'staging' }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=ref,event=tag,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build release image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          pull: true
+          push: >-
+            ${{
+              (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) ||
+              (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+            }}
+          load: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            API_URL=http://api:4000
+            NEXT_PUBLIC_DATA_MODE=api
+            NEXT_PUBLIC_ADMIN_DATA_MODE=api
+            NEXT_PUBLIC_MAP_STYLE_URL=${{ vars.NEXT_PUBLIC_MAP_STYLE_URL || 'https://demotiles.maplibre.org/style.json' }}
+            NEXT_PUBLIC_GEOCODER_URL=${{ vars.NEXT_PUBLIC_GEOCODER_URL || 'https://nominatim.openstreetmap.org' }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          provenance: ${{ github.event_name == 'push' }}
+          sbom: ${{ github.event_name == 'push' }}
+
+      - name: Record release mode
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "Dry run: \`${{ matrix.component }}\` image built locally and was not pushed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Published \`${{ matrix.component }}\`: ${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          fi

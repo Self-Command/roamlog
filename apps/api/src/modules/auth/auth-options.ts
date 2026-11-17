@@ -97,9 +97,7 @@ export function buildAuthOptions(dependencies: AuthOptionsDependencies): Record<
       }),
     ],
     rateLimit: {
-      enabled: true,
-      window: 60,
-      max: 10,
+      enabled: false,
     },
     telemetry: {
       enabled: false,

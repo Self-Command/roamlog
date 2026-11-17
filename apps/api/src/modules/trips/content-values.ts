@@ -1,6 +1,12 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { UuidV7Schema, type WorkspaceRole } from "@roamlog/contracts";
 
+export const UNSPECIFIED_TRIP_ORIGIN = "未填写";
+
+export function canonicalTripOrigin(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim() : UNSPECIFIED_TRIP_ORIGIN;
+}
+
 export function dateOnlyToDate(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }

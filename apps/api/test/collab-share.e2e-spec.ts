@@ -141,7 +141,7 @@ describe("ShareLinksService", () => {
     const token = "t".repeat(43);
     repository.findShareLinkByHash.mockResolvedValue(shareLinkRecord());
     repository.loadPublicTrip.mockResolvedValue({
-      trip: tripRecord(),
+      trip: tripRecord({ origin: "" }),
       stops: [stopRecord()],
       entries: [
         {
@@ -190,6 +190,7 @@ describe("ShareLinksService", () => {
 
     expect(payload.entries[0]?.contentHtml).toContain("<p>Safe</p>");
     expect(payload.entries[0]?.contentHtml).not.toMatch(/script|alert/i);
+    expect(payload.trip.origin).toBe("未填写");
     expect(JSON.stringify(payload)).not.toMatch(
       /tokenHash|passwordHash|email|comments|createdBy|workspaceId/i,
     );

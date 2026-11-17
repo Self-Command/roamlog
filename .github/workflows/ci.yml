@@ -4,10 +4,14 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   NODE_ENV: test
@@ -35,7 +39,7 @@ jobs:
   quality:
     name: Install, verify, and build
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:17-alpine
@@ -78,6 +82,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup Python for staging checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install staging YAML validator
+        run: python -m pip install PyYAML==6.0.3
+
+      - name: Static staging, Docker, and workflow checks
+        run: pnpm staging:validate
+
+      - name: Compose config validation
+        env:
+          ROAMLOG_STAGING_ENV_FILE: staging.env.example
+        run: >-
+          docker compose
+          --profile app
+          --env-file docker/staging.env.example
+          -f docker/compose.staging.yml
+          config --quiet
+
       - name: Lint
         run: pnpm lint
 
@@ -98,3 +123,19 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E browser smoke
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm e2e:web --grep "dashboard renders real travel stats and next journey"
+
+      - name: E2E API smoke
+        env:
+          E2E_SKIP_WEB_SERVER: "1"
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm e2e:api

@@ -31,6 +31,7 @@ import { parseRequest } from "../../common/services/request-validation.js";
 import { SanitizeService } from "../../common/services/sanitize.service.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { ActivitiesService } from "../activities/activities.service.js";
+import { canonicalTripOrigin } from "../trips/content-values.js";
 import {
   ShareLinksRepository,
   type PublicTripBundle,
@@ -196,7 +197,7 @@ export class ShareLinksService {
         startDate: dateOnly(trip.startDate),
         endDate: dateOnly(trip.endDate),
         coverMediaId: trip.coverMediaId ?? null,
-        origin: trip.origin,
+        origin: canonicalTripOrigin(trip.origin),
         destinations: trip.destinations ?? [],
         countryCodes: trip.countryCodes ?? [],
         tags: trip.tags ?? [],

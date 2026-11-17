@@ -56,7 +56,7 @@ function createDatabase(): WorkerDependencies["db"] {
   }
 }
 
-function createStorage(): WorkerStorage {
+export function createStorage(): WorkerStorage {
   const bucket = process.env.S3_BUCKET?.trim();
   if (!bucket) {
     throw new Error("S3_BUCKET is required by the worker");
@@ -96,7 +96,7 @@ function createStorage(): WorkerStorage {
   };
 }
 
-function createImageProcessor(): ImageProcessor {
+export function createImageProcessor(): ImageProcessor {
   return {
     async process({ bytes, mediaKey }) {
       let sharp: any;
@@ -169,8 +169,62 @@ function createImageProcessor(): ImageProcessor {
   };
 }
 
-function createEmailSender(): EmailSender {
+function parseEmailAddress(raw: string): { Email: string; Name?: string } {
+  const match = raw.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (!match) {
+    return { Email: raw.trim() };
+  }
+  return {
+    Email: match[2] ?? raw.trim(),
+    ...(match[1]?.trim() ? { Name: match[1].trim() } : {}),
+  };
+}
+
+function mailpitUrl(): string {
+  const configured = process.env.MAILPIT_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/+$/, "");
+  }
+  const port = process.env.MAILPIT_UI_PORT?.trim() || "8025";
+  return `http://127.0.0.1:${port}`;
+}
+
+async function sendViaMailpit(
+  message: Parameters<EmailSender>[0],
+): Promise<{ providerId: string }> {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Mailpit transport is disabled in production");
+  }
+  const response = await fetch(`${mailpitUrl()}/api/v1/send`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      From: parseEmailAddress(process.env.EMAIL_FROM ?? "Roamlog <hello@roamlog.app>"),
+      To: [parseEmailAddress(message.to)],
+      Subject: message.subject,
+      HTML: message.html,
+      Text: message.text,
+      Tags: ["roamlog-worker"],
+      Headers: {
+        "X-Roamlog-Idempotency-Key": message.idempotencyKey,
+      },
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Mailpit rejected the message (${response.status})`);
+  }
+  const body = (await response.json()) as { ID?: string };
+  return { providerId: body.ID ?? message.idempotencyKey };
+}
+
+export function createEmailSender(): EmailSender {
   return async (message) => {
+    if (process.env.EMAIL_PROVIDER?.trim().toLowerCase() === "mailpit") {
+      return sendViaMailpit(message);
+    }
     const apiKey = process.env.RESEND_API_KEY?.trim();
     if (!apiKey) {
       throw new Error("RESEND_API_KEY is required to send worker email");
@@ -198,9 +252,11 @@ function createEmailSender(): EmailSender {
   };
 }
 
-function createEmailRenderer(): EmailRenderer {
+export function createEmailRenderer(): EmailRenderer {
   return async (template, data) => {
     try {
+      const emailsRequire = createRequire(require.resolve("@roamlog/emails"));
+      (globalThis as { React?: unknown }).React ??= emailsRequire("react");
       const module = (await import("@roamlog/emails" as string)) as any;
       const rendered = await module.renderEmailTemplate(template, data);
       return { subject: rendered.subject, html: rendered.html, text: rendered.text };

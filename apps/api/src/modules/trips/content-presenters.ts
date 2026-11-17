@@ -15,7 +15,7 @@ import {
   type TripParticipant,
 } from "@roamlog/contracts";
 
-import { iso, nullableIso, presentDate } from "./content-values.js";
+import { canonicalTripOrigin, iso, nullableIso, presentDate } from "./content-values.js";
 
 export function presentTrip(record: {
   id: string;
@@ -44,6 +44,7 @@ export function presentTrip(record: {
 }): Trip {
   return TripSchema.parse({
     ...record,
+    origin: canonicalTripOrigin(record.origin),
     startDate: presentDate(record.startDate),
     endDate: presentDate(record.endDate),
     createdAt: iso(record.createdAt),

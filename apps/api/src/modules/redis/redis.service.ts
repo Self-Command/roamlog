@@ -55,6 +55,19 @@ export class RedisService implements OnModuleDestroy {
     return result === "OK";
   }
 
+  async incrementFixedWindow(
+    key: string,
+    ttlSeconds: number,
+  ): Promise<{ count: number; ttlSeconds: number }> {
+    const count = await this.client.incr(key);
+    let remainingTtl = await this.client.ttl(key);
+    if (remainingTtl < 0) {
+      await this.client.expire(key, ttlSeconds);
+      remainingTtl = ttlSeconds;
+    }
+    return { count, ttlSeconds: Math.max(1, remainingTtl) };
+  }
+
   async delete(key: string): Promise<void> {
     await this.client.del(key);
   }

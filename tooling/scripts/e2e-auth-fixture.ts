@@ -183,7 +183,7 @@ async function main(): Promise<void> {
       label: "owner",
       name: "Wave 5 Owner",
     });
-    const webWorkspace = await createWorkspace(web.id, "Roamlog Crew", "roamlog-crew");
+    const webWorkspace = await createWorkspace(web.id, "Roamlog Crew", `wave5-web-${runId}`);
 
     const admin = await createUser({
       label: "admin",

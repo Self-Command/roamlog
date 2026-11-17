@@ -8,7 +8,7 @@ import type { EmailDeliveryService } from "../email-delivery.service.js";
 import { generateUuidV7 } from "../uuid.js";
 
 describe("Better Auth options", () => {
-  it("configures verification, OAuth, cookies, rate limit, and structural 2FA", () => {
+  it("disables the global limiter and configures verification, OAuth, cookies, and structural 2FA", () => {
     const prisma = {
       client: {
         user: {
@@ -56,8 +56,7 @@ describe("Better Auth options", () => {
         sendOnSignUp: true,
       },
       rateLimit: {
-        enabled: true,
-        max: 10,
+        enabled: false,
       },
       advanced: {
         cookiePrefix: "roamlog",

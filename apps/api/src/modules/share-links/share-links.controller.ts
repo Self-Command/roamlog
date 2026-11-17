@@ -18,6 +18,7 @@ import {
 } from "../../common/guards/actor-context.js";
 import { RequirePermission } from "../../common/guards/require-permission.decorator.js";
 import { RolesGuard } from "../../common/guards/roles.guard.js";
+import { PublicShareRateLimitGuard } from "../../common/security/public-share-rate-limit.guard.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { ContentTenant } from "../trips/content-tenant.decorator.js";
 import { ContentTenantGuard } from "../trips/content-tenant.guard.js";
@@ -67,6 +68,7 @@ export class ShareLinksController {
 }
 
 @Controller("public/trips")
+@UseGuards(PublicShareRateLimitGuard)
 export class PublicShareController {
   constructor(@Inject(ShareLinksService) private readonly shareLinks: ShareLinksService) {}
 

@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { PermissionService } from "../src/common/services/permission.service.js";
+import { presentTrip } from "../src/modules/trips/content-presenters.js";
 import { TripsService } from "../src/modules/trips/trips.service.js";
 import { VersionConflictException } from "../src/modules/trips/version-conflict.exception.js";
 import { makeActor } from "./identity-fixtures.js";
@@ -50,6 +51,12 @@ function setup() {
 }
 
 describe("TripsService", () => {
+  it("renders a legacy empty origin as unspecified without throwing", () => {
+    expect(presentTrip(tripRecord({ origin: "" }))).toMatchObject({
+      origin: "未填写",
+    });
+  });
+
   it("rejects an invalid trip date range before any write", async () => {
     const { repository, service } = setup();
 

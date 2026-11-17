@@ -10,26 +10,35 @@ export interface CreatePrismaClientOptions {
 function resolveConnectionString(connectionString?: string): string {
   const value = connectionString ?? process.env.DATABASE_URL;
   if (!value) {
-    throw new Error(
-      "DATABASE_URL is required to create the Roamlog Prisma client",
-    );
+    throw new Error("DATABASE_URL is required to create the Roamlog Prisma client");
   }
   return value;
 }
 
-export function createPrismaClient(
-  options: CreatePrismaClientOptions = {},
-): PrismaClient {
+function resolveSchema(connectionString: string): string {
+  try {
+    return new URL(connectionString).searchParams.get("schema")?.trim() || "public";
+  } catch {
+    return "public";
+  }
+}
+
+export function createPrismaClient(options: CreatePrismaClientOptions = {}): PrismaClient {
   if (options.client) {
     return options.client;
   }
 
-  const adapter =
-    options.adapter ??
-    new PrismaPg({
-      connectionString: resolveConnectionString(options.connectionString),
-      max: 10,
-    });
+  let adapter = options.adapter;
+  if (!adapter) {
+    const connectionString = resolveConnectionString(options.connectionString);
+    adapter = new PrismaPg(
+      {
+        connectionString,
+        max: 10,
+      },
+      { schema: resolveSchema(connectionString) },
+    );
+  }
 
   return new PrismaClient({ adapter });
 }

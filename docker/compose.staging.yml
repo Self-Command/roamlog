@@ -1,0 +1,301 @@
+name: roamlog-staging
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-app-hardening: &app-hardening
+  init: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging: *default-logging
+
+services:
+  postgres:
+    profiles: ["infra", "app"]
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+    networks:
+      - backend
+
+  redis:
+    profiles: ["infra", "app"]
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli --no-auth-warning -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+    networks:
+      - backend
+
+  minio:
+    profiles: ["infra", "app"]
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-10-15T17-29-55Z}
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-}
+    ports:
+      - "127.0.0.1:${STAGING_MINIO_CONSOLE_PORT:-19001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+    networks:
+      - backend
+
+  minio-init:
+    profiles: ["infra", "app"]
+    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z}
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+    volumes:
+      - ./minio-init:/init:ro
+    entrypoint: ["/bin/sh", "/init/01-create-bucket.sh"]
+    logging: *default-logging
+    networks:
+      - backend
+
+  mailpit:
+    profiles: ["infra", "app"]
+    image: axllent/mailpit:v1.27.8
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "1000"
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${STAGING_MAILPIT_UI_PORT:-18025}:8025"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+    networks:
+      - backend
+
+  migrate:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+      target: migrate
+    image: roamlog/staging-api-migrate:${ROAMLOG_IMAGE_TAG:-local}
+    <<: *app-hardening
+    restart: "no"
+    env_file:
+      - ${ROAMLOG_STAGING_ENV_FILE:-.env.staging}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      CHECKPOINT_DISABLE: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks:
+      - backend
+
+  api:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+      target: runtime
+    image: roamlog/staging-api:${ROAMLOG_IMAGE_TAG:-local}
+    <<: *app-hardening
+    env_file:
+      - ${ROAMLOG_STAGING_ENV_FILE:-.env.staging}
+    environment:
+      NODE_ENV: production
+      API_PORT: "4000"
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+      REDIS_PREFIX: ${REDIS_PREFIX:-roamlog-staging}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+      S3_FORCE_PATH_STYLE: "true"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_USER: ""
+      SMTP_PASSWORD: ""
+      TRUST_PROXY: "true"
+      ADMIN_2FA_ENFORCED: "true"
+    ports:
+      - "127.0.0.1:${STAGING_API_PORT:-14000}:4000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    stop_grace_period: 30s
+    networks:
+      - backend
+      - edge
+
+  worker:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/worker.Dockerfile
+      target: runtime
+    image: roamlog/staging-worker:${ROAMLOG_IMAGE_TAG:-local}
+    <<: *app-hardening
+    env_file:
+      - ${ROAMLOG_STAGING_ENV_FILE:-.env.staging}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+      REDIS_PREFIX: ${REDIS_PREFIX:-roamlog-staging}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+      S3_FORCE_PATH_STYLE: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    stop_grace_period: 30s
+    networks:
+      - backend
+      - egress
+
+  web:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+      target: runtime
+      args:
+        API_URL: http://api:4000
+        NEXT_PUBLIC_DATA_MODE: api
+        NEXT_PUBLIC_MAP_STYLE_URL: ${NEXT_PUBLIC_MAP_STYLE_URL:?NEXT_PUBLIC_MAP_STYLE_URL is required}
+        NEXT_PUBLIC_GEOCODER_URL: ${NEXT_PUBLIC_GEOCODER_URL:?NEXT_PUBLIC_GEOCODER_URL is required}
+    image: roamlog/staging-web:${ROAMLOG_IMAGE_TAG:-local}
+    <<: *app-hardening
+    env_file:
+      - ${ROAMLOG_STAGING_ENV_FILE:-.env.staging}
+    environment:
+      NODE_ENV: production
+      API_URL: http://api:4000
+      NEXT_PUBLIC_DATA_MODE: api
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "127.0.0.1:${STAGING_WEB_PORT:-13000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    stop_grace_period: 30s
+    networks:
+      - edge
+      - backend
+
+  admin:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/admin.Dockerfile
+      target: runtime
+      args:
+        API_URL: http://api:4000
+        NEXT_PUBLIC_ADMIN_DATA_MODE: api
+    image: roamlog/staging-admin:${ROAMLOG_IMAGE_TAG:-local}
+    <<: *app-hardening
+    env_file:
+      - ${ROAMLOG_STAGING_ENV_FILE:-.env.staging}
+    environment:
+      NODE_ENV: production
+      API_URL: http://api:4000
+      NEXT_PUBLIC_ADMIN_DATA_MODE: api
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "127.0.0.1:${STAGING_ADMIN_PORT:-13001}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    stop_grace_period: 30s
+    networks:
+      - edge
+      - backend
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+
+networks:
+  edge:
+    driver: bridge
+  egress:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true

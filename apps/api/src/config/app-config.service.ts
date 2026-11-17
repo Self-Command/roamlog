@@ -67,6 +67,26 @@ export class AppConfigService {
     return this.required("REDIS_PREFIX");
   }
 
+  get rateLimitWindowSeconds(): number {
+    return this.required("RATE_LIMIT_WINDOW_SECONDS");
+  }
+
+  get authRateLimitMax(): number {
+    return this.required("AUTH_RATE_LIMIT_MAX");
+  }
+
+  get publicShareRateLimitMax(): number {
+    return this.required("PUBLIC_SHARE_RATE_LIMIT_MAX");
+  }
+
+  get publicSharePasswordRateLimitMax(): number {
+    return this.required("PUBLIC_SHARE_PASSWORD_RATE_LIMIT_MAX");
+  }
+
+  get mediaPresignRateLimitMax(): number {
+    return this.required("MEDIA_PRESIGN_RATE_LIMIT_MAX");
+  }
+
   get betterAuthSecret(): string {
     return this.required("BETTER_AUTH_SECRET");
   }
