@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, FileSearch, ShieldCheck } from "lucide-react";
 
+import type { ExportAdminAuditCsvParams } from "@roamlog/api-client";
 import { canPlatform } from "@roamlog/contracts";
 import type { AuditLog } from "@roamlog/contracts";
 import { Badge, Button, EmptyState, Input, Select } from "@roamlog/ui";
 
+import { AdminMutationError } from "../../lib/admin-api-error";
 import { getAdminDataSource } from "../../lib/admin-data-source";
 import { MOCK_ADMIN_USERS, type AdminConsoleRole } from "../../lib/fixtures";
 import type { AdminDataMode } from "../../lib/admin-data-mode";
@@ -20,6 +22,7 @@ interface AuditViewProps {
   role: AdminConsoleRole;
   entries?: readonly AuditLog[];
   mode?: AdminDataMode;
+  exportCsv?: (params: ExportAdminAuditCsvParams) => Promise<string>;
 }
 
 const actorTypeLabels: Record<AuditLog["actorType"], string> = {
@@ -46,7 +49,31 @@ function escapeCsvValue(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-export function AuditView({ role, entries, mode = "fixture" }: AuditViewProps) {
+const AUDIT_CSV_COLUMNS = [
+  "id",
+  "createdAt",
+  "actorType",
+  "actorId",
+  "action",
+  "targetType",
+  "targetId",
+  "workspaceId",
+  "ip",
+  "userAgent",
+  "metadata",
+] as const;
+
+function downloadCsv(csv: string, mode: AdminDataMode): void {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `roamlog-admin-audit-${mode}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditViewProps) {
   const sourceEntries = entries ?? getAdminDataSource().listAuditLogs();
   const [query, setQuery] = useState("");
   const [actorType, setActorType] = useState<"all" | AuditLog["actorType"]>("all");
@@ -56,6 +83,7 @@ export function AuditView({ role, entries, mode = "fixture" }: AuditViewProps) {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
   const [mockEvents, setMockEvents] = useState<MockAuditEvent[]>([]);
 
   useEffect(() => {
@@ -112,41 +140,51 @@ export function AuditView({ role, entries, mode = "fixture" }: AuditViewProps) {
     toDate,
   ]);
 
-  function exportFixtureCsv() {
-    const header = [
-      "id",
-      "createdAt",
-      "actorType",
-      "actorId",
-      "action",
-      "targetType",
-      "targetId",
-      "ip",
-    ];
+  async function exportAuditCsv() {
+    if (!canExport || isExporting) {
+      return;
+    }
+
+    if (mode === "api" && exportCsv) {
+      setIsExporting(true);
+      try {
+        const params: ExportAdminAuditCsvParams = {
+          ...(query.trim() ? { q: query.trim() } : {}),
+          ...(actorType !== "all" ? { actorType } : {}),
+          ...(actorFilter === "system"
+            ? { actorType: "system" as const }
+            : actorFilter !== "all"
+              ? { actorId: actorFilter }
+              : {}),
+          ...(targetTypeFilter !== "all" ? { targetType: targetTypeFilter } : {}),
+          ...(ipQuery.trim() ? { ip: ipQuery.trim() } : {}),
+          ...(fromDate ? { from: fromDate } : {}),
+          ...(toDate ? { to: toDate } : {}),
+          sort: "createdAt:desc",
+        };
+        const csv = await exportCsv(params);
+        downloadCsv(csv, "api");
+        setStatusMessage(`已从 Admin API 导出审计 CSV。`);
+      } catch (error) {
+        setStatusMessage(
+          error instanceof AdminMutationError
+            ? `导出失败：${error.failure.code} · ${error.failure.detail}`
+            : "导出失败，请检查 API 与权限后重试。",
+        );
+      } finally {
+        setIsExporting(false);
+      }
+      return;
+    }
+
     const rows = filteredEntries.map((entry) =>
-      [
-        entry.id,
-        entry.createdAt,
-        entry.actorType,
-        entry.actorId ?? "",
-        entry.action,
-        entry.targetType,
-        entry.targetId,
-        entry.ip ?? "",
-      ]
-        .map(String)
-        .map(escapeCsvValue)
-        .join(","),
+      AUDIT_CSV_COLUMNS.map((column) =>
+        escapeCsvValue(
+          column === "metadata" ? JSON.stringify(entry.metadata) : String(entry[column] ?? ""),
+        ),
+      ).join(","),
     );
-    const blob = new Blob([[header.join(","), ...rows].join("\n")], {
-      type: "text/csv;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `roamlog-admin-audit-${mode}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(`\uFEFF${[AUDIT_CSV_COLUMNS.join(","), ...rows].join("\r\n")}\r\n`, mode);
     setStatusMessage(`已导出 ${filteredEntries.length} 条 ${mode} 审计事件。`);
   }
 
@@ -166,12 +204,18 @@ export function AuditView({ role, entries, mode = "fixture" }: AuditViewProps) {
             <Button
               variant="ghost"
               size="sm"
-              disabled={!canExport}
-              title={canExport ? "导出当前筛选结果为 CSV" : "仅 Analyst 及以上角色可导出"}
-              onClick={exportFixtureCsv}
+              disabled={!canExport || isExporting}
+              title={
+                canExport
+                  ? mode === "api"
+                    ? "从 Admin API 导出当前筛选结果为 CSV"
+                    : "导出当前 fixture 筛选结果为 CSV"
+                  : "仅 Analyst 及以上角色可导出"
+              }
+              onClick={exportAuditCsv}
             >
               <Download aria-hidden="true" />
-              导出 CSV
+              {isExporting ? "导出中…" : "导出 CSV"}
             </Button>
             {!canExport ? (
               <p className="font-mono text-[9px] text-muted">

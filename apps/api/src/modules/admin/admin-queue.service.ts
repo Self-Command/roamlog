@@ -21,6 +21,7 @@ export interface AdminQueueCounters {
   failed: number;
   completed: number;
   delayed: number;
+  paused: boolean;
 }
 
 export interface AdminQueueRetryResult {
@@ -29,7 +30,13 @@ export interface AdminQueueRetryResult {
   queued: true;
 }
 
+export interface AdminQueueWorkerHealth {
+  status: "up" | "degraded" | "down";
+  consumers: number;
+}
+
 interface QueueClient {
+  options?: { keyPrefix?: string };
   llen(key: string): Promise<number>;
   zcard(key: string): Promise<number>;
   lrange(key: string, start: number, stop: number): Promise<string[]>;
@@ -40,6 +47,9 @@ interface QueueClient {
   zrem(key: string, member: string): Promise<number>;
   lpush(key: string, value: string): Promise<number>;
   hset(key: string, values: Record<string, string>): Promise<number>;
+  del(key: string): Promise<number>;
+  eval(script: string, numberOfKeys: number, ...args: string[]): Promise<unknown>;
+  call(command: string, ...args: string[]): Promise<unknown>;
 }
 
 function listKey(queue: string, suffix: string): string {
@@ -48,6 +58,49 @@ function listKey(queue: string, suffix: string): string {
 
 function jobKey(queue: string, jobId: string): string {
   return `${queue}:${jobId}`;
+}
+
+function metaKey(queue: string): string {
+  return `${queue}:meta`;
+}
+
+function queueLifecycleScript(): string {
+  return `
+local rcall = redis.call
+if ARGV[1] == "paused" then
+  rcall("HSET", KEYS[1], "paused", 1)
+  rcall("DEL", KEYS[5])
+  return 0
+end
+
+rcall("HDEL", KEYS[1], "paused")
+local pausedKey = KEYS[2]
+local waitKey = KEYS[3]
+if rcall("EXISTS", pausedKey) == 1 then
+  while rcall("EXISTS", pausedKey) == 1 do
+    local jobs = rcall("LRANGE", pausedKey, 0, 6999)
+    if #jobs == 0 then
+      break
+    end
+    if rcall("EXISTS", waitKey) == 0 then
+      rcall("RENAME", pausedKey, waitKey)
+    else
+      rcall("RPUSH", waitKey, unpack(jobs))
+      rcall("LTRIM", pausedKey, #jobs, -1)
+    end
+  end
+end
+
+if rcall("LLEN", waitKey) > 0 or rcall("ZCARD", KEYS[4]) > 0 then
+  rcall("ZADD", KEYS[5], 0, "0")
+else
+  local delayed = rcall("ZRANGE", KEYS[6], 0, 0, "WITHSCORES")
+  if delayed[2] ~= nil then
+    rcall("ZADD", KEYS[5], tonumber(delayed[2]) / 0x1000, "1")
+  end
+end
+return 0
+`;
 }
 
 function numberOrZero(value: unknown): number {
@@ -74,7 +127,9 @@ function parseData(value: string | undefined): Record<string, unknown> {
   }
 }
 
-function statusKey(status: AdminJobStatus): "wait" | "active" | "failed" | "completed" | "delayed" | "paused" {
+function statusKey(
+  status: AdminJobStatus,
+): "wait" | "active" | "failed" | "completed" | "delayed" | "paused" {
   switch (status) {
     case "waiting":
       return "wait";
@@ -107,12 +162,13 @@ export class AdminQueueService {
     const client = this.client();
     return Promise.all(
       queues.map(async (name) => {
-        const [waiting, active, failed, completed, delayed] = await Promise.all([
+        const [waiting, active, failed, completed, delayed, meta] = await Promise.all([
           client.llen(listKey(name, "wait")),
           client.llen(listKey(name, "active")),
           client.zcard(listKey(name, "failed")),
           client.zcard(listKey(name, "completed")),
           client.zcard(listKey(name, "delayed")),
+          client.hgetall(metaKey(name)),
         ]);
         return {
           name,
@@ -121,6 +177,7 @@ export class AdminQueueService {
           failed: numberOrZero(failed),
           completed: numberOrZero(completed),
           delayed: numberOrZero(delayed),
+          paused: Boolean(meta && Object.prototype.hasOwnProperty.call(meta, "paused")),
         };
       }),
     );
@@ -161,12 +218,7 @@ export class AdminQueueService {
   }
 
   async retryJob(queue: string, jobId: string): Promise<AdminQueueRetryResult> {
-    if (!DEFAULT_QUEUES.includes(queue as (typeof DEFAULT_QUEUES)[number])) {
-      throw new NotFoundException({
-        code: "JOB_QUEUE_NOT_FOUND",
-        message: "The queue was not found.",
-      });
-    }
+    this.assertQueue(queue);
 
     const client = this.client();
     const exists = await client.exists(jobKey(queue, jobId));
@@ -190,6 +242,80 @@ export class AdminQueueService {
     await client.lpush(listKey(queue, "wait"), jobId);
 
     return { queue, jobId, queued: true };
+  }
+
+  async pauseQueue(queue: string): Promise<void> {
+    this.assertQueue(queue);
+    await this.applyLifecycle(queue, "paused");
+  }
+
+  async resumeQueue(queue: string): Promise<void> {
+    this.assertQueue(queue);
+    await this.applyLifecycle(queue, "resumed");
+  }
+
+  async clearFailed(queue: string): Promise<number> {
+    this.assertQueue(queue);
+    const client = this.client();
+    const failedKey = listKey(queue, "failed");
+    const jobIds = await client.zrange(failedKey, 0, -1);
+    if (jobIds.length === 0) {
+      return 0;
+    }
+
+    await Promise.all(jobIds.map((jobId) => client.zrem(failedKey, jobId)));
+    await Promise.all(
+      jobIds.flatMap((jobId) => [
+        client.del(jobKey(queue, jobId)),
+        client.del(`${jobKey(queue, jobId)}:logs`),
+      ]),
+    );
+    return jobIds.length;
+  }
+
+  async workerHealth(queues: readonly string[] = DEFAULT_QUEUES): Promise<AdminQueueWorkerHealth> {
+    const client = this.client();
+    const output = await client.call("CLIENT", "LIST");
+    if (typeof output !== "string") {
+      throw new Error("Redis CLIENT LIST returned an invalid response");
+    }
+
+    const prefix = (client.options?.keyPrefix ?? "").replace(/:+$/, "");
+    const names = [...output.matchAll(/\bname=(\S+)/g)].map((match) => match[1] ?? "");
+    const workerNames = queues.flatMap((queue) => {
+      const encodedQueue = Buffer.from(queue).toString("base64");
+      return names.filter(
+        (name) =>
+          name === `${prefix}:${encodedQueue}:w:` ||
+          name.startsWith(`${prefix}:${encodedQueue}:w:`),
+      );
+    });
+    const consumers = workerNames.length;
+    const status = consumers === 0 ? "down" : consumers < queues.length ? "degraded" : "up";
+    return { status, consumers };
+  }
+
+  private assertQueue(queue: string): void {
+    if (!DEFAULT_QUEUES.includes(queue as (typeof DEFAULT_QUEUES)[number])) {
+      throw new NotFoundException({
+        code: "JOB_QUEUE_NOT_FOUND",
+        message: "The queue was not found.",
+      });
+    }
+  }
+
+  private async applyLifecycle(queue: string, action: "paused" | "resumed"): Promise<void> {
+    const client = this.client();
+    const keys = [
+      metaKey(queue),
+      listKey(queue, "paused"),
+      listKey(queue, "wait"),
+      listKey(queue, "prioritized"),
+      listKey(queue, "marker"),
+      listKey(queue, "delayed"),
+    ];
+
+    await client.eval(queueLifecycleScript(), keys.length, ...keys, action);
   }
 
   private async jobIds(

@@ -72,4 +72,11 @@ describe("platform permission matrix", () => {
     expect(canPlatform("super_admin", "admin:not-real")).toBe(false);
     expect(canPlatform("intruder", "admin:metrics:read")).toBe(false);
   });
+
+  it("reserves queue lifecycle management for super admins", () => {
+    expect(canPlatform("super_admin", "admin:jobs:manage")).toBe(true);
+    expect(canPlatform("admin", "admin:jobs:manage")).toBe(false);
+    expect(canPlatform("support", "admin:jobs:manage")).toBe(false);
+    expect(canPlatform("analyst", "admin:jobs:manage")).toBe(false);
+  });
 });

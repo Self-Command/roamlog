@@ -1,9 +1,4 @@
-import type {
-  EmailStatus,
-  MediaStatus,
-  TripVisibility,
-  WorkspaceRole,
-} from "@roamlog/contracts";
+import type { EmailStatus, MediaStatus, TripVisibility, WorkspaceRole } from "@roamlog/contracts";
 
 export type ContentKind = "trip" | "entry" | "comment";
 export type ContentModerationStatus = "published" | "flagged" | "deleted";
@@ -105,7 +100,8 @@ export interface AdminSystemSnapshot {
   buildTime: string;
   startedAt: string;
   uptimeSeconds: number;
-  lastWorkerHeartbeat: string;
+  workerStatus: "up" | "degraded" | "down";
+  workerConsumers: number;
   checks: AdminSystemCheck[];
   migrations: AdminMigration[];
 }
@@ -457,8 +453,7 @@ export const MOCK_ADMIN_FAILED_JOBS: AdminFailedJob[] = [
     queue: "archive-export",
     name: "assemble-workspace-export",
     attempts: 4,
-    failedReason:
-      "S3 multipart upload timed out after 3 retries. Last accepted part: 17/28.",
+    failedReason: "S3 multipart upload timed out after 3 retries. Last accepted part: 17/28.",
     payloadSummary: "workspace=studio-north, scope=workspace, includeMedia=true",
     createdAt: "2026-11-17T08:12:00.000Z",
     processedAt: "2026-11-17T08:24:00.000Z",
@@ -549,7 +544,8 @@ export const MOCK_ADMIN_SYSTEM: AdminSystemSnapshot = {
   buildTime: "2026-11-17T08:31:00.000Z",
   startedAt: "2026-11-17T01:12:00.000Z",
   uptimeSeconds: 27_420,
-  lastWorkerHeartbeat: "2026-11-17T08:44:48.000Z",
+  workerStatus: "up",
+  workerConsumers: 5,
   checks: [
     {
       name: "PostgreSQL",

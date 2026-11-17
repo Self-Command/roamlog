@@ -20,4 +20,5 @@ export type AdminSystemQueuesItem = {
   failed: number;
   /** @minimum 0 */
   delayed: number;
+  paused: boolean;
 };

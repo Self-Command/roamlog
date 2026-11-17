@@ -13,7 +13,7 @@ test("trip library supports text search and status filtering", async ({ page }) 
   await expect(page.getByRole("heading", { name: "京都红叶慢行" })).toBeVisible();
 
   await search.fill("");
-  await page.getByRole("tab", { name: /^愿望/ }).click();
+  await page.getByRole("button", { name: /^愿望/ }).click();
   await expect(page.getByText("SHOWING 2 OF 9")).toBeVisible();
   await expect(page.getByRole("heading", { name: "阿马尔菲海岸愿望单" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "巴塔哥尼亚穿越" })).toBeVisible();

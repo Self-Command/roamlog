@@ -2,7 +2,9 @@ import { Module } from "@nestjs/common";
 
 import { AccessControlModule } from "../../common/guards/access-control.module.js";
 import { AuditModule } from "../audit/audit.module.js";
+import { JobQueueModule } from "../exports/job-queue.module.js";
 import { FeatureFlagsModule } from "../feature-flags/feature-flags.module.js";
+import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { AdminAuditService } from "./admin-audit.service.js";
 import { AdminContentController } from "./admin-content.controller.js";
 import { AdminContentService } from "./admin-content.service.js";
@@ -22,7 +24,13 @@ import { AdminWorkspacesService } from "./admin-workspaces.service.js";
 import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
 
 @Module({
-  imports: [AccessControlModule, AuditModule, FeatureFlagsModule],
+  imports: [
+    AccessControlModule,
+    AuditModule,
+    FeatureFlagsModule,
+    IdempotencyModule,
+    JobQueueModule,
+  ],
   controllers: [
     AdminDashboardController,
     AdminUsersController,

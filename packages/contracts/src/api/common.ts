@@ -50,3 +50,7 @@ export const AdminJobParamsSchema = z.object({
   queue: z.string().min(1).max(80),
   jobId: z.string().min(1).max(120),
 });
+
+export const AdminQueueParamsSchema = z.object({
+  queue: z.string().min(1).max(80),
+});

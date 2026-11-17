@@ -13,5 +13,8 @@ describe("SystemView", () => {
     expect(screen.getByText("0003_export_cleanup")).toBeInTheDocument();
     expect(screen.getByText("Redis")).toBeInTheDocument();
     expect(screen.getByText("S3 / MinIO")).toBeInTheDocument();
+    expect(screen.getByText("后台 Worker")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("Healthy")).toBeInTheDocument();
   });
 });

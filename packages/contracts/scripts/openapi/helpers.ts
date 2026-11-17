@@ -1,8 +1,4 @@
-import type {
-  OpenAPIRegistry,
-  ResponseConfig,
-  RouteConfig,
-} from "@asteasolutions/zod-to-openapi";
+import type { OpenAPIRegistry, ResponseConfig, RouteConfig } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 
 import { ProblemDetailsSchema } from "../../src/common/problem-details";
@@ -25,6 +21,7 @@ export type OperationSpec = {
   body?: z.ZodType;
   response?: z.ZodType;
   responseDescription?: string;
+  responseContentType?: string;
   status?: number;
   public?: boolean;
   versioned?: boolean;
@@ -58,12 +55,13 @@ const defaultErrors: Record<number, string> = {
 export function registerOperation(registry: OpenAPIRegistry, spec: OperationSpec): void {
   const status = spec.status ?? (spec.method === "post" ? 201 : 200);
   const responseSchema = spec.response ? resolveRegisteredSchema(spec.response) : undefined;
+  const responseContentType = spec.responseContentType ?? "application/json";
   const responses: RouteConfig["responses"] = {
     [status]: responseSchema
       ? {
           description: spec.responseDescription ?? "Successful response.",
           content: {
-            "application/json": {
+            [responseContentType]: {
               schema: responseSchema,
             },
           },
@@ -72,8 +70,7 @@ export function registerOperation(registry: OpenAPIRegistry, spec: OperationSpec
   };
 
   const errors = new Set(
-    spec.errors ??
-      (spec.public ? [400, 404, 429, 500, 503] : [400, 401, 403, 404, 429, 500]),
+    spec.errors ?? (spec.public ? [400, 404, 429, 500, 503] : [400, 401, 403, 404, 429, 500]),
   );
   if (spec.versioned) {
     errors.add(409);
@@ -97,10 +94,9 @@ export function registerOperation(registry: OpenAPIRegistry, spec: OperationSpec
   }
 
   if (spec.idempotent) {
-    request.headers = z
-      .object({
-        "idempotency-key": IdempotencyKeySchema.optional(),
-      });
+    request.headers = z.object({
+      "idempotency-key": IdempotencyKeySchema.optional(),
+    });
   } else if (spec.headers) {
     request.headers = spec.headers;
   }

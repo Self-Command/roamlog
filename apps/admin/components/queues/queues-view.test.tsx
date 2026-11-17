@@ -1,7 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { MOCK_ADMIN_FAILED_JOBS, MOCK_ADMIN_QUEUES } from "../../lib/ops-fixtures";
 import { QueuesView } from "./queues-view";
 
@@ -31,11 +32,7 @@ describe("QueuesView", () => {
 
   it("blocks queue retry and pause controls for analysts", () => {
     render(
-      <QueuesView
-        role="analyst"
-        queues={MOCK_ADMIN_QUEUES}
-        failedJobs={MOCK_ADMIN_FAILED_JOBS}
-      />,
+      <QueuesView role="analyst" queues={MOCK_ADMIN_QUEUES} failedJobs={MOCK_ADMIN_FAILED_JOBS} />,
     );
 
     const failedRow = screen.getByRole("row", { name: /job-export-7781/ });
@@ -46,11 +43,7 @@ describe("QueuesView", () => {
 
   it("allows admin to retry failed jobs but not manage queue lifecycle", () => {
     render(
-      <QueuesView
-        role="admin"
-        queues={MOCK_ADMIN_QUEUES}
-        failedJobs={MOCK_ADMIN_FAILED_JOBS}
-      />,
+      <QueuesView role="admin" queues={MOCK_ADMIN_QUEUES} failedJobs={MOCK_ADMIN_FAILED_JOBS} />,
     );
 
     const failedRow = screen.getByRole("row", { name: /job-export-7781/ });
@@ -64,11 +57,7 @@ describe("QueuesView", () => {
 
   it("keeps retry and queue management disabled for support", () => {
     render(
-      <QueuesView
-        role="support"
-        queues={MOCK_ADMIN_QUEUES}
-        failedJobs={MOCK_ADMIN_FAILED_JOBS}
-      />,
+      <QueuesView role="support" queues={MOCK_ADMIN_QUEUES} failedJobs={MOCK_ADMIN_FAILED_JOBS} />,
     );
 
     const failedRow = screen.getByRole("row", { name: /job-export-7781/ });
@@ -95,20 +84,51 @@ describe("QueuesView", () => {
     await user.click(within(pauseDialog).getByRole("button", { name: "确认暂停" }));
     expect(screen.getByRole("status")).toHaveTextContent("已暂停队列：media-processing");
 
-    expect(
-      screen.getByRole("button", { name: "清空队列 media-processing" }),
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "清空队列 media-processing" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "清空队列 media-processing" }));
     const clearDialog = screen.getByRole("dialog", { name: "清空队列" });
     const clearConfirm = within(clearDialog).getByRole("button", { name: "确认清空" });
     expect(clearConfirm).toBeDisabled();
-    await user.type(
-      within(clearDialog).getByLabelText("输入队列名称确认"),
-      "media-processing",
-    );
+    await user.type(within(clearDialog).getByLabelText("输入队列名称确认"), "media-processing");
     await user.click(clearConfirm);
 
     expect(screen.getByRole("status")).toHaveTextContent("已清空失败任务：media-processing");
     expect(screen.queryByRole("row", { name: /job-media-2204/ })).not.toBeInTheDocument();
+  });
+
+  it("calls API queue lifecycle mutations in API mode", async () => {
+    const user = userEvent.setup();
+    const mutations = {
+      pauseQueue: vi.fn().mockResolvedValue(undefined),
+      resumeQueue: vi.fn().mockResolvedValue(undefined),
+      clearQueue: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AdminMutationPort;
+    render(
+      <QueuesView
+        role="super_admin"
+        queues={MOCK_ADMIN_QUEUES}
+        failedJobs={MOCK_ADMIN_FAILED_JOBS}
+        mode="api"
+        mutations={mutations}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "暂停队列 media-processing" }));
+    const pauseDialog = screen.getByRole("dialog", { name: "暂停队列" });
+    await user.type(within(pauseDialog).getByLabelText("输入队列名称确认"), "media-processing");
+    await user.click(within(pauseDialog).getByRole("button", { name: "确认暂停" }));
+    expect(mutations.pauseQueue).toHaveBeenCalledWith("media-processing");
+
+    await user.click(screen.getByRole("button", { name: "恢复队列 media-processing" }));
+    const resumeDialog = screen.getByRole("dialog", { name: "恢复队列" });
+    await user.type(within(resumeDialog).getByLabelText("输入队列名称确认"), "media-processing");
+    await user.click(within(resumeDialog).getByRole("button", { name: "确认恢复" }));
+    expect(mutations.resumeQueue).toHaveBeenCalledWith("media-processing");
+
+    await user.click(screen.getByRole("button", { name: "清空队列 media-processing" }));
+    const clearDialog = screen.getByRole("dialog", { name: "清空队列" });
+    await user.type(within(clearDialog).getByLabelText("输入队列名称确认"), "media-processing");
+    await user.click(within(clearDialog).getByRole("button", { name: "确认清空" }));
+    expect(mutations.clearQueue).toHaveBeenCalledWith("media-processing");
   });
 });

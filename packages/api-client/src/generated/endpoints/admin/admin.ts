@@ -22,6 +22,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdminAuditCsvResponse,
   AdminAuditPage,
   AdminCommentPage,
   AdminEmailPage,
@@ -36,7 +37,9 @@ import type {
   AdminUserPage,
   AdminWorkspaceDetail,
   AdminWorkspacePage,
+  ClearAdminQueueResponse,
   EmailLog,
+  ExportAdminAuditCsvParams,
   FeatureFlag,
   ForceLogoutResponse,
   ListAdminAuditParams,
@@ -49,8 +52,10 @@ import type {
   ListAdminUsersParams,
   ListAdminWorkspacesParams,
   MessageResponse,
+  PauseAdminQueueResponse,
   ProblemDetails,
   ResetTwoFactorResponse,
+  ResumeAdminQueueResponse,
   RetryJobResponse,
   UpdateAdminUserRequest,
   UpdateAdminWorkspaceRequest,
@@ -3229,6 +3234,226 @@ export function useListAdminAudit<
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+export type exportAdminAuditCsvResponse200 = {
+  data: AdminAuditCsvResponse;
+  status: 200;
+};
+
+export type exportAdminAuditCsvResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type exportAdminAuditCsvResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type exportAdminAuditCsvResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type exportAdminAuditCsvResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type exportAdminAuditCsvResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type exportAdminAuditCsvResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type exportAdminAuditCsvResponseSuccess = exportAdminAuditCsvResponse200 & {
+  headers: Headers;
+};
+export type exportAdminAuditCsvResponseError = (
+  | exportAdminAuditCsvResponse400
+  | exportAdminAuditCsvResponse401
+  | exportAdminAuditCsvResponse403
+  | exportAdminAuditCsvResponse404
+  | exportAdminAuditCsvResponse429
+  | exportAdminAuditCsvResponse500
+) & {
+  headers: Headers;
+};
+
+export type exportAdminAuditCsvResponse =
+  exportAdminAuditCsvResponseSuccess | exportAdminAuditCsvResponseError;
+
+export const getExportAdminAuditCsvUrl = (params?: ExportAdminAuditCsvParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/admin/audit/export?${stringifiedParams}`
+    : `/v1/admin/audit/export`;
+};
+
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata.
+ * @summary Export filtered platform audit logs as CSV
+ */
+export const exportAdminAuditCsv = async (
+  params?: ExportAdminAuditCsvParams,
+  options?: RequestInit,
+): Promise<exportAdminAuditCsvResponse> => {
+  const res = await fetch(getExportAdminAuditCsvUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: exportAdminAuditCsvResponse["data"] = body
+    ? contentType.includes("json")
+      ? JSON.parse(body)
+      : body
+    : {};
+  return { data, status: res.status, headers: res.headers } as exportAdminAuditCsvResponse;
+};
+
+export const getExportAdminAuditCsvQueryKey = (params?: ExportAdminAuditCsvParams) => {
+  return [`/v1/admin/audit/export`, ...(params ? [params] : [])] as const;
+};
+
+export const getExportAdminAuditCsvQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportAdminAuditCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminAuditCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminAuditCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportAdminAuditCsvQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportAdminAuditCsv>>> = ({ signal }) =>
+    exportAdminAuditCsv(params, { signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportAdminAuditCsv>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ExportAdminAuditCsvQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportAdminAuditCsv>>
+>;
+export type ExportAdminAuditCsvQueryError = ProblemDetails;
+
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata.
+ * @summary Export filtered platform audit logs as CSV
+ */
+export function useExportAdminAuditCsv<
+  TData = Awaited<ReturnType<typeof exportAdminAuditCsv>>,
+  TError = ProblemDetails,
+>(
+  params: undefined | ExportAdminAuditCsvParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminAuditCsv>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportAdminAuditCsv>>,
+          TError,
+          Awaited<ReturnType<typeof exportAdminAuditCsv>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata.
+ * @summary Export filtered platform audit logs as CSV
+ */
+export function useExportAdminAuditCsv<
+  TData = Awaited<ReturnType<typeof exportAdminAuditCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminAuditCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminAuditCsv>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportAdminAuditCsv>>,
+          TError,
+          Awaited<ReturnType<typeof exportAdminAuditCsv>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata.
+ * @summary Export filtered platform audit logs as CSV
+ */
+export function useExportAdminAuditCsv<
+  TData = Awaited<ReturnType<typeof exportAdminAuditCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminAuditCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminAuditCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata.
+ * @summary Export filtered platform audit logs as CSV
+ */
+export function useExportAdminAuditCsv<
+  TData = Awaited<ReturnType<typeof exportAdminAuditCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminAuditCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminAuditCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getExportAdminAuditCsvQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 export type listAdminFlagsResponse200 = {
   data: AdminFlagListResponse;
   status: 200;
@@ -4188,6 +4413,425 @@ export const useRetryAdminJob = <TError = ProblemDetails, TContext = unknown>(
   TContext
 > => {
   return useMutation(getRetryAdminJobMutationOptions(options), queryClient);
+};
+export type pauseAdminQueueResponse200 = {
+  data: PauseAdminQueueResponse;
+  status: 200;
+};
+
+export type pauseAdminQueueResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type pauseAdminQueueResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type pauseAdminQueueResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type pauseAdminQueueResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type pauseAdminQueueResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type pauseAdminQueueResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type pauseAdminQueueResponseSuccess = pauseAdminQueueResponse200 & {
+  headers: Headers;
+};
+export type pauseAdminQueueResponseError = (
+  | pauseAdminQueueResponse400
+  | pauseAdminQueueResponse401
+  | pauseAdminQueueResponse403
+  | pauseAdminQueueResponse404
+  | pauseAdminQueueResponse429
+  | pauseAdminQueueResponse500
+) & {
+  headers: Headers;
+};
+
+export type pauseAdminQueueResponse = pauseAdminQueueResponseSuccess | pauseAdminQueueResponseError;
+
+export const getPauseAdminQueueUrl = (queue: string) => {
+  return `/v1/admin/jobs/${queue}/pause`;
+};
+
+/**
+ * @summary Pause a BullMQ queue
+ */
+export const pauseAdminQueue = async (
+  queue: string,
+  options?: RequestInit,
+): Promise<pauseAdminQueueResponse> => {
+  const res = await fetch(getPauseAdminQueueUrl(queue), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: pauseAdminQueueResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as pauseAdminQueueResponse;
+};
+
+export const getPauseAdminQueueMutationKey = () => ["pauseAdminQueue"] as const;
+
+export const getPauseAdminQueueMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pauseAdminQueue>>,
+    TError,
+    PauseAdminQueueMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof pauseAdminQueue>>,
+  TError,
+  PauseAdminQueueMutationVariables,
+  TContext
+> => {
+  const mutationKey = getPauseAdminQueueMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof pauseAdminQueue>>,
+    PauseAdminQueueMutationVariables
+  > = (props) => {
+    const { queue } = props ?? {};
+
+    return pauseAdminQueue(queue, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PauseAdminQueueMutationResult = NonNullable<
+  Awaited<ReturnType<typeof pauseAdminQueue>>
+>;
+
+export type PauseAdminQueueMutationError = ProblemDetails;
+export type PauseAdminQueueMutationVariables = { queue: string };
+
+/** @summary Pause a BullMQ queue */
+export const usePauseAdminQueue = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof pauseAdminQueue>>,
+      TError,
+      PauseAdminQueueMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof pauseAdminQueue>>,
+  TError,
+  PauseAdminQueueMutationVariables,
+  TContext
+> => {
+  return useMutation(getPauseAdminQueueMutationOptions(options), queryClient);
+};
+export type resumeAdminQueueResponse200 = {
+  data: ResumeAdminQueueResponse;
+  status: 200;
+};
+
+export type resumeAdminQueueResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type resumeAdminQueueResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type resumeAdminQueueResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type resumeAdminQueueResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type resumeAdminQueueResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type resumeAdminQueueResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type resumeAdminQueueResponseSuccess = resumeAdminQueueResponse200 & {
+  headers: Headers;
+};
+export type resumeAdminQueueResponseError = (
+  | resumeAdminQueueResponse400
+  | resumeAdminQueueResponse401
+  | resumeAdminQueueResponse403
+  | resumeAdminQueueResponse404
+  | resumeAdminQueueResponse429
+  | resumeAdminQueueResponse500
+) & {
+  headers: Headers;
+};
+
+export type resumeAdminQueueResponse =
+  resumeAdminQueueResponseSuccess | resumeAdminQueueResponseError;
+
+export const getResumeAdminQueueUrl = (queue: string) => {
+  return `/v1/admin/jobs/${queue}/resume`;
+};
+
+/**
+ * @summary Resume a BullMQ queue
+ */
+export const resumeAdminQueue = async (
+  queue: string,
+  options?: RequestInit,
+): Promise<resumeAdminQueueResponse> => {
+  const res = await fetch(getResumeAdminQueueUrl(queue), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resumeAdminQueueResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as resumeAdminQueueResponse;
+};
+
+export const getResumeAdminQueueMutationKey = () => ["resumeAdminQueue"] as const;
+
+export const getResumeAdminQueueMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resumeAdminQueue>>,
+    TError,
+    ResumeAdminQueueMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resumeAdminQueue>>,
+  TError,
+  ResumeAdminQueueMutationVariables,
+  TContext
+> => {
+  const mutationKey = getResumeAdminQueueMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resumeAdminQueue>>,
+    ResumeAdminQueueMutationVariables
+  > = (props) => {
+    const { queue } = props ?? {};
+
+    return resumeAdminQueue(queue, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResumeAdminQueueMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resumeAdminQueue>>
+>;
+
+export type ResumeAdminQueueMutationError = ProblemDetails;
+export type ResumeAdminQueueMutationVariables = { queue: string };
+
+/** @summary Resume a BullMQ queue */
+export const useResumeAdminQueue = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof resumeAdminQueue>>,
+      TError,
+      ResumeAdminQueueMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof resumeAdminQueue>>,
+  TError,
+  ResumeAdminQueueMutationVariables,
+  TContext
+> => {
+  return useMutation(getResumeAdminQueueMutationOptions(options), queryClient);
+};
+export type clearAdminQueueResponse200 = {
+  data: ClearAdminQueueResponse;
+  status: 200;
+};
+
+export type clearAdminQueueResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type clearAdminQueueResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type clearAdminQueueResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type clearAdminQueueResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type clearAdminQueueResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type clearAdminQueueResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type clearAdminQueueResponseSuccess = clearAdminQueueResponse200 & {
+  headers: Headers;
+};
+export type clearAdminQueueResponseError = (
+  | clearAdminQueueResponse400
+  | clearAdminQueueResponse401
+  | clearAdminQueueResponse403
+  | clearAdminQueueResponse404
+  | clearAdminQueueResponse429
+  | clearAdminQueueResponse500
+) & {
+  headers: Headers;
+};
+
+export type clearAdminQueueResponse = clearAdminQueueResponseSuccess | clearAdminQueueResponseError;
+
+export const getClearAdminQueueUrl = (queue: string) => {
+  return `/v1/admin/jobs/${queue}/clear`;
+};
+
+/**
+ * Permanently removes failed jobs while preserving waiting and active jobs.
+ * @summary Clear failed jobs from a BullMQ queue
+ */
+export const clearAdminQueue = async (
+  queue: string,
+  options?: RequestInit,
+): Promise<clearAdminQueueResponse> => {
+  const res = await fetch(getClearAdminQueueUrl(queue), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: clearAdminQueueResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as clearAdminQueueResponse;
+};
+
+export const getClearAdminQueueMutationKey = () => ["clearAdminQueue"] as const;
+
+export const getClearAdminQueueMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearAdminQueue>>,
+    TError,
+    ClearAdminQueueMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clearAdminQueue>>,
+  TError,
+  ClearAdminQueueMutationVariables,
+  TContext
+> => {
+  const mutationKey = getClearAdminQueueMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clearAdminQueue>>,
+    ClearAdminQueueMutationVariables
+  > = (props) => {
+    const { queue } = props ?? {};
+
+    return clearAdminQueue(queue, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClearAdminQueueMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clearAdminQueue>>
+>;
+
+export type ClearAdminQueueMutationError = ProblemDetails;
+export type ClearAdminQueueMutationVariables = { queue: string };
+
+/**
+ * Permanently removes failed jobs while preserving waiting and active jobs.
+ * @summary Clear failed jobs from a BullMQ queue
+ */
+export const useClearAdminQueue = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof clearAdminQueue>>,
+      TError,
+      ClearAdminQueueMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof clearAdminQueue>>,
+  TError,
+  ClearAdminQueueMutationVariables,
+  TContext
+> => {
+  return useMutation(getClearAdminQueueMutationOptions(options), queryClient);
 };
 export type getAdminSystemResponse200 = {
   data: AdminSystem;

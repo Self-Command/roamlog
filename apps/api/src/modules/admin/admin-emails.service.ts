@@ -10,6 +10,7 @@ import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
 import { cursorId, toCursorPage } from "../../common/services/cursor-page.js";
 import { parseRequest } from "../../common/services/request-validation.js";
 import { AuditService } from "../audit/audit.service.js";
+import { JobQueueService, deterministicJobId } from "../exports/job-queue.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { assertAdminAction } from "./admin-access.js";
 import { presentEmailLog } from "./admin.presenters.js";
@@ -20,6 +21,7 @@ export class AdminEmailsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(JobQueueService) private readonly queue: JobQueueService,
   ) {}
 
   async list(actor: AuthenticatedActor, rawQuery: unknown): Promise<AdminEmailPage> {
@@ -66,6 +68,29 @@ export class AdminEmailsService {
       },
       select: emailSelect,
     });
+    let queuedJobId: string;
+    try {
+      const queued = await this.queue.enqueue({
+        queue: "email",
+        name: "email.send",
+        jobId: deterministicJobId("email-resend", created.id),
+        data: {
+          emailLogId: created.id,
+          to: created.to,
+          template: created.template,
+          subject: created.subject,
+        },
+      });
+      queuedJobId = queued.jobId;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The resend job could not be enqueued.";
+      await this.prisma.client.emailLog.update({
+        where: { id: created.id },
+        data: { status: "failed", error: message.slice(0, 1000) },
+      });
+      throw error;
+    }
     await this.audit.record({
       actorId: actor.user.id,
       actorType: "admin",
@@ -78,6 +103,7 @@ export class AdminEmailsService {
         originalEmailId: original.id,
         template: original.template,
         to: original.to,
+        queuedJobId,
       },
     });
 

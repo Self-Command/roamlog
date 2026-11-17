@@ -478,14 +478,21 @@ export function SettingsWorkspace() {
                     <span>TRIPS</span>
                     <span>{state.trips.length} / 25</span>
                   </div>
-                  <Progress value={(state.trips.length / 25) * 100} />
+                  <Progress
+                    value={(state.trips.length / 25) * 100}
+                    aria-label="旅行数量配额"
+                  />
                 </div>
                 <div>
                   <div className="mb-1.5 flex justify-between font-mono text-[8px] text-muted">
                     <span>LOCAL STORAGE</span>
                     <span>DEMO ONLY</span>
                   </div>
-                  <Progress value={12} indicatorClassName="bg-accent-blue" />
+                  <Progress
+                    value={12}
+                    indicatorClassName="bg-accent-blue"
+                    aria-label="本地存储使用量（演示）"
+                  />
                 </div>
               </div>
               <div className="mt-4 flex items-center gap-2 border-t border-hairline pt-3">

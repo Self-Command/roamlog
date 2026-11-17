@@ -11,7 +11,7 @@
   --body: rgba(252, 253, 255, 0.86);
   --muted: #a1a4a5;
   --ash: #888e90;
-  --stone: #464a4d;
+  --stone: #7a8083;
   --hairline: rgba(255, 255, 255, 0.06);
   --hairline-strong: rgba(255, 255, 255, 0.14);
   --divider: rgba(255, 255, 255, 0.04);
@@ -22,7 +22,7 @@
   --accent-red: #ff2047;
   --accent-yellow: #ffc53d;
   /* Sixth atmospheric accent from the Resend analysis; never used as a solid surface. */
-  --accent-slate: #64748b;
+  --accent-slate: #94a3b8;
 
   --glow-orange: rgba(255, 89, 0, 0.18);
   --glow-blue: rgba(0, 117, 255, 0.18);

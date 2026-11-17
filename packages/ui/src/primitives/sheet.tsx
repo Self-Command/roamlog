@@ -33,35 +33,53 @@ export interface SheetContentProps extends React.ComponentPropsWithoutRef<
 export const SheetContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ className, children, side = "right", ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed z-50 overflow-y-auto border-hairline-strong bg-canvas p-6 text-body outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:p-8",
-        side === "right" && "inset-y-0 right-0 h-full w-full max-w-xl border-l",
-        side === "left" && "inset-y-0 left-0 h-full w-full max-w-xl border-r",
-        side === "bottom" && "inset-x-0 bottom-0 max-h-[85dvh] w-full rounded-t-card border-t",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close asChild>
-        <IconButton
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="关闭"
-          className="absolute right-4 top-4"
-        >
-          <X aria-hidden="true" />
-        </IconButton>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </SheetPortal>
-));
+>(({ className, children, side = "right", onCloseAutoFocus, ...props }, ref) => {
+  const openerRef = React.useRef<HTMLElement | null>(null);
+  if (typeof document !== "undefined" && openerRef.current === null) {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && activeElement !== document.body) {
+      openerRef.current = activeElement;
+    }
+  }
+
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed z-50 overflow-y-auto border-hairline-strong bg-canvas p-6 text-body outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:p-8",
+          side === "right" && "inset-y-0 right-0 h-full w-full max-w-xl border-l",
+          side === "left" && "inset-y-0 left-0 h-full w-full max-w-xl border-r",
+          side === "bottom" && "inset-x-0 bottom-0 max-h-[85dvh] w-full rounded-t-card border-t",
+          className,
+        )}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event);
+          if (event.defaultPrevented) return;
+          const opener = openerRef.current;
+          if (!opener?.isConnected) return;
+          event.preventDefault();
+          opener.focus({ preventScroll: true });
+        }}
+        {...props}
+      >
+        {children}
+        <DialogPrimitive.Close asChild>
+          <IconButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="关闭"
+            className="absolute right-4 top-4"
+          >
+            <X aria-hidden="true" />
+          </IconButton>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = "SheetContent";
 
 export function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

@@ -32,7 +32,7 @@ describe("OpenAPI document", () => {
 
   it("covers the expected application surface", () => {
     const doc = document();
-    expect(Object.keys(doc.paths)).toHaveLength(87);
+    expect(Object.keys(doc.paths)).toHaveLength(91);
     const operations = Object.values(doc.paths).reduce(
       (count, pathItem) =>
         count +
@@ -47,6 +47,10 @@ describe("OpenAPI document", () => {
     expect(doc.paths["/v1/workspaces/{workspaceId}/members"]).toHaveProperty("get");
     expect(doc.paths["/v1/entries/{entryId}/revisions"]).toHaveProperty("get");
     expect(doc.paths["/v1/admin/system"]).toHaveProperty("get");
+    expect(doc.paths["/v1/admin/audit/export"]).toHaveProperty("get");
+    expect(doc.paths["/v1/admin/jobs/{queue}/pause"]).toHaveProperty("post");
+    expect(doc.paths["/v1/admin/jobs/{queue}/resume"]).toHaveProperty("post");
+    expect(doc.paths["/v1/admin/jobs/{queue}/clear"]).toHaveProperty("post");
     expect(doc.paths["/v1/health"]).toHaveProperty("get");
     expect(doc.paths["/v1/ready"]).toHaveProperty("get");
   });
@@ -54,9 +58,9 @@ describe("OpenAPI document", () => {
   it("publishes RFC 7807 responses and no import endpoints", () => {
     const doc = document();
     expect(doc.components.schemas.ProblemDetails).toBeDefined();
-    expect(
-      Object.keys(doc.paths).filter((path) => path.toLowerCase().includes("import")),
-    ).toEqual([]);
+    expect(Object.keys(doc.paths).filter((path) => path.toLowerCase().includes("import"))).toEqual(
+      [],
+    );
     const patchTrip = doc.paths["/v1/trips/{tripId}"]?.patch as {
       responses?: Record<string, { content?: Record<string, { schema?: unknown }> }>;
     };
@@ -75,6 +79,22 @@ describe("OpenAPI document", () => {
     expect(shareLink).not.toHaveProperty("properties.passwordHash");
   });
 
+  it("publishes the audit CSV contract as a text/csv attachment", () => {
+    const doc = document();
+    const operation = doc.paths["/v1/admin/audit/export"]?.get as {
+      responses?: Record<
+        string,
+        { content?: Record<string, { schema?: Record<string, unknown> }> }
+      >;
+    };
+
+    expect(operation.responses?.["200"]?.content).toHaveProperty("text/csv");
+    expect(operation.responses?.["200"]?.content?.["text/csv"]?.schema).toMatchObject({
+      $ref: "#/components/schemas/AdminAuditCsvResponse",
+    });
+    expect(doc.components.schemas.AdminAuditCsvResponse).toMatchObject({ type: "string" });
+  });
+
   it("declares every path parameter and keeps operation ids unique", () => {
     const doc = document();
     const operationIds: string[] = [];
@@ -90,9 +110,7 @@ describe("OpenAPI document", () => {
         operationIds.push(op.operationId ?? `${method}:${path}`);
         for (const placeholder of placeholders) {
           expect(op.parameters, `${method.toUpperCase()} ${path}`).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({ name: placeholder, in: "path" }),
-            ]),
+            expect.arrayContaining([expect.objectContaining({ name: placeholder, in: "path" })]),
           );
         }
       }

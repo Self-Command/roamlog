@@ -34,7 +34,7 @@ describe("Web application shell", () => {
     }
 
     expect(screen.getAllByText("Roamlog Crew").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "搜索或运行命令" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "搜索或运行命令 ⌘K" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "快速新建" })).toBeInTheDocument();
     expect(container.querySelectorAll("button.bg-ink").length).toBeLessThanOrEqual(1);
   });

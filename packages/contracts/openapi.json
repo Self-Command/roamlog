@@ -194,6 +194,64 @@
         ],
         "additionalProperties": false
       },
+      "AdminAuditCsvResponse": {
+        "type": "string",
+        "description": "UTF-8 CSV attachment. Columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata."
+      },
+      "AdminAuditExportQuery": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "actorType": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin",
+              "system"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "targetType": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "ip": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "q": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+          },
+          "sort": {
+            "type": "string",
+            "pattern": "^(?:createdAt):(?:asc|desc)$",
+            "description": "Whitelisted sort expression: createdAt:asc|desc."
+          }
+        }
+      },
       "AdminAuditPage": {
         "type": "object",
         "properties": {
@@ -327,9 +385,29 @@
             "format": "uuid",
             "description": "Sortable UUIDv7 identifier."
           },
+          "actorType": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin",
+              "system"
+            ]
+          },
           "action": {
             "type": "string",
             "maxLength": 120
+          },
+          "targetType": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "ip": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "q": {
+            "type": "string",
+            "maxLength": 200
           },
           "from": {
             "type": "string",
@@ -1450,6 +1528,9 @@
                 "completed": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "paused": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -1457,7 +1538,8 @@
                 "waiting",
                 "active",
                 "failed",
-                "completed"
+                "completed",
+                "paused"
               ],
               "additionalProperties": false
             }
@@ -1503,9 +1585,73 @@
             "minLength": 1,
             "maxLength": 40
           },
+          "buildTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
           "uptimeSeconds": {
             "type": "integer",
             "minimum": 0
+          },
+          "migration": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "appliedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              }
+            },
+            "required": [
+              "version",
+              "appliedAt"
+            ],
+            "additionalProperties": false
+          },
+          "worker": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "degraded",
+                  "down"
+                ]
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "consumers": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "status",
+              "version",
+              "consumers"
+            ],
+            "additionalProperties": false
           },
           "checks": {
             "type": "object",
@@ -1615,6 +1761,9 @@
                 "delayed": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "paused": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -1622,7 +1771,8 @@
                 "waiting",
                 "active",
                 "failed",
-                "delayed"
+                "delayed",
+                "paused"
               ],
               "additionalProperties": false
             }
@@ -1632,9 +1782,67 @@
           "version",
           "environment",
           "nodeVersion",
+          "buildTime",
+          "startedAt",
           "uptimeSeconds",
+          "migration",
+          "worker",
           "checks",
           "queues"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSystemMigration": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "appliedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "version",
+          "appliedAt"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSystemWorker": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "degraded",
+              "down"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "consumers": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "consumers"
         ],
         "additionalProperties": false
       },
@@ -3193,6 +3401,32 @@
             ]
           }
         ]
+      },
+      "ClearAdminQueueResponse": {
+        "type": "object",
+        "properties": {
+          "queue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "cleared": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "removedJobs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "queue",
+          "cleared",
+          "removedJobs"
+        ],
+        "additionalProperties": false
       },
       "Comment": {
         "type": "object",
@@ -7788,6 +8022,27 @@
         ],
         "additionalProperties": false
       },
+      "PauseAdminQueueResponse": {
+        "type": "object",
+        "properties": {
+          "queue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "paused": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "queue",
+          "paused"
+        ],
+        "additionalProperties": false
+      },
       "PlatformRole": {
         "type": "string",
         "enum": [
@@ -10601,6 +10856,27 @@
         "required": [
           "message",
           "totpReset"
+        ],
+        "additionalProperties": false
+      },
+      "ResumeAdminQueueResponse": {
+        "type": "object",
+        "properties": {
+          "queue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "paused": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          }
+        },
+        "required": [
+          "queue",
+          "paused"
         ],
         "additionalProperties": false
       },
@@ -26937,10 +27213,50 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "user",
+                "admin",
+                "system"
+              ]
+            },
+            "required": false,
+            "name": "actorType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "maxLength": 120
             },
             "required": false,
             "name": "action",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "required": false,
+            "name": "targetType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "ip",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "q",
             "in": "query"
           },
           {
@@ -26984,6 +27300,194 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminAuditPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/audit/export": {
+      "get": {
+        "operationId": "exportAdminAuditCsv",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Export filtered platform audit logs as CSV",
+        "description": "Returns a UTF-8 CSV attachment with columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": false,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": false,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "actorId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "admin",
+                "system"
+              ]
+            },
+            "required": false,
+            "name": "actorType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "required": false,
+            "name": "action",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "required": false,
+            "name": "targetType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "ip",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+            },
+            "required": false,
+            "description": "Calendar date in YYYY-MM-DD form, without a timezone.",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+            },
+            "required": false,
+            "description": "Calendar date in YYYY-MM-DD form, without a timezone.",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:createdAt):(?:asc|desc)$",
+              "description": "Whitelisted sort expression: createdAt:asc|desc."
+            },
+            "required": false,
+            "description": "Whitelisted sort expression: createdAt:asc|desc.",
+            "name": "sort",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit log CSV attachment.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAuditCsvResponse"
                 }
               }
             }
@@ -27414,6 +27918,16 @@
             "description": "Sortable UUIDv7 identifier.",
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -27655,6 +28169,286 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RetryJobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/jobs/{queue}/pause": {
+      "post": {
+        "operationId": "pauseAdminQueue",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Pause a BullMQ queue",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "queue",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PauseAdminQueueResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/jobs/{queue}/resume": {
+      "post": {
+        "operationId": "resumeAdminQueue",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Resume a BullMQ queue",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "queue",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeAdminQueueResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/jobs/{queue}/clear": {
+      "post": {
+        "operationId": "clearAdminQueue",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Clear failed jobs from a BullMQ queue",
+        "description": "Permanently removes failed jobs while preserving waiting and active jobs.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "queue",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearAdminQueueResponse"
                 }
               }
             }

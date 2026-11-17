@@ -185,6 +185,19 @@ export function registerAdminPaths(registry: OpenAPIRegistry): void {
   });
   registerOperation(registry, {
     method: "get",
+    path: "/v1/admin/audit/export",
+    operationId: "exportAdminAuditCsv",
+    tag: "Admin",
+    summary: "Export filtered platform audit logs as CSV",
+    description:
+      "Returns a UTF-8 CSV attachment with columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata.",
+    query: c.AdminAuditExportQuerySchema,
+    response: c.AdminAuditCsvResponseSchema,
+    responseContentType: "text/csv",
+    responseDescription: "Audit log CSV attachment.",
+  });
+  registerOperation(registry, {
+    method: "get",
     path: "/v1/admin/flags",
     operationId: "listAdminFlags",
     tag: "Admin",
@@ -218,6 +231,7 @@ export function registerAdminPaths(registry: OpenAPIRegistry): void {
     summary: "Resend a transactional email",
     params: c.AdminIdParamsSchema,
     status: 200,
+    idempotent: true,
     response: c.ResendEmailResponseSchema,
   });
   registerOperation(registry, {
@@ -238,6 +252,37 @@ export function registerAdminPaths(registry: OpenAPIRegistry): void {
     params: c.AdminJobParamsSchema,
     status: 200,
     response: c.RetryJobResponseSchema,
+  });
+  registerOperation(registry, {
+    method: "post",
+    path: "/v1/admin/jobs/{queue}/pause",
+    operationId: "pauseAdminQueue",
+    tag: "Admin",
+    summary: "Pause a BullMQ queue",
+    params: c.AdminQueueParamsSchema,
+    status: 200,
+    response: c.PauseAdminQueueResponseSchema,
+  });
+  registerOperation(registry, {
+    method: "post",
+    path: "/v1/admin/jobs/{queue}/resume",
+    operationId: "resumeAdminQueue",
+    tag: "Admin",
+    summary: "Resume a BullMQ queue",
+    params: c.AdminQueueParamsSchema,
+    status: 200,
+    response: c.ResumeAdminQueueResponseSchema,
+  });
+  registerOperation(registry, {
+    method: "post",
+    path: "/v1/admin/jobs/{queue}/clear",
+    operationId: "clearAdminQueue",
+    tag: "Admin",
+    summary: "Clear failed jobs from a BullMQ queue",
+    description: "Permanently removes failed jobs while preserving waiting and active jobs.",
+    params: c.AdminQueueParamsSchema,
+    status: 200,
+    response: c.ClearAdminQueueResponseSchema,
   });
   registerOperation(registry, {
     method: "get",

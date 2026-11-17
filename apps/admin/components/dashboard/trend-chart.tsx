@@ -68,7 +68,7 @@ export function TrendChart({ data, mode = "fixture" }: TrendChartProps) {
           role="img"
           aria-label={`用户与工作区 ${data.length} 日趋势图`}
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          className="h-auto w-full min-w-[560px]"
+          className="h-auto w-full"
         >
           <title>用户与工作区 12 日趋势图</title>
           <defs>

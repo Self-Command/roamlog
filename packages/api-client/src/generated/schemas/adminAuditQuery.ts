@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminAuditQueryActorType } from "./adminAuditQueryActorType";
 
 export interface AdminAuditQuery {
   /**
@@ -21,8 +22,15 @@ export interface AdminAuditQuery {
   workspaceId?: string;
   /** Sortable UUIDv7 identifier. */
   actorId?: string;
+  actorType?: AdminAuditQueryActorType;
   /** @maxLength 120 */
   action?: string;
+  /** @maxLength 60 */
+  targetType?: string;
+  /** @maxLength 64 */
+  ip?: string;
+  /** @maxLength 200 */
+  q?: string;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
   from?: string;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */

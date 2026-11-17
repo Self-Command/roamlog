@@ -24,16 +24,25 @@
     "tooling:minio-smoke": "tsx tooling/scripts/minio-smoke.ts",
     "check:env": "tsx tooling/scripts/check-env.ts",
     "e2e": "playwright test",
+    "e2e:live": "playwright test --config=playwright.live.config.ts",
+    "e2e:live:fixture": "pnpm --filter @roamlog/api exec tsx ../../tooling/scripts/e2e-auth-fixture.ts",
+    "e2e:live:cleanup": "pnpm --filter @roamlog/api exec tsx ../../tooling/scripts/e2e-auth-fixture.ts --cleanup",
     "e2e:web": "playwright test --project=web",
     "e2e:admin": "playwright test --project=admin",
     "e2e:api": "playwright test --project=api",
     "e2e:report": "playwright show-report",
+    "e2e:a11y": "playwright test --config=playwright.a11y.config.ts",
+    "e2e:a11y:axe": "playwright test --config=playwright.a11y.config.ts --grep @axe",
+    "e2e:a11y:keyboard": "playwright test --config=playwright.a11y.config.ts --grep @keyboard",
+    "e2e:visual": "playwright test --config=playwright.a11y.config.ts --project=web-visual --project=admin-visual",
     "security:check": "pnpm audit --audit-level high",
-    "k6:smoke": "tsx tooling/scripts/k6-smoke.ts",
+    "k6:smoke": "k6 run tooling/scripts/k6-smoke.js",
+    "k6:smoke:check": "node --input-type=module --check < tooling/scripts/k6-smoke.js",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.65.0",
     "@types/node": "24.10.1",
@@ -44,13 +53,5 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.73.0",
     "vitest": "5.1.0"
-  },
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  }
 }

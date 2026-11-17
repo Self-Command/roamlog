@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MailCheck, MailWarning, RefreshCw, Send, ShieldAlert } from "lucide-react";
 
 import { canPlatform } from "@roamlog/contracts";
@@ -76,6 +76,10 @@ export function EmailsView({
   const canResend = canPlatform(role, "admin:emails:resend");
   const canSendTest = mode === "fixture" && (role === "admin" || role === "super_admin");
   const readOnly = role === "analyst";
+
+  useEffect(() => {
+    setRecords(emails);
+  }, [emails]);
 
   const templateOptions = useMemo(
     () => [...new Set(records.map((email) => email.template))].sort(),

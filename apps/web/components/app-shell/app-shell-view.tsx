@@ -160,7 +160,7 @@ export function AppShellView({
             type="button"
             variant="ghost"
             onClick={() => setCommandOpen(true)}
-            aria-label="搜索或运行命令"
+            aria-label="搜索或运行命令 ⌘K"
             className="ml-auto h-11 min-w-11 max-w-64 flex-1 items-center justify-start gap-2 px-3 text-muted md:h-9 md:flex-none"
           >
             <Search aria-hidden="true" className="size-3.5" />

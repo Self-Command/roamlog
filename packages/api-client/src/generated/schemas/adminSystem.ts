@@ -7,7 +7,9 @@
  */
 import type { AdminSystemChecks } from "./adminSystemChecks";
 import type { AdminSystemEnvironment } from "./adminSystemEnvironment";
+import type { AdminSystemMigrationProperty } from "./adminSystemMigrationProperty";
 import type { AdminSystemQueuesItem } from "./adminSystemQueuesItem";
+import type { AdminSystemWorkerProperty } from "./adminSystemWorkerProperty";
 
 export interface AdminSystem {
   /**
@@ -21,8 +23,14 @@ export interface AdminSystem {
    * @maxLength 40
    */
   nodeVersion: string;
+  /** ISO 8601 timestamp with an explicit UTC offset. */
+  buildTime: string;
+  /** ISO 8601 timestamp with an explicit UTC offset. */
+  startedAt: string;
   /** @minimum 0 */
   uptimeSeconds: number;
+  migration: AdminSystemMigrationProperty;
+  worker: AdminSystemWorkerProperty;
   checks: AdminSystemChecks;
   queues: AdminSystemQueuesItem[];
 }

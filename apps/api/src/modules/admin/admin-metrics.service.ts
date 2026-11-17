@@ -118,6 +118,7 @@ export class AdminMetricsService {
         active: item.active,
         failed: item.failed,
         completed: item.completed,
+        paused: item.paused,
       }));
     } catch {
       degraded.push("queues");

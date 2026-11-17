@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Gauge, Pause, Play, RotateCcw, ShieldAlert } from "lucide-react";
 
 import { canPlatform } from "@roamlog/contracts";
@@ -59,7 +59,7 @@ export function QueuesView({
   const [statusMessage, setStatusMessage] = useState("");
 
   const canRetry = canPlatform(role, "admin:jobs:retry");
-  const canManageQueue = mode === "fixture" && canPlatform(role, "admin:jobs:manage");
+  const canManageQueue = canPlatform(role, "admin:jobs:manage");
   const readOnly = role === "analyst";
   const totalFailed = queueRecords.reduce((total, queue) => total + queue.failed, 0);
   const totalWaiting = queueRecords.reduce((total, queue) => total + queue.waiting, 0);
@@ -70,6 +70,11 @@ export function QueuesView({
     () => new Map(queueRecords.map((queue) => [queue.name, queue])),
     [queueRecords],
   );
+
+  useEffect(() => {
+    setQueueRecords(queues);
+    setJobRecords(failedJobs);
+  }, [queues, failedJobs]);
 
   function actionTarget(action: QueueAction): string {
     if (action.kind === "retry") {
@@ -144,32 +149,66 @@ export function QueuesView({
       setStatusMessage(`已重新入队：${job.id}`);
     } else if (pendingAction.kind === "clear") {
       const queue = pendingAction.queue;
+      if (mode === "api" && mutations) {
+        try {
+          await mutations.clearQueue(queue.name);
+        } catch (error) {
+          setStatusMessage(
+            error instanceof AdminMutationError
+              ? `清空失败：${error.failure.code} · ${error.failure.detail}`
+              : "清空失败，请检查 API 与权限后重试。",
+          );
+          setPendingAction(null);
+          return;
+        }
+      }
       setJobRecords((current) => current.filter((job) => job.queue !== queue.name));
       setQueueRecords((current) =>
         current.map((item) => (item.name === queue.name ? { ...item, failed: 0 } : item)),
       );
-      recordMockAuditEvent({
-        action: "admin.jobs.clear",
-        targetType: "queue",
-        targetId: queue.name,
-        targetName: queue.label,
-        metadata: { mock: true, queue: queue.name, previousFailed: queue.failed },
-      });
+      if (mode === "fixture") {
+        recordMockAuditEvent({
+          action: "admin.jobs.clear",
+          targetType: "queue",
+          targetId: queue.name,
+          targetName: queue.label,
+          metadata: { mock: true, queue: queue.name, previousFailed: queue.failed },
+        });
+      }
       setStatusMessage(`已清空失败任务：${queue.name}`);
     } else {
       const { queue, kind } = pendingAction;
+      if (mode === "api" && mutations) {
+        try {
+          if (kind === "pause") {
+            await mutations.pauseQueue(queue.name);
+          } else {
+            await mutations.resumeQueue(queue.name);
+          }
+        } catch (error) {
+          setStatusMessage(
+            error instanceof AdminMutationError
+              ? `${kind === "pause" ? "暂停" : "恢复"}失败：${error.failure.code} · ${error.failure.detail}`
+              : `${kind === "pause" ? "暂停" : "恢复"}失败，请检查 API 与权限后重试。`,
+          );
+          setPendingAction(null);
+          return;
+        }
+      }
       setQueueRecords((current) =>
         current.map((item) =>
           item.name === queue.name ? { ...item, paused: kind === "pause" } : item,
         ),
       );
-      recordMockAuditEvent({
-        action: kind === "pause" ? "admin.jobs.pause" : "admin.jobs.resume",
-        targetType: "queue",
-        targetId: queue.name,
-        targetName: queue.label,
-        metadata: { mock: true, queue: queue.name },
-      });
+      if (mode === "fixture") {
+        recordMockAuditEvent({
+          action: kind === "pause" ? "admin.jobs.pause" : "admin.jobs.resume",
+          targetType: "queue",
+          targetId: queue.name,
+          targetName: queue.label,
+          metadata: { mock: true, queue: queue.name },
+        });
+      }
       setStatusMessage(`${kind === "pause" ? "已暂停" : "已恢复"}队列：${queue.name}`);
     }
     setPendingAction(null);
@@ -180,7 +219,7 @@ export function QueuesView({
       <AdminPageHeader
         eyebrow="DELIVERY / BULLMQ"
         title="队列"
-        description="检查各队列等待、活跃与失败任务，查看失败原因。Admin API 当前提供失败任务读取与重试；队列暂停/清空仍待后端契约补齐。"
+        description="检查各队列等待、活跃与失败任务，查看失败原因；暂停、恢复与清空仅 super_admin 可执行。"
         readOnly={readOnly}
         actions={
           <div className="flex items-center gap-2 rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -233,7 +272,7 @@ export function QueuesView({
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
           {mode === "api"
-            ? "API 模式：失败任务重试已接入真实 mutation；队列暂停、恢复与清空在 Admin API 契约补齐前保持禁用。"
+            ? "API 模式：队列生命周期操作仅 super_admin 可执行；失败任务读取与重试按角色权限开放。"
             : !canRetry
               ? "Support / Analyst 可读取队列指标与失败原因；重试、暂停与清空操作保持可见但禁用。"
               : "Admin 可重试失败任务；暂停、恢复与清空队列属于 super_admin 专属操作。"}

@@ -11,9 +11,6 @@ import {
   PageHeader,
   Select,
   Skeleton,
-  Tabs,
-  TabsList,
-  TabsTrigger,
 } from "@roamlog/ui";
 import { Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
@@ -176,18 +173,22 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
         </div>
 
         <div className="mt-3 overflow-x-auto border-t border-hairline pt-3">
-          <Tabs value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
-            <TabsList className="w-max">
-              {statusTabs.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value}>
+          <div role="group" aria-label="按旅行状态筛选" className="flex w-max gap-1">
+            {statusTabs.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                aria-pressed={status === tab.value}
+                onClick={() => setStatus(tab.value)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-control border border-transparent px-3 text-xs text-muted outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ink aria-[pressed=true]:border-hairline-strong aria-[pressed=true]:bg-surface-2 aria-[pressed=true]:text-ink"
+              >
                   {tab.label}
                   <span className="font-mono text-[9px] text-stone">
                     {countForStatus(trips, tab.value)}
                   </span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

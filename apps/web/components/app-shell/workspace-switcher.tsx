@@ -20,7 +20,6 @@ export function WorkspaceSwitcher({
   return (
     <details className="group relative">
       <summary
-        aria-label="切换工作区"
         className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 rounded-control border border-hairline bg-surface-1 px-2.5 py-2 outline-none transition-colors hover:border-hairline-strong focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas [&::-webkit-details-marker]:hidden"
       >
         <Avatar name={currentWorkspace.name} size={28} />

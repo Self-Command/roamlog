@@ -44,7 +44,7 @@ describe("Roamlog design tokens", () => {
     expect(tokenCss).toContain("--accent-green: #11ff99;");
     expect(tokenCss).toContain("--accent-red: #ff2047;");
     expect(tokenCss).toContain("--accent-yellow: #ffc53d;");
-    expect(tokenCss).toContain("--accent-slate: #64748b;");
+    expect(tokenCss).toContain("--accent-slate: #94a3b8;");
   });
 
   it("keeps the shared radii and font channels contract explicit", () => {

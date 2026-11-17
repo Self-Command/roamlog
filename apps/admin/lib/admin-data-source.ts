@@ -1,4 +1,7 @@
 import {
+  exportAdminAuditCsv,
+  resendAdminEmail,
+  useClearAdminQueue,
   useDeleteAdminContent,
   useDeleteAdminMedia,
   useDeleteAdminUser,
@@ -16,9 +19,10 @@ import {
   useListAdminTrips,
   useListAdminUsers,
   useListAdminWorkspaces,
-  useResendAdminEmail,
+  usePauseAdminQueue,
   useResetAdminUserTwoFactor,
   useRestoreAdminContent,
+  useResumeAdminQueue,
   useRetryAdminJob,
   useUpdateAdminFlag,
   useUpdateAdminUser,
@@ -30,6 +34,7 @@ import {
   type AdminSystem,
   type AdminUserPageItemsItem,
   type AdminWorkspacePageItemsItem,
+  type ExportAdminAuditCsvParams,
   type UpdateAdminUserRequest,
   type UpdateAdminWorkspaceRequest,
 } from "@roamlog/api-client";
@@ -392,6 +397,7 @@ export function mapAdminQueues(
     active: number;
     failed: number;
     completed: number;
+    paused: boolean;
   }[],
 ): readonly AdminQueueSummary[] {
   return queues.map((queue) => ({
@@ -402,7 +408,7 @@ export function mapAdminQueues(
     failed: queue.failed,
     completed: queue.completed,
     throughputPerMinute: 0,
-    paused: false,
+    paused: queue.paused,
   }));
 }
 
@@ -449,10 +455,21 @@ export function mapAdminSystem(system: AdminSystem): AdminSystemSnapshot {
     latencyMs: value.latencyMs,
     detail: `${name} readiness probe`,
   }));
+  const migrations =
+    system.migration.version && system.migration.appliedAt
+      ? [
+          {
+            version: system.migration.version,
+            name: "latest applied migration",
+            appliedAt: system.migration.appliedAt,
+            status: "applied" as const,
+          },
+        ]
+      : [];
 
   return {
     apiVersion: system.version,
-    workerVersion: "backend-managed",
+    workerVersion: system.worker.version,
     environment:
       system.environment === "production"
         ? "production"
@@ -460,12 +477,13 @@ export function mapAdminSystem(system: AdminSystem): AdminSystemSnapshot {
           ? "staging"
           : "local",
     nodeVersion: system.nodeVersion,
-    buildTime: new Date(Date.now() - system.uptimeSeconds * 1000).toISOString(),
-    startedAt: new Date(Date.now() - system.uptimeSeconds * 1000).toISOString(),
+    buildTime: system.buildTime,
+    startedAt: system.startedAt,
     uptimeSeconds: system.uptimeSeconds,
-    lastWorkerHeartbeat: new Date().toISOString(),
+    workerStatus: system.worker.status,
+    workerConsumers: system.worker.consumers,
     checks,
-    migrations: [],
+    migrations,
   };
 }
 
@@ -484,6 +502,7 @@ export function mapAdminDashboard(input: {
       active: number;
       failed: number;
       completed: number;
+      paused: boolean;
     }>;
     generatedAt: string;
   };
@@ -684,6 +703,10 @@ export interface AdminMutationPort {
   ): Promise<void>;
   resendEmail(id: string): Promise<void>;
   retryJob(queue: string, jobId: string): Promise<void>;
+  pauseQueue(queue: string): Promise<void>;
+  resumeQueue(queue: string): Promise<void>;
+  clearQueue(queue: string): Promise<void>;
+  exportAuditCsv(params: ExportAdminAuditCsvParams): Promise<string>;
 }
 
 export function useAdminMutationPort(): AdminMutationPort {
@@ -698,8 +721,10 @@ export function useAdminMutationPort(): AdminMutationPort {
   const restoreContentMutation = useRestoreAdminContent();
   const deleteMediaMutation = useDeleteAdminMedia();
   const updateFlagMutation = useUpdateAdminFlag();
-  const resendEmailMutation = useResendAdminEmail();
   const retryJobMutation = useRetryAdminJob();
+  const pauseQueueMutation = usePauseAdminQueue();
+  const resumeQueueMutation = useResumeAdminQueue();
+  const clearQueueMutation = useClearAdminQueue();
 
   async function complete(
     operation: Promise<{ status: number; data: unknown; headers: Headers }>,
@@ -739,9 +764,28 @@ export function useAdminMutationPort(): AdminMutationPort {
         }),
         "update feature flag",
       ),
-    resendEmail: async (id) => complete(resendEmailMutation.mutateAsync({ id }), "resend email"),
+    resendEmail: async (id) =>
+      complete(
+        resendAdminEmail(id, {
+          headers: { "Idempotency-Key": crypto.randomUUID() },
+        }),
+        "resend email",
+      ),
     retryJob: async (queue, jobId) =>
       complete(retryJobMutation.mutateAsync({ queue, jobId }), "retry job"),
+    pauseQueue: async (queue) => complete(pauseQueueMutation.mutateAsync({ queue }), "pause queue"),
+    resumeQueue: async (queue) =>
+      complete(resumeQueueMutation.mutateAsync({ queue }), "resume queue"),
+    clearQueue: async (queue) => complete(clearQueueMutation.mutateAsync({ queue }), "clear queue"),
+    exportAuditCsv: async (params) =>
+      assertAdminResponse(
+        (await exportAdminAuditCsv(params)) as {
+          status: number;
+          data: unknown;
+          headers: Headers;
+        },
+        "export audit CSV",
+      ) as string,
   };
 }
 

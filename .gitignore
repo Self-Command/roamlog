@@ -34,6 +34,7 @@ playwright-report/
 test-results/
 screenshots/
 e2e/screenshots/
+.e2e-live/
 .nyc_output/
 
 # Local data

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AdminMetricsService } from "../admin-metrics.service.js";
 import { AdminSystemService } from "../admin-system.service.js";
+import { NOW } from "../../../../test/identity-fixtures.js";
 
 describe("AdminMetricsService", () => {
   function setup() {
@@ -39,11 +40,17 @@ describe("AdminMetricsService", () => {
     prisma.client.comment.count.mockResolvedValue(9);
     prisma.client.media.count.mockResolvedValue(5);
     prisma.client.media.aggregate.mockResolvedValue({ _sum: { size: 4096 } });
-    prisma.client.export.groupBy.mockResolvedValue([
-      { status: "ready", _count: { _all: 2 } },
-    ]);
+    prisma.client.export.groupBy.mockResolvedValue([{ status: "ready", _count: { _all: 2 } }]);
     queue.stats.mockResolvedValue([
-      { name: "email", waiting: 1, active: 0, failed: 2, completed: 10, delayed: 0 },
+      {
+        name: "email",
+        waiting: 1,
+        active: 0,
+        failed: 2,
+        completed: 10,
+        delayed: 0,
+        paused: false,
+      },
     ]);
 
     const { metrics, degraded } = await service.get();
@@ -87,23 +94,40 @@ describe("AdminSystemService", () => {
     const prisma = { healthCheck: vi.fn() };
     const redis = { ping: vi.fn() };
     const storage = { checkHealth: vi.fn() };
-    const queue = { stats: vi.fn() };
+    const queue = { stats: vi.fn(), workerHealth: vi.fn() };
+    prisma.healthCheck = vi.fn();
+    const prismaWithRaw = {
+      ...prisma,
+      client: { $queryRaw: vi.fn() },
+    };
     const service = new AdminSystemService(
-      prisma as never,
+      prismaWithRaw as never,
       redis as never,
       storage as never,
       queue as never,
     );
-    return { prisma, redis, storage, queue, service };
+    return { prisma: prismaWithRaw, redis, storage, queue, service };
   }
 
-  it("reports dependency health and queue state", async () => {
+  it("reports build, migration, worker, dependency, and queue state", async () => {
     const { prisma, redis, storage, queue, service } = setup();
     prisma.healthCheck.mockResolvedValue(undefined);
+    prisma.client.$queryRaw.mockResolvedValue([
+      { migration_name: "0002_two_factor_state", finished_at: NOW },
+    ]);
     redis.ping.mockResolvedValue(undefined);
     storage.checkHealth.mockResolvedValue(undefined);
+    queue.workerHealth.mockResolvedValue({ status: "up", consumers: 5 });
     queue.stats.mockResolvedValue([
-      { name: "email", waiting: 1, active: 0, failed: 2, completed: 10, delayed: 0 },
+      {
+        name: "email",
+        waiting: 1,
+        active: 0,
+        failed: 2,
+        completed: 10,
+        delayed: 0,
+        paused: true,
+      },
     ]);
 
     const system = await service.get();
@@ -111,14 +135,24 @@ describe("AdminSystemService", () => {
     expect(system.checks.database.status).toBe("up");
     expect(system.checks.redis.status).toBe("up");
     expect(system.checks.storage.status).toBe("up");
+    expect(system.migration).toEqual({
+      version: "0002_two_factor_state",
+      appliedAt: NOW.toISOString(),
+    });
+    expect(system.worker.status).toBe("up");
+    expect(system.worker.consumers).toBe(5);
+    expect(system.buildTime).toBe(system.startedAt);
     expect(system.queues[0]?.name).toBe("email");
+    expect(system.queues[0]?.paused).toBe(true);
   });
 
   it("reports down checks without throwing", async () => {
     const { prisma, redis, storage, queue, service } = setup();
     prisma.healthCheck.mockRejectedValue(new Error("down"));
+    prisma.client.$queryRaw.mockRejectedValue(new Error("down"));
     redis.ping.mockRejectedValue(new Error("down"));
     storage.checkHealth.mockRejectedValue(new Error("down"));
+    queue.workerHealth.mockRejectedValue(new Error("down"));
     queue.stats.mockRejectedValue(new Error("down"));
 
     const system = await service.get();
@@ -126,6 +160,8 @@ describe("AdminSystemService", () => {
     expect(system.checks.database.status).toBe("down");
     expect(system.checks.redis.status).toBe("down");
     expect(system.checks.storage.status).toBe("down");
+    expect(system.migration).toEqual({ version: null, appliedAt: null });
+    expect(system.worker.status).toBe("down");
     expect(system.queues).toEqual([]);
   });
 });

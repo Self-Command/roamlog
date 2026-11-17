@@ -72,7 +72,7 @@ export function AdminTopbar({
           <button
             type="button"
             onClick={onOpenCommandPalette}
-            aria-label="打开全局搜索"
+            aria-label="搜索页面、用户或工作区 K"
             className="hidden h-8 w-[clamp(12rem,22vw,20rem)] items-center gap-2 rounded-control border border-hairline bg-surface-1/60 px-2.5 text-left text-[11px] text-muted outline-none transition-colors hover:border-hairline-strong hover:text-body focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas md:flex"
           >
             <Search aria-hidden="true" className="size-3.5" />

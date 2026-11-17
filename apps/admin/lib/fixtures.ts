@@ -405,10 +405,17 @@ export const MOCK_ADMIN_METRICS: AdminMetrics = {
   media: { count: 318420, bytes: 824_633_190_400 },
   exports: { queued: 18, processing: 6, ready: 244, failed: 3, expired: 1120 },
   queues: [
-    { name: "media-processing", waiting: 18, active: 4, failed: 1, completed: 14208 },
-    { name: "email-delivery", waiting: 6, active: 2, failed: 0, completed: 22814 },
-    { name: "archive-export", waiting: 3, active: 1, failed: 2, completed: 1844 },
-    { name: "trip-reminders", waiting: 42, active: 0, failed: 0, completed: 8120 },
+    {
+      name: "media-processing",
+      waiting: 18,
+      active: 4,
+      failed: 1,
+      completed: 14208,
+      paused: false,
+    },
+    { name: "email-delivery", waiting: 6, active: 2, failed: 0, completed: 22814, paused: false },
+    { name: "archive-export", waiting: 3, active: 1, failed: 2, completed: 1844, paused: false },
+    { name: "trip-reminders", waiting: 42, active: 0, failed: 0, completed: 8120, paused: true },
   ],
   generatedAt: "2026-11-17T08:45:00.000Z",
 };

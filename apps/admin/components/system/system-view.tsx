@@ -29,12 +29,25 @@ const checkLabels = {
   down: "Down",
 } as const;
 
+const workerLabels = {
+  up: "Healthy",
+  degraded: "Degraded",
+  down: "Down",
+} as const;
+
+const workerTones = {
+  up: "green",
+  degraded: "yellow",
+  down: "red",
+} as const;
+
 export function SystemView({
   role,
   snapshot = MOCK_ADMIN_SYSTEM,
   mode = "fixture",
 }: SystemViewProps) {
   const readOnly = role === "analyst";
+  const upChecks = snapshot.checks.filter((check) => check.status === "up").length;
 
   return (
     <div className="space-y-5">
@@ -95,7 +108,9 @@ export function SystemView({
                 readiness / {mode} probes
               </p>
             </div>
-            <Badge tone="green">3 / 4 up</Badge>
+            <Badge tone={upChecks === snapshot.checks.length ? "green" : "yellow"}>
+              {upChecks} / {snapshot.checks.length} up
+            </Badge>
           </div>
           <div className="grid gap-px bg-hairline sm:grid-cols-2">
             {snapshot.checks.map((check) => (
@@ -115,7 +130,7 @@ export function SystemView({
 
         <aside className="space-y-4">
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">WORKER / HEARTBEAT</p>
+            <p className="type-eyebrow">WORKER / BULLMQ CLIENTS</p>
             <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">后台 Worker</h2>
             <dl className="mt-3 space-y-2 text-[11px]">
               <div className="flex items-center justify-between gap-3">
@@ -123,18 +138,21 @@ export function SystemView({
                 <dd className="font-mono text-[10px] text-body">v{snapshot.workerVersion}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted">最后心跳</dt>
-                <dd className="font-mono text-[10px] text-body">
-                  {formatDateTime(snapshot.lastWorkerHeartbeat)}
-                </dd>
+                <dt className="text-muted">消费者连接</dt>
+                <dd className="font-mono text-[10px] text-body">{snapshot.workerConsumers}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted">状态</dt>
                 <dd>
-                  <Badge tone="green">Healthy</Badge>
+                  <Badge tone={workerTones[snapshot.workerStatus]}>
+                    {workerLabels[snapshot.workerStatus]}
+                  </Badge>
                 </dd>
               </div>
             </dl>
+            <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
+              Redis CLIENT LIST · {snapshot.workerConsumers} BullMQ blocking consumers
+            </p>
           </section>
 
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
@@ -170,7 +188,9 @@ export function SystemView({
               prisma migrate status · {mode}
             </p>
           </div>
-          <Badge tone="green">Up to date</Badge>
+          <Badge tone={snapshot.migrations.length > 0 ? "green" : "yellow"}>
+            {snapshot.migrations.length > 0 ? "Latest applied" : "No metadata"}
+          </Badge>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] border-collapse text-left text-[12px]">
@@ -192,20 +212,30 @@ export function SystemView({
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
-              {snapshot.migrations.map((migration) => (
-                <tr key={migration.version} className="h-11">
-                  <td className="px-3 py-2 font-mono text-[10px] text-body">{migration.version}</td>
-                  <td className="px-3 py-2 text-[11px] text-muted">{migration.name}</td>
-                  <td className="px-3 py-2 font-mono text-[10px] text-muted">
-                    {formatDateTime(migration.appliedAt)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge tone={migration.status === "applied" ? "green" : "yellow"}>
-                      {migration.status === "applied" ? "Applied" : "Pending"}
-                    </Badge>
+              {snapshot.migrations.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-center text-[11px] text-muted">
+                    当前 API 未返回迁移版本；数据库恢复后刷新。
                   </td>
                 </tr>
-              ))}
+              ) : (
+                snapshot.migrations.map((migration) => (
+                  <tr key={migration.version} className="h-11">
+                    <td className="px-3 py-2 font-mono text-[10px] text-body">
+                      {migration.version}
+                    </td>
+                    <td className="px-3 py-2 text-[11px] text-muted">{migration.name}</td>
+                    <td className="px-3 py-2 font-mono text-[10px] text-muted">
+                      {formatDateTime(migration.appliedAt)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge tone={migration.status === "applied" ? "green" : "yellow"}>
+                        {migration.status === "applied" ? "Applied" : "Pending"}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

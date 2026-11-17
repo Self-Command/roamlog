@@ -1,11 +1,17 @@
 import { z } from "zod";
 
-import { DateOnlySchema, EmailSchema, IsoTimestampSchema, JsonObjectSchema, UuidV7Schema } from "../common/ids";
+import {
+  DateOnlySchema,
+  EmailSchema,
+  IsoTimestampSchema,
+  JsonObjectSchema,
+  UuidV7Schema,
+} from "../common/ids";
 import { createSortSchema, CursorPageSchema, CursorQuerySchema } from "../common/pagination";
 import { ActivitySchema } from "../entities/activity";
 import { AuditLogSchema } from "../entities/audit-log";
 import { CommentSchema } from "../entities/comment";
-import { EmailStatusSchema, ExportStatusSchema } from "../entities/enums";
+import { AuditActorTypeSchema, EmailStatusSchema, ExportStatusSchema } from "../entities/enums";
 import { EmailLogSchema } from "../entities/email-log";
 import { ExportSchema } from "../entities/export";
 import { FeatureFlagSchema } from "../entities/feature-flag";
@@ -54,6 +60,7 @@ export const AdminMetricsSchema = z
           active: z.number().int().nonnegative(),
           failed: z.number().int().nonnegative(),
           completed: z.number().int().nonnegative(),
+          paused: z.boolean(),
         })
         .strict(),
     ),
@@ -166,12 +173,29 @@ export type AdminMediaPage = z.infer<typeof AdminMediaPageSchema>;
 export const AdminAuditQuerySchema = CursorQuerySchema.extend({
   workspaceId: UuidV7Schema.optional(),
   actorId: UuidV7Schema.optional(),
+  actorType: AuditActorTypeSchema.optional(),
   action: z.string().max(120).optional(),
+  targetType: z.string().max(60).optional(),
+  ip: z.string().max(64).optional(),
+  q: z.string().max(200).optional(),
   from: DateOnlySchema.optional(),
   to: DateOnlySchema.optional(),
   sort: createSortSchema(["createdAt"]).optional(),
 });
 export type AdminAuditQuery = z.infer<typeof AdminAuditQuerySchema>;
+
+export const AdminAuditExportQuerySchema = AdminAuditQuerySchema.omit({
+  cursor: true,
+  limit: true,
+});
+export type AdminAuditExportQuery = z.infer<typeof AdminAuditExportQuerySchema>;
+
+export const AdminAuditCsvResponseSchema = z
+  .string()
+  .describe(
+    "UTF-8 CSV attachment. Columns: id, createdAt, actorType, actorId, action, targetType, targetId, workspaceId, ip, userAgent, metadata.",
+  );
+export type AdminAuditCsvResponse = z.infer<typeof AdminAuditCsvResponseSchema>;
 
 export const AdminAuditPageSchema = CursorPageSchema(AuditLogSchema);
 export type AdminAuditPage = z.infer<typeof AdminAuditPageSchema>;
@@ -250,17 +274,80 @@ export const RetryJobResponseSchema = z
   .strict();
 export type RetryJobResponse = z.infer<typeof RetryJobResponseSchema>;
 
+export const PauseAdminQueueResponseSchema = z
+  .object({
+    queue: z.string().min(1).max(80),
+    paused: z.literal(true),
+  })
+  .strict();
+export type PauseAdminQueueResponse = z.infer<typeof PauseAdminQueueResponseSchema>;
+
+export const ResumeAdminQueueResponseSchema = z
+  .object({
+    queue: z.string().min(1).max(80),
+    paused: z.literal(false),
+  })
+  .strict();
+export type ResumeAdminQueueResponse = z.infer<typeof ResumeAdminQueueResponseSchema>;
+
+export const ClearAdminQueueResponseSchema = z
+  .object({
+    queue: z.string().min(1).max(80),
+    cleared: z.literal(true),
+    removedJobs: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ClearAdminQueueResponse = z.infer<typeof ClearAdminQueueResponseSchema>;
+
+export const AdminSystemWorkerSchema = z
+  .object({
+    status: z.enum(["up", "degraded", "down"]),
+    version: z.string().min(1).max(40),
+    consumers: z.number().int().nonnegative(),
+  })
+  .strict();
+export type AdminSystemWorker = z.infer<typeof AdminSystemWorkerSchema>;
+
+export const AdminSystemMigrationSchema = z
+  .object({
+    version: z.string().min(1).max(160).nullable(),
+    appliedAt: IsoTimestampSchema.nullable(),
+  })
+  .strict();
+export type AdminSystemMigration = z.infer<typeof AdminSystemMigrationSchema>;
+
 export const AdminSystemSchema = z
   .object({
     version: z.string().min(1).max(40),
     environment: z.enum(["development", "test", "staging", "production"]),
     nodeVersion: z.string().min(1).max(40),
+    buildTime: IsoTimestampSchema,
+    startedAt: IsoTimestampSchema,
     uptimeSeconds: z.number().int().nonnegative(),
-    checks: z.object({
-      database: z.object({ status: z.enum(["up", "down"]), latencyMs: z.number().int().nonnegative().nullable() }).strict(),
-      redis: z.object({ status: z.enum(["up", "down"]), latencyMs: z.number().int().nonnegative().nullable() }).strict(),
-      storage: z.object({ status: z.enum(["up", "down"]), latencyMs: z.number().int().nonnegative().nullable() }).strict(),
-    }).strict(),
+    migration: AdminSystemMigrationSchema,
+    worker: AdminSystemWorkerSchema,
+    checks: z
+      .object({
+        database: z
+          .object({
+            status: z.enum(["up", "down"]),
+            latencyMs: z.number().int().nonnegative().nullable(),
+          })
+          .strict(),
+        redis: z
+          .object({
+            status: z.enum(["up", "down"]),
+            latencyMs: z.number().int().nonnegative().nullable(),
+          })
+          .strict(),
+        storage: z
+          .object({
+            status: z.enum(["up", "down"]),
+            latencyMs: z.number().int().nonnegative().nullable(),
+          })
+          .strict(),
+      })
+      .strict(),
     queues: z.array(
       z
         .object({
@@ -269,6 +356,7 @@ export const AdminSystemSchema = z
           active: z.number().int().nonnegative(),
           failed: z.number().int().nonnegative(),
           delayed: z.number().int().nonnegative(),
+          paused: z.boolean(),
         })
         .strict(),
     ),

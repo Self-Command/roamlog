@@ -20,4 +20,5 @@ export type AdminMetricsQueuesItem = {
   failed: number;
   /** @minimum 0 */
   completed: number;
+  paused: boolean;
 };
