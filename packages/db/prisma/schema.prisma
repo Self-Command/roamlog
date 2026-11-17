@@ -1,0 +1,831 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PlatformRole {
+  user
+  support
+  analyst
+  admin
+  super_admin
+}
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+}
+
+enum Plan {
+  free
+  pro
+  team
+}
+
+enum WorkspaceStatus {
+  active
+  suspended
+  deleted
+}
+
+enum MemberRole {
+  owner
+  admin
+  editor
+  viewer
+}
+
+enum MemberStatus {
+  active
+  suspended
+}
+
+enum TripStatus {
+  wishlist
+  planning
+  upcoming
+  active
+  completed
+}
+
+enum TripVisibility {
+  workspace
+  private
+  public_link
+}
+
+enum Mood {
+  calm
+  happy
+  awe
+  tired
+  reflective
+  excited
+}
+
+enum Weather {
+  sunny
+  cloudy
+  rain
+  snow
+  wind
+  fog
+}
+
+enum ItineraryType {
+  transit
+  food
+  activity
+  stay
+  note
+}
+
+enum CommentTargetType {
+  journal_entry
+  itinerary_item
+}
+
+enum MediaStatus {
+  pending
+  processing
+  ready
+  failed
+}
+
+enum ExpenseCategory {
+  transport
+  stay
+  food
+  activity
+  shopping
+  other
+}
+
+enum SplitMode {
+  equal
+  custom
+}
+
+enum PackingCategory {
+  documents
+  clothing
+  gear
+  health
+  other
+}
+
+enum ExportScope {
+  trip
+  workspace
+  account
+}
+
+enum ExportFormat {
+  zip
+  json
+}
+
+enum ExportStatus {
+  queued
+  processing
+  ready
+  failed
+  expired
+}
+
+enum EmailStatus {
+  queued
+  sent
+  delivered
+  bounced
+  complained
+  failed
+}
+
+enum ActorType {
+  user
+  admin
+  system
+}
+
+model User {
+  id                String                   @id @default(uuid(7)) @db.Uuid
+  email             String                   @unique
+  emailVerified     Boolean                  @default(false)
+  name              String
+  image             String?
+  platformRole      PlatformRole             @default(user)
+  status            UserStatus               @default(active)
+  locale            String                   @default("zh-CN")
+  timezone          String                   @default("Asia/Shanghai")
+  lastActiveAt      DateTime?                @db.Timestamptz(3)
+  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                 @updatedAt @db.Timestamptz(3)
+  deletedAt         DateTime?                @db.Timestamptz(3)
+  sessions          Session[]
+  accounts          Account[]
+  twoFactors        TwoFactor[]
+  ownedWorkspaces   Workspace[]              @relation("WorkspaceOwner")
+  memberships       WorkspaceMember[]
+  workspaceInvites  WorkspaceMember[]        @relation("WorkspaceMemberInviter")
+  invitationsSent   Invitation[]             @relation("InvitationSender")
+  tripsCreated      Trip[]                   @relation("TripCreator")
+  tripsUpdated      Trip[]                   @relation("TripUpdater")
+  tripParticipants  TripParticipant[]
+  stopsCreated      Stop[]                   @relation("StopCreator")
+  stopsUpdated      Stop[]                   @relation("StopUpdater")
+  entriesCreated    JournalEntry[]           @relation("EntryCreator")
+  entriesUpdated    JournalEntry[]           @relation("EntryUpdater")
+  revisions         EntryRevision[]          @relation("RevisionEditor")
+  itineraryCreated  ItineraryItem[]          @relation("ItineraryCreator")
+  itineraryUpdated  ItineraryItem[]          @relation("ItineraryUpdater")
+  itineraryAssigned ItineraryItem[]          @relation("ItineraryAssignee")
+  comments          Comment[]                @relation("CommentAuthor")
+  commentsResolved  Comment[]                @relation("CommentResolver")
+  commentMentions   CommentMention[]
+  activities        Activity[]               @relation("ActivityActor")
+  media             Media[]
+  expensesPaid      Expense[]                @relation("ExpensePayer")
+  expensesCreated   Expense[]                @relation("ExpenseCreator")
+  expenseShares     ExpenseParticipant[]
+  packingCreated    PackingItem[]            @relation("PackingCreator")
+  packingUpdated    PackingItem[]            @relation("PackingUpdater")
+  packingAssigned   PackingItem[]            @relation("PackingAssignee")
+  shareLinksCreated ShareLink[]
+  notifications     Notification[]           @relation("NotificationRecipient")
+  notificationsSent Notification[]           @relation("NotificationActor")
+  preferences       NotificationPreference[]
+  auditActor        AuditLog[]               @relation("AuditActor")
+  featureFlags      FeatureFlag[]            @relation("FeatureFlagUpdater")
+  emails            EmailLog[]
+  exports           Export[]
+
+  @@index([platformRole, status])
+  @@index([status, createdAt])
+}
+
+model Session {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  expiresAt DateTime @db.Timestamptz(3)
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Account {
+  id                    String    @id @default(uuid(7)) @db.Uuid
+  accountId             String
+  providerId            String
+  userId                String    @db.Uuid
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@index([expiresAt])
+}
+
+model TwoFactor {
+  id          String @id @default(uuid(7)) @db.Uuid
+  secret      String
+  backupCodes String
+  userId      String @db.Uuid
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Invariant: Workspace.ownerId identifies the single active WorkspaceMember
+/// with role=owner. The initial migration enforces at most one owner row with
+/// a partial unique index and verifies ownerId consistency with a deferred
+/// constraint trigger. Ownership transfer must stay in one transaction.
+model Workspace {
+  id                  String               @id @default(uuid(7)) @db.Uuid
+  name                String
+  slug                String               @unique
+  logoMediaId         String?              @db.Uuid
+  ownerId             String               @db.Uuid
+  plan                Plan                 @default(free)
+  status              WorkspaceStatus      @default(active)
+  defaultCurrency     String               @default("CNY")
+  timezone            String               @default("Asia/Shanghai")
+  weekStartsOn        Int                  @default(1)
+  settings            Json                 @default("{}") @db.JsonB
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
+  deletedAt           DateTime?            @db.Timestamptz(3)
+  owner               User                 @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  logoMedia           Media?               @relation("WorkspaceLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
+  members             WorkspaceMember[]
+  invitations         Invitation[]
+  trips               Trip[]
+  tripParticipants    TripParticipant[]
+  stops               Stop[]
+  journalEntries      JournalEntry[]
+  entryRevisions      EntryRevision[]
+  entryMedia          EntryMedia[]
+  itineraryItems      ItineraryItem[]
+  comments            Comment[]
+  commentMentions     CommentMention[]
+  activities          Activity[]
+  media               Media[]
+  expenses            Expense[]
+  expenseParticipants ExpenseParticipant[]
+  packingItems        PackingItem[]
+  shareLinks          ShareLink[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+  exports             Export[]
+
+  @@index([ownerId])
+  @@index([status, createdAt])
+}
+
+model WorkspaceMember {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  workspaceId String       @db.Uuid
+  userId      String       @db.Uuid
+  role        MemberRole
+  status      MemberStatus @default(active)
+  joinedAt    DateTime     @default(now()) @db.Timestamptz(3)
+  invitedById String?      @db.Uuid
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy   User?        @relation("WorkspaceMemberInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId, role, status])
+  @@index([userId, status])
+}
+
+model Invitation {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  workspaceId String     @db.Uuid
+  email       String
+  role        MemberRole
+  tokenHash   String     @unique
+  invitedById String     @db.Uuid
+  expiresAt   DateTime   @db.Timestamptz(3)
+  acceptedAt  DateTime?  @db.Timestamptz(3)
+  revokedAt   DateTime?  @db.Timestamptz(3)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User       @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, email])
+  @@index([workspaceId, expiresAt])
+}
+
+model Trip {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  workspaceId       String            @db.Uuid
+  title             String
+  summary           String            @default("")
+  status            TripStatus        @default(planning)
+  startDate         DateTime          @db.Date
+  endDate           DateTime          @db.Date
+  coverMediaId      String?           @db.Uuid
+  origin            String
+  destinations      String[]          @default([])
+  countryCodes      String[]          @default([])
+  tags              String[]          @default([])
+  guestNames        String[]          @default([])
+  budgetAmountMinor Int?
+  budgetCurrency    String?
+  visibility        TripVisibility    @default(workspace)
+  favorite          Boolean           @default(false)
+  version           Int               @default(1)
+  createdById       String            @db.Uuid
+  updatedById       String            @db.Uuid
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
+  deletedAt         DateTime?         @db.Timestamptz(3)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  coverMedia        Media?            @relation("TripCover", fields: [coverMediaId], references: [id], onDelete: SetNull)
+  createdBy         User              @relation("TripCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy         User              @relation("TripUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  participants      TripParticipant[]
+  stops             Stop[]
+  entries           JournalEntry[]
+  itineraryItems    ItineraryItem[]
+  comments          Comment[]
+  activities        Activity[]
+  media             Media[]
+  expenses          Expense[]
+  packingItems      PackingItem[]
+  shareLinks        ShareLink[]
+  notifications     Notification[]
+  exports           Export[]
+
+  @@index([workspaceId, status, startDate])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, visibility])
+}
+
+model TripParticipant {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  workspaceId String    @db.Uuid
+  tripId      String    @db.Uuid
+  userId      String    @db.Uuid
+  joinedAt    DateTime  @default(now()) @db.Timestamptz(3)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+  @@index([workspaceId, userId])
+}
+
+model Stop {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  tripId      String    @db.Uuid
+  workspaceId String    @db.Uuid
+  city        String
+  country     String
+  countryCode String
+  lat         Float?
+  lng         Float?
+  startDate   DateTime  @db.Date
+  endDate     DateTime  @db.Date
+  notes       String
+  order       Int       @default(0)
+  version     Int       @default(1)
+  createdById String    @db.Uuid
+  updatedById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("StopCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User      @relation("StopUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([tripId, order])
+  @@index([workspaceId, startDate])
+}
+
+model JournalEntry {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  tripId      String          @db.Uuid
+  workspaceId String          @db.Uuid
+  title       String
+  date        DateTime        @db.Date
+  location    String
+  lat         Float?
+  lng         Float?
+  mood        Mood?
+  weather     Weather?
+  contentJson Json            @db.JsonB
+  contentHtml String
+  excerpt     String
+  tags        String[]        @default([])
+  favorite    Boolean         @default(false)
+  version     Int             @default(1)
+  createdById String          @db.Uuid
+  updatedById String          @db.Uuid
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime?       @db.Timestamptz(3)
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip        Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdBy   User            @relation("EntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User            @relation("EntryUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  revisions   EntryRevision[]
+  media       EntryMedia[]
+
+  @@index([workspaceId, date])
+  @@index([tripId, date])
+  @@index([workspaceId, favorite, date])
+}
+
+model EntryRevision {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  entryId     String       @db.Uuid
+  workspaceId String       @db.Uuid
+  version     Int
+  title       String
+  contentJson Json         @db.JsonB
+  contentHtml String
+  editedById  String       @db.Uuid
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  editedBy    User         @relation("RevisionEditor", fields: [editedById], references: [id], onDelete: Restrict)
+
+  @@unique([entryId, version])
+  @@index([workspaceId, createdAt])
+}
+
+model EntryMedia {
+  workspaceId String       @db.Uuid
+  entryId     String       @db.Uuid
+  mediaId     String       @db.Uuid
+  order       Int          @default(0)
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  media       Media        @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([entryId, mediaId])
+  @@index([workspaceId, entryId, order])
+  @@index([mediaId])
+}
+
+model ItineraryItem {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  tripId      String        @db.Uuid
+  workspaceId String        @db.Uuid
+  date        DateTime      @db.Date
+  /// Local wall-clock time (HH:mm), intentionally not tied to UTC.
+  startTime   String?
+  /// Local wall-clock time (HH:mm), intentionally not tied to UTC.
+  endTime     String?
+  title       String
+  type        ItineraryType
+  location    String
+  notes       String
+  done        Boolean       @default(false)
+  order       Int           @default(0)
+  assigneeId  String?       @db.Uuid
+  version     Int           @default(1)
+  createdById String        @db.Uuid
+  updatedById String        @db.Uuid
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime?     @db.Timestamptz(3)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip        Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  assignee    User?         @relation("ItineraryAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy   User          @relation("ItineraryCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User          @relation("ItineraryUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([tripId, date, order])
+  @@index([workspaceId, date, order])
+  @@index([assigneeId])
+}
+
+model Comment {
+  id           String            @id @default(uuid(7)) @db.Uuid
+  workspaceId  String            @db.Uuid
+  tripId       String            @db.Uuid
+  targetType   CommentTargetType
+  targetId     String            @db.Uuid
+  parentId     String?           @db.Uuid
+  authorId     String            @db.Uuid
+  body         String
+  resolvedAt   DateTime?         @db.Timestamptz(3)
+  resolvedById String?           @db.Uuid
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
+  deletedAt    DateTime?         @db.Timestamptz(3)
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip         Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  parent       Comment?          @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      Comment[]         @relation("CommentThread")
+  author       User              @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  resolvedBy   User?             @relation("CommentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  mentions     CommentMention[]
+
+  @@index([workspaceId, targetType, targetId, createdAt])
+  @@index([tripId, createdAt])
+  @@index([authorId])
+}
+
+model CommentMention {
+  workspaceId String    @db.Uuid
+  commentId   String    @db.Uuid
+  userId      String    @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  comment     Comment   @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId])
+  @@index([workspaceId, userId])
+}
+
+model Activity {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  workspaceId String    @db.Uuid
+  tripId      String?   @db.Uuid
+  actorId     String    @db.Uuid
+  verb        String
+  entityType  String
+  entityId    String    @db.Uuid
+  metadata    Json      @default("{}") @db.JsonB
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip        Trip?     @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  actor       User      @relation("ActivityActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, createdAt])
+  @@index([tripId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model Media {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  workspaceId     String       @db.Uuid
+  tripId          String?      @db.Uuid
+  uploaderId      String       @db.Uuid
+  bucket          String
+  key             String
+  mimeType        String
+  size            Int
+  width           Int?
+  height          Int?
+  blurhash        String?
+  variants        Json         @default("{}") @db.JsonB
+  status          MediaStatus  @default(pending)
+  error           String?
+  caption         String?
+  date            DateTime?    @db.Date
+  location        String?
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime?    @db.Timestamptz(3)
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip            Trip?        @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  uploader        User         @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  entryMedia      EntryMedia[]
+  coveredTrips    Trip[]       @relation("TripCover")
+  workspaceLogos  Workspace[]  @relation("WorkspaceLogo")
+  expenseReceipts Expense[]    @relation("ExpenseReceipt")
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, status, createdAt])
+  @@index([tripId, createdAt])
+  @@index([uploaderId])
+}
+
+model Expense {
+  id             String               @id @default(uuid(7)) @db.Uuid
+  workspaceId    String               @db.Uuid
+  tripId         String               @db.Uuid
+  date           DateTime             @db.Date
+  category       ExpenseCategory
+  note           String
+  amountMinor    Int
+  currency       String
+  paidById       String               @db.Uuid
+  splitMode      SplitMode            @default(equal)
+  receiptMediaId String?              @db.Uuid
+  createdById    String               @db.Uuid
+  version        Int                  @default(1)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+  deletedAt      DateTime?            @db.Timestamptz(3)
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip           Trip                 @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  paidBy         User                 @relation("ExpensePayer", fields: [paidById], references: [id], onDelete: Restrict)
+  createdBy      User                 @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  receiptMedia   Media?               @relation("ExpenseReceipt", fields: [receiptMediaId], references: [id], onDelete: SetNull)
+  participants   ExpenseParticipant[]
+
+  @@index([workspaceId, date])
+  @@index([tripId, date])
+  @@index([paidById])
+}
+
+model ExpenseParticipant {
+  workspaceId      String    @db.Uuid
+  expenseId        String    @db.Uuid
+  userId           String    @db.Uuid
+  shareAmountMinor Int
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  expense          Expense   @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([expenseId, userId])
+  @@index([workspaceId, userId])
+}
+
+model PackingItem {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  workspaceId String          @db.Uuid
+  tripId      String          @db.Uuid
+  category    PackingCategory
+  name        String
+  quantity    Int             @default(1)
+  packed      Boolean         @default(false)
+  assigneeId  String?         @db.Uuid
+  order       Int             @default(0)
+  version     Int             @default(1)
+  createdById String          @db.Uuid
+  updatedById String          @db.Uuid
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime?       @db.Timestamptz(3)
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip        Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  assignee    User?           @relation("PackingAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy   User            @relation("PackingCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User            @relation("PackingUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([tripId, order])
+  @@index([workspaceId, category, order])
+  @@index([assigneeId])
+}
+
+model ShareLink {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  workspaceId    String    @db.Uuid
+  tripId         String    @db.Uuid
+  tokenHash      String    @unique
+  createdById    String    @db.Uuid
+  expiresAt      DateTime? @db.Timestamptz(3)
+  revokedAt      DateTime? @db.Timestamptz(3)
+  passwordHash   String?
+  allowIndex     Boolean   @default(false)
+  showBudget     Boolean   @default(false)
+  lastAccessedAt DateTime? @db.Timestamptz(3)
+  accessCount    Int       @default(0)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip           Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdBy      User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, tripId])
+  @@index([expiresAt])
+}
+
+model Notification {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  userId      String     @db.Uuid
+  workspaceId String?    @db.Uuid
+  tripId      String?    @db.Uuid
+  actorId     String?    @db.Uuid
+  type        String
+  title       String
+  body        String
+  entityType  String?
+  entityId    String?    @db.Uuid
+  readAt      DateTime?  @db.Timestamptz(3)
+  emailedAt   DateTime?  @db.Timestamptz(3)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  user        User       @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  trip        Trip?      @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  actor       User?      @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt, createdAt])
+  @@index([workspaceId, createdAt])
+}
+
+model NotificationPreference {
+  userId String  @db.Uuid
+  type   String
+  inApp  Boolean @default(true)
+  email  Boolean @default(true)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type])
+  @@index([type])
+}
+
+model AuditLog {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  actorId     String?    @db.Uuid
+  actorType   ActorType
+  action      String
+  targetType  String
+  targetId    String     @db.Uuid
+  workspaceId String?    @db.Uuid
+  ip          String?
+  userAgent   String?
+  metadata    Json       @default("{}") @db.JsonB
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  actor       User?      @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([targetType, targetId])
+  @@index([actorId, createdAt])
+}
+
+model FeatureFlag {
+  key               String   @id
+  description       String
+  enabled           Boolean  @default(false)
+  rolloutPercentage Int      @default(0)
+  rules             Json     @default("{}") @db.JsonB
+  updatedById       String   @db.Uuid
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  updatedBy         User     @relation("FeatureFlagUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([enabled])
+}
+
+model EmailLog {
+  id         String      @id @default(uuid(7)) @db.Uuid
+  userId     String?     @db.Uuid
+  to         String
+  template   String
+  subject    String
+  providerId String?
+  status     EmailStatus @default(queued)
+  error      String?
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([to, createdAt])
+  @@index([status, createdAt])
+}
+
+model Export {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  workspaceId     String       @db.Uuid
+  tripId          String?      @db.Uuid
+  requestedById   String       @db.Uuid
+  scope           ExportScope
+  format          ExportFormat
+  includeComments Boolean      @default(true)
+  includeExpenses Boolean      @default(true)
+  includeMedia    Boolean      @default(true)
+  status          ExportStatus @default(queued)
+  storageKey      String?
+  error           String?
+  expiresAt       DateTime?    @db.Timestamptz(3)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  completedAt     DateTime?    @db.Timestamptz(3)
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip            Trip?        @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  requestedBy     User         @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
+  @@index([requestedById])
+}
