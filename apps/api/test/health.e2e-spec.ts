@@ -1,0 +1,86 @@
+import type { INestApplication } from "@nestjs/common";
+import request from "supertest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { createTestApp, type TestDependencyMocks } from "./test-app.js";
+
+describe("health and readiness", () => {
+  let app: INestApplication;
+  let mocks: TestDependencyMocks;
+
+  beforeAll(async () => {
+    ({ app, mocks } = await createTestApp());
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it("returns liveness without touching dependencies", async () => {
+    const response = await request(app.getHttpServer()).get("/v1/health").expect(200);
+
+    expect(response.body).toEqual({ status: "ok" });
+    expect(mocks.prisma.healthCheck).not.toHaveBeenCalled();
+    expect(mocks.redis.ping).not.toHaveBeenCalled();
+    expect(mocks.storage.checkHealth).not.toHaveBeenCalled();
+  });
+
+  it("checks database, redis, and storage for readiness", async () => {
+    const response = await request(app.getHttpServer()).get("/v1/ready").expect(200);
+
+    expect(response.body).toMatchObject({
+      status: "ok",
+      checks: {
+        database: { status: "up" },
+        redis: { status: "up" },
+        storage: { status: "up" },
+      },
+    });
+    expect(mocks.prisma.healthCheck).toHaveBeenCalledOnce();
+    expect(mocks.redis.ping).toHaveBeenCalledOnce();
+    expect(mocks.storage.checkHealth).toHaveBeenCalledOnce();
+  });
+
+  it("returns 503 when a dependency is unavailable", async () => {
+    mocks.storage.checkHealth.mockRejectedValueOnce(new Error("S3 unavailable"));
+
+    const response = await request(app.getHttpServer()).get("/v1/ready").expect(503);
+
+    expect(response.body).toMatchObject({
+      status: "unavailable",
+      checks: {
+        database: { status: "up" },
+        redis: { status: "up" },
+        storage: { status: "down" },
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toContain("S3 unavailable");
+  });
+
+  it("exposes process and HTTP metrics without accepting them as routes", async () => {
+    await request(app.getHttpServer()).get("/v1/health").expect(200);
+    const response = await request(app.getHttpServer()).get("/v1/metrics").expect(200);
+
+    expect(response.headers["content-type"]).toContain("text/plain");
+    expect(response.text).toContain("process_cpu_seconds_total");
+    expect(response.text).toContain("roamlog_http_requests_total");
+  });
+
+  it("sets security headers and only allows configured browser origins", async () => {
+    const allowed = await request(app.getHttpServer())
+      .get("/v1/health")
+      .set("Origin", "http://localhost:3000")
+      .expect(200);
+
+    expect(allowed.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    expect(allowed.headers["access-control-allow-credentials"]).toBe("true");
+    expect(allowed.headers["x-content-type-options"]).toBe("nosniff");
+    expect(allowed.headers["x-frame-options"]).toBe("DENY");
+
+    const denied = await request(app.getHttpServer())
+      .get("/v1/health")
+      .set("Origin", "https://evil.example")
+      .expect(200);
+    expect(denied.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+});

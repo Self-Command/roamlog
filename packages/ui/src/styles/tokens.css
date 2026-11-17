@@ -1,0 +1,301 @@
+@source "../**/*.{ts,tsx}";
+
+:root {
+  color-scheme: dark;
+
+  --canvas: #000000;
+  --surface-1: #0a0a0c;
+  --surface-2: #101012;
+  --surface-deep: #06060a;
+  --ink: #fcfdff;
+  --body: rgba(252, 253, 255, 0.86);
+  --muted: #a1a4a5;
+  --ash: #888e90;
+  --stone: #464a4d;
+  --hairline: rgba(255, 255, 255, 0.06);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+  --divider: rgba(255, 255, 255, 0.04);
+
+  --accent-orange: #ff801f;
+  --accent-blue: #3b9eff;
+  --accent-green: #11ff99;
+  --accent-red: #ff2047;
+  --accent-yellow: #ffc53d;
+  /* Sixth atmospheric accent from the Resend analysis; never used as a solid surface. */
+  --accent-slate: #64748b;
+
+  --glow-orange: rgba(255, 89, 0, 0.18);
+  --glow-blue: rgba(0, 117, 255, 0.18);
+  --glow-green: rgba(17, 255, 153, 0.14);
+  --glow-red: rgba(255, 32, 71, 0.16);
+  --glow-yellow: rgba(255, 197, 61, 0.14);
+  --glow-slate: rgba(100, 116, 139, 0.16);
+
+  --roamlog-radius-card: 12px;
+  --roamlog-radius-control: 8px;
+  --roamlog-radius-pill: 9999px;
+
+  --roamlog-font-serif:
+    var(--font-instrument), var(--font-noto-serif), "Songti SC", "SimSun", serif;
+  --roamlog-font-sans:
+    var(--font-geist), var(--font-noto-sans), ui-sans-serif, system-ui, sans-serif;
+  --roamlog-font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --roamlog-text-page-title: clamp(2.75rem, 2rem + 2vw, 3.5rem);
+  --roamlog-text-trip-title: clamp(2.5rem, 1.75rem + 1.8vw, 3rem);
+  --roamlog-text-journal-title: clamp(1.75rem, 1.25rem + 1.1vw, 2.25rem);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-deep: var(--surface-deep);
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-ash: var(--ash);
+  --color-stone: var(--stone);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-divider: var(--divider);
+
+  --color-accent-orange: var(--accent-orange);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-green: var(--accent-green);
+  --color-accent-red: var(--accent-red);
+  --color-accent-yellow: var(--accent-yellow);
+  --color-accent-slate: var(--accent-slate);
+
+  --radius-card: var(--roamlog-radius-card);
+  --radius-control: var(--roamlog-radius-control);
+  --radius-pill: var(--roamlog-radius-pill);
+
+  --font-serif: var(--roamlog-font-serif);
+  --font-sans: var(--roamlog-font-sans);
+  --font-mono: var(--roamlog-font-mono);
+
+  --text-page-title: var(--roamlog-text-page-title);
+  --text-page-title--line-height: 1.1;
+  --text-page-title--letter-spacing: -0.035em;
+  --text-trip-title: var(--roamlog-text-trip-title);
+  --text-trip-title--line-height: 1.1;
+  --text-trip-title--letter-spacing: -0.035em;
+  --text-journal-title: var(--roamlog-text-journal-title);
+  --text-journal-title--line-height: 1.12;
+  --text-journal-title--letter-spacing: -0.025em;
+  --text-meta: 0.625rem;
+  --text-meta--line-height: 1.4;
+  --text-meta--letter-spacing: 0.12em;
+
+  --tracking-display: -0.035em;
+  --tracking-meta: 0.12em;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--hairline);
+  }
+
+  html {
+    background: var(--canvas);
+    color-scheme: dark;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-height: 100dvh;
+    background: var(--canvas);
+    color: var(--body);
+    font-family: var(--roamlog-font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--ink);
+    text-wrap: balance;
+  }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::placeholder {
+    color: var(--stone);
+  }
+
+  ::selection {
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.6;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .type-page-title {
+    font-family: var(--roamlog-font-serif);
+    font-size: var(--roamlog-text-page-title);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: var(--tracking-display);
+    color: var(--ink);
+    text-wrap: balance;
+  }
+
+  .type-trip-title {
+    font-family: var(--roamlog-font-serif);
+    font-size: var(--roamlog-text-trip-title);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: var(--tracking-display);
+    color: var(--ink);
+    text-wrap: balance;
+  }
+
+  .type-journal-title {
+    font-family: var(--roamlog-font-serif);
+    font-size: var(--roamlog-text-journal-title);
+    font-weight: 400;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+
+  :lang(en) .type-page-title,
+  :lang(en) .type-trip-title {
+    line-height: 1;
+  }
+
+  .type-eyebrow {
+    font-family: var(--roamlog-font-mono);
+    font-size: 0.625rem;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: var(--tracking-meta);
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .type-meta {
+    font-family: var(--roamlog-font-mono);
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  .type-body {
+    font-family: var(--roamlog-font-sans);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--body);
+  }
+
+  .page-glow {
+    position: absolute;
+    top: -180px;
+    left: 50%;
+    width: min(800px, 110vw);
+    height: 720px;
+    transform: translateX(-50%);
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse 58% 54% at 50% 0%,
+      var(--page-glow-color, var(--glow-orange)) 0%,
+      transparent 72%
+    );
+    mask-image: linear-gradient(to bottom, black 20%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 20%, transparent 100%);
+  }
+
+  .surface-card {
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--roamlog-radius-card);
+    background: var(--surface-1);
+  }
+
+  .focus-ring {
+    outline: none;
+  }
+
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
