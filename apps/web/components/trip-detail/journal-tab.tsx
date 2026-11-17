@@ -1,22 +1,16 @@
 "use client";
 
 import type { JournalEntry, Mood, WorkspaceRole } from "@roamlog/contracts";
+import { Badge, Button, Input } from "@roamlog/ui";
 import {
-  Badge,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  FormField,
-  Input,
-} from "@roamlog/ui";
-import { Heart, MapPin, MessageCircle, NotebookPen, Plus, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+  Heart,
+  MapPin,
+  MessageCircle,
+  NotebookPen,
+  Search,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-import { canEdit, useDemoStore } from "@/lib/demo-store";
 import {
   gradientFor,
   moodColors,
@@ -24,32 +18,58 @@ import {
   shortDate,
   weatherLabels,
 } from "@/lib/demo-format";
+import { canEdit, useDemoStore } from "@/lib/demo-store";
 
-import { JournalEntrySheet } from "@/components/journal/journal-entry-sheet";
+import { JournalEditorSheet } from "@/components/journal/journal-editor-sheet";
+import {
+  createMockJournalRepository,
+  mergeMockJournalEntries,
+  readMockJournalOverrides,
+} from "@/components/journal/journal-repository";
 
 export function TripJournalTab({ tripId, role }: { tripId: string; role: WorkspaceRole }) {
-  const { state, addEntry } = useDemoStore();
+  const { state, currentUser, toggleEntryFavorite, addComment } = useDemoStore();
   const [query, setQuery] = useState("");
   const [mood, setMood] = useState<Mood | "all">("all");
-  const [selected, setSelected] = useState<JournalEntry | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [location, setLocation] = useState("");
-  const [excerpt, setExcerpt] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [savedEntries, setSavedEntries] = useState<Record<string, JournalEntry>>({});
   const trip = state.trips.find((candidate) => candidate.id === tripId);
+  const editable = canEdit(role);
+
+  useEffect(() => {
+    const overrides = readMockJournalOverrides();
+    if (!overrides.length) return;
+    setSavedEntries((current) => {
+      const merged = { ...current };
+      overrides.forEach((entry) => {
+        merged[entry.id] = entry;
+      });
+      return merged;
+    });
+  }, []);
+
+  const allEntries = useMemo(() => {
+    const byId = new Map(mergeMockJournalEntries(state.entries).map((entry) => [entry.id, entry]));
+    Object.values(savedEntries).forEach((entry) => byId.set(entry.id, entry));
+    return [...byId.values()];
+  }, [savedEntries, state.entries]);
+
   const entries = useMemo(
     () =>
-      state.entries
+      allEntries
         .filter((entry) => {
           if (entry.tripId !== tripId) return false;
-          const text = `${entry.title} ${entry.location} ${entry.excerpt}`.toLocaleLowerCase("zh-CN");
+          const text = `${entry.title} ${entry.location} ${entry.excerpt}`.toLocaleLowerCase(
+            "zh-CN",
+          );
           return (
             (!query.trim() || text.includes(query.trim().toLocaleLowerCase("zh-CN"))) &&
             (mood === "all" || entry.mood === mood)
           );
         })
         .sort((left, right) => right.date.localeCompare(left.date)),
-    [mood, query, state.entries, tripId],
+    [allEntries, mood, query, tripId],
   );
   const comments = useMemo(() => {
     const counts = new Map<string, number>();
@@ -58,20 +78,24 @@ export function TripJournalTab({ tripId, role }: { tripId: string; role: Workspa
     );
     return counts;
   }, [state.comments]);
-  const editable = canEdit(role);
+  const selectedEntry = selectedId
+    ? allEntries.find((entry) => entry.id === selectedId) ?? null
+    : null;
+  const selectedComments = state.comments.filter((comment) => comment.targetId === selectedId);
+  const repository = useMemo(
+    () =>
+      createMockJournalRepository({
+        resolveEntry: (entryId) => allEntries.find((entry) => entry.id === entryId),
+        currentUserId: currentUser.id,
+        workspaceId: trip?.workspaceId ?? state.entries[0]?.workspaceId ?? "",
+        tripId,
+        location: "本地演示地点",
+      }),
+    [allEntries, currentUser.id, state.entries, trip?.workspaceId, tripId],
+  );
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!title.trim() || !location.trim() || !excerpt.trim()) return;
-    addEntry(
-      tripId,
-      { title: title.trim(), location: location.trim(), excerpt: excerpt.trim() },
-      role,
-    );
-    setTitle("");
-    setLocation("");
-    setExcerpt("");
-    setDialogOpen(false);
+  function handleEntrySaved(entry: JournalEntry) {
+    setSavedEntries((current) => ({ ...current, [entry.id]: entry }));
   }
 
   return (
@@ -85,7 +109,7 @@ export function TripJournalTab({ tripId, role }: { tripId: string; role: Workspa
             </h2>
           </div>
           {editable ? (
-            <Button type="button" variant="outline" onClick={() => setDialogOpen(true)}>
+            <Button type="button" variant="outline" onClick={() => setCreateOpen(true)}>
               <NotebookPen aria-hidden="true" />
               写一篇
             </Button>
@@ -144,44 +168,58 @@ export function TripJournalTab({ tripId, role }: { tripId: string; role: Workspa
       {entries.length ? (
         <div className="divide-y divide-hairline">
           {entries.map((entry) => (
-            <button
+            <article
               key={entry.id}
-              type="button"
-              onClick={() => setSelected(entry)}
-              className="grid w-full grid-cols-[82px_minmax(0,1fr)] items-center gap-3 p-3 text-left hover:bg-surface-2 sm:grid-cols-[132px_minmax(0,1fr)_auto] sm:gap-4 sm:p-4"
+              className="flex items-center gap-3 p-3 hover:bg-surface-2 sm:gap-4 sm:p-4"
             >
-              <div
-                className={`aspect-[4/3] rounded-control border border-hairline-strong bg-gradient-to-br ${gradientFor(entry.id)}`}
-              />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-                  <span>{shortDate(entry.date)}</span>
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin aria-hidden="true" className="size-3" />
-                    {entry.location}
-                  </span>
-                  <span>{weatherLabels[entry.weather ?? "cloudy"]}</span>
+              <button
+                type="button"
+                onClick={() => setSelectedId(entry.id)}
+                className="grid min-w-0 flex-1 grid-cols-[82px_minmax(0,1fr)] items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-4"
+              >
+                <div
+                  className={`aspect-[4/3] rounded-control border border-hairline-strong bg-gradient-to-br ${gradientFor(entry.id)}`}
+                />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
+                    <span>{shortDate(entry.date)}</span>
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin aria-hidden="true" className="size-3" />
+                      {entry.location}
+                    </span>
+                    <span>{weatherLabels[entry.weather ?? "cloudy"]}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-1 font-serif text-[23px] leading-tight text-ink">
+                    {entry.title}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+                    {entry.excerpt}
+                  </p>
                 </div>
-                <p className="mt-1 line-clamp-1 font-serif text-[23px] leading-tight text-ink">
-                  {entry.title}
-                </p>
-                <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
-                  {entry.excerpt}
-                </p>
-              </div>
+              </button>
               <div className="hidden items-center gap-3 sm:flex">
-                {entry.favorite ? (
+                <button
+                  type="button"
+                  aria-label={entry.favorite ? "取消收藏" : "收藏日志"}
+                  aria-pressed={entry.favorite}
+                  disabled={!editable}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleEntryFavorite(entry.id);
+                  }}
+                  className="flex size-8 items-center justify-center rounded-control border border-hairline bg-surface-2 text-muted hover:text-ink disabled:opacity-40"
+                >
                   <Heart
-                    aria-label="已收藏"
-                    className="size-3.5 fill-accent-orange text-accent-orange"
+                    aria-hidden="true"
+                    className={`size-3.5 ${entry.favorite ? "fill-accent-orange text-accent-orange" : ""}`}
                   />
-                ) : null}
+                </button>
                 <span className="inline-flex items-center gap-1 font-mono text-[9px] text-stone">
                   <MessageCircle aria-hidden="true" className="size-3" />
                   {comments.get(entry.id) ?? 0}
                 </span>
               </div>
-            </button>
+            </article>
           ))}
         </div>
       ) : (
@@ -192,47 +230,35 @@ export function TripJournalTab({ tripId, role }: { tripId: string; role: Workspa
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <p className="type-eyebrow">NEW JOURNAL ENTRY</p>
-            <DialogTitle>写一篇日志</DialogTitle>
-            <DialogDescription>
-              这是轻量本地编辑器，保存后立即出现在时间线；Tiptap 与版本历史尚未接入。
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={submit} className="space-y-4">
-            <FormField label="标题" required>
-              <Input value={title} onChange={(event) => setTitle(event.target.value)} />
-            </FormField>
-            <FormField label="地点" required>
-              <Input value={location} onChange={(event) => setLocation(event.target.value)} />
-            </FormField>
-            <FormField label="正文" required>
-              <textarea
-                value={excerpt}
-                onChange={(event) => setExcerpt(event.target.value)}
-                className="min-h-32 w-full resize-y rounded-control border border-hairline-strong bg-surface-1 px-3 py-2.5 text-sm leading-6 text-ink outline-none focus-visible:ring-2 focus-visible:ring-ink"
-                placeholder="今天发生了什么？"
-              />
-            </FormField>
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>
-                取消
-              </Button>
-              <Button type="submit" variant="outline">
-                <Plus aria-hidden="true" />
-                保存日志
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <JournalEntrySheet
-        entry={selected}
-        open={selected !== null}
-        onOpenChange={(open) => !open && setSelected(null)}
+      <JournalEditorSheet
+        entry={selectedEntry}
+        open={selectedEntry !== null}
+        repository={repository}
+        canEdit={editable}
+        canComment
+        members={state.members}
+        currentUserId={currentUser.id}
+        comments={selectedComments}
+        onEntrySaved={handleEntrySaved}
+        onSubmitComment={(body, mentionIds) => {
+          if (selectedEntry) addComment(selectedEntry.id, body, mentionIds);
+        }}
+        onOpenChange={(open) => {
+          if (!open) setSelectedId(null);
+        }}
+      />
+      <JournalEditorSheet
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        repository={repository}
+        tripId={tripId}
+        trips={state.trips}
+        initialTripId={tripId}
+        canEdit={editable}
+        canComment={false}
+        members={state.members}
+        currentUserId={currentUser.id}
+        onEntrySaved={handleEntrySaved}
       />
     </section>
   );

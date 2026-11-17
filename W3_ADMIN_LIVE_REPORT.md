@@ -33,6 +33,7 @@
   - metrics、users、workspaces、trips/entries/comments、media、audit、flags、emails、jobs、system 均通过 `@roamlog/api-client` hooks 读取。
   - users/workspaces suspend/restore/delete/role、force logout、reset 2FA、content delete/restore、media delete、flag update、email resend、job retry 通过生成 mutation 提交。
 - 页面只消费 `AdminDataBoundary` 资源，不直接 fetch。API 模式有 loading、empty、network/HTTP error、`ADMIN_2FA_REQUIRED` gate、403/401 与 `x-roamlog-degraded` 可见状态。
+- `AdminDataBoundary` 外层增加稳定 client-only 边界：SSR 与 hydration 首帧都输出同一“正在准备后台视图”占位，挂载后再渲染 Radix Switch/Checkbox 页面内容。根因是 Radix 隐藏 input 的 `style` 属性在 SSR 与客户端首次渲染中不一致；未使用 `suppressHydrationWarning`，console guard 未关闭或放宽。
 - API 模式平台角色来自 `/v1/me`，侧栏角色切换被锁定；前端 `canPlatform` 只做 UX guard，最终权限由后端 guard 决定。
 - 登录页 API 模式调用 Better Auth：
   - `POST /v1/auth/sign-in/email`
@@ -62,7 +63,7 @@
 ```text
 pnpm --filter @roamlog/admin test
 Test Files  15 passed (15)
-Tests       33 passed (33)
+Tests       34 passed (34)
 
 pnpm --filter @roamlog/admin typecheck
 tsc --noEmit 通过
@@ -70,6 +71,10 @@ tsc --noEmit 通过
 pnpm --filter @roamlog/admin build
 Next.js 16.4.6 production build 通过
 包含 /admin/2fa/enroll 与 ƒ /v1/[...path]
+
+pnpm exec playwright test --project=admin
+8 passed (8)
+flags / roles / responsive console guard 全部通过
 ```
 
 验证后预览仍可用：
@@ -78,6 +83,7 @@ Next.js 16.4.6 production build 通过
 http://localhost:3000 -> 200
 http://localhost:3001/login -> 200
 http://localhost:3001/admin -> 200
+http://localhost:3001/admin/flags -> 200
 http://localhost:3001/v1/admin/metrics -> 503 ADMIN_API_UNAVAILABLE（当前 API:4000 未启动，代理错误结构可见）
 ```
 
@@ -95,6 +101,7 @@ http://localhost:3001/v1/admin/metrics -> 503 ADMIN_API_UNAVAILABLE（当前 API
   - enrollment 展示 QR、totpURI、backup codes 并完成 verify
   - fixture enrollment 不发起网络注册
 - 新增 `AdminDataBoundary` 403 2FA gate 测试。
+- 新增 hydration 回归测试：服务端渲染 `AdminDataBoundary` 内 Radix Switch 时，HTML 不得包含隐藏 `type="checkbox"` input，并必须输出稳定占位。
 - QR 生成器用独立 QR 参考实现做过 ASCII otpauth URI 的逐模块对比（同 mask 下 0 差异）。
 
 ## 已知风险与未覆盖项
@@ -103,6 +110,7 @@ http://localhost:3001/v1/admin/metrics -> 503 ADMIN_API_UNAVAILABLE（当前 API
 - 当前 Admin API 契约没有队列 pause/resume/clear、测试邮件入口。API 模式下这些控件保持可见但禁用，并明确提示契约缺口；失败任务 `retry` 已接入真实 mutation。
 - Admin API users/workspaces 列表返回基础实体，不包含详情计数、会话或成员列表。API 模式显示 `—`/说明，避免把 0 当成真实值；后续建议补列表详情字段或按需详情请求。
 - Dashboard 没有趋势时间序列端点，API 模式只展示当前 metrics 快照单点；邮件健康由最近 100 条邮件日志推导，不是全量统计。
+- client-only 边界会让 Admin 业务页首屏先显示短暂准备占位，再显示真实页面；这是为避免 Radix SSR/hydration 属性不一致的明确取舍。
 - `apps/admin/next-env.d.ts` 在 build 后由 Next.js 自动切换为 `.next/types`，已恢复原 `.next/dev/types` 内容，避免生成噪音。
 - 根工作区存在其他 Agent 对 Web、API、根 `package.json`、`pnpm-lock.yaml` 的并发改动；本报告不声称验证了这些改动。
 

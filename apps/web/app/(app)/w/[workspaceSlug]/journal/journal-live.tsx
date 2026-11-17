@@ -1,28 +1,12 @@
 "use client";
 
 import {
-  Avatar,
-  Badge,
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   EmptyState,
   ErrorState,
-  FormField,
-  Input,
   PageHeader,
   Select,
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
   Skeleton,
-  Textarea,
 } from "@roamlog/ui";
 import {
   Bookmark,
@@ -33,9 +17,10 @@ import {
   NotebookPen,
   Search,
 } from "lucide-react";
-import { useDeferredValue, useMemo, useState, type FormEvent } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { isForbidden } from "@/lib/api";
+import { useDataAdapter } from "@/lib/data-provider";
 import {
   gradientFor,
   moodColors,
@@ -45,26 +30,22 @@ import {
 import {
   useCommentsQuery,
   useCreateCommentMutation,
-  useCreateEntryMutation,
   useEntriesQuery,
   useFavoriteEntryMutation,
+  useMeQuery,
   useMembersQuery,
   useTripsQuery,
   useWorkspaceBySlug,
 } from "@/lib/query";
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
+import { JournalEditorSheet } from "@/components/journal/journal-editor-sheet";
+import { createApiJournalRepository } from "@/components/journal/journal-repository";
 
 export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
   const { workspace, workspacesQuery } = useWorkspaceBySlug(workspaceSlug);
   const tripsQuery = useTripsQuery(workspace?.id);
   const membersQuery = useMembersQuery(workspace?.id);
+  const meQuery = useMeQuery();
   const [query, setQuery] = useState("");
   const [tripFilter, setTripFilter] = useState("all");
   const [favoriteOnly, setFavoriteOnly] = useState(false);
@@ -77,20 +58,12 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
   });
   const favoriteEntry = useFavoriteEntryMutation();
   const createComment = useCreateCommentMutation();
-  const createEntry = useCreateEntryMutation();
+  const adapter = useDataAdapter();
+  const queryClient = useQueryClient();
+  const repository = useMemo(() => createApiJournalRepository(adapter), [adapter]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [comment, setComment] = useState("");
-  const [commentError, setCommentError] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const [tripId, setTripId] = useState("");
-  const [title, setTitle] = useState("");
-  const [location, setLocation] = useState("");
-  const [body, setBody] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [formError, setFormError] = useState<string | null>(null);
 
   const trips = tripsQuery.data?.items ?? [];
   const members = membersQuery.data?.items ?? [];
@@ -134,62 +107,20 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
     );
   }
 
-  async function submitComment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedEntry || !workspace || !comment.trim()) return;
-    setCommentError(null);
-    try {
-      await createComment.mutateAsync({
-        tripId: selectedEntry.tripId,
-        targetType: "journal_entry",
-        targetId: selectedEntry.id,
-        body: comment.trim(),
-      });
-      setComment("");
-    } catch (cause) {
-      setCommentError(
-        isForbidden(cause) ? "你的角色不能评论这个日志。" : "评论没有发送成功，请重试。",
-      );
-    }
+  function handleEntrySaved() {
+    void queryClient.invalidateQueries({ queryKey: ["v1", "entries"] });
+    void queryClient.invalidateQueries({ queryKey: ["v1", "trip-entries"] });
   }
 
-  async function submitEntry(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!tripId || !title.trim() || !location.trim() || !body.trim()) {
-      setFormError("请选择旅行，并填写标题、地点和正文。");
-      return;
-    }
-    setFormError(null);
-    try {
-      const text = body.trim();
-      await createEntry.mutateAsync({
-        tripId,
-        input: {
-          title: title.trim(),
-          date,
-          location: location.trim(),
-          contentJson: {
-            type: "doc",
-            content: [
-              {
-                type: "paragraph",
-                content: [{ type: "text", text }],
-              },
-            ],
-          },
-          contentHtml: `<p>${escapeHtml(text)}</p>`,
-          excerpt: text.slice(0, 180),
-          tags: [],
-        },
-      });
-      setComposeOpen(false);
-      setTitle("");
-      setLocation("");
-      setBody("");
-      setNotice("日志已保存到真实 API。");
-    } catch (cause) {
-      setFormError(isForbidden(cause) ? "你的角色不能在这个 Workspace 写日志。" : "日志保存失败。");
-    }
+  async function handleComment(body: string, mentionUserIds: string[]) {
+    if (!selectedEntry) return;
+    await createComment.mutateAsync({
+      tripId: selectedEntry.tripId,
+      targetType: "journal_entry",
+      targetId: selectedEntry.id,
+      body,
+      mentionUserIds,
+    });
   }
 
   return (
@@ -204,7 +135,6 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
               type="button"
               variant="primary"
               onClick={() => {
-                setTripId(trips[0]?.id ?? "");
                 setComposeOpen(true);
               }}
               disabled={trips.length === 0}
@@ -215,15 +145,6 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
           ) : null
         }
       />
-
-      {notice ? (
-        <p
-          role="status"
-          className="rounded-control border border-accent-green/20 bg-accent-green/5 px-3 py-2 text-xs text-accent-green"
-        >
-          {notice}
-        </p>
-      ) : null}
 
       <div className="flex flex-col gap-3 border-b border-hairline pb-3 lg:flex-row lg:items-center">
         <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-control border border-hairline-strong bg-surface-1 px-3">
@@ -341,161 +262,35 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
         </div>
       )}
 
-      <Sheet
-        open={Boolean(selectedEntry)}
+      <JournalEditorSheet
+        entry={selectedEntry}
+        open={selectedEntry !== null}
+        repository={repository}
+        canEdit={canEdit}
+        canComment
+        members={members}
+        currentUserId={meQuery.data?.id}
+        comments={commentsQuery.data?.items ?? []}
+        commentsLoading={commentsQuery.isLoading}
+        onSubmitComment={handleComment}
+        onEntrySaved={handleEntrySaved}
         onOpenChange={(open) => {
-          if (!open) {
-            setSelectedId(null);
-            setComment("");
-            setCommentError(null);
-          }
+          if (!open) setSelectedId(null);
         }}
-      >
-        <SheetContent className="overflow-y-auto sm:max-w-xl">
-          {selectedEntry ? (
-            <>
-              <SheetHeader>
-                <p className="type-eyebrow">
-                  {trips.find((trip) => trip.id === selectedEntry.tripId)?.title ?? "LOG ENTRY"}
-                </p>
-                <SheetTitle className="font-serif text-3xl tracking-[-0.03em]">
-                  {selectedEntry.title}
-                </SheetTitle>
-                <SheetDescription>
-                  {selectedEntry.date} · {selectedEntry.location} · VERSION {selectedEntry.version}
-                </SheetDescription>
-              </SheetHeader>
-              <div
-                className="mt-5 text-sm leading-7 text-body"
-                dangerouslySetInnerHTML={{ __html: selectedEntry.contentHtml }}
-              />
-              <div className="mt-6 flex flex-wrap gap-2">
-                {selectedEntry.tags.map((tag) => (
-                  <Badge key={tag} tone="neutral">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
+      />
 
-              <section className="mt-8 border-t border-hairline pt-5" aria-label="评论">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-serif text-xl text-ink">评论</h3>
-                  <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                    {commentsQuery.data?.items.length ?? 0} THREADS
-                  </span>
-                </div>
-                <div className="mt-4 space-y-4">
-                  {commentsQuery.isLoading ? <Skeleton className="h-20 rounded-card" /> : null}
-                  {commentsQuery.data?.items.map((item) => {
-                    const author = members.find((member) => member.userId === item.authorId)?.user;
-                    return (
-                      <div key={item.id} className="flex items-start gap-3">
-                        <Avatar name={author?.name ?? "成员"} src={author?.image ?? undefined} size={28} />
-                        <div className="min-w-0 flex-1 rounded-card border border-hairline bg-surface-1 px-3 py-2.5">
-                          <p className="text-[11px] text-ink">{author?.name ?? "成员"}</p>
-                          <p className="mt-1 text-xs leading-5 text-body">{item.body}</p>
-                          <p className="mt-1 font-mono text-[9px] text-stone">
-                            {item.createdAt.slice(0, 16).replace("T", " ")}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {commentsQuery.data?.items.length === 0 ? (
-                    <p className="text-xs text-muted">还没有评论。Viewer 也可以在这里参与讨论。</p>
-                  ) : null}
-                </div>
-
-                <form className="mt-5 space-y-2" onSubmit={(event) => void submitComment(event)}>
-                  <Textarea
-                    value={comment}
-                    onChange={(event) => {
-                      setComment(event.target.value);
-                      if (commentError) setCommentError(null);
-                    }}
-                    placeholder="写下评论，输入 @ 提及成员…"
-                    aria-label="评论内容"
-                    rows={3}
-                  />
-                  {commentError ? (
-                    <p role="alert" className="text-xs text-accent-red">
-                      {commentError}
-                    </p>
-                  ) : null}
-                  <div className="flex justify-end">
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      disabled={!comment.trim() || createComment.isPending}
-                    >
-                      发送评论
-                    </Button>
-                  </div>
-                </form>
-              </section>
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
-
-      <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <form onSubmit={(event) => void submitEntry(event)} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle>写日志</DialogTitle>
-              <DialogDescription>
-                日志会写入真实 API，并生成第一个 revision。正文先以纯文本保存。
-              </DialogDescription>
-            </DialogHeader>
-            <FormField label="旅行">
-              <Select value={tripId} onChange={(event) => setTripId(event.target.value)}>
-                <option value="">选择旅行</option>
-                {trips.map((trip) => (
-                  <option key={trip.id} value={trip.id}>
-                    {trip.title}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField label="标题">
-              <Input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                maxLength={180}
-              />
-            </FormField>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="日期">
-                <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-              </FormField>
-              <FormField label="地点">
-                <Input
-                  value={location}
-                  onChange={(event) => setLocation(event.target.value)}
-                  maxLength={160}
-                />
-              </FormField>
-            </div>
-            <FormField label="正文">
-              <Textarea value={body} onChange={(event) => setBody(event.target.value)} rows={6} />
-            </FormField>
-            {formError ? (
-              <p role="alert" className="text-xs text-accent-red">
-                {formError}
-              </p>
-            ) : null}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setComposeOpen(false)}>
-                取消
-              </Button>
-              <Button type="submit" variant="primary" disabled={createEntry.isPending}>
-                <NotebookPen aria-hidden="true" />
-                保存日志
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <JournalEditorSheet
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        repository={repository}
+        trips={trips}
+        initialTripId={trips[0]?.id}
+        canEdit={canEdit}
+        canComment={false}
+        members={members}
+        currentUserId={meQuery.data?.id}
+        onEntrySaved={handleEntrySaved}
+      />
     </div>
   );
 }

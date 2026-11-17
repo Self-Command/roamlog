@@ -31,20 +31,44 @@ import {
   weatherLabels,
 } from "@/lib/demo-format";
 
-import { JournalEntrySheet } from "./journal-entry-sheet";
-import { JournalComposeDialog } from "./journal-compose-dialog";
+import { JournalEditorSheet } from "./journal-editor-sheet";
+import {
+  createMockJournalRepository,
+  mergeMockJournalEntries,
+  readMockJournalOverrides,
+} from "./journal-repository";
 
 type ViewMode = "grid" | "list";
 
 export function JournalWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
-  const { state } = useDemoStore();
+  const { state, currentRole, currentUser, addComment } = useDemoStore();
   const [query, setQuery] = useState("");
   const [tripFilter, setTripFilter] = useState("all");
   const [moodFilter, setMoodFilter] = useState<Mood | "all">("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [view, setView] = useState<ViewMode>("grid");
-  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [savedEntries, setSavedEntries] = useState<Record<string, JournalEntry>>({});
+
+  useEffect(() => {
+    const overrides = readMockJournalOverrides();
+    if (!overrides.length) return;
+    setSavedEntries((current) => {
+      const merged = { ...current };
+      overrides.forEach((entry) => {
+        merged[entry.id] = entry;
+      });
+      return merged;
+    });
+  }, []);
+
+  const allEntries = useMemo(() => {
+    const merged = mergeMockJournalEntries(state.entries);
+    const byId = new Map(merged.map((entry) => [entry.id, entry]));
+    Object.values(savedEntries).forEach((entry) => byId.set(entry.id, entry));
+    return [...byId.values()];
+  }, [savedEntries, state.entries]);
 
   const tripById = useMemo(
     () => new Map(state.trips.map((trip) => [trip.id, trip])),
@@ -60,7 +84,7 @@ export function JournalWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("zh-CN");
-    return state.entries
+    return allEntries
       .filter((entry) => {
         const trip = tripById.get(entry.tripId);
         const text = [
@@ -83,7 +107,30 @@ export function JournalWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
           ? right.date.localeCompare(left.date)
           : left.date.localeCompare(right.date),
       );
-  }, [moodFilter, query, sortOrder, state.entries, tripById, tripFilter]);
+  }, [allEntries, moodFilter, query, sortOrder, tripById, tripFilter]);
+
+  const selectedEntry = selectedEntryId
+    ? allEntries.find((entry) => entry.id === selectedEntryId) ?? null
+    : null;
+  const selectedComments = useMemo(
+    () => state.comments.filter((comment) => comment.targetId === selectedEntryId),
+    [selectedEntryId, state.comments],
+  );
+  const repository = useMemo(
+    () =>
+      createMockJournalRepository({
+        resolveEntry: (entryId) => allEntries.find((entry) => entry.id === entryId),
+        currentUserId: currentUser.id,
+        workspaceId: allEntries[0]?.workspaceId ?? state.entries[0]?.workspaceId ?? "",
+        tripId: state.trips[0]?.id ?? "",
+        location: "本地演示地点",
+      }),
+    [allEntries, currentUser.id, state.entries, state.trips],
+  );
+
+  function handleEntrySaved(entry: JournalEntry) {
+    setSavedEntries((current) => ({ ...current, [entry.id]: entry }));
+  }
 
   const grouped = useMemo(() => {
     const groups = new Map<string, JournalEntry[]>();
@@ -114,7 +161,7 @@ export function JournalWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`JOURNAL / ${String(state.entries.length).padStart(2, "0")} ENTRIES`}
+        eyebrow={`JOURNAL / ${String(allEntries.length).padStart(2, "0")} ENTRIES`}
         title="全部日志"
         description="按月份翻阅，或沿着心情、旅行和关键词重新遇见某一天。每一条都能打开右侧详情并继续评论。"
         actions={
@@ -149,7 +196,7 @@ export function JournalWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
             <p className="type-eyebrow text-body">ARCHIVE INDEX</p>
           </div>
           <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-            {filtered.length} / {state.entries.length} ENTRIES · LOCAL FIXTURE
+            {filtered.length} / {allEntries.length} ENTRIES · LOCAL FIXTURE
           </p>
         </div>
 
@@ -308,7 +355,7 @@ export function JournalWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
                       <button
                         key={entry.id}
                         type="button"
-                        onClick={() => setSelectedEntry(entry)}
+                        onClick={() => setSelectedEntryId(entry.id)}
                         className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-hairline-strong bg-surface-1 text-left transition-colors hover:border-white/25"
                       >
                         <div
@@ -377,7 +424,7 @@ export function JournalWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
                       <button
                         key={entry.id}
                         type="button"
-                        onClick={() => setSelectedEntry(entry)}
+                        onClick={() => setSelectedEntryId(entry.id)}
                         className="grid w-full grid-cols-[74px_minmax(0,1fr)] items-center gap-3 border-b border-hairline px-3 py-3 text-left last:border-b-0 hover:bg-surface-2 sm:grid-cols-[120px_minmax(0,1fr)_auto] sm:gap-4 sm:px-4"
                       >
                         <div
@@ -418,14 +465,35 @@ export function JournalWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
         </div>
       )}
 
-      <JournalEntrySheet
+      <JournalEditorSheet
         entry={selectedEntry}
         open={selectedEntry !== null}
+        repository={repository}
+        canEdit={currentRole !== "viewer"}
+        canComment
+        members={state.members}
+        currentUserId={currentUser.id}
+        comments={selectedComments}
+        onEntrySaved={handleEntrySaved}
+        onSubmitComment={(body, mentionIds) => {
+          if (selectedEntry) addComment(selectedEntry.id, body, mentionIds);
+        }}
         onOpenChange={(open) => {
-          if (!open) setSelectedEntry(null);
+          if (!open) setSelectedEntryId(null);
         }}
       />
-      <JournalComposeDialog open={composeOpen} onOpenChange={setComposeOpen} />
+      <JournalEditorSheet
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        repository={repository}
+        trips={state.trips}
+        initialTripId={state.trips[0]?.id}
+        canEdit={currentRole !== "viewer"}
+        canComment={false}
+        members={state.members}
+        currentUserId={currentUser.id}
+        onEntrySaved={handleEntrySaved}
+      />
     </div>
   );
 }

@@ -5,6 +5,26 @@ import { AlertTriangle, LocateFixed, RefreshCw, ShieldAlert, WifiOff } from "luc
 import { Badge, Button, EmptyState } from "@roamlog/ui";
 
 import type { AdminResource } from "../../lib/admin-data-source";
+import { AdminClientOnly } from "./admin-client-only";
+
+function AdminPreparingView() {
+  return (
+    <div role="status" aria-live="polite" className="space-y-4">
+      <div className="rounded-card border border-hairline-strong bg-surface-1 px-4 py-3">
+        <p className="type-eyebrow">ADMIN / PREPARING VIEW</p>
+        <p className="mt-1 text-[12px] text-muted">正在准备后台视图。</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {[0, 1, 2].map((index) => (
+          <div
+            key={index}
+            className="h-32 animate-pulse rounded-card border border-hairline bg-surface-1"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function AdminDataLoading({ mode }: { mode: "fixture" | "api" }) {
   return (
@@ -31,6 +51,20 @@ function AdminDataLoading({ mode }: { mode: "fixture" | "api" }) {
 }
 
 export function AdminDataBoundary<T>({
+  resource,
+  children,
+}: {
+  resource: AdminResource<T>;
+  children: (data: T) => React.ReactNode;
+}) {
+  return (
+    <AdminClientOnly fallback={<AdminPreparingView />}>
+      <AdminDataContent resource={resource}>{children}</AdminDataContent>
+    </AdminClientOnly>
+  );
+}
+
+function AdminDataContent<T>({
   resource,
   children,
 }: {

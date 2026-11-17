@@ -29,7 +29,7 @@ import {
   getTripStatusTone,
   tripDurationDays,
 } from "@/lib/trip-presentation";
-import { WorldMap } from "@/components/map/world-map";
+import { AtlasMap } from "@/components/map/atlas-map";
 
 const COUNTRY_NAMES: Record<string, string> = {
   KR: "韩国",
@@ -131,11 +131,10 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
 
           {view === "map" ? (
             <div className="relative">
-              <WorldMap
+              <AtlasMap
                 trips={filtered}
                 selectedTripId={selected?.id}
                 onSelect={setSelectedId}
-                className="h-auto min-h-80 w-full"
               />
               {!filtered.length ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/65 p-6 backdrop-blur-sm">

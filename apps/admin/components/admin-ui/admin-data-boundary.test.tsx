@@ -1,10 +1,33 @@
 import { render, screen } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+
+import { Switch } from "@roamlog/ui";
 
 import type { AdminResource } from "../../lib/admin-data-source";
 import { AdminDataBoundary } from "./admin-data-boundary";
 
 describe("AdminDataBoundary", () => {
+  it("does not serialize Radix hidden inputs during server rendering", () => {
+    const resource: AdminResource<string> = {
+      mode: "fixture",
+      data: "ready",
+      isLoading: false,
+      error: null,
+      degraded: [],
+      refetch: vi.fn(),
+    };
+
+    const html = renderToString(
+      <AdminDataBoundary resource={resource}>
+        {() => <Switch aria-label="灰度开关" defaultChecked />}
+      </AdminDataBoundary>,
+    );
+
+    expect(html).not.toContain('type="checkbox"');
+    expect(html).toContain("正在准备后台视图");
+  });
+
   it("renders the 2FA enrollment gate for ADMIN_2FA_REQUIRED", () => {
     const resource: AdminResource<string> = {
       mode: "api",
