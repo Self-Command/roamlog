@@ -2,6 +2,8 @@ import type * as React from "react";
 
 import { Badge } from "@roamlog/ui";
 
+import { getAdminDataMode } from "../../lib/admin-data-mode";
+
 interface AdminPageHeaderProps {
   eyebrow: string;
   title: string;
@@ -17,13 +19,17 @@ export function AdminPageHeader({
   readOnly = false,
   actions,
 }: AdminPageHeaderProps) {
+  const mode = getAdminDataMode();
+
   return (
     <header className="flex flex-col gap-5 border-b border-hairline pb-6 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <p className="type-eyebrow">{eyebrow}</p>
           {readOnly ? <Badge tone="slate">只读分析模式</Badge> : null}
-          <Badge tone="neutral">MOCK DATA</Badge>
+          <Badge tone={mode === "api" ? "green" : "neutral"}>
+            {mode === "api" ? "LIVE API" : "MOCK DATA"}
+          </Badge>
         </div>
         <h1 className="mt-3 font-serif text-[clamp(2rem,1.7rem+0.8vw,2.5rem)] leading-tight tracking-[-0.035em] text-ink">
           {title}
