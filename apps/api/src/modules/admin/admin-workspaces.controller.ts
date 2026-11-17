@@ -15,9 +15,10 @@ import { SessionGuard } from "../../common/guards/session.guard.js";
 import { AdminGuard } from "./admin.guard.js";
 import { RequireAdminAction } from "./admin.decorator.js";
 import { AdminWorkspacesService } from "./admin-workspaces.service.js";
+import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
 
 @Controller("admin/workspaces")
-@UseGuards(SessionGuard, AdminGuard)
+@UseGuards(SessionGuard, PlatformTwoFactorGuard, AdminGuard)
 export class AdminWorkspacesController {
   constructor(
     @Inject(AdminWorkspacesService) private readonly workspaces: AdminWorkspacesService,

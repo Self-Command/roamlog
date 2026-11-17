@@ -19,6 +19,7 @@ import { AdminUsersController } from "./admin-users.controller.js";
 import { AdminUsersService } from "./admin-users.service.js";
 import { AdminWorkspacesController } from "./admin-workspaces.controller.js";
 import { AdminWorkspacesService } from "./admin-workspaces.service.js";
+import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
 
 @Module({
   imports: [AccessControlModule, AuditModule, FeatureFlagsModule],
@@ -31,6 +32,7 @@ import { AdminWorkspacesService } from "./admin-workspaces.service.js";
   ],
   providers: [
     AdminGuard,
+    PlatformTwoFactorGuard,
     AdminQueueService,
     AdminMetricsService,
     AdminSystemService,

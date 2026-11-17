@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { loadEnvironmentFiles } from "../src/config/load-environment.js";
 import { validateEnvironment } from "../src/config/environment.js";
+import { assertBootstrapTwoFactorReady } from "../src/modules/auth/bootstrap-two-factor.js";
 
 const emailSchema = z.email();
 
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
           id: true,
           email: true,
           emailVerified: true,
+          twoFactorEnabled: true,
           platformRole: true,
           status: true,
           deletedAt: true,
@@ -56,6 +58,8 @@ async function main(): Promise<void> {
               id: true,
               secret: true,
               backupCodes: true,
+              verified: true,
+              lockedUntil: true,
             },
           },
         },
@@ -68,7 +72,7 @@ async function main(): Promise<void> {
 
     if (!user) {
       fail(
-        "No matching user exists. Create the account through Better Auth and enroll TOTP 2FA before bootstrapping.",
+        "No matching user exists. Automatic bootstrap account creation is not implemented; create the account through Better Auth and enroll verified TOTP 2FA before bootstrapping.",
       );
     }
 
@@ -76,12 +80,7 @@ async function main(): Promise<void> {
       fail("The target account must be active and have a verified email address");
     }
 
-    const hasCompleteSecondFactor = user.twoFactors.some(
-      (twoFactor) => twoFactor.secret.trim() && twoFactor.backupCodes.trim(),
-    );
-    if (!hasCompleteSecondFactor) {
-      fail("The target account must complete TOTP 2FA enrollment before promotion");
-    }
+    assertBootstrapTwoFactorReady(user);
 
     await prisma.$transaction(async (transaction) => {
       await transaction.user.update({

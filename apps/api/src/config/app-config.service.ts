@@ -79,6 +79,10 @@ export class AppConfigService {
     return this.config.get<string>("BETTER_AUTH_URL") ?? this.apiUrl;
   }
 
+  get adminTwoFactorEnforced(): boolean {
+    return this.config.get<boolean>("ADMIN_2FA_ENFORCED") ?? this.isProduction;
+  }
+
   get googleClientId(): string | undefined {
     return this.config.get<string>("GOOGLE_CLIENT_ID");
   }

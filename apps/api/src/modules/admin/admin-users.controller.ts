@@ -18,9 +18,10 @@ import { SessionGuard } from "../../common/guards/session.guard.js";
 import { AdminGuard } from "./admin.guard.js";
 import { RequireAdminAction } from "./admin.decorator.js";
 import { AdminUsersService } from "./admin-users.service.js";
+import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
 
 @Controller("admin/users")
-@UseGuards(SessionGuard, AdminGuard)
+@UseGuards(SessionGuard, PlatformTwoFactorGuard, AdminGuard)
 export class AdminUsersController {
   constructor(@Inject(AdminUsersService) private readonly users: AdminUsersService) {}
 

@@ -37,6 +37,7 @@ const EnvironmentSchema = z
     REDIS_PREFIX: z.string().min(1).default("roamlog"),
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: optionalUrl,
+    ADMIN_2FA_ENFORCED: booleanFromEnvironment.optional(),
     SESSION_COOKIE_DOMAIN: optionalString,
     GOOGLE_CLIENT_ID: optionalString,
     GOOGLE_CLIENT_SECRET: optionalString,

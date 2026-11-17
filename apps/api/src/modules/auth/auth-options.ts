@@ -8,7 +8,19 @@ export interface AuthOptionsDependencies {
   prisma: PrismaService;
   email: EmailDeliveryService;
   prismaAdapter: (client: unknown, options: { provider: "postgresql" }) => unknown;
-  twoFactor: (options: { issuer: string; skipVerificationOnEnable: boolean }) => unknown;
+  twoFactor: (options: {
+    issuer: string;
+    skipVerificationOnEnable: boolean;
+    totpOptions: {
+      digits: 6 | 8;
+      period: number;
+    };
+    accountLockout: {
+      enabled: boolean;
+      maxFailedAttempts: number;
+      durationSeconds: number;
+    };
+  }) => unknown;
 }
 
 export function buildAuthOptions(dependencies: AuthOptionsDependencies): Record<string, unknown> {
@@ -73,6 +85,15 @@ export function buildAuthOptions(dependencies: AuthOptionsDependencies): Record<
       twoFactor({
         issuer: "Roamlog",
         skipVerificationOnEnable: false,
+        totpOptions: {
+          digits: 6,
+          period: 30,
+        },
+        accountLockout: {
+          enabled: true,
+          maxFailedAttempts: 10,
+          durationSeconds: 900,
+        },
       }),
     ],
     rateLimit: {

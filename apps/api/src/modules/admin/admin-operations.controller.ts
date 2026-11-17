@@ -22,9 +22,10 @@ import { RequireAdminAction } from "./admin.decorator.js";
 import { AdminAuditService } from "./admin-audit.service.js";
 import { AdminEmailsService } from "./admin-emails.service.js";
 import { AdminJobsService } from "./admin-jobs.service.js";
+import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
 
 @Controller("admin")
-@UseGuards(SessionGuard, AdminGuard)
+@UseGuards(SessionGuard, PlatformTwoFactorGuard, AdminGuard)
 export class AdminOperationsController {
   constructor(
     @Inject(AdminAuditService) private readonly audit: AdminAuditService,

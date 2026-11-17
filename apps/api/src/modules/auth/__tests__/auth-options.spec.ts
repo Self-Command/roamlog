@@ -74,6 +74,15 @@ describe("Better Auth options", () => {
     expect(twoFactor).toHaveBeenCalledWith({
       issuer: "Roamlog",
       skipVerificationOnEnable: false,
+      totpOptions: {
+        digits: 6,
+        period: 30,
+      },
+      accountLockout: {
+        enabled: true,
+        maxFailedAttempts: 10,
+        durationSeconds: 900,
+      },
     });
     expect(prismaAdapter).toHaveBeenCalledWith(prisma.client, {
       provider: "postgresql",

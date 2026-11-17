@@ -84,7 +84,19 @@ export class AuthService implements OnModuleInit {
         prismaAdapter: (client: unknown, options: { provider: "postgresql" }) => unknown;
       };
       const { twoFactor } = (await import(twoFactorPackage)) as {
-        twoFactor: (options: { issuer: string; skipVerificationOnEnable: boolean }) => unknown;
+        twoFactor: (options: {
+          issuer: string;
+          skipVerificationOnEnable: boolean;
+          totpOptions: {
+            digits: 6 | 8;
+            period: number;
+          };
+          accountLockout: {
+            enabled: boolean;
+            maxFailedAttempts: number;
+            durationSeconds: number;
+          };
+        }) => unknown;
       };
 
       const options = buildAuthOptions({

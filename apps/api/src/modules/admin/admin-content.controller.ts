@@ -17,9 +17,10 @@ import { AdminGuard } from "./admin.guard.js";
 import { RequireAdminAction } from "./admin.decorator.js";
 import { AdminContentService } from "./admin-content.service.js";
 import { AdminMediaService } from "./admin-media.service.js";
+import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
 
 @Controller("admin")
-@UseGuards(SessionGuard, AdminGuard)
+@UseGuards(SessionGuard, PlatformTwoFactorGuard, AdminGuard)
 export class AdminContentController {
   constructor(
     @Inject(AdminContentService) private readonly content: AdminContentService,

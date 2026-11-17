@@ -7,9 +7,10 @@ import { AdminGuard } from "./admin.guard.js";
 import { RequireAdminAction } from "./admin.decorator.js";
 import { AdminMetricsService } from "./admin-metrics.service.js";
 import { AdminSystemService } from "./admin-system.service.js";
+import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
 
 @Controller("admin")
-@UseGuards(SessionGuard, AdminGuard)
+@UseGuards(SessionGuard, PlatformTwoFactorGuard, AdminGuard)
 export class AdminDashboardController {
   constructor(
     @Inject(AdminMetricsService) private readonly metrics: AdminMetricsService,
