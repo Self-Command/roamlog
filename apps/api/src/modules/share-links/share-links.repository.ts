@@ -1,0 +1,256 @@
+import { Inject, Injectable } from "@nestjs/common";
+
+import { PrismaService } from "../prisma/prisma.service.js";
+import type { ContentTransaction } from "../trips/content-transaction.js";
+
+export interface ShareLinkRecord {
+  id: string;
+  workspaceId: string;
+  tripId: string;
+  tokenHash: string;
+  createdById: string;
+  expiresAt: Date | null;
+  revokedAt: Date | null;
+  passwordHash: string | null;
+  allowIndex: boolean;
+  showBudget: boolean;
+  lastAccessedAt: Date | null;
+  accessCount: number;
+  createdAt: Date;
+}
+
+export interface PublicTripBundle {
+  trip: Record<string, unknown>;
+  stops: Array<Record<string, unknown>>;
+  entries: Array<Record<string, unknown> & { media?: Array<Record<string, unknown>> }>;
+  media: Array<Record<string, unknown>>;
+  budget: Record<string, unknown> | null;
+}
+
+@Injectable()
+export class ShareLinksRepository {
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  transaction<T>(callback: (tx: ContentTransaction) => Promise<T>): Promise<T> {
+    return this.prisma.client.$transaction(callback);
+  }
+
+  async findTrip(workspaceId: string, tripId: string): Promise<Record<string, unknown> | null> {
+    return this.prisma.client.trip.findFirst({
+      where: { id: tripId, workspaceId, deletedAt: null },
+    });
+  }
+
+  async createShareLink(
+    tx: ContentTransaction,
+    data: {
+      workspaceId: string;
+      tripId: string;
+      tokenHash: string;
+      createdById: string;
+      expiresAt: Date | null;
+      passwordHash: string | null;
+      allowIndex: boolean;
+      showBudget: boolean;
+    },
+  ): Promise<ShareLinkRecord> {
+    return (await tx.shareLink.create({ data })) as ShareLinkRecord;
+  }
+
+  async listShareLinks(workspaceId: string, tripId: string): Promise<ShareLinkRecord[]> {
+    return (await this.prisma.client.shareLink.findMany({
+      where: { workspaceId, tripId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    })) as ShareLinkRecord[];
+  }
+
+  async findShareLink(
+    workspaceId: string,
+    tripId: string,
+    shareLinkId: string,
+  ): Promise<ShareLinkRecord | null> {
+    return (await this.prisma.client.shareLink.findFirst({
+      where: { id: shareLinkId, workspaceId, tripId },
+    })) as ShareLinkRecord | null;
+  }
+
+  async findShareLinkById(shareLinkId: string): Promise<ShareLinkRecord | null> {
+    return (await this.prisma.client.shareLink.findFirst({
+      where: { id: shareLinkId },
+    })) as ShareLinkRecord | null;
+  }
+
+  async findShareLinkByHash(tokenHash: string): Promise<ShareLinkRecord | null> {
+    return (await this.prisma.client.shareLink.findUnique({
+      where: { tokenHash },
+    })) as ShareLinkRecord | null;
+  }
+
+  async revokeShareLink(
+    tx: ContentTransaction,
+    args: { workspaceId: string; shareLinkId: string },
+  ): Promise<number> {
+    const result = await tx.shareLink.updateMany({
+      where: {
+        id: args.shareLinkId,
+        workspaceId: args.workspaceId,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+    return result.count;
+  }
+
+  async recordAccess(shareLinkId: string, accessedAt: Date): Promise<boolean> {
+    const result = await this.prisma.client.shareLink.updateMany({
+      where: { id: shareLinkId, revokedAt: null },
+      data: {
+        lastAccessedAt: accessedAt,
+        accessCount: { increment: 1 },
+      },
+    });
+    return result.count > 0;
+  }
+
+  async loadPublicTrip(shareLink: ShareLinkRecord): Promise<PublicTripBundle | null> {
+    const trip = await this.prisma.client.trip.findFirst({
+      where: {
+        id: shareLink.tripId,
+        workspaceId: shareLink.workspaceId,
+        deletedAt: null,
+      },
+    });
+    if (!trip) {
+      return null;
+    }
+
+    const [stops, entries, directMedia] = await Promise.all([
+      this.prisma.client.stop.findMany({
+        where: { tripId: trip.id, workspaceId: shareLink.workspaceId, deletedAt: null },
+        orderBy: [{ startDate: "asc" }, { order: "asc" }, { id: "asc" }],
+      }),
+      this.prisma.client.journalEntry.findMany({
+        where: { tripId: trip.id, workspaceId: shareLink.workspaceId, deletedAt: null },
+        orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      }),
+      this.prisma.client.media.findMany({
+        where: {
+          tripId: trip.id,
+          workspaceId: shareLink.workspaceId,
+          status: "ready",
+          deletedAt: null,
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
+    ]);
+
+    const entryMedia = await this.prisma.client.entryMedia.findMany({
+      where: {
+        workspaceId: shareLink.workspaceId,
+        entryId: { in: entries.map((entry) => entry.id) },
+        media: { status: "ready", deletedAt: null },
+      },
+      include: { media: true },
+      orderBy: [{ order: "asc" }],
+    });
+    const mediaByEntry = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of entryMedia) {
+      const list = mediaByEntry.get(row.entryId) ?? [];
+      list.push(row.media as unknown as Record<string, unknown>);
+      mediaByEntry.set(row.entryId, list);
+    }
+    const mediaById = new Map(
+      directMedia.map((media) => [media.id, media as unknown as Record<string, unknown>]),
+    );
+    for (const mediaList of mediaByEntry.values()) {
+      for (const media of mediaList) {
+        mediaById.set(String(media.id), media);
+      }
+    }
+
+    return {
+      trip: trip as unknown as Record<string, unknown>,
+      stops: stops as unknown as Array<Record<string, unknown>>,
+      entries: entries.map((entry) => ({
+        ...(entry as unknown as Record<string, unknown>),
+        media: mediaByEntry.get(entry.id) ?? [],
+      })),
+      media: [...mediaById.values()],
+      budget: shareLink.showBudget
+        ? await this.loadBudget(trip, shareLink.workspaceId)
+        : null,
+    };
+  }
+
+  private async loadBudget(
+    trip: Record<string, unknown>,
+    workspaceId: string,
+  ): Promise<Record<string, unknown>> {
+    const tripId = String(trip.id);
+    const displayCurrency =
+      typeof trip.budgetCurrency === "string" ? trip.budgetCurrency : "USD";
+    const expenses = await this.prisma.client.expense.findMany({
+      where: { tripId, workspaceId, deletedAt: null },
+      select: { category: true, amountMinor: true, currency: true },
+    });
+    const originalTotals = new Map<string, number>();
+    const categories = new Map<string, Map<string, number>>();
+    for (const expense of expenses) {
+      originalTotals.set(
+        expense.currency,
+        (originalTotals.get(expense.currency) ?? 0) + expense.amountMinor,
+      );
+      const category = categories.get(expense.category) ?? new Map<string, number>();
+      category.set(
+        expense.currency,
+        (category.get(expense.currency) ?? 0) + expense.amountMinor,
+      );
+      categories.set(expense.category, category);
+    }
+
+    const converted = expenses.reduce(
+      (sum, expense) =>
+        sum + Math.round(expense.amountMinor * approximateRate(expense.currency, displayCurrency)),
+      0,
+    );
+    const budgetMinor =
+      typeof trip.budgetAmountMinor === "number" ? trip.budgetAmountMinor : null;
+    return {
+      tripId,
+      displayCurrency,
+      originalTotals: [...originalTotals].map(([currency, amountMinor]) => ({
+        currency,
+        amountMinor,
+      })),
+      displayTotal: {
+        currency: displayCurrency,
+        amountMinor: converted,
+        approx: true,
+      },
+      categories: [...categories].map(([category, totals]) => ({
+        category,
+        totals: [...totals].map(([currency, amountMinor]) => ({ currency, amountMinor })),
+      })),
+      expenseCount: expenses.length,
+      overBudget: budgetMinor === null ? false : converted > budgetMinor,
+    };
+  }
+}
+
+const USD_RATES: Record<string, number> = {
+  USD: 1,
+  EUR: 1.05,
+  GBP: 1.27,
+  CNY: 0.14,
+  JPY: 0.0067,
+  KRW: 0.00072,
+  THB: 0.029,
+  CAD: 0.73,
+  AUD: 0.66,
+};
+
+function approximateRate(from: string, to: string): number {
+  const fromRate = USD_RATES[from] ?? 1;
+  const toRate = USD_RATES[to] ?? 1;
+  return fromRate / toRate;
+}

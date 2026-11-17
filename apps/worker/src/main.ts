@@ -1,5 +1,7 @@
 import { loadLocalEnvironment, readWorkerConfig } from "./config.js";
-import { defaultProcessors } from "./jobs/index.js";
+import { createWorkerDependencies } from "./dependencies.js";
+import { createDefaultProcessors } from "./jobs/index.js";
+import { startJobIngress, type JobIngress } from "./ingress.js";
 import { createLogger, serializeError } from "./logger.js";
 import { QUEUE_NAMES, redisConnectionOptions, startWorkerRuntime } from "./queue.js";
 
@@ -18,10 +20,18 @@ async function main(): Promise<void> {
     "starting worker runtime",
   );
 
+  const dependencies = createWorkerDependencies(logger);
+  const processors = createDefaultProcessors(dependencies);
   const runtime = await startWorkerRuntime({
     redisUrl: config.redisUrl,
     prefix: config.redisPrefix,
-    processors: defaultProcessors,
+    processors,
+    logger,
+  });
+  const ingress: JobIngress = await startJobIngress({
+    redisUrl: config.redisUrl,
+    prefix: config.redisPrefix,
+    queues: runtime.queues,
     logger,
   });
 
@@ -52,6 +62,7 @@ async function main(): Promise<void> {
     );
 
     try {
+      await ingress.close();
       await runtime.close();
       logger.info(
         {

@@ -18,9 +18,12 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1170.0",
+    "@roamlog/db": "workspace:*",
+    "@roamlog/emails": "workspace:*",
     "bullmq": "6.7.7",
     "ioredis": "5.11.1",
-    "pino": "10.4.0"
+    "pino": "10.4.0",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
