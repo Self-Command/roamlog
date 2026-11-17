@@ -11,7 +11,7 @@ export function AdminFilterBar({
     <div
       role="search"
       className={cn(
-        "flex flex-col gap-3 rounded-card border border-hairline bg-surface-1/70 p-3 md:flex-row md:items-end",
+        "flex flex-col gap-3 rounded-card border border-hairline bg-surface-1/70 p-3 md:flex-row md:flex-wrap md:items-end",
         className,
       )}
       {...props}

@@ -202,7 +202,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
             ))}
           </dl>
           <p className="mt-4 text-[11px] leading-5 text-muted">
-            退信与投诉保留在队列和邮件日志中；本骨架不提供重发或退订操作。
+            退信与投诉保留在邮件日志中；邮件页可重发失败邮件，队列页可检查投递任务的失败详情。
           </p>
         </section>
       </div>

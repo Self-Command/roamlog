@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Map,
   Menu,
+  Settings,
   Users,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ const futureLabels = {
   members: "成员",
   activity: "活动",
   notifications: "通知",
+  settings: "设置",
 } as const;
 
 export function breadcrumbFor(
@@ -102,6 +104,12 @@ export function buildShellNavigation(
         label: "通知",
         icon: Bell,
         active: isSectionActive("/notifications"),
+      },
+      {
+        href: `${workspaceRoot}/settings`,
+        label: "设置",
+        icon: Settings,
+        active: isSectionActive("/settings"),
       },
     ],
     mobileNav: [

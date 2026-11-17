@@ -41,6 +41,9 @@ export function AuditView({ role, entries }: AuditViewProps) {
   const sourceEntries = entries ?? getAdminDataSource().listAuditLogs();
   const [query, setQuery] = useState("");
   const [actorType, setActorType] = useState<"all" | AuditLog["actorType"]>("all");
+  const [actorFilter, setActorFilter] = useState("all");
+  const [targetTypeFilter, setTargetTypeFilter] = useState("all");
+  const [ipQuery, setIpQuery] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -51,21 +54,52 @@ export function AuditView({ role, entries }: AuditViewProps) {
   }, []);
 
   const canExport = canPlatform(role, "admin:audit:export");
+  const targetTypeOptions = useMemo(
+    () => [...new Set(sourceEntries.map((entry) => entry.targetType))].sort(),
+    [sourceEntries],
+  );
   const filteredEntries = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
+    const normalizedIp = ipQuery.trim().toLocaleLowerCase("zh-CN");
     return sourceEntries.filter((entry) => {
       const matchesQuery =
         !normalizedQuery ||
-        `${entry.action} ${entry.targetType} ${entry.actorId ?? ""}`
+        `${entry.action} ${entry.targetType} ${entry.actorId ?? ""} ${actorName(
+          entry.actorId,
+          entry.actorType,
+        )}`
           .toLocaleLowerCase("zh-CN")
           .includes(normalizedQuery);
       const matchesActor = actorType === "all" || entry.actorType === actorType;
+      const matchesActorId =
+        actorFilter === "all" ||
+        (actorFilter === "system" ? entry.actorType === "system" : entry.actorId === actorFilter);
+      const matchesTarget =
+        targetTypeFilter === "all" || entry.targetType === targetTypeFilter;
+      const matchesIp = !normalizedIp || (entry.ip ?? "").toLocaleLowerCase("zh-CN").includes(normalizedIp);
       const entryDate = entry.createdAt.slice(0, 10);
       const matchesFrom = !fromDate || entryDate >= fromDate;
       const matchesTo = !toDate || entryDate <= toDate;
-      return matchesQuery && matchesActor && matchesFrom && matchesTo;
+      return (
+        matchesQuery &&
+        matchesActor &&
+        matchesActorId &&
+        matchesTarget &&
+        matchesIp &&
+        matchesFrom &&
+        matchesTo
+      );
     });
-  }, [actorType, fromDate, query, sourceEntries, toDate]);
+  }, [
+    actorFilter,
+    actorType,
+    fromDate,
+    ipQuery,
+    query,
+    sourceEntries,
+    targetTypeFilter,
+    toDate,
+  ]);
 
   function exportFixtureCsv() {
     const header = [
@@ -158,6 +192,47 @@ export function AuditView({ role, entries }: AuditViewProps) {
             <option value="admin">Admin</option>
             <option value="system">System</option>
           </Select>
+        </label>
+        <label className="w-full md:w-40">
+          <span className="type-eyebrow">Actor</span>
+          <Select
+            className="mt-1.5 h-9"
+            value={actorFilter}
+            onChange={(event) => setActorFilter(event.currentTarget.value)}
+          >
+            <option value="all">全部操作者</option>
+            <option value="system">System worker</option>
+            {MOCK_ADMIN_USERS.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="w-full md:w-36">
+          <span className="type-eyebrow">Target type</span>
+          <Select
+            className="mt-1.5 h-9"
+            value={targetTypeFilter}
+            onChange={(event) => setTargetTypeFilter(event.currentTarget.value)}
+          >
+            <option value="all">全部目标</option>
+            {targetTypeOptions.map((targetType) => (
+              <option key={targetType} value={targetType}>
+                {targetType}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="w-full md:w-32">
+          <span className="type-eyebrow">IP</span>
+          <Input
+            className="mt-1.5 h-9"
+            type="search"
+            placeholder="10.10.2"
+            value={ipQuery}
+            onChange={(event) => setIpQuery(event.currentTarget.value)}
+          />
         </label>
         <label className="w-full md:w-36">
           <span className="type-eyebrow">开始日期</span>

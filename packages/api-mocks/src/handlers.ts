@@ -1,7 +1,33 @@
-import type { ProblemDetails, TripPage } from "@roamlog/contracts";
+import {
+  ActivitySchema,
+  CommentPageSchema,
+  EntryPageSchema,
+  ExpensePageSchema,
+  InvitationPageSchema,
+  MediaPageSchema,
+  NotificationPageSchema,
+  NotificationPreferencesResponseSchema,
+  PackingPageSchema,
+  StopListResponseSchema,
+  WorkspaceMemberPageSchema,
+  type ProblemDetails,
+  type TripPage,
+} from "@roamlog/contracts";
 import { http, HttpResponse } from "msw";
 
-import { demoFixtureState, demoItineraries, demoUser, demoWorkspaces } from "./fixtures";
+import {
+  demoActivities,
+  demoComments,
+  demoContent,
+  demoExpenses,
+  demoFixtureState,
+  demoItineraries,
+  demoMedia,
+  demoNotifications,
+  demoStops,
+  demoUser,
+  demoWorkspaces,
+} from "./fixtures";
 
 function problem(
   status: number,
@@ -88,4 +114,148 @@ export const handlers = [
 
     return HttpResponse.json(demoItineraries[tripId] ?? []);
   }),
+
+  http.get("/v1/workspaces/:workspaceId/members", ({ params }) => {
+    const workspaceId = String(params.workspaceId);
+    return HttpResponse.json(
+      WorkspaceMemberPageSchema.parse({
+        items: demoContent.members.filter((member) => member.workspaceId === workspaceId),
+        nextCursor: null,
+        hasMore: false,
+      }),
+    );
+  }),
+
+  http.get("/v1/workspaces/:workspaceId/invitations", ({ params }) => {
+    const workspaceId = String(params.workspaceId);
+    return HttpResponse.json(
+      InvitationPageSchema.parse({
+        items: demoContent.invitations.filter(
+          (invitation) => invitation.workspaceId === workspaceId,
+        ),
+        nextCursor: null,
+        hasMore: false,
+      }),
+    );
+  }),
+
+  http.get("/v1/workspaces/:workspaceId/entries", ({ params }) => {
+    const workspaceId = String(params.workspaceId);
+    return HttpResponse.json(
+      EntryPageSchema.parse({
+        items: demoContent.entries.filter((entry) => entry.workspaceId === workspaceId),
+        nextCursor: null,
+        hasMore: false,
+      }),
+    );
+  }),
+
+  http.get("/v1/trips/:tripId/entries", ({ params }) => {
+    const tripId = String(params.tripId);
+    return HttpResponse.json(
+      EntryPageSchema.parse({
+        items: demoContent.entries.filter((entry) => entry.tripId === tripId),
+        nextCursor: null,
+        hasMore: false,
+      }),
+    );
+  }),
+
+  http.get("/v1/trips/:tripId/comments", ({ params, request }) => {
+    const tripId = String(params.tripId);
+    const url = new URL(request.url);
+    const targetId = url.searchParams.get("targetId");
+    return HttpResponse.json(
+      CommentPageSchema.parse({
+        items: demoComments.filter(
+          (comment) =>
+            comment.tripId === tripId && (!targetId || comment.targetId === targetId),
+        ),
+        nextCursor: null,
+        hasMore: false,
+      }),
+    );
+  }),
+
+  http.get("/v1/trips/:tripId/expenses", ({ params }) => {
+    const tripId = String(params.tripId);
+    return HttpResponse.json(
+      ExpensePageSchema.parse({
+        items: demoExpenses.filter((expense) => expense.tripId === tripId),
+        nextCursor: null,
+        hasMore: false,
+      }),
+    );
+  }),
+
+  http.get("/v1/trips/:tripId/packing", ({ params }) => {
+    const tripId = String(params.tripId);
+    return HttpResponse.json(
+      PackingPageSchema.parse({
+        items: demoContent.packing.filter((item) => item.tripId === tripId),
+        nextCursor: null,
+        hasMore: false,
+      }),
+    );
+  }),
+
+  http.get("/v1/trips/:tripId/stops", ({ params }) => {
+    const tripId = String(params.tripId);
+    return HttpResponse.json(
+      StopListResponseSchema.parse(demoStops.filter((stop) => stop.tripId === tripId)),
+    );
+  }),
+
+  http.get("/v1/trips/:tripId/media", ({ params }) => {
+    const tripId = String(params.tripId);
+    return HttpResponse.json(
+      MediaPageSchema.parse({
+        items: demoMedia.filter((media) => media.tripId === tripId),
+        nextCursor: null,
+        hasMore: false,
+      }),
+    );
+  }),
+
+  http.get("/v1/trips/:tripId/activity", ({ params }) => {
+    const tripId = String(params.tripId);
+    return HttpResponse.json({
+      items: ActivitySchema.array().parse(
+        demoActivities.filter((activity) => activity.tripId === tripId),
+      ),
+      nextCursor: null,
+      hasMore: false,
+    });
+  }),
+
+  http.get("/v1/workspaces/:workspaceId/activity", ({ params }) => {
+    const workspaceId = String(params.workspaceId);
+    return HttpResponse.json({
+      items: ActivitySchema.array().parse(
+        demoActivities.filter((activity) => activity.workspaceId === workspaceId),
+      ),
+      nextCursor: null,
+      hasMore: false,
+    });
+  }),
+
+  http.get("/v1/me/notifications", () =>
+    HttpResponse.json(
+      NotificationPageSchema.parse({
+        items: demoNotifications,
+        nextCursor: null,
+        hasMore: false,
+      }),
+    ),
+  ),
+
+  http.get("/v1/me/notification-preferences", () =>
+    HttpResponse.json(
+      NotificationPreferencesResponseSchema.parse([
+        { userId: demoUser.id, type: "mention", inApp: true, email: true },
+        { userId: demoUser.id, type: "comment", inApp: true, email: true },
+        { userId: demoUser.id, type: "trip_reminder", inApp: true, email: false },
+      ]),
+    ),
+  ),
 ];

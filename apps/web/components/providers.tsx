@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { startMockWorker } from "@/lib/msw";
+import { DemoDataProvider } from "@/lib/demo-store";
 
 const mocksEnabled = process.env.NODE_ENV !== "production";
 
@@ -93,7 +94,9 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+      <TooltipProvider delayDuration={200}>
+        <DemoDataProvider>{children}</DemoDataProvider>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

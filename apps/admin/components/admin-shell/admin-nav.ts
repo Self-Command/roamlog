@@ -1,6 +1,8 @@
 import {
   Activity,
   Building2,
+  FileText,
+  Image,
   LayoutDashboard,
   ListChecks,
   Mail,
@@ -37,24 +39,19 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     ],
   },
   {
+    label: "内容与资产",
+    items: [
+      { href: "/admin/content", label: "内容审核", icon: FileText },
+      { href: "/admin/media", label: "媒体库", icon: Image },
+    ],
+  },
+  {
     label: "数据与运营",
     items: [
-      { href: "/admin/emails", label: "邮件", icon: Mail, disabled: true, badge: "SOON" },
-      { href: "/admin/queues", label: "队列", icon: ListChecks, disabled: true, badge: "SOON" },
-      {
-        href: "/admin/flags",
-        label: "功能开关",
-        icon: ToggleLeft,
-        disabled: true,
-        badge: "SOON",
-      },
-      {
-        href: "/admin/system",
-        label: "系统健康",
-        icon: Activity,
-        disabled: true,
-        badge: "SOON",
-      },
+      { href: "/admin/emails", label: "邮件", icon: Mail },
+      { href: "/admin/queues", label: "队列", icon: ListChecks },
+      { href: "/admin/flags", label: "功能开关", icon: ToggleLeft },
+      { href: "/admin/system", label: "系统健康", icon: Activity },
     ],
   },
 ];

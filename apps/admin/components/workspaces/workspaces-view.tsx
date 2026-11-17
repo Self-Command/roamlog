@@ -21,8 +21,9 @@ import {
 
 import { getAdminDataSource } from "../../lib/admin-data-source";
 import type { AdminConsoleRole } from "../../lib/fixtures";
-import { formatDateTime } from "../../lib/format";
+import { formatBytes, formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
+import { getWorkspaceContext } from "../../lib/ops-fixtures";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { BulkSelectionBar } from "../admin-ui/bulk-selection-bar";
@@ -33,7 +34,22 @@ type WorkspaceAction =
   | { kind: "suspend"; workspace: AdminWorkspaceDetail }
   | { kind: "restore"; workspace: AdminWorkspaceDetail }
   | { kind: "delete"; workspace: AdminWorkspaceDetail }
-  | { kind: "bulk-suspend"; workspaces: AdminWorkspaceDetail[] };
+  | { kind: "bulk-suspend"; workspaces: AdminWorkspaceDetail[] }
+  | { kind: "bulk-restore"; workspaces: AdminWorkspaceDetail[] }
+  | { kind: "bulk-delete"; workspaces: AdminWorkspaceDetail[] };
+
+type BulkWorkspaceAction = Extract<
+  WorkspaceAction,
+  { kind: "bulk-suspend" | "bulk-restore" | "bulk-delete" }
+>;
+
+function isBulkWorkspaceAction(action: WorkspaceAction): action is BulkWorkspaceAction {
+  return (
+    action.kind === "bulk-suspend" ||
+    action.kind === "bulk-restore" ||
+    action.kind === "bulk-delete"
+  );
+}
 
 const actionCopy: Record<
   WorkspaceAction["kind"],
@@ -62,6 +78,18 @@ const actionCopy: Record<
     description: "所选 Workspace 会暂停访问。当前演示不会调用真实 API。",
     confirmLabel: "确认批量暂停",
     action: "admin.workspace.bulk-suspend",
+  },
+  "bulk-restore": {
+    title: "批量恢复工作区",
+    description: "所选 Workspace 会恢复访问。当前演示不会调用真实 API。",
+    confirmLabel: "确认批量恢复",
+    action: "admin.workspace.bulk-restore",
+  },
+  "bulk-delete": {
+    title: "批量删除工作区",
+    description: "所选 Workspace 进入软删除状态。当前演示不会调用真实 API。",
+    confirmLabel: "确认批量删除",
+    action: "admin.workspace.bulk-delete",
   },
 };
 
@@ -116,7 +144,7 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
   }
 
   function actionTarget(action: WorkspaceAction): string {
-    return action.kind === "bulk-suspend"
+    return isBulkWorkspaceAction(action)
       ? `${action.workspaces.length} 个工作区`
       : action.workspace.name;
   }
@@ -128,11 +156,20 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
 
     const copy = actionCopy[pendingAction.kind];
 
-    if (pendingAction.kind === "bulk-suspend") {
+    if (isBulkWorkspaceAction(pendingAction)) {
       const ids = new Set(pendingAction.workspaces.map((workspace) => workspace.id));
       setRecords((current) =>
         current.map((workspace) =>
-          ids.has(workspace.id) ? { ...workspace, status: "suspended" } : workspace,
+          ids.has(workspace.id)
+            ? {
+                ...workspace,
+                status: (pendingAction.kind === "bulk-restore"
+                  ? "active"
+                  : pendingAction.kind === "bulk-delete"
+                    ? "deleted"
+                    : "suspended") as AccountStatus,
+              }
+            : workspace,
         ),
       );
       setSelectedIds(new Set());
@@ -159,7 +196,7 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
       action: copy.action,
       targetType: "workspace",
       targetId:
-        pendingAction.kind === "bulk-suspend"
+        isBulkWorkspaceAction(pendingAction)
           ? `batch-${pendingAction.workspaces.length}`
           : pendingAction.workspace.id,
       targetName: actionTarget(pendingAction),
@@ -170,6 +207,9 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
   }
 
   const copy = pendingAction ? actionCopy[pendingAction.kind] : null;
+  const workspaceContext = detailWorkspace
+    ? getWorkspaceContext(detailWorkspace.id)
+    : null;
 
   return (
     <div className="space-y-5">
@@ -247,16 +287,37 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
         noun="个工作区"
         onClear={() => setSelectedIds(new Set())}
         actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={
-              !canSuspend || !bulkWorkspaces.every((workspace) => workspace.status === "active")
-            }
-            onClick={() => setPendingAction({ kind: "bulk-suspend", workspaces: bulkWorkspaces })}
-          >
-            批量暂停
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={
+                !canRestore ||
+                !bulkWorkspaces.some((workspace) => workspace.status === "suspended")
+              }
+              onClick={() => setPendingAction({ kind: "bulk-restore", workspaces: bulkWorkspaces })}
+            >
+              批量恢复
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={
+                !canSuspend || !bulkWorkspaces.every((workspace) => workspace.status === "active")
+              }
+              onClick={() => setPendingAction({ kind: "bulk-suspend", workspaces: bulkWorkspaces })}
+            >
+              批量暂停
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={!canDelete}
+              onClick={() => setPendingAction({ kind: "bulk-delete", workspaces: bulkWorkspaces })}
+            >
+              批量删除
+            </Button>
+          </>
         }
       />
 
@@ -473,6 +534,83 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
                 </p>
               </div>
 
+              <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline">
+                <div className="bg-surface-1 p-3">
+                  <p className="type-eyebrow">存储用量</p>
+                  <p className="mt-1.5 font-serif text-xl text-ink">
+                    {formatBytes(workspaceContext?.storageBytes ?? 0)}
+                  </p>
+                </div>
+                <div className="bg-surface-1 p-3">
+                  <p className="type-eyebrow">成员总数</p>
+                  <p className="mt-1.5 font-serif text-xl text-ink">
+                    {workspaceContext?.members.length ?? detailWorkspace.memberCount}
+                  </p>
+                </div>
+              </div>
+
+              <section aria-labelledby="workspace-members-heading" className="mt-6">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 id="workspace-members-heading" className="type-eyebrow">
+                    成员
+                  </h3>
+                  <span className="font-mono text-[9px] text-muted">
+                    {workspaceContext?.members.length ?? 0} records
+                  </span>
+                </div>
+                {workspaceContext && workspaceContext.members.length > 0 ? (
+                  <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
+                    {workspaceContext.members.map((member) => (
+                      <li
+                        key={member.userId}
+                        className="flex items-center justify-between gap-3 py-2.5"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] text-body">{member.name}</p>
+                          <p className="truncate font-mono text-[9px] text-muted">{member.email}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <Badge tone="slate">{member.role}</Badge>
+                          {member.status === "suspended" ? <Badge tone="yellow">Suspended</Badge> : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-[11px] text-muted">没有成员记录。</p>
+                )}
+              </section>
+
+              <section aria-labelledby="workspace-trips-heading" className="mt-6">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 id="workspace-trips-heading" className="type-eyebrow">
+                    最近旅行
+                  </h3>
+                  <span className="font-mono text-[9px] text-muted">
+                    {workspaceContext?.recentTrips.length ?? 0} records
+                  </span>
+                </div>
+                {workspaceContext && workspaceContext.recentTrips.length > 0 ? (
+                  <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
+                    {workspaceContext.recentTrips.map((trip) => (
+                      <li key={trip.id} className="flex items-center justify-between gap-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] text-body">{trip.title}</p>
+                          <p className="mt-0.5 font-mono text-[9px] text-muted">
+                            {formatDateTime(trip.updatedAt)}
+                          </p>
+                        </div>
+                        <Badge tone={trip.status === "completed" ? "green" : "blue"}>
+                          {trip.status}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-[11px] text-muted">没有近期旅行记录。</p>
+                )}
+              </section>
+
               <div className="mt-6 rounded-control border border-hairline bg-surface-1 p-3">
                 <p className="type-eyebrow">Workspace settings</p>
                 <div className="mt-2 flex items-center justify-between gap-3 text-[12px]">
@@ -501,7 +639,9 @@ export function WorkspacesView({ role, workspaces }: WorkspacesViewProps) {
         description={copy?.description ?? ""}
         targetName={pendingAction ? actionTarget(pendingAction) : ""}
         confirmationLabel={
-          pendingAction?.kind === "bulk-suspend" ? "输入选中数量确认" : "输入工作区名称确认"
+          pendingAction && isBulkWorkspaceAction(pendingAction)
+            ? "输入选中数量确认"
+            : "输入工作区名称确认"
         }
         confirmActionLabel={copy?.confirmLabel ?? "确认"}
         onConfirm={confirmAction}

@@ -23,6 +23,7 @@ import { getAdminDataSource } from "../../lib/admin-data-source";
 import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES, type AdminConsoleRole } from "../../lib/fixtures";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
+import { getUserContext } from "../../lib/ops-fixtures";
 import { cn } from "../admin-shell/cn";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
@@ -37,7 +38,22 @@ type UserAction =
   | { kind: "change-role"; user: AdminUserDetail }
   | { kind: "force-logout"; user: AdminUserDetail }
   | { kind: "reset-2fa"; user: AdminUserDetail }
-  | { kind: "bulk-suspend"; users: AdminUserDetail[] };
+  | { kind: "bulk-suspend"; users: AdminUserDetail[] }
+  | { kind: "bulk-restore"; users: AdminUserDetail[] }
+  | { kind: "bulk-delete"; users: AdminUserDetail[] };
+
+type BulkUserAction = Extract<
+  UserAction,
+  { kind: "bulk-suspend" | "bulk-restore" | "bulk-delete" }
+>;
+
+function isBulkUserAction(action: UserAction): action is BulkUserAction {
+  return (
+    action.kind === "bulk-suspend" ||
+    action.kind === "bulk-restore" ||
+    action.kind === "bulk-delete"
+  );
+}
 
 interface UsersViewProps {
   role: AdminConsoleRole;
@@ -89,6 +105,18 @@ const userActionCopy: Record<
     description: "所选账户会进入暂停状态。当前演示只更新本地 fixture 并记录 mock 审计事件。",
     confirmLabel: "确认批量暂停",
     action: "admin.user.bulk-suspend",
+  },
+  "bulk-restore": {
+    title: "批量恢复账户",
+    description: "所选已暂停账户会恢复访问。当前演示只更新本地 fixture 并记录 mock 审计事件。",
+    confirmLabel: "确认批量恢复",
+    action: "admin.user.bulk-restore",
+  },
+  "bulk-delete": {
+    title: "批量删除账户",
+    description: "所选账户进入软删除状态，需由管理员恢复。当前演示只更新本地 fixture。",
+    confirmLabel: "确认批量删除",
+    action: "admin.user.bulk-delete",
   },
 };
 
@@ -149,7 +177,7 @@ export function UsersView({ role, users }: UsersViewProps) {
   }
 
   function actionTargetName(action: UserAction): string {
-    return action.kind === "bulk-suspend" ? `${action.users.length} 位用户` : action.user.name;
+    return isBulkUserAction(action) ? `${action.users.length} 位用户` : action.user.name;
   }
 
   function confirmAction() {
@@ -159,11 +187,23 @@ export function UsersView({ role, users }: UsersViewProps) {
 
     const copy = userActionCopy[pendingAction.kind];
 
-    if (pendingAction.kind === "bulk-suspend") {
+    if (isBulkUserAction(pendingAction)) {
       const ids = new Set(pendingAction.users.map((user) => user.id));
       setRecords((current) =>
         current.map((user) =>
-          ids.has(user.id) ? { ...user, status: "suspended", activeSessionCount: 0 } : user,
+          ids.has(user.id)
+            ? {
+                ...user,
+                status:
+                  pendingAction.kind === "bulk-restore"
+                    ? "active"
+                    : pendingAction.kind === "bulk-delete"
+                      ? "deleted"
+                      : "suspended",
+                activeSessionCount:
+                  pendingAction.kind === "bulk-restore" ? user.activeSessionCount : 0,
+              }
+            : user,
         ),
       );
       setSelectedIds(new Set());
@@ -200,7 +240,7 @@ export function UsersView({ role, users }: UsersViewProps) {
       action: copy.action,
       targetType: "user",
       targetId:
-        pendingAction.kind === "bulk-suspend"
+        isBulkUserAction(pendingAction)
           ? `batch-${pendingAction.users.length}`
           : pendingAction.user.id,
       targetName: actionTargetName(pendingAction),
@@ -217,6 +257,7 @@ export function UsersView({ role, users }: UsersViewProps) {
 
   const copy = pendingAction ? userActionCopy[pendingAction.kind] : null;
   const bulkUsers = records.filter((user) => selectedIds.has(user.id));
+  const userContext = detailUser ? getUserContext(detailUser.id) : null;
 
   return (
     <div className="space-y-5">
@@ -294,15 +335,37 @@ export function UsersView({ role, users }: UsersViewProps) {
         noun="位用户"
         onClear={() => setSelectedIds(new Set())}
         actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!canSuspend || !bulkUsers.every((user) => user.status === "active")}
-            title={canSuspend ? "批量暂停所选账户" : "当前平台角色不可暂停账户"}
-            onClick={() => openAction({ kind: "bulk-suspend", users: bulkUsers })}
-          >
-            批量暂停
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={
+                !canRestore || !bulkUsers.some((user) => user.status === "suspended")
+              }
+              title={canRestore ? "批量恢复所选账户" : "当前平台角色不可恢复账户"}
+              onClick={() => openAction({ kind: "bulk-restore", users: bulkUsers })}
+            >
+              批量恢复
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!canSuspend || !bulkUsers.every((user) => user.status === "active")}
+              title={canSuspend ? "批量暂停所选账户" : "当前平台角色不可暂停账户"}
+              onClick={() => openAction({ kind: "bulk-suspend", users: bulkUsers })}
+            >
+              批量暂停
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={!canDelete}
+              title={canDelete ? "批量软删除所选账户" : "当前平台角色不可删除账户"}
+              onClick={() => openAction({ kind: "bulk-delete", users: bulkUsers })}
+            >
+              批量删除
+            </Button>
+          </>
         }
       />
 
@@ -511,6 +574,69 @@ export function UsersView({ role, users }: UsersViewProps) {
                 ))}
               </dl>
 
+              <div className="mt-6 space-y-5">
+                <section aria-labelledby="user-sessions-heading">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 id="user-sessions-heading" className="type-eyebrow">
+                      活跃会话
+                    </h3>
+                    <span className="font-mono text-[9px] text-muted">
+                      {userContext?.sessions.length ?? 0} records
+                    </span>
+                  </div>
+                  {userContext && userContext.sessions.length > 0 ? (
+                    <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
+                      {userContext.sessions.map((item) => (
+                        <li key={item.id} className="py-2.5">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="truncate text-[11px] text-body">{item.device}</span>
+                            {item.current ? <Badge tone="green">Current</Badge> : null}
+                          </div>
+                          <p className="mt-1 font-mono text-[9px] text-muted">
+                            {item.ip} · {formatDateTime(item.lastSeenAt)}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-muted">没有活跃会话。</p>
+                  )}
+                </section>
+
+                <section aria-labelledby="user-memberships-heading">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 id="user-memberships-heading" className="type-eyebrow">
+                      Workspace 成员关系
+                    </h3>
+                    <span className="font-mono text-[9px] text-muted">
+                      {userContext?.memberships.length ?? 0} records
+                    </span>
+                  </div>
+                  {userContext && userContext.memberships.length > 0 ? (
+                    <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
+                      {userContext.memberships.map((membership) => (
+                        <li
+                          key={membership.workspaceId}
+                          className="flex items-center justify-between gap-3 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-[11px] text-body">
+                              {membership.workspaceName}
+                            </p>
+                            <p className="mt-0.5 font-mono text-[9px] text-muted">
+                              加入 {formatDateTime(membership.joinedAt)}
+                            </p>
+                          </div>
+                          <Badge tone="slate">{membership.role}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-muted">没有 Workspace 成员关系。</p>
+                  )}
+                </section>
+              </div>
+
               <div className="mt-6 space-y-3">
                 <h3 className="type-eyebrow">安全操作</h3>
                 <div className="flex flex-wrap gap-2">
@@ -553,7 +679,9 @@ export function UsersView({ role, users }: UsersViewProps) {
         description={copy?.description ?? ""}
         targetName={pendingAction ? actionTargetName(pendingAction) : ""}
         confirmationLabel={
-          pendingAction?.kind === "bulk-suspend" ? "输入选中数量确认" : "输入用户姓名确认"
+          pendingAction && isBulkUserAction(pendingAction)
+            ? "输入选中数量确认"
+            : "输入用户姓名确认"
         }
         confirmActionLabel={copy?.confirmLabel ?? "确认"}
         onConfirm={confirmAction}
