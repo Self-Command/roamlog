@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  DATABASE_URL: postgresql://roamlog:roamlog@localhost:5432/roamlog?schema=public
+  ROAMLOG_TEST_DATABASE_URL: postgresql://roamlog:roamlog@localhost:5432/roamlog?schema=public
+  REDIS_URL: redis://localhost:6379
+  REDIS_PREFIX: roamlog-ci
+  BETTER_AUTH_SECRET: ci-only-secret-value-that-is-long-enough-123456
+  APP_URL: http://localhost:3000
+  ADMIN_URL: http://localhost:3001
+  API_URL: http://localhost:4000
+  S3_ENDPOINT: http://localhost:9000
+  S3_BUCKET: roamlog-ci
+  S3_ACCESS_KEY: roamlog
+  S3_SECRET_KEY: roamlog-ci-secret
+  RESEND_API_KEY: re_ci_placeholder
+  NEXT_PUBLIC_MAP_STYLE_URL: https://demotiles.maplibre.org/style.json
+  NEXT_PUBLIC_GEOCODER_URL: https://nominatim.openstreetmap.org
+  EXPORT_SIGNED_URL_TTL: "900"
+  BOOTSTRAP_SUPER_ADMIN_EMAIL: admin@roamlog.local
+  DEMO_SEED_ENABLED: "true"
+  ROAMLOG_SEED_S3_UPLOAD: "false"
+
+jobs:
+  quality:
+    name: Install, verify, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: roamlog
+          POSTGRES_PASSWORD: roamlog
+          POSTGRES_DB: roamlog
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U roamlog -d roamlog"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+
+      - name: Seed demo data
+        run: pnpm db:seed
+
+      - name: Test
+        run: pnpm test
+
+      - name: Contract and generated client freshness
+        run: pnpm contracts:check
+
+      - name: Build
+        run: pnpm build

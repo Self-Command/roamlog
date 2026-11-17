@@ -1,0 +1,20 @@
+# Roamlog ownership boundaries. Last matching pattern wins.
+* @roamlog/integrator
+
+/.github/ @roamlog/integrator
+/docker/ @roamlog/integrator
+/tooling/ @roamlog/integrator
+/package.json @roamlog/integrator
+/pnpm-workspace.yaml @roamlog/integrator
+/turbo.json @roamlog/integrator
+/tsconfig.base.json @roamlog/integrator
+
+/packages/contracts/ @roamlog/integrator
+/packages/db/ @roamlog/integrator
+/packages/api-client/ @roamlog/integrator
+/packages/ui/ @roamlog/design-system
+
+/apps/api/ @roamlog/api
+/apps/worker/ @roamlog/api
+/apps/web/ @roamlog/web
+/apps/admin/ @roamlog/admin

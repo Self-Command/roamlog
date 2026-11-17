@@ -1,0 +1,43 @@
+{
+  "name": "roamlog",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Roamlog collaborative travel archive",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=12.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @roamlog/db prisma migrate deploy",
+    "db:seed": "pnpm --filter @roamlog/db db:seed",
+    "db:studio": "pnpm --filter @roamlog/db prisma studio",
+    "contracts:generate": "pnpm --filter @roamlog/contracts contracts:generate",
+    "contracts:check": "pnpm --filter @roamlog/contracts contracts:check && pnpm --filter @roamlog/api-client api-client:check",
+    "api-client:generate": "pnpm --filter @roamlog/api-client api-client:generate",
+    "admin:bootstrap": "tsx tooling/scripts/bootstrap-admin.ts",
+    "tooling:minio-smoke": "tsx tooling/scripts/minio-smoke.ts",
+    "check:env": "tsx tooling/scripts/check-env.ts",
+    "e2e": "pnpm --filter @roamlog/web e2e",
+    "security:check": "pnpm audit --audit-level high",
+    "k6:smoke": "tsx tooling/scripts/k6-smoke.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.10.1",
+    "eslint": "10.15.0",
+    "prettier": "3.10.1",
+    "tsx": "4.23.15",
+    "turbo": "2.11.11",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.73.0",
+    "vitest": "5.1.0"
+  }
+}
