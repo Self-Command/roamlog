@@ -14,6 +14,25 @@ type ObservableRequest = {
   headers?: Record<string, string | string[] | undefined>;
 };
 
+export function redactRequestUrlForLog(value: string | undefined): string | undefined {
+  if (!value) {
+    return value;
+  }
+
+  try {
+    const parsed = new URL(value, "http://roamlog.invalid");
+    if (/^\/v1\/invitations\/[^/]+\/accept\/?$/.test(parsed.pathname)) {
+      return "/v1/invitations/[redacted]/accept";
+    }
+    if (parsed.pathname === "/v1/auth" || parsed.pathname.startsWith("/v1/auth/")) {
+      return parsed.pathname;
+    }
+    return value;
+  } catch {
+    return "[redacted-url]";
+  }
+}
+
 export function createHttpLogger(logger: Logger): RequestHandler {
   return pinoHttp({
     logger,
@@ -44,7 +63,7 @@ export function createHttpLogger(logger: Logger): RequestHandler {
         return {
           id: observable.requestId,
           method: observable.method,
-          url: observable.url,
+          url: redactRequestUrlForLog(observable.url),
           remoteAddress: observable.remoteAddress,
           userAgent: observable.headers?.["user-agent"],
         };

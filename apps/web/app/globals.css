@@ -1,0 +1,80 @@
+@import "tailwindcss";
+@import "@roamlog/ui/tokens.css";
+
+@source "../components/**/*.{ts,tsx}";
+@source "../lib/**/*.{ts,tsx}";
+
+@layer base {
+  body {
+    background:
+      radial-gradient(circle at 84% 0%, rgba(59, 158, 255, 0.04), transparent 26rem), var(--canvas);
+  }
+}
+
+@layer utilities {
+  .trip-cover {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background-color: var(--surface-1);
+  }
+
+  .trip-cover::before {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    content: "";
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 45%),
+      linear-gradient(0deg, rgba(0, 0, 0, 0.5), transparent 70%);
+  }
+
+  .trip-cover::after {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    content: "";
+    opacity: 0.9;
+    background-image:
+      radial-gradient(circle at 17% 28%, rgba(255, 255, 255, 0.16) 0 0.65rem, transparent 0.72rem),
+      repeating-linear-gradient(112deg, transparent 0 26px, rgba(255, 255, 255, 0.025) 26px 27px);
+    mix-blend-mode: screen;
+  }
+
+  .trip-cover--amber {
+    background:
+      radial-gradient(ellipse at 70% 5%, rgba(255, 128, 31, 0.42), transparent 52%),
+      linear-gradient(135deg, #25160d, #070708 68%);
+  }
+
+  .trip-cover--moss {
+    background:
+      radial-gradient(ellipse at 18% 15%, rgba(17, 255, 153, 0.14), transparent 48%),
+      linear-gradient(135deg, #152119, #070708 72%);
+  }
+
+  .trip-cover--ice {
+    background:
+      radial-gradient(ellipse at 72% 18%, rgba(59, 158, 255, 0.23), transparent 50%),
+      linear-gradient(135deg, #0f1722, #070708 70%);
+  }
+
+  .trip-cover--coast {
+    background:
+      radial-gradient(ellipse at 22% 10%, rgba(255, 197, 61, 0.15), transparent 44%),
+      linear-gradient(150deg, #1a1710, #070708 72%);
+  }
+
+  .trip-cover--rose {
+    background:
+      radial-gradient(ellipse at 72% 8%, rgba(255, 32, 71, 0.2), transparent 48%),
+      linear-gradient(145deg, #211015, #070708 70%);
+  }
+
+  .hairline-grid {
+    background-image:
+      linear-gradient(to right, var(--divider) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--divider) 1px, transparent 1px);
+    background-size: 36px 36px;
+  }
+}

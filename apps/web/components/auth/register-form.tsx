@@ -1,0 +1,119 @@
+"use client";
+
+import { Button, FormField, Input } from "@roamlog/ui";
+import { ArrowRight, UserPlus } from "lucide-react";
+import { useState, type FormEvent } from "react";
+
+import { validateEmail, validatePassword, validateRequired } from "@/lib/validation";
+
+interface RegisterErrors {
+  name?: string;
+  email?: string;
+  password?: string;
+}
+
+export function RegisterForm() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<RegisterErrors>({});
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = {
+      name: validateRequired(name, "请输入你的名字"),
+      email: validateEmail(email),
+      password: validatePassword(password),
+    };
+
+    setErrors(nextErrors);
+    if (nextErrors.name || nextErrors.email || nextErrors.password) {
+      setNotice(null);
+      return;
+    }
+
+    setNotice("注册表单已通过本地校验。真实账号创建与邮箱验证将在身份后端接入后启用。");
+  }
+
+  return (
+    <div>
+      <p className="type-eyebrow">CREATE YOUR ARCHIVE</p>
+      <h1 className="mt-3 font-serif text-[clamp(2rem,1.5rem+1vw,2.75rem)] leading-none tracking-[-0.035em] text-ink">
+        创建旅行档案
+      </h1>
+      <p className="mt-4 text-sm leading-6 text-muted">
+        注册后会创建个人 Workspace。当前表单不会创建真实账号或发送验证邮件。
+      </p>
+
+      <form noValidate onSubmit={handleSubmit} className="mt-8 space-y-5">
+        <FormField label="名字" error={errors.name}>
+          <Input
+            name="name"
+            autoComplete="name"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              if (errors.name) setErrors((current) => ({ ...current, name: undefined }));
+            }}
+            placeholder="你的显示名称"
+          />
+        </FormField>
+        <FormField label="邮箱" error={errors.email}>
+          <Input
+            type="email"
+            name="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
+            }}
+            placeholder="you@example.com"
+          />
+        </FormField>
+        <FormField
+          label="密码"
+          error={errors.password}
+          hint="至少 8 位；真实实现将由身份服务执行强度检查。"
+        >
+          <Input
+            type="password"
+            name="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              if (errors.password) {
+                setErrors((current) => ({ ...current, password: undefined }));
+              }
+            }}
+            placeholder="至少 8 位"
+          />
+        </FormField>
+
+        {notice ? (
+          <p
+            role="status"
+            className="rounded-control border border-accent-green/20 bg-accent-green/5 px-3 py-2.5 text-xs leading-5 text-accent-green"
+          >
+            {notice}
+          </p>
+        ) : null}
+
+        <Button type="submit" variant="primary" size="lg" className="w-full">
+          <UserPlus aria-hidden="true" />
+          创建账号
+          <ArrowRight aria-hidden="true" />
+        </Button>
+      </form>
+
+      <p className="mt-6 text-center text-xs text-muted">
+        已有账号？{" "}
+        <a href="/login" className="text-ink underline-offset-4 hover:underline">
+          返回登录
+        </a>
+      </p>
+    </div>
+  );
+}

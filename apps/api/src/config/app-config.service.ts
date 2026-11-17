@@ -75,6 +75,26 @@ export class AppConfigService {
     return this.config.get<string>("SESSION_COOKIE_DOMAIN");
   }
 
+  get betterAuthUrl(): string {
+    return this.config.get<string>("BETTER_AUTH_URL") ?? this.apiUrl;
+  }
+
+  get googleClientId(): string | undefined {
+    return this.config.get<string>("GOOGLE_CLIENT_ID");
+  }
+
+  get googleClientSecret(): string | undefined {
+    return this.config.get<string>("GOOGLE_CLIENT_SECRET");
+  }
+
+  get githubClientId(): string | undefined {
+    return this.config.get<string>("GITHUB_CLIENT_ID");
+  }
+
+  get githubClientSecret(): string | undefined {
+    return this.config.get<string>("GITHUB_CLIENT_SECRET");
+  }
+
   get trustProxy(): boolean {
     return this.required("TRUST_PROXY");
   }
@@ -85,6 +105,30 @@ export class AppConfigService {
 
   get sentryTracesSampleRate(): number {
     return this.required("SENTRY_TRACES_SAMPLE_RATE");
+  }
+
+  get smtpHost(): string | undefined {
+    return this.config.get<string>("SMTP_HOST");
+  }
+
+  get smtpPort(): number {
+    return this.required("SMTP_PORT");
+  }
+
+  get smtpUser(): string | undefined {
+    return this.config.get<string>("SMTP_USER");
+  }
+
+  get smtpPassword(): string | undefined {
+    return this.config.get<string>("SMTP_PASSWORD");
+  }
+
+  get resendApiKey(): string | undefined {
+    return this.config.get<string>("RESEND_API_KEY");
+  }
+
+  get emailFrom(): string {
+    return this.required("EMAIL_FROM");
   }
 
   get signedUrlTtlSeconds(): number {

@@ -27,6 +27,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
     id,
     email: `user-${id.slice(0, 8)}@roamlog.local`,
     emailVerified: true,
+    twoFactorEnabled: false,
     name: "Factory User",
     image: null,
     platformRole: "user",
