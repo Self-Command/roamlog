@@ -16,7 +16,7 @@ function NextAppLink({ href, ...props }: ShellLinkProps) {
 function LoadingShell() {
   return (
     <div className="flex min-h-dvh bg-canvas">
-      <aside className="hidden w-60 shrink-0 border-r border-hairline bg-surface-deep p-4 lg:block">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-hairline bg-surface-deep p-4 lg:block">
         <Skeleton className="h-8 w-28" />
         <Skeleton className="mt-8 h-12 w-full" />
         <div className="mt-8 space-y-2">

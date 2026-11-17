@@ -21,3 +21,21 @@ test("dashboard renders real travel stats and next journey", async ({ page }) =>
 
   await screenshot(page, "web-1440-dashboard.png");
 });
+
+test("desktop sidebar stays pinned while the page scrolls", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(WORKSPACE_PATH);
+
+  const sidebar = page.locator("aside").first();
+  await expect(sidebar).toBeVisible();
+  const before = await sidebar.boundingBox();
+  expect(before).not.toBeNull();
+
+  await page.evaluate(() => window.scrollTo({ top: 900, behavior: "instant" }));
+  await page.waitForTimeout(100);
+
+  const after = await sidebar.boundingBox();
+  expect(after).not.toBeNull();
+  expect(after?.y).toBeCloseTo(before?.y ?? 0, 0);
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+});
