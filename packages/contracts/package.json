@@ -1,0 +1,29 @@
+{
+  "name": "@roamlog/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./permissions": "./src/permissions.ts",
+    "./events": "./src/events/realtime.ts",
+    "./openapi.json": "./openapi.json"
+  },
+  "scripts": {
+    "contracts:generate": "tsx scripts/generate-openapi.ts",
+    "contracts:check": "tsx scripts/check-openapi.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "9.1.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "5.1.0"
+  }
+}

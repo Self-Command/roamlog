@@ -1,0 +1,26 @@
+{
+  "name": "@roamlog/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./generated/*": "./src/generated/*"
+  },
+  "scripts": {
+    "api-client:generate": "orval --config orval.config.ts",
+    "api-client:check": "tsx scripts/check-generated.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.107.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "orval": "8.48.0",
+    "react": "19.3.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}
