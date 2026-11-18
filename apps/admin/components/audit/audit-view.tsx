@@ -31,6 +31,11 @@ const actorTypeLabels: Record<AuditLog["actorType"], string> = {
   system: "System",
 };
 
+interface AuditActorOption {
+  value: string;
+  label: string;
+}
+
 function actorName(
   actorId: string | null,
   actorType: AuditLog["actorType"],
@@ -39,10 +44,10 @@ function actorName(
   if (actorType === "system") {
     return "System worker";
   }
-  if (mode === "api") {
-    return actorId ? `actor ${actorId.slice(-8)}` : "未知操作者";
+  if (mode === "fixture") {
+    return MOCK_ADMIN_USERS.find((user) => user.id === actorId)?.name ?? "未知管理员";
   }
-  return MOCK_ADMIN_USERS.find((user) => user.id === actorId)?.name ?? "未知管理员";
+  return actorId ? `actor ${actorId.slice(-8)}` : "未知操作者";
 }
 
 function escapeCsvValue(value: string): string {
@@ -95,6 +100,43 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
     () => [...new Set(sourceEntries.map((entry) => entry.targetType))].sort(),
     [sourceEntries],
   );
+  const actorOptions = useMemo<readonly AuditActorOption[]>(() => {
+    if (mode === "fixture") {
+      return MOCK_ADMIN_USERS.map((user) => ({ value: user.id, label: user.name }));
+    }
+
+    // API mode: the audit log carries real actor ids but no display names, so the
+    // filter offers exactly the actors present on the loaded page. Labels come
+    // from actorName(), matching the `actor <id8>` text used by the timeline.
+    const labelsByActorId = new Map<string, string>();
+    for (const entry of sourceEntries) {
+      if (entry.actorType === "system" || !entry.actorId) {
+        continue;
+      }
+      if (!labelsByActorId.has(entry.actorId)) {
+        labelsByActorId.set(entry.actorId, actorName(entry.actorId, entry.actorType, mode));
+      }
+    }
+
+    const options: AuditActorOption[] = [...labelsByActorId].map(([value, label]) => ({
+      value,
+      label,
+    }));
+    if (
+      actorFilter !== "all" &&
+      actorFilter !== "system" &&
+      !options.some((option) => option.value === actorFilter)
+    ) {
+      // Keep an active filter selectable after the loaded page no longer contains
+      // that actor, so the control never falls back to a blank selection.
+      options.push({ value: actorFilter, label: actorName(actorFilter, "admin", mode) });
+    }
+
+    return options.sort(
+      (left, right) =>
+        left.label.localeCompare(right.label, "zh-CN") || left.value.localeCompare(right.value),
+    );
+  }, [actorFilter, mode, sourceEntries]);
   const filteredEntries = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
     const normalizedIp = ipQuery.trim().toLocaleLowerCase("zh-CN");
@@ -261,9 +303,9 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
           >
             <option value="all">全部操作者</option>
             <option value="system">System worker</option>
-            {MOCK_ADMIN_USERS.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name}
+            {actorOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </Select>
