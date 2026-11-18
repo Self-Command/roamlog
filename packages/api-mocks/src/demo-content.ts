@@ -567,19 +567,22 @@ const stopSeeds: Array<{
   countryCode: string;
   lat: number;
   lng: number;
+  provider: "photon" | "local";
+  providerPlaceId: string | null;
+  timeZone: string;
   startDate: string;
   endDate: string;
 }> = [
-  { tripId: SEOUL_TRIP_ID, city: "首尔", country: "韩国", countryCode: "KR", lat: 37.5665, lng: 126.978, startDate: "2026-11-16", endDate: "2026-11-18" },
-  { tripId: SEOUL_TRIP_ID, city: "釜山", country: "韩国", countryCode: "KR", lat: 35.1796, lng: 129.0756, startDate: "2026-11-18", endDate: "2026-11-21" },
-  { tripId: KYOTO_TRIP_ID, city: "京都", country: "日本", countryCode: "JP", lat: 35.0116, lng: 135.7681, startDate: "2026-11-12", endDate: "2026-11-18" },
-  { tripId: KYOTO_TRIP_ID, city: "奈良", country: "日本", countryCode: "JP", lat: 34.6851, lng: 135.8048, startDate: "2026-11-15", endDate: "2026-11-15" },
-  { tripId: ICELAND_TRIP_ID, city: "雷克雅未克", country: "冰岛", countryCode: "IS", lat: 64.1466, lng: -21.9426, startDate: "2026-08-02", endDate: "2026-08-04" },
-  { tripId: ICELAND_TRIP_ID, city: "维克", country: "冰岛", countryCode: "IS", lat: 63.4187, lng: -19.006, startDate: "2026-08-04", endDate: "2026-08-06" },
-  { tripId: LISBON_TRIP_ID, city: "里斯本", country: "葡萄牙", countryCode: "PT", lat: 38.7223, lng: -9.1393, startDate: "2026-05-10", endDate: "2026-05-14" },
-  { tripId: LISBON_TRIP_ID, city: "辛特拉", country: "葡萄牙", countryCode: "PT", lat: 38.8029, lng: -9.3817, startDate: "2026-05-14", endDate: "2026-05-16" },
-  { tripId: AMALFI_TRIP_ID, city: "索伦托", country: "意大利", countryCode: "IT", lat: 40.6263, lng: 14.3758, startDate: "2027-09-10", endDate: "2027-09-18" },
-  { tripId: PATAGONIA_TRIP_ID, city: "百内", country: "智利", countryCode: "CL", lat: -50.9423, lng: -73.4068, startDate: "2027-02-10", endDate: "2027-02-24" },
+  { tripId: SEOUL_TRIP_ID, city: "首尔", country: "韩国", countryCode: "KR", lat: 37.5665, lng: 126.978, provider: "photon", providerPlaceId: "photon:node/3100000001", timeZone: "Asia/Seoul", startDate: "2026-11-16", endDate: "2026-11-18" },
+  { tripId: SEOUL_TRIP_ID, city: "釜山", country: "韩国", countryCode: "KR", lat: 35.1796, lng: 129.0756, provider: "photon", providerPlaceId: "photon:node/3100000002", timeZone: "Asia/Seoul", startDate: "2026-11-18", endDate: "2026-11-21" },
+  { tripId: KYOTO_TRIP_ID, city: "京都", country: "日本", countryCode: "JP", lat: 35.0116, lng: 135.7681, provider: "photon", providerPlaceId: "photon:node/3920000001", timeZone: "Asia/Tokyo", startDate: "2026-11-12", endDate: "2026-11-18" },
+  { tripId: KYOTO_TRIP_ID, city: "奈良", country: "日本", countryCode: "JP", lat: 34.6851, lng: 135.8048, provider: "local", providerPlaceId: null, timeZone: "Asia/Tokyo", startDate: "2026-11-15", endDate: "2026-11-15" },
+  { tripId: ICELAND_TRIP_ID, city: "雷克雅未克", country: "冰岛", countryCode: "IS", lat: 64.1466, lng: -21.9426, provider: "photon", providerPlaceId: "photon:node/3520000001", timeZone: "Atlantic/Reykjavik", startDate: "2026-08-02", endDate: "2026-08-04" },
+  { tripId: ICELAND_TRIP_ID, city: "维克", country: "冰岛", countryCode: "IS", lat: 63.4187, lng: -19.006, provider: "photon", providerPlaceId: "photon:node/3520000002", timeZone: "Atlantic/Reykjavik", startDate: "2026-08-04", endDate: "2026-08-06" },
+  { tripId: LISBON_TRIP_ID, city: "里斯本", country: "葡萄牙", countryCode: "PT", lat: 38.7223, lng: -9.1393, provider: "photon", providerPlaceId: "photon:node/3510000001", timeZone: "Europe/Lisbon", startDate: "2026-05-10", endDate: "2026-05-14" },
+  { tripId: LISBON_TRIP_ID, city: "辛特拉", country: "葡萄牙", countryCode: "PT", lat: 38.8029, lng: -9.3817, provider: "photon", providerPlaceId: "photon:node/3510000002", timeZone: "Europe/Lisbon", startDate: "2026-05-14", endDate: "2026-05-16" },
+  { tripId: AMALFI_TRIP_ID, city: "索伦托", country: "意大利", countryCode: "IT", lat: 40.6263, lng: 14.3758, provider: "photon", providerPlaceId: "photon:node/3800000001", timeZone: "Europe/Rome", startDate: "2027-09-10", endDate: "2027-09-18" },
+  { tripId: PATAGONIA_TRIP_ID, city: "百内", country: "智利", countryCode: "CL", lat: -50.9423, lng: -73.4068, provider: "local", providerPlaceId: null, timeZone: "America/Punta_Arenas", startDate: "2027-02-10", endDate: "2027-02-24" },
 ];
 
 export const demoStops: Stop[] = stopSeeds.map((stop, index) =>

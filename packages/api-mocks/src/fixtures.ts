@@ -3,6 +3,7 @@ import {
   MeResponseSchema,
   MyWorkspacesResponseSchema,
   TripSchema,
+  tripDurationDays,
   type ItineraryListResponse,
   type MeResponse,
   type MyWorkspacesResponse,
@@ -98,7 +99,7 @@ export const demoWorkspaces: MyWorkspacesResponse = MyWorkspacesResponseSchema.p
   },
 ]);
 
-export const demoTrips: Trip[] = TripSchema.array().parse([
+const tripSeeds = [
   {
     ...tripDefaults,
     id: SEOUL_TRIP_ID,
@@ -270,7 +271,14 @@ export const demoTrips: Trip[] = TripSchema.array().parse([
     version: 6,
     updatedAt: "2024-10-20T10:00:00.000Z",
   },
-]);
+];
+
+export const demoTrips: Trip[] = TripSchema.array().parse(
+  tripSeeds.map((trip) => ({
+    ...trip,
+    durationDays: tripDurationDays(trip.startDate, trip.endDate),
+  })),
+);
 
 export const demoItineraries: Record<string, ItineraryListResponse> = {
   [SEOUL_TRIP_ID]: ItineraryListResponseSchema.parse([

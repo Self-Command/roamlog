@@ -24,11 +24,16 @@ ARG API_URL=http://api:4000
 ARG NEXT_PUBLIC_DATA_MODE=api
 ARG NEXT_PUBLIC_MAP_STYLE_URL
 ARG NEXT_PUBLIC_GEOCODER_URL
+# Deployment identity inlined into the bundle at build time. Defaults to
+# production; staging builds must pass --build-arg NEXT_PUBLIC_APP_ENV=staging,
+# otherwise the inherited NODE_ENV=production fallback mislabels the environment.
+ARG NEXT_PUBLIC_APP_ENV=production
 
 ENV API_URL=${API_URL} \
     NEXT_PUBLIC_DATA_MODE=${NEXT_PUBLIC_DATA_MODE} \
     NEXT_PUBLIC_MAP_STYLE_URL=${NEXT_PUBLIC_MAP_STYLE_URL} \
     NEXT_PUBLIC_GEOCODER_URL=${NEXT_PUBLIC_GEOCODER_URL} \
+    NEXT_PUBLIC_APP_ENV=${NEXT_PUBLIC_APP_ENV} \
     NEXT_TELEMETRY_DISABLED=1
 
 COPY . .

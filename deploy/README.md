@@ -1,13 +1,32 @@
 # Roamlog production server deployment
 
 This is the deployment runbook for the single-host production origin
-`https://we.spacedo.org`. The Compose files retain `staging` in their names for
-compatibility; the two-file server stack is the deployed application:
+`https://we.spacedo.org`. The production stack is one standalone Compose file:
 
 ```text
-docker/compose.staging.yml
-docker/compose.server.yml
+docker/compose.production.yml
 ```
+
+The older two-file stack is **legacy staging** and is kept only so the existing
+environment keeps working:
+
+```text
+docker/compose.staging.yml    # legacy staging base (builds images, runs Mailpit)
+docker/compose.server.yml     # legacy staging server override (GHCR images, bind mounts)
+```
+
+Rules of thumb:
+
+- Production uses `docker/compose.production.yml` with
+  `/opt/roamlog/config/.env.production`. Its project name is `roamlog`.
+- Do not layer `compose.production.yml` on top of the legacy pair. The legacy
+  pair keeps `name: roamlog-staging`, starts a Mailpit container, and is not a
+  production deployment.
+- `compose.staging.yml` and `compose.server.yml` are intentionally not deleted.
+  Treat every `staging` path, port, and env example in the legacy sections below
+  as staging-only.
+- Production mail is a real provider (Resend or SMTP), never Mailpit. See
+  [email-production.md](../docs/operations/email-production.md).
 
 Caddy is not used on this host. Host Nginx terminates TLS and forwards only the
 required loopback routes to Docker Compose.
@@ -23,7 +42,7 @@ required loopback routes to Docker Compose.
 | Realtime      | `wss://we.spacedo.org/v1/ws`            | `127.0.0.1:14000`         |
 | MinIO S3      | private, container network only         | `127.0.0.1:19000`         |
 | MinIO console | SSH tunnel only                         | `127.0.0.1:19001`         |
-| Mailpit       | SSH tunnel only                         | `127.0.0.1:18025`         |
+| Mailpit       | legacy staging only, never production   | `127.0.0.1:18025`         |
 
 Only TCP 80 and 443 are public. PostgreSQL and Redis have no host ports.
 The web, admin, and API loopback ports must never be exposed directly to the
@@ -51,15 +70,16 @@ Internet -> Cloudflare (if enabled) -> host Nginx :443 -> loopback app ports
   `trust proxy` setting (`TRUST_PROXY=true` maps to one proxy), so do not add a
   second app proxy, a service mesh, or a direct loopback bypass. Only Nginx may
   send `X-Forwarded-*` headers to the API.
-- Nginx blocks `GET /v1/metrics` with `404`. Postgres, Redis, MinIO, and Mailpit
-  remain private.
+- Nginx blocks `GET /v1/metrics` with `404`. Postgres, Redis, and MinIO remain
+  private in production. Mailpit exists only in the legacy staging stack and is
+  never exposed by the production runbook.
 
 ## Host layout
 
 ```text
 /opt/roamlog/
   bin/backup-roamlog.sh
-  config/.env.staging
+  config/.env.production
   config/image-digests.txt
   data/postgres
   data/redis
@@ -75,8 +95,25 @@ into Git or a ticket:
 
 ```bash
 install -d -m 700 /opt/roamlog/config
-install -m 600 docker/staging.env.example /opt/roamlog/config/.env.staging
+install -m 600 docker/production.env.example /opt/roamlog/config/.env.production
 ```
+
+The API validates this file at boot. `APP_ENV=production`, a real
+`EMAIL_PROVIDER`, and a non-`.local` `EMAIL_FROM` are mandatory; see
+[email-production.md](../docs/operations/email-production.md) for the mail half
+of the checklist.
+
+Preflight the file before any deploy command. The check is read-only, calls the
+same `validateEnvironment()` the API runs, and never prints a value:
+
+```bash
+cd /opt/roamlog/repo
+pnpm check:env -- --env production --env-file /opt/roamlog/config/.env.production
+```
+
+Exit `0` means the file is complete and still contains no `CHANGE_ME`
+placeholder. The unmodified template is expected to exit `1`; that is how the
+preflight proves the template is not deployable as-is.
 
 Use same-origin public values. The exact auth callback, CORS, and cookie values
 must be reviewed by the API owner before enabling traffic; do not infer them
@@ -97,20 +134,30 @@ release image.
 
 ## Compose command
 
-Always apply both files and the same env path:
+Always use the production file and the production env path:
 
 ```bash
 cd /opt/roamlog/repo
+docker compose \
+  --env-file /opt/roamlog/config/.env.production \
+  -f docker/compose.production.yml \
+  config --quiet
+```
+
+`compose.production.yml` is standalone: it already contains the GHCR images, the
+`/opt/roamlog/data/*` bind mounts, and the loopback-only ports. There is no
+override file to apply and no `--profile` to select.
+
+Legacy staging keeps the two-file form and the `.env.staging` path; only use it
+for the staging environment:
+
+```bash
 docker compose \
   --env-file /opt/roamlog/config/.env.staging \
   -f docker/compose.staging.yml \
   -f docker/compose.server.yml \
   --profile app config --quiet
 ```
-
-The server override replaces named data volumes with the bind mounts under
-`/opt/roamlog/data`, so a compose command without
-`docker/compose.server.yml` is not the production deployment.
 
 ## First-time Nginx and TLS
 
@@ -149,17 +196,20 @@ cd /opt/roamlog/repo
 export ROAMLOG_IMAGE_TAG=v0.1.0-rc.3
 
 docker compose \
-  --env-file /opt/roamlog/config/.env.staging \
-  -f docker/compose.staging.yml \
-  -f docker/compose.server.yml \
-  --profile app pull migrate api worker web admin
+  --env-file /opt/roamlog/config/.env.production \
+  -f docker/compose.production.yml \
+  pull migrate api worker web admin
 
 docker compose \
-  --env-file /opt/roamlog/config/.env.staging \
-  -f docker/compose.staging.yml \
-  -f docker/compose.server.yml \
-  --profile app up -d --no-build
+  --env-file /opt/roamlog/config/.env.production \
+  -f docker/compose.production.yml \
+  up -d --no-build
 ```
+
+The tag is also read from `ROAMLOG_IMAGE_TAG` in the env file; the shell export
+above simply wins for the current session. Every image reference in
+`compose.production.yml` uses `${ROAMLOG_IMAGE_TAG:?}`, so a missing tag aborts
+before anything is pulled.
 
 Do not use `--build` for a release deployment. Record the tag and all five
 digests in `config/image-digests.txt`. The migration service must exit `0`
@@ -171,15 +221,14 @@ Release workflow details and failure recovery are in
 
 ## Bootstrap
 
-Bootstrap is intentionally two-stage. Run it only with the same server compose
-files:
+Bootstrap is intentionally two-stage. Run it only with the production compose
+file:
 
 ```bash
 docker compose \
-  --env-file /opt/roamlog/config/.env.staging \
-  -f docker/compose.staging.yml \
-  -f docker/compose.server.yml \
-  --profile app run --rm --no-deps --entrypoint tsx api \
+  --env-file /opt/roamlog/config/.env.production \
+  -f docker/compose.production.yml \
+  run --rm --no-deps --entrypoint tsx api \
   scripts/bootstrap-admin.ts --force
 ```
 
@@ -188,14 +237,17 @@ messages through the configured mail provider. After email verification,
 password setup, and TOTP enrollment, run the same command again. Promotion to
 `super_admin` is refused until both email and TOTP are verified.
 
-For the isolated staging Mailpit tunnel, use the host alias rather than a
-hard-coded address:
+Production should send through the approved Resend/SMTP provider. Mailpit is
+not part of `compose.production.yml`; the API refuses to start with
+`EMAIL_PROVIDER=mailpit` when `APP_ENV=production`. For the legacy staging
+catcher only, use the host alias rather than a hard-coded address:
 
 ```bash
 ssh -L 18025:127.0.0.1:18025 root@we.spacedo.org
 ```
 
-Production should use the approved Resend/SMTP provider, not Mailpit.
+Mail delivery, DNS checks, and rollback are documented in
+[email-production.md](../docs/operations/email-production.md).
 
 ## Backups
 
@@ -215,10 +267,55 @@ retention period. It does not install cron or systemd units.
 See [production backup and restore](../docs/operations/production-backup-restore.md)
 for verification, isolated restore, and drill requirements.
 
-## Known integration gap
+## Legacy staging stack (not production)
 
-The API currently signs S3 URLs with the internal `http://minio:9000` endpoint.
-Public uploads and private media reads therefore need either a dedicated TLS
-media origin or an API-side public storage endpoint. This deployment keeps the
-S3 service private and records the gap rather than weakening object storage
-authorization.
+`docker/compose.staging.yml` plus `docker/compose.server.yml` still describe the
+pre-production environment (`name: roamlog-staging`). They are kept so the
+running staging host is not broken, and are intentionally not deleted. They are
+frozen in place for production purposes:
+
+- They start a Mailpit container; production mail must be a real provider.
+- They build local images by default; production pulls only GHCR release images
+  pinned by `ROAMLOG_IMAGE_TAG`. Local staging builds must pass
+  `--build-arg NEXT_PUBLIC_APP_ENV=staging` (or the matching `build.args`
+  entry); `docker/web.Dockerfile` and `docker/admin.Dockerfile` default that arg
+  to `production`, because the base image sets `NODE_ENV=production` and the
+  Admin badge would otherwise claim `PRODUCTION` on staging.
+- They read `/opt/roamlog/config/.env.staging`, which does not carry the
+  production mail validation contract (`APP_ENV=production`,
+  `EMAIL_PROVIDER=resend|smtp`).
+
+Migrating a host from the legacy pair to production is a compose-file swap plus
+a new env file: copy `docker/production.env.example` to
+`/opt/roamlog/config/.env.production`, fill it, then run the production command
+from "Compose command" above. Do not run both stacks against the same data
+directories.
+
+## Media delivery: two endpoints, not a gap
+
+The API uses two storage endpoints on purpose, and production sets both:
+
+| Endpoint             | Value in production      | Used for                                                          |
+| -------------------- | ------------------------ | ----------------------------------------------------------------- |
+| `S3_ENDPOINT`        | `http://minio:9000`      | server-side S3 calls: health, head, delete, bucket checks         |
+| `S3_PUBLIC_ENDPOINT` | `https://media.<domain>` | SigV4 presigning only (GET reads, PUT uploads handed to browsers) |
+
+SigV4 signs the `Host` header, so the browser-facing URL must be signed against
+the host the browser will actually call. Writing the internal `minio:9000` host
+into a presigned URL would produce a 403 in every browser, even though the API
+itself can reach MinIO. Nginx therefore terminates TLS for the media host and
+must forward the original `Host` header to MinIO — see
+[deploy/nginx/media.conf.example](nginx/media.conf.example), which keeps
+`proxy_set_header Host $host;`.
+
+With `APP_ENV=production` the API refuses to boot when `S3_PUBLIC_ENDPOINT` is
+missing or is not a public https origin without a path, and
+`compose.production.yml` requires the variable at `docker compose config` time.
+The bucket CORS policy for cross-origin reads/uploads is derived from
+`MEDIA_CORS_ORIGINS` by the `minio-init` one-shot service.
+
+The full contract — validation rules, TTL limits, CORS, rotation between media
+hosts, and signature-mismatch triage — is in
+[docs/operations/media-delivery.md](../docs/operations/media-delivery.md). This
+section replaces the earlier "Known integration gap" note, which described the
+pre-`S3_PUBLIC_ENDPOINT` behaviour and is no longer true.

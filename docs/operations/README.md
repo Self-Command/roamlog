@@ -2,8 +2,11 @@
 
 | Runbook                                                          | Use                                                                       |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [release-checklist.md](./release-checklist.md)                   | rc.4 pre-release gate: env preflight, contracts, build, compose, smoke    |
 | [staging-deployment.md](./staging-deployment.md)                 | Prepare secrets, start compose, TLS/CORS/CSP/HSTS, bootstrap, smoke tests |
 | [release-gate.md](./release-gate.md)                             | CI dry run, GHCR publication, staging image deployment                    |
+| [media-delivery.md](./media-delivery.md)                         | Two storage endpoints, presigning, bucket CORS, media DNS/TLS             |
+| [email-production.md](./email-production.md)                     | Production mail provider, SPF/DKIM/DMARC checks, rollback                 |
 | [migrations.md](./migrations.md)                                 | Migration preflight, apply, failure recovery                              |
 | [backup-restore.md](./backup-restore.md)                         | PostgreSQL, object storage, Redis recovery and drills                     |
 | [production-backup-restore.md](./production-backup-restore.md)   | Production backup script, verification, isolated restore                  |
@@ -15,14 +18,19 @@
 
 ## Current deployment boundary
 
-- The repository contains production-oriented Dockerfiles and a staging
-  compose stack using PostgreSQL, Redis, MinIO, Mailpit, API, worker, web, and
-  admin.
+- The repository contains production-oriented Dockerfiles, the production
+  stack `docker/compose.production.yml`, and a legacy staging compose stack
+  using PostgreSQL, Redis, MinIO, Mailpit, API, worker, web, and admin.
 - GitHub Actions defines a full quality gate and a dry-run-capable release
-  workflow that publishes immutable images to GHCR.
-- The single-host `we.spacedo.org` deployment uses host Nginx and the
-  `docker/compose.server.yml` override. Admin is same-origin under `/admin/*`
-  and `/admin-assets/*`; the API is same-origin under `/v1/*` and `/v1/ws`.
+  workflow that publishes immutable images to GHCR. The quality gate validates
+  both the staging and the production compose files statically.
+- The single-host `we.spacedo.org` deployment is
+  `docker/compose.production.yml` plus
+  `/opt/roamlog/config/.env.production`, behind host Nginx. The
+  `docker/compose.staging.yml` + `docker/compose.server.yml` pair is legacy
+  staging only and is never layered under production. Admin is same-origin
+  under `/admin/*` and `/admin-assets/*`; the API is same-origin under `/v1/*`
+  and `/v1/ws`.
 - The supported ingress path is Cloudflare (when enabled) to one host Nginx
   instance to loopback app ports. Only Nginx is trusted by the application.
 - Automatic staging host rollout, DNS, certificates, external monitoring, k6

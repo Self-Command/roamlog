@@ -459,42 +459,54 @@ pnpm admin:bootstrap -- --force
 完整模板：
 
 - 本地：[`.env.example`](.env.example)
-- staging：[`docker/staging.env.example`](docker/staging.env.example)
+- staging（legacy 双文件栈）：[`docker/staging.env.example`](docker/staging.env.example)
+- production：[`docker/production.env.example`](docker/production.env.example) → `/opt/roamlog/config/.env.production`
 
 关键变量：
 
-| 分组       | 变量                                                                                             | 用途                                  |
-| ---------- | ------------------------------------------------------------------------------------------------ | ------------------------------------- |
-| Runtime    | `NODE_ENV`, `LOG_LEVEL`, `ROAMLOG_ENV_FILE`                                                      | 环境、日志级别、显式 env 文件路径     |
-| URL        | `APP_URL`, `ADMIN_URL`, `API_URL`, `BETTER_AUTH_URL`                                             | 公开 origin 与 Better Auth 基址       |
-| 网络边界   | `CORS_ORIGINS`, `TRUST_PROXY`, `SESSION_COOKIE_DOMAIN`                                           | 精确 CORS、代理信任、父域 cookie      |
-| 前端模式   | `NEXT_PUBLIC_DATA_MODE`, `NEXT_PUBLIC_ADMIN_DATA_MODE`                                           | `mock/fixture` 或 `api`               |
-| 数据库     | `DATABASE_URL`, `POSTGRES_*`                                                                     | PostgreSQL 连接与 Compose 初始化      |
-| Redis      | `REDIS_URL`, `REDIS_PREFIX`, `REDIS_PASSWORD`                                                    | 队列、限流、幂等、presence 与隔离前缀 |
-| 认证       | `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_*`, `GITHUB_CLIENT_*`                                       | session 签名与 OAuth                  |
-| 管理后台   | `ADMIN_2FA_ENFORCED`                                                                             | 平台后台强制 TOTP                     |
-| 对象存储   | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_FORCE_PATH_STYLE` | 私有媒体与导出                        |
-| MinIO 镜像 | `MINIO_IMAGE`, `MINIO_MC_IMAGE`                                                                  | 固定、可验证的镜像来源                |
-| 邮件       | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `RESEND_API_KEY`, `EMAIL_FROM`           | Mailpit 或 Resend                     |
-| 地图       | `NEXT_PUBLIC_MAP_STYLE_URL`, `NEXT_PUBLIC_GEOCODER_URL`                                          | 瓦片样式与城市搜索                    |
-| 导出       | `EXPORT_SIGNED_URL_TTL`                                                                          | 签名下载 URL 有效期，默认 900 秒      |
-| 观测       | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `OTEL_EXPORTER_OTLP_ENDPOINT`                         | 错误与 trace                          |
-| Bootstrap  | `BOOTSTRAP_SUPER_ADMIN_EMAIL`, `BOOTSTRAP_SUPER_ADMIN_NAME`                                      | 首个平台管理员目标                    |
-| Seed       | `DEMO_SEED_ENABLED`, `DEMO_*`, `ROAMLOG_SEED_S3_UPLOAD`                                          | 仅 local/staging 演示数据             |
-| Staging    | `ROAMLOG_IMAGE_TAG`, `STAGING_*_PORT`                                                            | 发布镜像 tag 与 loopback 端口         |
+| 分组       | 变量                                                                                                     | 用途                                  |
+| ---------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Runtime    | `NODE_ENV`, `APP_ENV`, `LOG_LEVEL`, `ROAMLOG_ENV_FILE`                                                   | Node 运行模式、部署形态、日志级别     |
+| URL        | `APP_URL`, `ADMIN_URL`, `API_URL`, `BETTER_AUTH_URL`                                                     | 公开 origin 与 Better Auth 基址       |
+| 网络边界   | `CORS_ORIGINS`, `TRUST_PROXY`, `SESSION_COOKIE_DOMAIN`                                                   | 精确 CORS、代理信任、父域 cookie      |
+| 前端模式   | `NEXT_PUBLIC_DATA_MODE`, `NEXT_PUBLIC_ADMIN_DATA_MODE`, `NEXT_PUBLIC_APP_ENV`                            | `mock/fixture` 或 `api`、环境徽标     |
+| 限流       | `RATE_LIMIT_WINDOW_SECONDS`, `AUTH_RATE_LIMIT_MAX`, `PUBLIC_SHARE_*_RATE_LIMIT_MAX`                      | 登录、分享、预签名请求限流            |
+| 数据库     | `DATABASE_URL`, `POSTGRES_*`                                                                             | PostgreSQL 连接与 Compose 初始化      |
+| Redis      | `REDIS_URL`, `REDIS_PREFIX`, `REDIS_PASSWORD`                                                            | 队列、限流、幂等、presence 与隔离前缀 |
+| 认证       | `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_*`, `GITHUB_CLIENT_*`                                               | session 签名与 OAuth                  |
+| 管理后台   | `ADMIN_2FA_ENFORCED`                                                                                     | 平台后台强制 TOTP                     |
+| 对象存储   | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_FORCE_PATH_STYLE`         | 私有媒体与导出（服务端内部 endpoint） |
+| 媒体投递   | `S3_PUBLIC_ENDPOINT`, `S3_PUBLIC_BASE_URL`, `MEDIA_SIGNED_URL_TTL_SECONDS`, `MEDIA_CORS_ORIGINS`         | 浏览器可见的签名 origin、TTL、桶 CORS |
+| MinIO 镜像 | `MINIO_IMAGE`, `MINIO_MC_IMAGE`                                                                          | 固定、可验证的镜像来源                |
+| 邮件       | `EMAIL_PROVIDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `RESEND_API_KEY`, `EMAIL_FROM` | Mailpit / SMTP relay / Resend         |
+| 地图       | `NEXT_PUBLIC_MAP_STYLE_URL`, `NEXT_PUBLIC_GEOCODER_URL`                                                  | 瓦片样式与城市搜索                    |
+| 导出       | `EXPORT_SIGNED_URL_TTL`                                                                                  | 签名下载 URL 有效期，默认 900 秒      |
+| 观测       | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `OTEL_EXPORTER_OTLP_ENDPOINT`                                 | 错误与 trace                          |
+| Bootstrap  | `BOOTSTRAP_SUPER_ADMIN_EMAIL`, `BOOTSTRAP_SUPER_ADMIN_NAME`                                              | 首个平台管理员目标                    |
+| Seed       | `DEMO_SEED_ENABLED`, `DEMO_*`, `ROAMLOG_SEED_S3_UPLOAD`                                                  | 仅 local/staging 演示数据             |
+| 发布       | `ROAMLOG_IMAGE_TAG`, `PRODUCTION_*_PORT`, `STAGING_*_PORT`                                               | 镜像 tag 与 loopback 端口             |
+
+`APP_ENV` 与 `NODE_ENV` 的区别：staging 也以 `NODE_ENV=production` 运行以复用 Node 运行时行为，因此**生产专属校验（媒体公开 origin、真实邮件通道）只由 `APP_ENV=production` 触发**。省略 `APP_ENV` 会让 API 静默回落为 `development` 并跳过这些校验，`pnpm check:env -- --env production` 会因此直接报错。
 
 加载规则：
 
 - API、Worker、Prisma seed 会读取根 `.env.local`；显式路径可设 `ROAMLOG_ENV_FILE`。
-- Next.js 的 `NEXT_PUBLIC_*` 在 development/build 时注入，必须在应用环境或 shell 中可见；staging Docker 构建使用 build args。
+- Next.js 的 `NEXT_PUBLIC_*` 在 development/build 时注入，必须在应用环境或 shell 中可见；staging Docker 构建使用 build args。`NEXT_PUBLIC_APP_ENV` 是**构建期**变量（web/admin Dockerfile 有同名 build arg，默认 `production`），不是运行时 env，容器里再设置不会改变徽标。
+- production 只使用 `docker/compose.production.yml` + `/opt/roamlog/config/.env.production`；staging 的双文件（`docker/compose.staging.yml` + `docker/compose.server.yml`）是 legacy，不得叠加到 production 之上。
 - production/staging 不应依赖任意向上查找的本地 env 文件；容器环境变量由编排显式提供。
 - 不要提交 `.env`、`.env.local`、`docker/.env.staging`、密钥、token、数据库 dump 或真实用户数据。
 
 启动前检查：
 
 ```bash
+# 本地（允许占位符，仅告警）
 pnpm check:env
+
+# production：严格模式，进程环境变量不参与，只看被审的文件
+pnpm check:env -- --env production --env-file /opt/roamlog/config/.env.production
 ```
+
+严格模式复用 `apps/api/src/config/environment.ts` 的 `validateEnvironment()`，因此预检与 API 启动校验不会漂移。错误只报变量名与规则，不回显值；模板本身（含 `CHANGE_ME`）预期以退出码 `1` 失败，这是它作为“未填写”证明的方式。
 
 ## 常用命令
 
@@ -617,7 +629,7 @@ pnpm check:env
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 PR、`main` push 和 release gate 调用时执行：
 
 1. frozen install。
-2. staging/Docker/workflow 静态检查与 Compose config。
+2. staging/Docker/workflow 静态检查、staging 与 production 两份 Compose 的 `config --quiet` 校验。
 3. lint、typecheck。
 4. Prisma migration + seed。
 5. 测试、契约/生成 client 新鲜度。
@@ -650,7 +662,9 @@ git push origin v0.x.y
 
 发布 workflow **不负责部署**。把镜像部署到 staging 时需要 pull、retag 到 Compose 期望的名称，再 `up --no-build`。完整步骤见 [release gate runbook](docs/operations/release-gate.md)。
 
-### Docker staging
+### Docker staging（legacy）
+
+> staging 双文件栈仅用于既有 staging 环境，**不是 production**。production 使用 `docker/compose.production.yml`，见下一节。
 
 ```bash
 cp docker/staging.env.example docker/.env.staging
@@ -667,9 +681,34 @@ docker compose --env-file docker/.env.staging -f docker/compose.staging.yml \
 - staging 默认 `NODE_ENV=production`，不自动 seed。
 - MinIO 必须使用批准的 Quay/私有镜像或 digest；clean host 无法匿名拉取。
 
+### Docker production
+
+production 只有一个 compose 文件，不叠加 legacy 双文件，也不使用 `--profile`：
+
+```bash
+cd /opt/roamlog/repo
+docker compose \
+  --env-file /opt/roamlog/config/.env.production \
+  -f docker/compose.production.yml \
+  config --quiet     # 静态校验；必填变量缺失会在这一步失败
+
+docker compose \
+  --env-file /opt/roamlog/config/.env.production \
+  -f docker/compose.production.yml \
+  up -d --no-build
+```
+
+- env 文件从 `docker/production.env.example` 复制为 `/opt/roamlog/config/.env.production`（`0600`），不要写进 Git。
+- `APP_ENV=production` 缺失会让 API 跳过媒体与邮件强校验；`pnpm check:env -- --env production` 会拒绝这种文件。
+- 发布镜像由 release gate 构建，`NEXT_PUBLIC_APP_ENV` 默认 `production`；staging 镜像必须显式传 `--build-arg NEXT_PUBLIC_APP_ENV=staging`，否则徽标会显示 `PRODUCTION`。
+- 完整上线步骤、Nginx/TLS、备份与回滚见 [deploy/README.md](deploy/README.md)。
+
 运维入口：
 
 - [Operations index](docs/operations/README.md)
+- [Release checklist (rc.4)](docs/operations/release-checklist.md)
+- [Media delivery](docs/operations/media-delivery.md)
+- [Email delivery](docs/operations/email-production.md)
 - [Staging deployment](docs/operations/staging-deployment.md)
 - [Migrations](docs/operations/migrations.md)
 - [Backup and restore](docs/operations/backup-restore.md)

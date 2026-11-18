@@ -3,6 +3,11 @@ import { CREATED_AT, UPDATED_AT, USER_ID, WORKSPACE_ID } from "./fixture-ids";
 export const tripDefaults = {
   workspaceId: WORKSPACE_ID,
   coverMediaId: null,
+  cover: null,
+  originLat: null,
+  originLng: null,
+  originCountryCode: null,
+  timeZone: null,
   visibility: "workspace" as const,
   favorite: false,
   version: 1,

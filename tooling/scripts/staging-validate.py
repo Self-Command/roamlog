@@ -67,6 +67,7 @@ def require_env_keys(relative_path: str, keys: set[str]) -> None:
 
 compose = load_yaml("docker/compose.yml")
 staging = load_yaml("docker/compose.staging.yml")
+production = load_yaml("docker/compose.production.yml")
 ci = load_yaml(".github/workflows/ci.yml")
 release = load_yaml(".github/workflows/release.yml")
 
@@ -143,7 +144,96 @@ check(
     "Staging worker needs the egress network for external email/object-storage calls",
 )
 
-for relative_path in ("docker/compose.yml", "docker/compose.staging.yml"):
+# Production stack: images come from GHCR, the env file is an absolute host
+# path, and CI validates this file. Cover the same posture as staging so a
+# regression here cannot reach the release gate unnoticed.
+production_services = production.get("services", {})
+required_production = {
+    "postgres",
+    "redis",
+    "minio",
+    "minio-init",
+    "migrate",
+    "api",
+    "worker",
+    "web",
+    "admin",
+}
+for service in required_production:
+    check(
+        service in production_services,
+        f"docker/compose.production.yml is missing {service}",
+    )
+for service in {"postgres", "redis", "minio"}:
+    check(
+        bool(production_services.get(service, {}).get("healthcheck")),
+        f"Production {service} needs a healthcheck",
+    )
+
+production_networks = production.get("networks", {})
+check(
+    bool(production_networks.get("backend", {}).get("internal")),
+    "The production backend network must be internal",
+)
+check("edge" in production_networks, "The production edge network is missing")
+check("egress" in production_networks, "The production worker egress network is missing")
+check(
+    "egress" in production_services.get("worker", {}).get("networks", []),
+    "Production worker needs the egress network",
+)
+
+for service in {"api", "worker", "web", "admin", "migrate"}:
+    definition = production_services.get(service, {})
+    check(definition.get("read_only") is True, f"Production {service} must use a read-only root FS")
+    check("ALL" in definition.get("cap_drop", []), f"Production {service} must drop all capabilities")
+    check(
+        "no-new-privileges:true" in definition.get("security_opt", []),
+        f"Production {service} must set no-new-privileges",
+    )
+    check(
+        definition.get("env_file") == ["/opt/roamlog/config/.env.production"],
+        f"Production {service} must load /opt/roamlog/config/.env.production",
+    )
+for service in {"postgres", "redis"}:
+    check(
+        not production_services.get(service, {}).get("ports"),
+        f"Production {service} must stay private",
+    )
+for service in {"api", "web", "admin", "minio"}:
+    for port in production_services.get(service, {}).get("ports", []):
+        check(
+            str(port).startswith("127.0.0.1:"),
+            f"Production {service} port must bind loopback only",
+        )
+
+production_api = production_services.get("api", {})
+check(
+    production_api.get("depends_on", {}).get("migrate", {}).get("condition")
+    == "service_completed_successfully",
+    "Production API must wait for the migration job",
+)
+check(
+    "${S3_PUBLIC_ENDPOINT:?" in str(production_api.get("environment", {}).get("S3_PUBLIC_ENDPOINT", "")),
+    "Production API must keep the required S3_PUBLIC_ENDPOINT guard",
+)
+
+production_env = parse_env("docker/production.env.example")
+check(production_env.get("APP_ENV") == "production", "Production template APP_ENV must be production")
+interpolated_production_required = set(
+    re.findall(r"\$\{([A-Z0-9_]+):\?", read("docker/compose.production.yml"))
+)
+missing_production_interpolation = sorted(interpolated_production_required - production_env.keys())
+check(
+    not missing_production_interpolation,
+    "docker/production.env.example is missing compose interpolation keys: "
+    + ", ".join(missing_production_interpolation),
+)
+
+for relative_path in (
+    "docker/compose.yml",
+    "docker/compose.staging.yml",
+    "docker/compose.production.yml",
+):
     text = read(relative_path)
     check("privileged: true" not in text, f"{relative_path} must not use privileged containers")
     check("network_mode: host" not in text, f"{relative_path} must not use host networking")
@@ -297,6 +387,14 @@ for command in (
 ):
     check(command in ci_text, f"CI is missing required command: {command}")
 check(bool(ci.get("jobs", {}).get("quality")), "CI quality job is missing")
+check(
+    "Production compose config validation" in ci_text,
+    "CI is missing the production compose config validation step",
+)
+check(
+    "sudo install -m 600" in ci_text and "/opt/roamlog/config/.env.production" in ci_text,
+    "CI must stage docker/production.env.example at the compose env_file path before validation",
+)
 
 release_text = read(".github/workflows/release.yml")
 check("workflow_dispatch" in release_text, "Release workflow needs a manual dry-run trigger")
@@ -305,6 +403,10 @@ check("uses: ./.github/workflows/ci.yml" in release_text, "Release must reuse th
 check("docker/build-push-action" in release_text, "Release does not build production images")
 check("load:" in release_text and "push:" in release_text, "Release must separate dry-run and publish")
 check(bool(release.get("jobs", {}).get("images")), "Release image job is missing")
+check(
+    "NEXT_PUBLIC_APP_ENV=" in release_text,
+    "Release images must pass NEXT_PUBLIC_APP_ENV so staging builds do not show the PRODUCTION badge",
+)
 
 # Shell scripts must parse before they are copied into a container.
 bash = shutil.which("bash")

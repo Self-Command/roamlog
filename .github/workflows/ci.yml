@@ -103,6 +103,40 @@ jobs:
           -f docker/compose.staging.yml
           config --quiet
 
+      - name: Stage production env placeholder for compose validation
+        # `docker compose config` resolves the `env_file` entries declared in
+        # docker/compose.production.yml. The x-app-service anchor points at the
+        # real host path (/opt/roamlog/config/.env.production), which does not
+        # exist on a GitHub runner, so materialise that same absolute path from
+        # the checked-in template. This is a CI-only placeholder containing no
+        # real secret; production uses the operator-managed file at the same
+        # path (see docker/production.env.example header).
+        #
+        # Ownership is the runner user while the mode stays 0600: the file is a
+        # secret-free template, and `docker compose config` runs unprivileged,
+        # so it must be able to read the file it validates. Production keeps the
+        # same path root-owned with mode 0600 and a 0700 parent directory.
+        #
+        # Interpolation still reads `--env-file docker/production.env.example`
+        # plus the CI-only ROAMLOG_IMAGE_TAG below, so this placeholder cannot
+        # mask a missing `${VAR:?}` required variable. Never weaken those guards.
+        run: |
+          sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /opt/roamlog/config
+          sudo install -m 600 -o "$(id -u)" -g "$(id -g)" docker/production.env.example /opt/roamlog/config/.env.production
+
+      - name: Production compose config validation
+        env:
+          # compose.production.yml interpolates ${ROAMLOG_IMAGE_TAG:?}; the
+          # checked-in template carries a CHANGE_ME placeholder, so pin a
+          # CI-only tag for this static check. The `:?` guards stay as strict as
+          # they are — never weaken them to make this step pass.
+          ROAMLOG_IMAGE_TAG: ci-validate
+        run: >-
+          docker compose
+          --env-file docker/production.env.example
+          -f docker/compose.production.yml
+          config --quiet
+
       - name: Lint
         run: pnpm lint
 

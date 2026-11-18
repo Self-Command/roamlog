@@ -24,11 +24,17 @@ ARG API_URL=http://api:4000
 ARG NEXT_PUBLIC_ADMIN_DATA_MODE=api
 ARG NEXT_PUBLIC_ADMIN_ASSET_PREFIX=
 ARG NEXT_PUBLIC_ADMIN_LOGIN_PATH=
+# Deployment identity inlined into the bundle at build time. Defaults to
+# production; staging builds must pass --build-arg NEXT_PUBLIC_APP_ENV=staging,
+# otherwise the inherited NODE_ENV=production fallback makes the Admin topbar
+# badge claim PRODUCTION on staging.
+ARG NEXT_PUBLIC_APP_ENV=production
 
 ENV API_URL=${API_URL} \
     NEXT_PUBLIC_ADMIN_DATA_MODE=${NEXT_PUBLIC_ADMIN_DATA_MODE} \
     NEXT_PUBLIC_ADMIN_ASSET_PREFIX=${NEXT_PUBLIC_ADMIN_ASSET_PREFIX} \
     NEXT_PUBLIC_ADMIN_LOGIN_PATH=${NEXT_PUBLIC_ADMIN_LOGIN_PATH} \
+    NEXT_PUBLIC_APP_ENV=${NEXT_PUBLIC_APP_ENV} \
     NEXT_TELEMETRY_DISABLED=1
 
 COPY . .
