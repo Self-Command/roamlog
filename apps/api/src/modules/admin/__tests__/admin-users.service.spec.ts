@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { AdminUsersService } from "../admin-users.service.js";
@@ -8,8 +8,17 @@ import {
   USER_OWNER_ID,
   USER_VIEWER_ID,
   makeActor,
-  makeUserRecord,
+  makeUserRecord as baseMakeUserRecord,
 } from "../../../../test/identity-fixtures.js";
+
+function makeUserRecord(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    ...baseMakeUserRecord(id, overrides),
+    ...overrides,
+    twoFactorEnabled:
+      typeof overrides.twoFactorEnabled === "boolean" ? overrides.twoFactorEnabled : false,
+  };
+}
 
 describe("AdminUsersService", () => {
   function setup() {
@@ -24,12 +33,17 @@ describe("AdminUsersService", () => {
         workspaceMember: {
           count: vi.fn(),
           updateMany: vi.fn(),
+          findMany: vi.fn(),
         },
         trip: { count: vi.fn() },
         journalEntry: { count: vi.fn() },
+        comment: { count: vi.fn() },
+        media: { count: vi.fn() },
         session: {
           count: vi.fn(),
           deleteMany: vi.fn(),
+          groupBy: vi.fn(),
+          findMany: vi.fn(),
         },
         twoFactor: { deleteMany: vi.fn(), count: vi.fn() },
         invitation: { updateMany: vi.fn() },
@@ -37,6 +51,11 @@ describe("AdminUsersService", () => {
       },
     };
     const audit = { record: vi.fn().mockResolvedValue({ id: "audit" }) };
+    prisma.client.workspaceMember.findMany.mockResolvedValue([]);
+    prisma.client.session.findMany.mockResolvedValue([]);
+    prisma.client.session.groupBy.mockResolvedValue([]);
+    prisma.client.comment.count.mockResolvedValue(0);
+    prisma.client.media.count.mockResolvedValue(0);
     const service = new AdminUsersService(prisma as never, audit as never);
     return { prisma, audit, service };
   }
@@ -212,5 +231,165 @@ describe("AdminUsersService", () => {
 
     await expect(service.get(makeActor(USER_ADMIN_ID, { platformRole: "support" }), USER_OWNER_ID))
       .rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("applies server-side search, role/status filters and active-session counts", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findMany.mockResolvedValue([makeUserRecord(USER_VIEWER_ID)]);
+    prisma.client.session.groupBy.mockResolvedValue([
+      { userId: USER_VIEWER_ID, _count: { _all: 2 } },
+    ]);
+
+    const page = await service.list(makeActor(USER_ADMIN_ID, { platformRole: "support" }), {
+      q: "atlas",
+      status: "active",
+      platformRole: "user",
+      limit: 5,
+    });
+
+    expect(prisma.client.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 6,
+        where: expect.objectContaining({
+          status: "active",
+          platformRole: "user",
+          OR: expect.arrayContaining([
+            { name: { contains: "atlas", mode: "insensitive" } },
+            { email: { contains: "atlas", mode: "insensitive" } },
+            {
+              memberships: {
+                some: { workspace: { name: { contains: "atlas", mode: "insensitive" } } },
+              },
+            },
+          ]),
+        }),
+      }),
+    );
+    expect(page.items[0]?.activeSessionCount).toBe(2);
+  });
+
+  it("returns cursor pagination boundaries and forwards the decoded cursor", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findMany
+      .mockResolvedValueOnce([
+        makeUserRecord(USER_ADMIN_ID),
+        makeUserRecord(USER_OWNER_ID),
+        makeUserRecord(USER_VIEWER_ID),
+      ])
+      .mockResolvedValueOnce([makeUserRecord(USER_VIEWER_ID)]);
+
+    const first = await service.list(makeActor(USER_ADMIN_ID, { platformRole: "support" }), {
+      limit: 2,
+    });
+
+    expect(first.items).toHaveLength(2);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toEqual(expect.any(String));
+
+    await service.list(makeActor(USER_ADMIN_ID, { platformRole: "support" }), {
+      limit: 2,
+      cursor: first.nextCursor ?? undefined,
+    });
+
+    expect(prisma.client.user.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        take: 3,
+        cursor: { id: USER_OWNER_ID },
+        skip: 1,
+      }),
+    );
+  });
+
+  it("rejects an invalid pagination limit with a validation error", async () => {
+    const { service } = setup();
+
+    await expect(
+      service.list(makeActor(USER_ADMIN_ID, { platformRole: "support" }), { limit: 0 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("returns real detail counters, memberships, sessions and 2FA state", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findUnique.mockResolvedValue(
+      makeUserRecord(USER_VIEWER_ID, { twoFactorEnabled: true }),
+    );
+    prisma.client.workspaceMember.count.mockResolvedValue(2);
+    prisma.client.trip.count.mockResolvedValue(3);
+    prisma.client.journalEntry.count.mockResolvedValue(4);
+    prisma.client.session.count.mockResolvedValue(5);
+    prisma.client.comment.count.mockResolvedValue(6);
+    prisma.client.media.count.mockResolvedValue(7);
+    prisma.client.workspaceMember.findMany.mockResolvedValue([
+      {
+        role: "owner",
+        status: "active",
+        joinedAt: NOW,
+        workspace: { id: "01942f30-1200-7000-8000-000000000010", name: "Atlas", slug: "atlas" },
+      },
+    ]);
+    prisma.client.session.findMany.mockResolvedValue([
+      {
+        id: "01942f30-1200-7000-8000-000000000901",
+        ipAddress: "10.0.0.1",
+        userAgent: "Chrome",
+        createdAt: NOW,
+        expiresAt: NOW,
+      },
+    ]);
+
+    const detail = await service.get(
+      makeActor(USER_ADMIN_ID, { platformRole: "support" }),
+      USER_VIEWER_ID,
+    );
+
+    expect(detail).toMatchObject({
+      workspaceCount: 2,
+      tripCount: 3,
+      entryCount: 4,
+      activeSessionCount: 5,
+      commentCount: 6,
+      mediaCount: 7,
+      twoFactorEnabled: true,
+    });
+    expect(detail.workspaces?.[0]).toMatchObject({ workspaceName: "Atlas", role: "owner" });
+    expect(detail.sessions?.[0]).toMatchObject({ ipAddress: "10.0.0.1", userAgent: "Chrome" });
+  });
+
+  it("streams a filtered CSV export with a header, BOM and spreadsheet-safe values", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findMany.mockResolvedValue([
+      makeUserRecord(USER_VIEWER_ID, { name: "=cmd", email: "viewer@roamlog.test" }),
+    ]);
+
+    const chunks: string[] = [];
+    for await (const chunk of service.exportCsv(
+      makeActor(USER_ADMIN_ID, { platformRole: "admin" }),
+      { q: "viewer" },
+    )) {
+      chunks.push(chunk);
+    }
+
+    const csv = chunks.join("");
+    expect(csv.startsWith("\uFEFFid,email,emailVerified,name,platformRole,status,")).toBe(true);
+    expect(csv).toContain('"viewer@roamlog.test"');
+    expect(csv).toContain('"\'=cmd"');
+    expect(prisma.client.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ OR: expect.any(Array) }) }),
+    );
+  });
+
+  it("rejects CSV export for support", async () => {
+    const { service } = setup();
+
+    await expect(
+      (async () => {
+        for await (const _chunk of service.exportCsv(
+          makeActor(USER_ADMIN_ID, { platformRole: "support" }),
+          {},
+        )) {
+          // The generator throws before yielding when the role is forbidden.
+        }
+      })(),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

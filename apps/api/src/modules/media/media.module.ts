@@ -10,6 +10,11 @@ import { MediaController } from "./media.controller.js";
 import { MediaRepository } from "./media.repository.js";
 import { MediaService } from "./media.service.js";
 import { MediaTenantGuard } from "./media-tenant.guard.js";
+// `MediaUrlModule` owns signed URLs and cover projection. Re-exporting it keeps
+// `MediaUrlService` available to modules that import `MediaModule`
+// (`share-links`), while `TripsModule` can import the small module directly
+// instead of importing all of `MediaModule`.
+import { MediaUrlModule } from "./media-url.module.js";
 
 @Module({
   imports: [
@@ -19,9 +24,10 @@ import { MediaTenantGuard } from "./media-tenant.guard.js";
     IdempotencyModule,
     JobQueueModule,
     TripsModule,
+    MediaUrlModule,
   ],
   controllers: [MediaController],
   providers: [MediaRepository, MediaService, MediaTenantGuard],
-  exports: [MediaService, MediaTenantGuard],
+  exports: [MediaService, MediaTenantGuard, MediaUrlModule],
 })
 export class MediaModule {}

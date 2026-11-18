@@ -21,9 +21,197 @@ const booleanFromEnvironment = z.preprocess((value) => {
   return value;
 }, z.boolean());
 
+/**
+ * Deployment flavour. Defaults to `development` on purpose: staging also runs
+ * `NODE_ENV=production` for Node runtime reasons and still delivers mail to a
+ * local catcher, so production-only mail rules must key off APP_ENV instead of
+ * NODE_ENV. Production sets APP_ENV=production explicitly.
+ */
+const AppEnvironment = z
+  .enum(["development", "staging", "production", "test"])
+  .default("development");
+
+/** `mailpit` stays available for local/staging; production rejects it. */
+const EmailProvider = z.enum(["resend", "smtp", "mailpit"]).default("smtp");
+
+const LOCAL_MAIL_HOSTS = new Set([
+  "mailpit",
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "::1",
+  "[::1]",
+  "host.docker.internal",
+]);
+
+const PLACEHOLDER_FRAGMENTS = [
+  "change_me",
+  "change-me",
+  "changeme",
+  "placeholder",
+  "replace-with",
+  "xxxx",
+  "your-",
+];
+
+function looksLikePlaceholder(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return PLACEHOLDER_FRAGMENTS.some((fragment) => normalized.includes(fragment));
+}
+
+/** Extract the domain of `Name <local@domain>` or `local@domain`. */
+function emailDomainFrom(value: string): string | undefined {
+  const bracketed = /<([^<>@\s]+@[^<>\s]+)>/u.exec(value);
+  const candidate = (bracketed?.[1] ?? value).trim();
+  const at = candidate.lastIndexOf("@");
+  if (at <= 0 || at === candidate.length - 1) {
+    return undefined;
+  }
+  return candidate
+    .slice(at + 1)
+    .trim()
+    .toLowerCase()
+    .replace(/[>);,]+$/u, "");
+}
+
+function isLocalMailDomain(domain: string): boolean {
+  return domain === "local" || domain === "localhost" || domain.endsWith(".local");
+}
+
+function isUnreachableMailHost(host: string): boolean {
+  return (
+    LOCAL_MAIL_HOSTS.has(host) ||
+    host.includes("mailpit") ||
+    host.endsWith(".local") ||
+    host === "example.com" ||
+    host.endsWith(".example.com")
+  );
+}
+
+/**
+ * Hosts that can only ever be reached from inside the deployment. A presigned
+ * URL is handed to a browser, so signing it against one of these makes media
+ * unreachable from the internet even though the API itself works.
+ */
+const LOCAL_STORAGE_HOSTS = new Set([
+  "minio",
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "::1",
+  "[::1]",
+  "host.docker.internal",
+]);
+
+function isPrivateIpv4(host: string): boolean {
+  const parts = host.split(".");
+  if (parts.length !== 4) {
+    return false;
+  }
+  const octets = parts.map((part) => (/^\d{1,3}$/u.test(part) ? Number(part) : Number.NaN));
+  if (octets.some((octet) => Number.isNaN(octet) || octet < 0 || octet > 255)) {
+    return false;
+  }
+  const [first, second] = octets as [number, number, number, number];
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function isInternalStorageHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase();
+  if (!host) {
+    return true;
+  }
+  // IPv6 literals are always rejected: production media is a named TLS host.
+  if (host.startsWith("[")) {
+    return true;
+  }
+  if (LOCAL_STORAGE_HOSTS.has(host)) {
+    return true;
+  }
+  if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) {
+    return true;
+  }
+  if (isPrivateIpv4(host)) {
+    return true;
+  }
+  // A single-label hostname cannot be resolved by a public browser.
+  return !host.includes(".");
+}
+
+/**
+ * Validates a browser-facing storage URL. Messages name the variable only and
+ * never echo the value (it is not a secret, but validation output ends up in
+ * logs and issue trackers).
+ */
+function addPublicStorageUrlIssues(
+  context: z.RefinementCtx,
+  key: "S3_PUBLIC_ENDPOINT" | "S3_PUBLIC_BASE_URL",
+  value: string,
+): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    context.addIssue({
+      code: "custom",
+      path: [key],
+      message: `${key} must be an absolute https URL`,
+    });
+    return;
+  }
+
+  if (parsed.protocol !== "https:") {
+    context.addIssue({
+      code: "custom",
+      path: [key],
+      message: `${key} must use https in production`,
+    });
+  }
+
+  if (parsed.username || parsed.password) {
+    context.addIssue({
+      code: "custom",
+      path: [key],
+      message: `${key} must not embed credentials`,
+    });
+  }
+
+  if (parsed.pathname !== "/" && parsed.pathname !== "") {
+    context.addIssue({
+      code: "custom",
+      path: [key],
+      message: `${key} must be an origin without a path (presigned keys are appended to it)`,
+    });
+  }
+
+  if (isInternalStorageHost(parsed.hostname)) {
+    context.addIssue({
+      code: "custom",
+      path: [key],
+      message: `${key} must be a public host, not minio/localhost/127.0.0.1/a private IP`,
+    });
+  }
+
+  if (looksLikePlaceholder(value)) {
+    context.addIssue({
+      code: "custom",
+      path: [key],
+      message: `${key} still contains a placeholder; replace it before deploying`,
+    });
+  }
+}
+
 const EnvironmentSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    APP_ENV: AppEnvironment,
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
@@ -40,6 +228,11 @@ const EnvironmentSchema = z
     PUBLIC_SHARE_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(60),
     PUBLIC_SHARE_PASSWORD_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(20),
     MEDIA_PRESIGN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(20),
+    /**
+     * Lifetime of media read/upload URLs. Replaces the previous shared default
+     * (`EXPORT_SIGNED_URL_TTL`); exports keep their own knob.
+     */
+    MEDIA_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(604_800).default(900),
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: optionalUrl,
     ADMIN_2FA_ENFORCED: booleanFromEnvironment.optional(),
@@ -50,6 +243,18 @@ const EnvironmentSchema = z
     GITHUB_CLIENT_SECRET: optionalString,
     TRUST_PROXY: booleanFromEnvironment.default(false),
     S3_ENDPOINT: z.url(),
+    /**
+     * Browser-facing MinIO origin used to presign URLs. Optional so local and
+     * staging keep working (falls back to `S3_ENDPOINT`); required in a real
+     * production deployment, where `S3_ENDPOINT` is an internal Docker name.
+     */
+    S3_PUBLIC_ENDPOINT: optionalUrl,
+    /**
+     * Optional unsigned public object base URL (CDN/origin). Reserved: no code
+     * path serves media through it, because workspace media stays private and
+     * is always reached through presigned URLs.
+     */
+    S3_PUBLIC_BASE_URL: optionalUrl,
     S3_BUCKET: z.string().min(1),
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
@@ -62,44 +267,181 @@ const EnvironmentSchema = z
     SMTP_USER: optionalString,
     SMTP_PASSWORD: optionalString,
     RESEND_API_KEY: optionalString,
+    EMAIL_PROVIDER: EmailProvider,
     EMAIL_FROM: z.string().min(1).default("Roamlog <hello@roamlog.local>"),
     EXPORT_SIGNED_URL_TTL: z.coerce.number().int().min(60).max(604_800).default(900),
     BOOTSTRAP_SUPER_ADMIN_EMAIL: optionalString,
   })
   .superRefine((environment, context) => {
-    if (environment.NODE_ENV !== "production") {
+    // Deployment-shape checks keep keying off NODE_ENV, because staging also
+    // runs NODE_ENV=production.
+    if (environment.NODE_ENV === "production") {
+      if (!environment.CORS_ORIGINS) {
+        context.addIssue({
+          code: "custom",
+          path: ["CORS_ORIGINS"],
+          message: "CORS_ORIGINS is required in production",
+        });
+      }
+
+      if (environment.BETTER_AUTH_SECRET.includes("replace-with")) {
+        context.addIssue({
+          code: "custom",
+          path: ["BETTER_AUTH_SECRET"],
+          message: "Replace the local BETTER_AUTH_SECRET before production",
+        });
+      }
+
+      for (const key of ["APP_URL", "ADMIN_URL", "API_URL"] as const) {
+        if (!environment[key].startsWith("https://")) {
+          context.addIssue({
+            code: "custom",
+            path: [key],
+            message: `${key} must use https in production`,
+          });
+        }
+      }
+    }
+
+    // Media delivery is gated on APP_ENV=production, not NODE_ENV: staging also
+    // runs NODE_ENV=production and still signs against the internal endpoint.
+    // Presigned URLs sign the Host header, so a production deployment must sign
+    // against the public TLS origin or every browser request 403s.
+    if (environment.APP_ENV === "production") {
+      if (!environment.S3_PUBLIC_ENDPOINT) {
+        context.addIssue({
+          code: "custom",
+          path: ["S3_PUBLIC_ENDPOINT"],
+          message:
+            "S3_PUBLIC_ENDPOINT is required when APP_ENV=production (presigned URLs are signed for the browser-facing host)",
+        });
+      } else {
+        addPublicStorageUrlIssues(context, "S3_PUBLIC_ENDPOINT", environment.S3_PUBLIC_ENDPOINT);
+      }
+
+      if (environment.S3_PUBLIC_BASE_URL) {
+        addPublicStorageUrlIssues(context, "S3_PUBLIC_BASE_URL", environment.S3_PUBLIC_BASE_URL);
+      }
+    }
+
+    // Mail rules only apply to a real production deployment (APP_ENV), so
+    // staging can keep using its local mail catcher.
+    if (environment.APP_ENV !== "production") {
       return;
     }
 
-    if (!environment.CORS_ORIGINS) {
+    const provider = environment.EMAIL_PROVIDER;
+    const fromDomain = emailDomainFrom(environment.EMAIL_FROM);
+
+    if (!fromDomain) {
       context.addIssue({
         code: "custom",
-        path: ["CORS_ORIGINS"],
-        message: "CORS_ORIGINS is required in production",
+        path: ["EMAIL_FROM"],
+        message: "EMAIL_FROM must be an address such as Roamlog <no-reply@example.com>",
+      });
+    } else if (isLocalMailDomain(fromDomain)) {
+      context.addIssue({
+        code: "custom",
+        path: ["EMAIL_FROM"],
+        message: "EMAIL_FROM must not use a .local domain in production",
+      });
+    } else if (looksLikePlaceholder(environment.EMAIL_FROM)) {
+      context.addIssue({
+        code: "custom",
+        path: ["EMAIL_FROM"],
+        message: "Replace the placeholder EMAIL_FROM before production",
       });
     }
 
-    if (environment.BETTER_AUTH_SECRET.includes("replace-with")) {
+    if (provider === "mailpit") {
       context.addIssue({
         code: "custom",
-        path: ["BETTER_AUTH_SECRET"],
-        message: "Replace the local BETTER_AUTH_SECRET before production",
+        path: ["EMAIL_PROVIDER"],
+        message: "EMAIL_PROVIDER=mailpit is not allowed when APP_ENV=production",
       });
+      return;
     }
 
-    for (const key of ["APP_URL", "ADMIN_URL", "API_URL"] as const) {
-      if (!environment[key].startsWith("https://")) {
+    if (provider === "resend") {
+      const apiKey = environment.RESEND_API_KEY?.trim();
+      if (!apiKey) {
         context.addIssue({
           code: "custom",
-          path: [key],
-          message: `${key} must use https in production`,
+          path: ["RESEND_API_KEY"],
+          message: "RESEND_API_KEY is required when EMAIL_PROVIDER=resend",
+        });
+      } else if (!apiKey.startsWith("re_") || looksLikePlaceholder(apiKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["RESEND_API_KEY"],
+          message: "RESEND_API_KEY must be a real Resend key (re_...), not a placeholder",
         });
       }
+
+      if (environment.SMTP_HOST) {
+        context.addIssue({
+          code: "custom",
+          path: ["SMTP_HOST"],
+          message:
+            "SMTP_HOST must be empty when EMAIL_PROVIDER=resend, otherwise the API prefers SMTP",
+        });
+      }
+      return;
+    }
+
+    const smtpHost = environment.SMTP_HOST?.trim().toLowerCase();
+    if (!smtpHost) {
+      context.addIssue({
+        code: "custom",
+        path: ["SMTP_HOST"],
+        message: "SMTP_HOST is required when EMAIL_PROVIDER=smtp",
+      });
+    } else if (isUnreachableMailHost(smtpHost)) {
+      context.addIssue({
+        code: "custom",
+        path: ["SMTP_HOST"],
+        message: "SMTP_HOST must be a reachable relay in production, not a local or example host",
+      });
+    }
+
+    if (environment.SMTP_PORT === 1025) {
+      context.addIssue({
+        code: "custom",
+        path: ["SMTP_PORT"],
+        message: "SMTP_PORT 1025 is the local mail-catcher port; set the production relay port",
+      });
+    }
+
+    if (!environment.SMTP_USER?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["SMTP_USER"],
+        message: "SMTP_USER is required when EMAIL_PROVIDER=smtp",
+      });
+    }
+
+    if (!environment.SMTP_PASSWORD?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["SMTP_PASSWORD"],
+        message: "SMTP_PASSWORD is required when EMAIL_PROVIDER=smtp",
+      });
+    } else if (looksLikePlaceholder(environment.SMTP_PASSWORD)) {
+      context.addIssue({
+        code: "custom",
+        path: ["SMTP_PASSWORD"],
+        message: "Replace the placeholder SMTP_PASSWORD before production",
+      });
     }
   });
 
-export type Environment = Omit<z.infer<typeof EnvironmentSchema>, "CORS_ORIGINS"> & {
+export type Environment = Omit<
+  z.infer<typeof EnvironmentSchema>,
+  "CORS_ORIGINS" | "S3_PUBLIC_ENDPOINT"
+> & {
   CORS_ORIGINS: string[];
+  /** Always resolved: falls back to `S3_ENDPOINT` when it is not configured. */
+  S3_PUBLIC_ENDPOINT: string;
 };
 
 function normalizeCorsOrigins(rawOrigins: string): string[] {
@@ -156,6 +498,9 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
   return {
     ...input,
     ...result.data,
+    S3_PUBLIC_ENDPOINT: (
+      result.data.S3_PUBLIC_ENDPOINT ?? result.data.S3_ENDPOINT
+    ).replace(/\/+$/u, ""),
     CORS_ORIGINS: corsOrigins,
   };
 }

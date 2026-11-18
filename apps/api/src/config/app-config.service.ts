@@ -20,6 +20,15 @@ export class AppConfigService {
     return this.required("NODE_ENV");
   }
 
+  /**
+   * Deployment flavour (`development` | `staging` | `production` | `test`).
+   * Independent from NODE_ENV: staging also runs NODE_ENV=production, so
+   * production-only mail rules must read APP_ENV.
+   */
+  get appEnv(): Environment["APP_ENV"] {
+    return this.required("APP_ENV");
+  }
+
   get isProduction(): boolean {
     return this.nodeEnv === "production";
   }
@@ -135,6 +144,11 @@ export class AppConfigService {
     return this.config.get<string>("SMTP_HOST");
   }
 
+  /** Configured mail transport. Production validation forbids `mailpit`. */
+  get emailProvider(): Environment["EMAIL_PROVIDER"] {
+    return this.required("EMAIL_PROVIDER");
+  }
+
   get smtpPort(): number {
     return this.required("SMTP_PORT");
   }
@@ -159,19 +173,44 @@ export class AppConfigService {
     return this.required("EXPORT_SIGNED_URL_TTL");
   }
 
+  /**
+   * Default lifetime of browser-facing media URLs. Separate from
+   * `EXPORT_SIGNED_URL_TTL` so downloads and image reads can be tuned apart.
+   */
+  get mediaSignedUrlTtlSeconds(): number {
+    return this.required("MEDIA_SIGNED_URL_TTL_SECONDS");
+  }
+
+  /**
+   * Browser-reachable origin used to presign media URLs. Always resolved by
+   * environment validation (falls back to `S3_ENDPOINT` for local/staging).
+   */
+  get s3PublicEndpoint(): string {
+    return this.required("S3_PUBLIC_ENDPOINT");
+  }
+
+  /** Optional unsigned public object base URL. Reserved; nothing reads it yet. */
+  get s3PublicBaseUrl(): string | undefined {
+    return this.config.get<string>("S3_PUBLIC_BASE_URL");
+  }
+
   get bootstrapSuperAdminEmail(): string | undefined {
     return this.config.get<string>("BOOTSTRAP_SUPER_ADMIN_EMAIL");
   }
 
   get storageSettings(): StorageSettings {
+    const publicBaseUrl = this.s3PublicBaseUrl;
     return {
       endpoint: this.required("S3_ENDPOINT"),
+      publicEndpoint: this.s3PublicEndpoint,
+      ...(publicBaseUrl ? { publicBaseUrl } : {}),
       bucket: this.required("S3_BUCKET"),
       accessKey: this.required("S3_ACCESS_KEY"),
       secretKey: this.required("S3_SECRET_KEY"),
       region: this.required("S3_REGION"),
       forcePathStyle: this.required("S3_FORCE_PATH_STYLE"),
       signedUrlTtlSeconds: this.signedUrlTtlSeconds,
+      mediaSignedUrlTtlSeconds: this.mediaSignedUrlTtlSeconds,
     };
   }
 }

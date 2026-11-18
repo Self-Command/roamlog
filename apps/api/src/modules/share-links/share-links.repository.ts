@@ -24,6 +24,18 @@ export interface PublicTripBundle {
   stops: Array<Record<string, unknown>>;
   entries: Array<Record<string, unknown> & { media?: Array<Record<string, unknown>> }>;
   media: Array<Record<string, unknown>>;
+  /**
+   * The media row referenced by `trip.coverMediaId` when that row is *not* part
+   * of {@link PublicTripBundle.media}.
+   *
+   * A Workspace-level photo (`media.tripId = null`) picked as a trip cover is
+   * exactly this case: the public gallery mirrors the authenticated trip gallery
+   * (trip-attached media only), so the cover row travels separately. It is loaded
+   * by the same Workspace-scoped media query as `media`, hence it can never come
+   * from another Workspace. `null` when the trip has no cover, or when the cover
+   * is already in `media`.
+   */
+  coverMedia: Record<string, unknown> | null;
   budget: Record<string, unknown> | null;
 }
 
@@ -124,7 +136,9 @@ export class ShareLinksRepository {
       return null;
     }
 
-    const [stops, entries, directMedia] = await Promise.all([
+    const coverMediaId = trip.coverMediaId ?? null;
+
+    const [stops, entries, mediaRows] = await Promise.all([
       this.prisma.client.stop.findMany({
         where: { tripId: trip.id, workspaceId: shareLink.workspaceId, deletedAt: null },
         orderBy: [{ startDate: "asc" }, { order: "asc" }, { id: "asc" }],
@@ -133,16 +147,36 @@ export class ShareLinksRepository {
         where: { tripId: trip.id, workspaceId: shareLink.workspaceId, deletedAt: null },
         orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       }),
+      // One query for the gallery *and* the cover. The cover arm is an `OR` on
+      // `id` instead of a follow-up lookup, so a public read still issues a single
+      // media query. `workspaceId`, `status` and `deletedAt` stay at the top level
+      // and therefore constrain both arms: a cover owned by another Workspace, a
+      // cover that is not `ready`, and a soft-deleted cover are never even loaded.
       this.prisma.client.media.findMany({
         where: {
-          tripId: trip.id,
           workspaceId: shareLink.workspaceId,
           status: "ready",
           deletedAt: null,
+          ...(coverMediaId === null
+            ? { tripId: trip.id }
+            : { OR: [{ tripId: trip.id }, { id: coverMediaId }] }),
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
     ]);
+
+    // `media` keeps its previous meaning exactly: media attached to this trip.
+    const directMedia = mediaRows.filter((media) => media.tripId === trip.id);
+    // A Workspace-level cover (`tripId = null`) or a cover attached to another trip
+    // is reported separately, so the public gallery does not grow a row the
+    // authenticated trip gallery would not list. The projector decides whether it
+    // is an acceptable cover; loading it grants nothing on its own.
+    const coverMedia =
+      coverMediaId === null
+        ? null
+        : (mediaRows.find(
+            (media) => media.id === coverMediaId && media.tripId !== trip.id,
+          ) ?? null);
 
     const entryMedia = await this.prisma.client.entryMedia.findMany({
       where: {
@@ -176,6 +210,7 @@ export class ShareLinksRepository {
         media: mediaByEntry.get(entry.id) ?? [],
       })),
       media: [...mediaById.values()],
+      coverMedia: coverMedia as unknown as Record<string, unknown> | null,
       budget: shareLink.showBudget
         ? await this.loadBudget(trip, shareLink.workspaceId)
         : null,

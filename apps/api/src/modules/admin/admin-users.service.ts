@@ -6,10 +6,13 @@ import {
 } from "@nestjs/common";
 import {
   AdminUserDetailSchema,
+  AdminUserExportQuerySchema,
   AdminUserQuerySchema,
   UpdateAdminUserRequestSchema,
   type AdminUserDetail,
+  type AdminUserExportQuery,
   type AdminUserPage,
+  type AdminUserQuery,
   type ForceLogoutResponse,
   type ResetTwoFactorResponse,
   type UpdateAdminUserRequest,
@@ -22,12 +25,28 @@ import { parseRequest } from "../../common/services/request-validation.js";
 import { AuditService } from "../audit/audit.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { assertAdminAction } from "./admin-access.js";
+import { CSV_BOM, csvHeader, csvRow } from "./admin-csv.js";
 import { userSelect } from "./admin-selects.js";
+
+const CSV_MAX_ROWS = 50_000;
+const CSV_BATCH_SIZE = 500;
+const USER_CSV_COLUMNS = [
+  "id",
+  "email",
+  "emailVerified",
+  "name",
+  "platformRole",
+  "status",
+  "createdAt",
+  "lastActiveAt",
+  "deletedAt",
+] as const;
 
 interface UserDetailSource {
   id: string;
   email: string;
   emailVerified: boolean;
+  twoFactorEnabled: boolean;
   name: string;
   image: string | null;
   platformRole: string;
@@ -53,25 +72,68 @@ export class AdminUsersService {
     const cursor = cursorId(query.cursor);
 
     const rows = await this.prisma.client.user.findMany({
-      where: {
-        ...(query.status ? { status: query.status } : {}),
-        ...(query.platformRole ? { platformRole: query.platformRole } : {}),
-        ...(query.q
-          ? {
-              OR: [
-                { name: { contains: query.q, mode: "insensitive" } },
-                { email: { contains: query.q, mode: "insensitive" } },
-              ],
-            }
-          : {}),
-      },
+      where: this.where(query),
       orderBy: userOrderBy(query.sort),
       take: query.limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: userSelect,
     });
 
-    return toCursorPage(rows, query.limit, presentUser) as AdminUserPage;
+    const visibleIds = rows.slice(0, query.limit).map((row) => row.id);
+    const sessionCounts = visibleIds.length
+      ? await this.prisma.client.session.groupBy({
+          by: ["userId"],
+          where: { userId: { in: visibleIds }, expiresAt: { gt: new Date() } },
+          _count: { _all: true },
+        })
+      : [];
+    const activeSessionsByUser = new Map(
+      sessionCounts.map((entry) => [entry.userId, entry._count._all]),
+    );
+
+    return toCursorPage(rows, query.limit, (row) => ({
+      ...presentUser(row),
+      activeSessionCount: activeSessionsByUser.get(row.id) ?? 0,
+    })) as AdminUserPage;
+  }
+
+  async *exportCsv(
+    actor: AuthenticatedActor,
+    rawQuery: unknown,
+  ): AsyncGenerator<string, void, undefined> {
+    assertAdminAction(actor, "admin:users:delete");
+    const query = parseRequest(AdminUserExportQuerySchema, rawQuery);
+
+    yield `${CSV_BOM}${csvHeader(USER_CSV_COLUMNS)}`;
+
+    let cursor: string | undefined;
+    let exported = 0;
+    while (exported < CSV_MAX_ROWS) {
+      const take = Math.min(CSV_BATCH_SIZE, CSV_MAX_ROWS - exported);
+      const batch = await this.prisma.client.user.findMany({
+        where: this.where(query),
+        orderBy: userOrderBy(query.sort),
+        take,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        select: userSelect,
+      });
+      if (batch.length === 0) {
+        return;
+      }
+
+      let chunk = "";
+      for (const row of batch) {
+        chunk += csvRow(USER_CSV_COLUMNS, presentUser(row) as unknown as Record<string, unknown>);
+      }
+      yield chunk;
+
+      exported += batch.length;
+      const last = batch.at(-1);
+      if (batch.length < take || !last) {
+        return;
+      }
+      cursor = last.id;
+    }
   }
 
   async get(actor: AuthenticatedActor, id: string): Promise<AdminUserDetail> {
@@ -227,7 +289,17 @@ export class AdminUsersService {
   }
 
   private async detail(record: UserDetailSource): Promise<AdminUserDetail> {
-    const [workspaceCount, tripCount, entryCount, activeSessionCount] = await Promise.all([
+    const now = new Date();
+    const [
+      workspaceCount,
+      tripCount,
+      entryCount,
+      activeSessionCount,
+      commentCount,
+      mediaCount,
+      memberships,
+      sessions,
+    ] = await Promise.all([
       this.prisma.client.workspaceMember.count({
         where: { userId: record.id, status: "active" },
       }),
@@ -236,7 +308,36 @@ export class AdminUsersService {
         where: { createdById: record.id, deletedAt: null },
       }),
       this.prisma.client.session.count({
-        where: { userId: record.id, expiresAt: { gt: new Date() } },
+        where: { userId: record.id, expiresAt: { gt: now } },
+      }),
+      this.prisma.client.comment.count({
+        where: { authorId: record.id, deletedAt: null },
+      }),
+      this.prisma.client.media.count({
+        where: { uploaderId: record.id, deletedAt: null },
+      }),
+      this.prisma.client.workspaceMember.findMany({
+        where: { userId: record.id },
+        orderBy: [{ joinedAt: "desc" }],
+        take: 20,
+        select: {
+          role: true,
+          status: true,
+          joinedAt: true,
+          workspace: { select: { id: true, name: true, slug: true } },
+        },
+      }),
+      this.prisma.client.session.findMany({
+        where: { userId: record.id, expiresAt: { gt: now } },
+        orderBy: [{ createdAt: "desc" }],
+        take: 10,
+        select: {
+          id: true,
+          ipAddress: true,
+          userAgent: true,
+          createdAt: true,
+          expiresAt: true,
+        },
       }),
     ]);
 
@@ -246,7 +347,42 @@ export class AdminUsersService {
       tripCount,
       entryCount,
       activeSessionCount,
+      twoFactorEnabled: record.twoFactorEnabled,
+      commentCount,
+      mediaCount,
+      workspaces: memberships.map((membership) => ({
+        workspaceId: membership.workspace.id,
+        workspaceName: membership.workspace.name,
+        workspaceSlug: membership.workspace.slug,
+        role: membership.role,
+        status: membership.status,
+        joinedAt: iso(membership.joinedAt),
+      })),
+      sessions: sessions.map((session) => ({
+        id: session.id,
+        ipAddress: session.ipAddress,
+        userAgent: session.userAgent,
+        createdAt: iso(session.createdAt),
+        expiresAt: iso(session.expiresAt),
+      })),
     });
+  }
+
+  private where(query: AdminUserQuery | AdminUserExportQuery): Record<string, unknown> {
+    return {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.platformRole ? { platformRole: query.platformRole } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { name: { contains: query.q, mode: "insensitive" } },
+              { email: { contains: query.q, mode: "insensitive" } },
+              { memberships: { some: { workspace: { name: { contains: query.q, mode: "insensitive" } } } } },
+              { memberships: { some: { workspace: { slug: { contains: query.q, mode: "insensitive" } } } } },
+            ],
+          }
+        : {}),
+    };
   }
 
   private assertUserMutation(
@@ -281,6 +417,10 @@ export class AdminUsersService {
       });
     }
   }
+}
+
+function iso(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 function userOrderBy(

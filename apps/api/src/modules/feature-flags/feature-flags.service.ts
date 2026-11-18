@@ -1,14 +1,18 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import {
+  CreateFeatureFlagRequestSchema,
   JsonObjectSchema,
   UpdateFeatureFlagRequestSchema,
   UuidV7Schema,
+  type CreateFeatureFlagRequest,
   type FeatureFlag,
+  type MessageResponse,
   type UpdateFeatureFlagRequest,
 } from "@roamlog/contracts";
 
@@ -84,6 +88,88 @@ export class FeatureFlagsService {
     return presentFeatureFlag(updated);
   }
 
+  async create(actor: AuthenticatedActor, rawBody: unknown): Promise<FeatureFlag> {
+    assertAdminAction(actor, "admin:flags:update");
+    const body: CreateFeatureFlagRequest = parseRequest(CreateFeatureFlagRequestSchema, rawBody);
+    const rules = body.rules === undefined ? {} : validateRules(body.rules);
+
+    const existing = await this.prisma.client.featureFlag.findUnique({ where: { key: body.key } });
+    if (existing) {
+      throw new ConflictException({
+        code: "FEATURE_FLAG_EXISTS",
+        message: "A feature flag with this key already exists.",
+        key: body.key,
+      });
+    }
+
+    let created: Parameters<typeof presentFeatureFlag>[0];
+    try {
+      created = await this.prisma.client.featureFlag.create({
+        data: {
+          key: body.key,
+          description: body.description,
+          enabled: body.enabled,
+          rolloutPercentage: body.rolloutPercentage,
+          rules: rules as never,
+          updatedById: actor.user.id,
+        },
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException({
+          code: "FEATURE_FLAG_EXISTS",
+          message: "A feature flag with this key already exists.",
+          key: body.key,
+        });
+      }
+      throw error;
+    }
+
+    await this.audit.record({
+      actorId: actor.user.id,
+      actorType: "admin",
+      action: "admin.feature_flag.created",
+      targetType: "feature_flag",
+      targetId: uuidV7FromString(`feature-flag:${body.key}`),
+      ip: actor.ip ?? undefined,
+      userAgent: actor.userAgent ?? undefined,
+      metadata: {
+        key: body.key,
+        enabled: body.enabled,
+        rolloutPercentage: body.rolloutPercentage,
+      },
+    });
+
+    return presentFeatureFlag(created);
+  }
+
+  async remove(actor: AuthenticatedActor, key: string): Promise<MessageResponse> {
+    assertAdminAction(actor, "admin:flags:update");
+
+    const existing = await this.prisma.client.featureFlag.findUnique({ where: { key } });
+    if (!existing) {
+      throw new NotFoundException({
+        code: "FEATURE_FLAG_NOT_FOUND",
+        message: "The feature flag was not found.",
+      });
+    }
+
+    await this.prisma.client.featureFlag.delete({ where: { key } });
+
+    await this.audit.record({
+      actorId: actor.user.id,
+      actorType: "admin",
+      action: "admin.feature_flag.deleted",
+      targetType: "feature_flag",
+      targetId: uuidV7FromString(`feature-flag:${key}`),
+      ip: actor.ip ?? undefined,
+      userAgent: actor.userAgent ?? undefined,
+      metadata: { key },
+    });
+
+    return { message: `Feature flag ${key} was deleted.` };
+  }
+
   async isEnabledFor(key: string, workspaceId?: string): Promise<boolean> {
     const flag = await this.prisma.client.featureFlag.findUnique({ where: { key } });
     if (!flag || !flag.enabled) {
@@ -155,4 +241,14 @@ function rolloutBucket(value: string): number {
   return Math.abs(hash);
 }
 
-export type { UpdateFeatureFlagRequest };
+/** Prisma unique-constraint violation, matched without importing the client. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
+
+export type { CreateFeatureFlagRequest, UpdateFeatureFlagRequest };

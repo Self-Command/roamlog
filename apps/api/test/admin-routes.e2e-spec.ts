@@ -54,6 +54,12 @@ describe("admin route wiring", () => {
       .overrideProvider(PrismaService)
       .useValue({
         client: {
+          user: {
+            findMany: async () => [],
+          },
+          workspace: {
+            findMany: async () => [],
+          },
           auditLog: {
             findMany: async () => [
               {
@@ -145,6 +151,8 @@ describe("admin route wiring", () => {
     ["post", "/v1/admin/jobs/email/resume"],
     ["post", "/v1/admin/jobs/email/clear"],
     ["get", "/v1/admin/audit/export"],
+    ["get", "/v1/admin/users/export"],
+    ["get", "/v1/admin/workspaces/export"],
     ["get", "/v1/admin/system"],
   ] as const)("requires authentication for %s %s", async (method, path) => {
     const response = await request(app.getHttpServer())[method](path);
@@ -205,6 +213,42 @@ describe("admin route wiring", () => {
     expect(response.headers["content-disposition"]).toContain("attachment");
     expect(response.text).toContain("admin.user.suspend");
     expect(response.text).toContain("source");
+  });
+
+  it("streams user and workspace CSV exports without shadowing the :id route", async () => {
+    const users = await request(app.getHttpServer())
+      .get("/v1/admin/users/export")
+      .set("x-test-role", "admin")
+      .query({ q: "viewer" });
+
+    expect(users.status).toBe(200);
+    expect(users.headers["content-type"]).toContain("text/csv");
+    expect(users.headers["content-disposition"]).toContain("roamlog-admin-users-");
+    expect(users.text.startsWith("\uFEFFid,email,emailVerified,name,platformRole,status,")).toBe(
+      true,
+    );
+
+    const workspaces = await request(app.getHttpServer())
+      .get("/v1/admin/workspaces/export")
+      .set("x-test-role", "admin")
+      .query({ plan: "free" });
+
+    expect(workspaces.status).toBe(200);
+    expect(workspaces.headers["content-type"]).toContain("text/csv");
+    expect(workspaces.headers["content-disposition"]).toContain("roamlog-admin-workspaces-");
+    expect(workspaces.text.startsWith("\uFEFFid,name,slug,ownerId,plan,status,")).toBe(true);
+  });
+
+  it("rejects support and analysts from exporting user or workspace CSV", async () => {
+    for (const role of ["support", "analyst"] as const) {
+      for (const path of ["/v1/admin/users/export", "/v1/admin/workspaces/export"]) {
+        const response = await request(app.getHttpServer())
+          .get(path)
+          .set("x-test-role", role);
+        expect(response.status).toBe(403);
+        expect(response.body.code).toBe("ADMIN_ACCESS_DENIED");
+      }
+    }
   });
 
   it("rejects support from exporting audit CSV", async () => {

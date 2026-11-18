@@ -1,8 +1,9 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import {
   AdminEmailQuerySchema,
   type AdminEmailPage,
   type EmailLog,
+  type EmailStatus,
   type ResendEmailResponse,
 } from "@roamlog/contracts";
 
@@ -15,6 +16,12 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { assertAdminAction } from "./admin-access.js";
 import { presentEmailLog } from "./admin.presenters.js";
 import { emailSelect } from "./admin-selects.js";
+
+/**
+ * Only failures can be retried. Re-sending a delivered/sent/complained message
+ * would duplicate a successful delivery or ignore a recipient complaint.
+ */
+export const RESENDABLE_EMAIL_STATUSES: readonly EmailStatus[] = ["failed", "bounced"];
 
 @Injectable()
 export class AdminEmailsService {
@@ -55,6 +62,13 @@ export class AdminEmailsService {
       throw new NotFoundException({
         code: "EMAIL_NOT_FOUND",
         message: "The email log was not found.",
+      });
+    }
+    if (!RESENDABLE_EMAIL_STATUSES.includes(original.status as EmailStatus)) {
+      throw new ConflictException({
+        code: "EMAIL_NOT_RESENDABLE",
+        message: "Only failed or bounced emails can be resent.",
+        status: original.status,
       });
     }
 

@@ -20,6 +20,7 @@ import { MediaModule } from "./modules/media/media.module.js";
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
 import { ObservabilityModule } from "./modules/observability/observability.module.js";
 import { PackingModule } from "./modules/packing/packing.module.js";
+import { PlacesModule } from "./modules/places/places.module.js";
 import { PrismaModule } from "./modules/prisma/prisma.module.js";
 import { RealtimeModule } from "./modules/realtime/realtime.module.js";
 import { RedisModule } from "./modules/redis/redis.module.js";
@@ -52,6 +53,7 @@ import { WorkspacesModule } from "./modules/workspaces/workspaces.module.js";
     MediaModule,
     ExpensesModule,
     PackingModule,
+    PlacesModule,
     ExportsModule,
     SearchModule,
     ShareLinksModule,

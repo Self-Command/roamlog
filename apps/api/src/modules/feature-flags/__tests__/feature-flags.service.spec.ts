@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -30,7 +35,9 @@ describe("FeatureFlagsService", () => {
         featureFlag: {
           findMany: vi.fn(),
           findUnique: vi.fn(),
+          create: vi.fn(),
           update: vi.fn(),
+          delete: vi.fn(),
         },
       },
     };
@@ -124,5 +131,103 @@ describe("FeatureFlagsService", () => {
         { enabled: true },
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("creates a flag with validation and an audit entry", async () => {
+    const { prisma, audit, service } = setup();
+    prisma.client.featureFlag.findUnique.mockResolvedValue(null);
+    prisma.client.featureFlag.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => flagRecord(data),
+    );
+
+    const created = await service.create(
+      makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }),
+      {
+        key: "share.password.v3",
+        description: "Share password v3",
+        enabled: true,
+        rolloutPercentage: 40,
+        rules: { workspaceAllowlist: [WORKSPACE_A_ID] },
+      },
+    );
+
+    expect(created.key).toBe("share.password.v3");
+    expect(prisma.client.featureFlag.create).toHaveBeenCalledWith({
+      data: {
+        key: "share.password.v3",
+        description: "Share password v3",
+        enabled: true,
+        rolloutPercentage: 40,
+        rules: { workspaceAllowlist: [WORKSPACE_A_ID] },
+        updatedById: USER_ADMIN_ID,
+      },
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.feature_flag.created",
+        targetType: "feature_flag",
+        metadata: expect.objectContaining({ key: "share.password.v3", enabled: true }),
+      }),
+    );
+  });
+
+  it("rejects an invalid key, an out-of-range rollout, and a duplicate key", async () => {
+    const { prisma, service } = setup();
+    const actor = makeActor(USER_ADMIN_ID, { platformRole: "super_admin" });
+
+    await expect(
+      service.create(actor, { key: "Bad Key!", description: "x" }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(
+      service.create(actor, { key: "valid.key", description: "x", rolloutPercentage: 140 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    prisma.client.featureFlag.findUnique.mockResolvedValue(flagRecord({ key: "valid.key" }));
+    await expect(
+      service.create(actor, { key: "valid.key", description: "x" }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.client.featureFlag.create).not.toHaveBeenCalled();
+  });
+
+  it("blocks non super_admin from creating or deleting flags", async () => {
+    const { service } = setup();
+    const actor = makeActor(USER_ADMIN_ID, { platformRole: "admin" });
+
+    await expect(
+      service.create(actor, { key: "valid.key", description: "x" }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.remove(actor, "trips.map")).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("deletes an existing flag and audits it", async () => {
+    const { prisma, audit, service } = setup();
+    prisma.client.featureFlag.findUnique.mockResolvedValue(flagRecord());
+    prisma.client.featureFlag.delete.mockResolvedValue(flagRecord());
+
+    const result = await service.remove(
+      makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }),
+      "trips.map",
+    );
+
+    expect(result.message).toContain("trips.map");
+    expect(prisma.client.featureFlag.delete).toHaveBeenCalledWith({ where: { key: "trips.map" } });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.feature_flag.deleted",
+        targetType: "feature_flag",
+        metadata: { key: "trips.map" },
+      }),
+    );
+  });
+
+  it("returns 404 when deleting an unknown flag", async () => {
+    const { prisma, service } = setup();
+    prisma.client.featureFlag.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.remove(makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }), "missing.flag"),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.client.featureFlag.delete).not.toHaveBeenCalled();
   });
 });

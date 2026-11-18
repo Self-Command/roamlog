@@ -16,6 +16,10 @@ export interface TripRecord {
   endDate: Date;
   coverMediaId: string | null;
   origin: string;
+  originLat: number | null;
+  originLng: number | null;
+  originCountryCode: string | null;
+  timeZone: string | null;
   destinations: string[];
   countryCodes: string[];
   tags: string[];
@@ -45,6 +49,9 @@ export interface StopRecord {
   endDate: Date;
   notes: string;
   order: number;
+  provider: string | null;
+  providerPlaceId: string | null;
+  timeZone: string | null;
   version: number;
   createdById: string;
   updatedById: string;

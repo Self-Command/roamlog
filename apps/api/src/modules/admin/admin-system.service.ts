@@ -11,6 +11,9 @@ import { RedisService } from "../redis/redis.service.js";
 import { StorageService } from "../storage/storage.service.js";
 import { AdminQueueService, type AdminQueueCounters } from "./admin-queue.service.js";
 
+/** Reported by the console as "not wired" when the deployment injects no version. */
+export const UNCONFIGURED_VERSION = "unconfigured";
+
 type CheckStatus = "up" | "down";
 
 interface CheckResult {
@@ -36,6 +39,16 @@ function timestamp(value: string | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+/**
+ * Build/version metadata is only reported when the deployment injects it.
+ * Substituting `0.0.0` or the container start time would show fabricated
+ * operational facts, so absent values stay distinguishable.
+ */
+function buildVersion(): string {
+  const value = process.env.ROAMLOG_API_VERSION ?? process.env.npm_package_version;
+  return value?.trim() ? value.trim() : UNCONFIGURED_VERSION;
+}
+
 @Injectable()
 export class AdminSystemService {
   constructor(
@@ -46,7 +59,7 @@ export class AdminSystemService {
   ) {}
 
   async get(): Promise<AdminSystem> {
-    const version = process.env.npm_package_version ?? "0.0.0";
+    const version = buildVersion();
     const startedAt = new Date(Date.now() - Math.floor(process.uptime() * 1_000));
     const [database, redis, storage, queues, migration, worker] = await Promise.all([
       this.probe(() => this.prisma.healthCheck()),
@@ -56,20 +69,31 @@ export class AdminSystemService {
       this.latestMigration(),
       Promise.resolve()
         .then(() => this.queue.workerHealth())
-        .catch((): AdminSystemWorker => ({ status: "down", version, consumers: 0 })),
+        .catch(
+          (): AdminSystemWorker => ({
+            status: "degraded",
+            version,
+            consumers: 0,
+            signal: "unavailable",
+            blockedConsumers: 0,
+            lastJobAt: null,
+            lastJobStatus: null,
+            lastJobQueue: null,
+          }),
+        ),
     ]);
 
     return AdminSystemSchema.parse({
       version,
       environment: environment(),
       nodeVersion: process.version,
-      buildTime: timestamp(process.env.ROAMLOG_BUILD_TIME) ?? startedAt.toISOString(),
+      buildTime: timestamp(process.env.ROAMLOG_BUILD_TIME),
       startedAt: startedAt.toISOString(),
       uptimeSeconds: Math.floor(process.uptime()),
       migration,
       worker: {
         ...worker,
-        version: process.env.ROAMLOG_WORKER_VERSION ?? version,
+        version: process.env.ROAMLOG_WORKER_VERSION?.trim() || version,
       },
       checks: {
         database,

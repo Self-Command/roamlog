@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
 import { UuidV7Schema, type WorkspaceRole } from "@roamlog/contracts";
 
 export const UNSPECIFIED_TRIP_ORIGIN = "未填写";
@@ -69,6 +73,61 @@ export function assertBudgetPair(
       ],
     });
   }
+}
+
+/**
+ * Enforces the paired-origin-coordinate invariant.
+ *
+ * `originLat`/`originLng` are a single location: both are set or both are `null`.
+ * The database enforces the same rule with a CHECK constraint; the API reports a
+ * 422 so a well-formed request that breaks the business rule gets a field-scoped
+ * error instead of a 500 from the constraint.
+ */
+export function assertOriginCoordinatePair(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+  field = "originLng",
+): void {
+  const hasLat = typeof lat === "number";
+  const hasLng = typeof lng === "number";
+  if (hasLat === hasLng) {
+    return;
+  }
+  throw new UnprocessableEntityException({
+    code: "VALIDATION_ERROR",
+    message: "originLat and originLng must be provided together.",
+    errors: [
+      {
+        field,
+        code: "INVALID_COORDINATE_PAIR",
+        message: "Origin latitude and longitude must both be set or both be null.",
+      },
+    ],
+  });
+}
+
+/**
+ * Reads `originLat`/`originLng` out of an unvalidated request body.
+ *
+ * Used before schema parsing so the paired-coordinate rule is reported as 422 for
+ * creations too; everything else about the request is still owned by the schema.
+ * Returns `null` when the body does not mention either coordinate.
+ */
+export function rawOriginCoordinatePair(
+  rawInput: unknown,
+): { lat: number | null; lng: number | null } | null {
+  if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) {
+    return null;
+  }
+  const body = rawInput as Record<string, unknown>;
+  if (!("originLat" in body) && !("originLng" in body)) {
+    return null;
+  }
+  return { lat: coordinateSlot(body.originLat), lng: coordinateSlot(body.originLng) };
+}
+
+function coordinateSlot(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 export function assertUuid(value: string, field: string): void {

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -66,6 +67,19 @@ export class AdminOperationsController {
   @RequireAdminAction("admin:flags:read")
   listFlags(@CurrentActor() _actor: AuthenticatedActor) {
     return this.flags.list();
+  }
+
+  @Post("flags")
+  @HttpCode(HttpStatus.CREATED)
+  @RequireAdminAction("admin:flags:update")
+  createFlag(@CurrentActor() actor: AuthenticatedActor, @Body() body: unknown) {
+    return this.flags.create(actor, body);
+  }
+
+  @Delete("flags/:key")
+  @RequireAdminAction("admin:flags:update")
+  deleteFlag(@CurrentActor() actor: AuthenticatedActor, @Param("key") key: string) {
+    return this.flags.remove(actor, key);
   }
 
   @Patch("flags/:key")

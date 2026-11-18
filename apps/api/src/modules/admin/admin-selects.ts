@@ -2,6 +2,7 @@ export const userSelect = {
   id: true,
   email: true,
   emailVerified: true,
+  twoFactorEnabled: true,
   name: true,
   image: true,
   platformRole: true,

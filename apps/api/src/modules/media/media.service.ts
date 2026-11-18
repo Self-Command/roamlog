@@ -1,4 +1,11 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
 import {
   CompleteMediaRequestSchema,
   encodeCursor,
@@ -10,6 +17,7 @@ import {
   type Media,
   type MediaPage,
   type MediaPresignResponse,
+  type MediaRead,
   type Trip,
 } from "@roamlog/contracts";
 
@@ -31,7 +39,9 @@ import {
 } from "./media-rules.js";
 import type { MediaRecord } from "./media-records.js";
 import { MediaRepository } from "./media.repository.js";
-import { presentMedia, variantKeys, type MediaVariantView } from "./media.presenter.js";
+import { MediaUrlService } from "./media-url.service.js";
+import { presentMedia, presentMediaRead, variantKeys, type MediaVariantView } from "./media.presenter.js";
+import { TripCoverService } from "./trip-cover.service.js";
 import {
   assertTripVisible,
   sortParts,
@@ -51,6 +61,9 @@ export class MediaService {
     @Inject(PermissionService) private readonly permissions: PermissionService,
     @Inject(ActivitiesService) private readonly activities: ActivitiesService,
     @Inject(AppConfigService) private readonly config: AppConfigService,
+    // Optional for hand-built instances only; `MediaModule` always injects both.
+    @Inject(MediaUrlService) private readonly mediaUrls?: MediaUrlService,
+    @Inject(TripCoverService) private readonly covers?: TripCoverService,
   ) {}
 
   async presign(
@@ -133,12 +146,7 @@ export class MediaService {
     this.permissions.assertCan(membership.role, "media:complete", "media");
     const completion = parseOptionalCompletion(rawInput);
     const media = await this.requireMedia(membership.workspaceId, mediaId);
-    if (media.tripId) {
-      const trip = await this.trips.findTrip(membership.workspaceId, media.tripId);
-      if (trip) {
-        assertTripVisible(membership, trip);
-      }
-    }
+    await this.assertMediaVisible(membership, media);
     if (media.status === "processing" || media.status === "ready") {
       return this.presentWithUrls(media);
     }
@@ -256,6 +264,26 @@ export class MediaService {
     return (await this.presentPage(records, query.limit)) as MediaPage;
   }
 
+  /**
+   * Single media read (`GET /v1/media/{mediaId}`).
+   *
+   * Visibility follows the workspace media list: media attached to a private trip
+   * is only readable by members who can see that trip. The response never carries
+   * bucket, object key or the raw variant map, and unprocessed media reports
+   * `url: null` with its real status instead of a placeholder link.
+   */
+  async getOne(
+    _actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    mediaId: string,
+  ): Promise<MediaRead> {
+    this.permissions.assertCan(membership.role, "media:read", "media");
+    const media = await this.requireMedia(membership.workspaceId, mediaId);
+    await this.assertMediaVisible(membership, media);
+    const urls = await this.signer().sign(media);
+    return presentMediaRead(media, urls);
+  }
+
   async update(
     actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
@@ -264,7 +292,8 @@ export class MediaService {
   ): Promise<Media> {
     this.permissions.assertCan(membership.role, "media:update", "media");
     const input = parseRequest(UpdateMediaRequestSchema, rawInput);
-    await this.requireMedia(membership.workspaceId, mediaId);
+    const current = await this.requireMedia(membership.workspaceId, mediaId);
+    await this.assertMediaVisible(membership, current);
     if (input.tripId) {
       const trip = await this.trips.findTrip(membership.workspaceId, input.tripId);
       if (!trip) {
@@ -303,6 +332,7 @@ export class MediaService {
   ): Promise<{ message: string }> {
     this.permissions.assertCan(membership.role, "media:delete", "media");
     const current = await this.requireMedia(membership.workspaceId, mediaId);
+    await this.assertMediaVisible(membership, current);
     await this.repository.transaction(async (tx) => {
       const count = await this.repository.softDelete(tx, membership.workspaceId, mediaId);
       if (count === 0) {
@@ -348,13 +378,14 @@ export class MediaService {
     assertTripVisible(membership, trip);
     const media = await this.requireMedia(membership.workspaceId, input.mediaId);
     if (media.status !== "ready") {
-      throw new BadRequestException({
+      // The request is well formed; the asset simply is not processed yet.
+      throw new ConflictException({
         code: "MEDIA_NOT_READY",
         message: "Only processed media can be used as a trip cover.",
       });
     }
     if (media.tripId && media.tripId !== tripId) {
-      throw new BadRequestException({
+      throw new UnprocessableEntityException({
         code: "MEDIA_TRIP_MISMATCH",
         message: "The media belongs to another trip.",
       });
@@ -382,7 +413,19 @@ export class MediaService {
       });
       return record;
     });
-    return presentTrip(updated as never);
+    const covers = await this.coverProjector().resolve(
+      [{ id: tripId, coverMediaId: input.mediaId }],
+      async () => [media],
+    );
+    return presentTrip(updated as never, covers.get(tripId) ?? null);
+  }
+
+  private signer(): MediaUrlService {
+    return this.mediaUrls ?? new MediaUrlService(this.storage);
+  }
+
+  private coverProjector(): TripCoverService {
+    return this.covers ?? new TripCoverService(this.signer());
   }
 
   private async requireMedia(workspaceId: string, mediaId: string): Promise<MediaRecord> {
@@ -392,6 +435,25 @@ export class MediaService {
     }
     assertSafeMediaKey(media.key);
     return media;
+  }
+
+  /**
+   * Media attached to a private trip is invisible to members who cannot see
+   * that trip, so mutations addressed by id must apply the same rule the list
+   * endpoints filter on. Without this, an editor was excluded from private-trip
+   * media listings but could still PATCH/DELETE a row whose id they knew.
+   */
+  private async assertMediaVisible(
+    membership: WorkspaceMembershipAccess,
+    media: MediaRecord,
+  ): Promise<void> {
+    if (!media.tripId) {
+      return;
+    }
+    const trip = await this.trips.findTrip(membership.workspaceId, media.tripId);
+    if (trip) {
+      assertTripVisible(membership, trip);
+    }
   }
 
   private async presentPage(records: MediaRecord[], limit: number) {

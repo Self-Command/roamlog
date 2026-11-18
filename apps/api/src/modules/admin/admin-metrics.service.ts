@@ -1,5 +1,10 @@
 import { Inject, Injectable, ServiceUnavailableException } from "@nestjs/common";
-import { AdminMetricsSchema, type AdminMetrics, type ExportStatus } from "@roamlog/contracts";
+import {
+  AdminMetricsSchema,
+  type AdminMetrics,
+  type EmailStatus,
+  type ExportStatus,
+} from "@roamlog/contracts";
 
 import { PrismaService } from "../prisma/prisma.service.js";
 import { AdminQueueService } from "./admin-queue.service.js";
@@ -10,6 +15,15 @@ const EXPORT_STATUSES: readonly ExportStatus[] = [
   "ready",
   "failed",
   "expired",
+];
+
+const EMAIL_STATUSES: readonly EmailStatus[] = [
+  "queued",
+  "sent",
+  "delivered",
+  "bounced",
+  "complained",
+  "failed",
 ];
 
 export interface AdminMetricsResult {
@@ -38,6 +52,7 @@ export class AdminMetricsService {
       comments: number;
       media: { count: number; bytes: number };
       exports: Record<string, number>;
+      emails: Record<string, number>;
     };
 
     try {
@@ -57,6 +72,7 @@ export class AdminMetricsService {
         mediaCount,
         mediaBytes,
         exportGroups,
+        emailGroups,
       ] = await Promise.all([
         this.prisma.client.user.count({ where: { deletedAt: null } }),
         this.prisma.client.user.count({ where: { status: "active", deletedAt: null } }),
@@ -74,6 +90,7 @@ export class AdminMetricsService {
         this.prisma.client.media.count({ where: { deletedAt: null } }),
         this.prisma.client.media.aggregate({ where: { deletedAt: null }, _sum: { size: true } }),
         this.prisma.client.export.groupBy({ by: ["status"], _count: { _all: true } }),
+        this.prisma.client.emailLog.groupBy({ by: ["status"], _count: { _all: true } }),
       ]);
 
       const exports: Record<string, number> = Object.fromEntries(
@@ -81,6 +98,13 @@ export class AdminMetricsService {
       );
       for (const group of exportGroups) {
         exports[group.status] = group._count._all;
+      }
+
+      const emails: Record<string, number> = Object.fromEntries(
+        EMAIL_STATUSES.map((status) => [status, 0]),
+      );
+      for (const group of emailGroups) {
+        emails[group.status] = group._count._all;
       }
 
       database = {
@@ -101,6 +125,7 @@ export class AdminMetricsService {
         comments,
         media: { count: mediaCount, bytes: mediaBytes._sum.size ?? 0 },
         exports,
+        emails,
       };
     } catch {
       throw new ServiceUnavailableException({
@@ -118,7 +143,12 @@ export class AdminMetricsService {
         active: item.active,
         failed: item.failed,
         completed: item.completed,
+        delayed: item.delayed,
         paused: item.paused,
+        throughputPerMinute: item.throughputPerMinute,
+        throughputWindowSeconds: item.throughputWindowSeconds,
+        lastCompletedAt: item.lastCompletedAt,
+        lastFailedAt: item.lastFailedAt,
       }));
     } catch {
       degraded.push("queues");

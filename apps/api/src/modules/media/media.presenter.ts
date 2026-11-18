@@ -1,7 +1,13 @@
-import { MediaSchema, type Media } from "@roamlog/contracts";
+import {
+  MediaReadSchema,
+  MediaSchema,
+  type Media,
+  type MediaRead,
+} from "@roamlog/contracts";
 
 import { iso, nullableIso, presentDate } from "../trips/content-values.js";
 import type { MediaRecord } from "./media-records.js";
+import type { SignedMediaUrls } from "./media-url.service.js";
 
 export interface MediaVariantView {
   key: string;
@@ -29,6 +35,24 @@ export function presentMedia(
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
     deletedAt: nullableIso(record.deletedAt),
+  });
+}
+
+/**
+ * Projects a media row into the single-media read model (`GetMediaResponseSchema`).
+ *
+ * Bucket, object key and the raw variant map are dropped on purpose: storage
+ * coordinates must never leave the API. Signed URLs are only present while the
+ * asset is `ready`; unprocessed or failed media reports `null` URLs with its real
+ * status instead of a placeholder link.
+ */
+export function presentMediaRead(record: MediaRecord, urls: SignedMediaUrls): MediaRead {
+  const { bucket: _bucket, key: _key, variants: _variants, ...rest } = presentMedia(record);
+  return MediaReadSchema.parse({
+    ...rest,
+    url: urls.url,
+    thumbUrl: urls.thumbUrl,
+    expiresAt: urls.expiresAt,
   });
 }
 

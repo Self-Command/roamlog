@@ -56,4 +56,55 @@ describe("AdminAuditService export", () => {
     });
     expect(prisma.client.auditLog.findMany).not.toHaveBeenCalled();
   });
+
+  it("lists and exports legacy UUIDv4 audit records without rewriting their id", async () => {
+    const { prisma, service } = setup();
+    const legacyId = "9f1d7a2e-3b4c-4d5e-8f60-123456789abc";
+    prisma.client.auditLog.findMany.mockResolvedValue([
+      {
+        id: legacyId,
+        actorId: null,
+        actorType: "system",
+        action: "admin.user.updated",
+        targetType: "user",
+        targetId: "01942f30-1200-7000-8000-000000000503",
+        workspaceId: null,
+        ip: null,
+        userAgent: null,
+        metadata: { source: "legacy" },
+        createdAt: NOW,
+      },
+    ]);
+
+    const actor = makeActor(USER_ADMIN_ID, { platformRole: "analyst" });
+    const page = await service.list(actor, {});
+    const csv = await service.exportCsv(actor, {});
+
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]?.id).toBe(legacyId);
+    expect(csv).toContain(`"${legacyId}"`);
+  });
+
+  it("still rejects audit ids that are not UUIDs", async () => {
+    const { prisma, service } = setup();
+    prisma.client.auditLog.findMany.mockResolvedValue([
+      {
+        id: "not-a-uuid",
+        actorId: null,
+        actorType: "system",
+        action: "admin.user.updated",
+        targetType: "user",
+        targetId: "01942f30-1200-7000-8000-000000000503",
+        workspaceId: null,
+        ip: null,
+        userAgent: null,
+        metadata: {},
+        createdAt: NOW,
+      },
+    ]);
+
+    await expect(
+      service.list(makeActor(USER_ADMIN_ID, { platformRole: "analyst" }), {}),
+    ).rejects.toThrow();
+  });
 });

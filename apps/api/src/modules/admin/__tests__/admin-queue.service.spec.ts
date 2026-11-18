@@ -1,7 +1,9 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
-import { AdminQueueService } from "../admin-queue.service.js";
+import { AdminQueueService, countBlockedConsumers } from "../admin-queue.service.js";
+
+const QUEUE_PREFIX = "roamlog:";
 
 function jobHash(overrides: Record<string, string> = {}) {
   return {
@@ -14,10 +16,19 @@ function jobHash(overrides: Record<string, string> = {}) {
   };
 }
 
+interface CounterValues {
+  waiting?: number;
+  active?: number;
+  failed?: number;
+  completed?: number;
+  delayed?: number;
+  paused?: boolean;
+}
+
 describe("AdminQueueService", () => {
   function setup() {
     const client = {
-      options: { keyPrefix: "roamlog:" },
+      options: { keyPrefix: QUEUE_PREFIX },
       llen: vi.fn(),
       zcard: vi.fn(),
       lrange: vi.fn(),
@@ -31,17 +42,60 @@ describe("AdminQueueService", () => {
       del: vi.fn(),
       eval: vi.fn(),
       call: vi.fn(),
+      scan: vi.fn(),
     };
+
+    // A registered `email` queue plus an unrelated API ingress key that must be
+    // ignored by queue discovery.
+    client.scan.mockResolvedValue([
+      "0",
+      [`${QUEUE_PREFIX}email:wait`, `${QUEUE_PREFIX}email:meta`, `${QUEUE_PREFIX}jobs:ingress`],
+    ]);
+    client.call.mockImplementation(async (command: string, ...args: unknown[]) => {
+      if (command === "ZCOUNT") {
+        return 3;
+      }
+      if (command === "ZRANGE") {
+        const key = String(args[0]);
+        return key.endsWith(":completed") ? ["job-9", "1763370300000"] : [];
+      }
+      if (command === "CLIENT") {
+        return "";
+      }
+      return null;
+    });
+
     const redis = { client };
     const service = new AdminQueueService(redis as never);
     return { client, service };
   }
 
-  it("reads queue counters from BullMQ-compatible Redis keys", async () => {
+  function respondCounters(client: ReturnType<typeof setup>["client"], values: CounterValues) {
+    client.llen.mockImplementation(async (key: string) => {
+      if (key.endsWith(":wait")) return values.waiting ?? 0;
+      if (key.endsWith(":active")) return values.active ?? 0;
+      return 0;
+    });
+    client.zcard.mockImplementation(async (key: string) => {
+      if (key.endsWith(":failed")) return values.failed ?? 0;
+      if (key.endsWith(":completed")) return values.completed ?? 0;
+      if (key.endsWith(":delayed")) return values.delayed ?? 0;
+      return 0;
+    });
+    client.hgetall.mockImplementation(async () => (values.paused ? { paused: "1" } : {}));
+  }
+
+  it("discovers registered queues from BullMQ Redis keys instead of a hardcoded list", async () => {
     const { client, service } = setup();
-    client.llen.mockResolvedValueOnce(4).mockResolvedValueOnce(1);
-    client.zcard.mockResolvedValueOnce(2).mockResolvedValueOnce(8);
-    client.hgetall.mockResolvedValue({ paused: "1" });
+    respondCounters(client, { waiting: 1 });
+
+    await expect(service.listQueues()).resolves.toEqual(["email"]);
+    expect(client.scan).toHaveBeenCalledWith("0", "MATCH", "roamlog:*", "COUNT", 500);
+  });
+
+  it("reads queue counters from BullMQ keys and derives throughput from completion timestamps", async () => {
+    const { client, service } = setup();
+    respondCounters(client, { waiting: 4, active: 1, failed: 2, completed: 8, paused: true });
 
     const stats = await service.stats(["email"]);
 
@@ -54,6 +108,10 @@ describe("AdminQueueService", () => {
         completed: 8,
         delayed: 0,
         paused: true,
+        throughputPerMinute: 0.6,
+        throughputWindowSeconds: 300,
+        lastCompletedAt: new Date(1_763_370_300_000).toISOString(),
+        lastFailedAt: null,
       },
     ]);
     expect(client.llen).toHaveBeenCalledWith("email:wait");
@@ -61,6 +119,32 @@ describe("AdminQueueService", () => {
     expect(client.zcard).toHaveBeenCalledWith("email:failed");
     expect(client.zcard).toHaveBeenCalledWith("email:completed");
     expect(client.hgetall).toHaveBeenCalledWith("email:meta");
+    expect(client.call).toHaveBeenCalledWith(
+      "ZCOUNT",
+      "email:completed",
+      expect.any(String),
+      "+inf",
+    );
+  });
+
+  it("reports throughput as unavailable when Redis cannot answer the window", async () => {
+    const { client, service } = setup();
+    respondCounters(client, { completed: 8 });
+    client.call.mockImplementation(async (command: string) => {
+      if (command === "ZCOUNT") {
+        throw new Error("ZCOUNT unsupported");
+      }
+      if (command === "ZRANGE") {
+        throw new Error("ZRANGE unsupported");
+      }
+      return "";
+    });
+
+    const [stats] = await service.stats(["email"]);
+
+    expect(stats?.throughputPerMinute).toBeNull();
+    expect(stats?.throughputWindowSeconds).toBeNull();
+    expect(stats?.lastCompletedAt).toBeNull();
   });
 
   it("lists failed jobs with contract-shaped fields", async () => {
@@ -155,21 +239,86 @@ describe("AdminQueueService", () => {
     expect(client.del).toHaveBeenCalledWith("email:job-2");
   });
 
-  it("reports worker consumers from BullMQ client names", async () => {
+  it("counts blocked BullMQ consumers from CLIENT LIST flags and command", async () => {
     const { client, service } = setup();
-    const names = ["media", "email"].map((queue) => Buffer.from(queue).toString("base64"));
-    client.call.mockResolvedValue(
-      [
-        `id=1 name=roamlog:${names[0]}:w:`,
-        `id=2 name=roamlog:${names[1]}:w:`,
-        "id=3 name=roamlog-api",
-      ].join("\n"),
-    );
-
-    await expect(service.workerHealth(["media", "email"])).resolves.toEqual({
-      status: "up",
-      consumers: 2,
+    respondCounters(client, { waiting: 2 });
+    client.call.mockImplementation(async (command: string, ...args: unknown[]) => {
+      if (command === "CLIENT") {
+        return [
+          "id=1 flags=b db=0 cmd=bzpopmin name=",
+          "id=2 flags=b db=0 cmd=bzpopmin name=",
+          "id=3 flags=N db=0 cmd=get name=roamlog-api",
+        ].join("\n");
+      }
+      if (command === "ZCOUNT") {
+        return 0;
+      }
+      if (command === "ZRANGE") {
+        return String(args[0]).endsWith(":failed") ? ["job-7", "1763370400000"] : [];
+      }
+      return null;
     });
+
+    const health = await service.workerHealth(["email"]);
+
+    expect(health).toMatchObject({
+      status: "up",
+      signal: "consumer-clients",
+      consumers: 2,
+      blockedConsumers: 2,
+      lastJobStatus: "failed",
+      lastJobQueue: "email",
+    });
+  });
+
+  it("reports down only when queued work has no consumer and no active job", async () => {
+    const { client, service } = setup();
+    respondCounters(client, { waiting: 5 });
+
+    const health = await service.workerHealth(["email"]);
+
+    expect(health).toMatchObject({
+      status: "down",
+      signal: "consumer-clients",
+      consumers: 0,
+    });
+  });
+
+  it("derives an activity signal when consumers are busy instead of blocked", async () => {
+    const { client, service } = setup();
+    respondCounters(client, { active: 2 });
+
+    const health = await service.workerHealth(["email"]);
+
+    expect(health).toMatchObject({ status: "up", signal: "activity-derived", consumers: 0 });
+    expect(health.lastJobAt).toBe(new Date(1_763_370_300_000).toISOString());
+  });
+
+  it("reports an unavailable signal instead of fabricating DOWN when CLIENT LIST fails", async () => {
+    const { client, service } = setup();
+    respondCounters(client, {});
+    client.call.mockRejectedValue(new Error("CLIENT LIST is not supported"));
+
+    const health = await service.workerHealth(["email"]);
+
+    expect(health).toMatchObject({
+      status: "degraded",
+      signal: "unavailable",
+      consumers: 0,
+      lastJobAt: null,
+    });
+  });
+
+  it("parses only blocked BullMQ blocking commands as consumers", () => {
+    const output = [
+      "id=1 flags=b db=0 cmd=bzpopmin name=",
+      "id=2 flags=b db=0 cmd=blmpop name=",
+      "id=3 flags=b db=0 cmd=subscribe name=",
+      "id=4 flags=N db=0 cmd=bzpopmin name=",
+      "id=5 flags=b db=0 cmd=brpoplpush name=",
+    ].join("\n");
+
+    expect(countBlockedConsumers(output)).toBe(3);
   });
 
   it("rejects unknown queues before touching Redis", async () => {

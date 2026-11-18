@@ -75,6 +75,9 @@ export class StopsService {
         endDate,
         notes: input.notes ?? "",
         order: input.order ?? (max._max.order ?? -1) + 1,
+        provider: input.provider ?? null,
+        providerPlaceId: input.providerPlaceId ?? null,
+        timeZone: input.timeZone ?? null,
         createdById: actor.user.id,
         updatedById: actor.user.id,
       });
@@ -117,6 +120,9 @@ export class StopsService {
       ...(input.endDate !== undefined ? { endDate: nextEnd } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
       ...(input.order !== undefined ? { order: input.order } : {}),
+      ...(input.provider !== undefined ? { provider: input.provider } : {}),
+      ...(input.providerPlaceId !== undefined ? { providerPlaceId: input.providerPlaceId } : {}),
+      ...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
       updatedById: actor.user.id,
     };
 

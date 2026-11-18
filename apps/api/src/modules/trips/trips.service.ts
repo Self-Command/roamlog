@@ -12,6 +12,7 @@ import {
   TripListQuerySchema,
   UpdateTripRequestSchema,
   type Trip,
+  type TripCover,
   type TripPage,
   type TripParticipant,
 } from "@roamlog/contracts";
@@ -23,13 +24,16 @@ import { parseRequest } from "../../common/services/request-validation.js";
 import { SanitizeService } from "../../common/services/sanitize.service.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { ActivitiesService } from "../activities/activities.service.js";
+import { TripCoverService } from "../media/trip-cover.service.js";
 import {
   assertBudgetPair,
   assertDateRange,
+  assertOriginCoordinatePair,
   assertTripVisible,
   assertUuid,
   canonicalTripOrigin,
   dateOnlyToDate,
+  rawOriginCoordinatePair,
   sortParts,
 } from "./content-values.js";
 import {
@@ -48,6 +52,10 @@ export class TripsService {
     @Inject(TripsRepository) private readonly repository: TripsRepository,
     @Inject(PermissionService) private readonly permissions: PermissionService,
     @Inject(ActivitiesService) private readonly activities: ActivitiesService,
+    // Optional only so hand-built instances (existing specs construct three
+    // collaborators) keep compiling; `TripsModule` always injects the projector,
+    // and without it every trip honestly reports `cover: null`.
+    @Inject(TripCoverService) private readonly covers?: TripCoverService,
     @Inject(SanitizeService)
     private readonly sanitizer: SanitizeService = new SanitizeService(),
   ) {}
@@ -106,7 +114,10 @@ export class TripsService {
       ...(cursorId(query.cursor) ? { cursor: cursorId(query.cursor) } : {}),
       take: query.limit + 1,
     });
-    return toCursorPage(records, query.limit, presentTrip) as TripPage;
+    const covers = await this.resolveCovers(membership.workspaceId, records);
+    return toCursorPage(records, query.limit, (record) =>
+      presentTrip(record, covers.get(record.id) ?? null),
+    ) as TripPage;
   }
 
   async create(
@@ -115,15 +126,24 @@ export class TripsService {
     rawInput: unknown,
   ): Promise<Trip> {
     this.permissions.assertCan(membership.role, "trip:create", "trip");
+    // Paired-origin coordinates are a business rule, not a shape rule: report them
+    // as 422 before the schema turns the pair into a generic 400.
+    const rawPair = rawOriginCoordinatePair(rawInput);
+    if (rawPair) {
+      assertOriginCoordinatePair(rawPair.lat, rawPair.lng);
+    }
     const input = parseRequest(CreateTripRequestSchema, rawInput);
     const startDate = dateOnlyToDate(input.startDate);
     const endDate = dateOnlyToDate(input.endDate);
     const budgetAmountMinor = input.budgetAmountMinor ?? null;
     const budgetCurrency = input.budgetCurrency ?? null;
+    const originLat = input.originLat ?? null;
+    const originLng = input.originLng ?? null;
     assertDateRange(startDate, endDate);
     assertBudgetPair(budgetAmountMinor, budgetCurrency);
+    assertOriginCoordinatePair(originLat, originLng);
 
-    return this.repository.transaction(async (tx) => {
+    const created = await this.repository.transaction(async (tx) => {
       await this.assertMedia(tx, membership.workspaceId, input.coverMediaId ?? null);
       const data: TripCreateData = {
         workspaceId: membership.workspaceId,
@@ -134,6 +154,10 @@ export class TripsService {
         endDate,
         coverMediaId: input.coverMediaId ?? null,
         origin: canonicalTripOrigin(input.origin),
+        originLat,
+        originLng,
+        originCountryCode: input.originCountryCode ?? null,
+        timeZone: input.timeZone ?? null,
         destinations: input.destinations ?? [],
         countryCodes: input.countryCodes ?? [],
         tags: input.tags ?? [],
@@ -160,8 +184,10 @@ export class TripsService {
         entityId: record.id,
         metadata: { status: record.status, visibility: record.visibility },
       });
-      return presentTrip(record);
+      return record;
     });
+
+    return this.presentWithCover(membership.workspaceId, created);
   }
 
   async get(
@@ -171,7 +197,7 @@ export class TripsService {
   ): Promise<Trip> {
     this.permissions.assertCan(membership.role, "trip:read", "trip");
     const trip = await this.requireVisibleTrip(membership, tripId);
-    return presentTrip(trip);
+    return this.presentWithCover(membership.workspaceId, trip);
   }
 
   async update(
@@ -189,8 +215,15 @@ export class TripsService {
       input.budgetAmountMinor !== undefined ? input.budgetAmountMinor : current.budgetAmountMinor;
     const nextBudgetCurrency =
       input.budgetCurrency !== undefined ? input.budgetCurrency : current.budgetCurrency;
+    const nextOriginLat =
+      input.originLat !== undefined ? input.originLat : (current.originLat ?? null);
+    const nextOriginLng =
+      input.originLng !== undefined ? input.originLng : (current.originLng ?? null);
     assertDateRange(nextStart, nextEnd);
     assertBudgetPair(nextBudgetAmount, nextBudgetCurrency);
+    // The update schema cannot see the stored half of the pair: a patch that sets
+    // one coordinate must still merge into a complete location.
+    assertOriginCoordinatePair(nextOriginLat, nextOriginLng);
 
     const data: TripUpdateData = {
       ...(input.title !== undefined ? { title: input.title } : {}),
@@ -200,6 +233,12 @@ export class TripsService {
       ...(input.endDate !== undefined ? { endDate: nextEnd } : {}),
       ...(input.coverMediaId !== undefined ? { coverMediaId: input.coverMediaId } : {}),
       ...(input.origin !== undefined ? { origin: canonicalTripOrigin(input.origin) } : {}),
+      ...(input.originLat !== undefined ? { originLat: input.originLat } : {}),
+      ...(input.originLng !== undefined ? { originLng: input.originLng } : {}),
+      ...(input.originCountryCode !== undefined
+        ? { originCountryCode: input.originCountryCode }
+        : {}),
+      ...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
       ...(input.destinations !== undefined ? { destinations: input.destinations } : {}),
       ...(input.countryCodes !== undefined ? { countryCodes: input.countryCodes } : {}),
       ...(input.tags !== undefined ? { tags: input.tags } : {}),
@@ -215,7 +254,7 @@ export class TripsService {
       updatedById: actor.user.id,
     };
 
-    return this.repository.transaction(async (tx) => {
+    const saved = await this.repository.transaction(async (tx) => {
       if (input.coverMediaId !== undefined) {
         await this.assertMedia(tx, membership.workspaceId, input.coverMediaId);
       }
@@ -241,8 +280,10 @@ export class TripsService {
         entityId: tripId,
         metadata: { fields: Object.keys(input).filter((field) => field !== "version").sort() },
       });
-      return presentTrip(updated);
+      return updated;
     });
+
+    return this.presentWithCover(membership.workspaceId, saved);
   }
 
   async remove(
@@ -285,7 +326,7 @@ export class TripsService {
     const input = parseRequest(DuplicateTripRequestSchema, rawInput);
     const source = await this.requireVisibleTrip(membership, tripId);
 
-    return this.repository.transaction(async (tx) => {
+    const duplicated = await this.repository.transaction(async (tx) => {
       const copyTitle = (input.title ?? `${source.title} (Copy)`).slice(0, 160);
       const created = await this.repository.createTrip(tx, {
         workspaceId: membership.workspaceId,
@@ -296,6 +337,10 @@ export class TripsService {
         endDate: source.endDate,
         coverMediaId: source.coverMediaId,
         origin: source.origin,
+        originLat: source.originLat ?? null,
+        originLng: source.originLng ?? null,
+        originCountryCode: source.originCountryCode ?? null,
+        timeZone: source.timeZone ?? null,
         destinations: [...source.destinations],
         countryCodes: [...source.countryCodes],
         tags: [...source.tags],
@@ -333,8 +378,13 @@ export class TripsService {
         entityId: created.id,
         metadata: { sourceTripId: tripId },
       });
-      return presentTrip(created);
+      return created;
     });
+
+    // The copy keeps the source `coverMediaId`, but that asset belongs to the
+    // source trip, so the projector reports `cover: null` until a cover is set
+    // for the new trip. No borrowed or invented URL is ever returned.
+    return this.presentWithCover(membership.workspaceId, duplicated);
   }
 
   async listParticipants(
@@ -464,6 +514,28 @@ export class TripsService {
     const trip = await this.requireTrip(membership.workspaceId, tripId);
     assertTripVisible(membership, trip);
     return trip;
+  }
+
+  /** Projects covers for a page of trips with one Workspace-scoped media lookup. */
+  private async resolveCovers(
+    workspaceId: string,
+    records: ReadonlyArray<{ id: string; coverMediaId: string | null }>,
+  ): Promise<Map<string, TripCover | null>> {
+    if (!this.covers) {
+      return new Map(records.map((record) => [record.id, null]));
+    }
+    return this.covers.resolve(
+      records.map((record) => ({ id: record.id, coverMediaId: record.coverMediaId ?? null })),
+      (mediaIds) => this.repository.findMediaForCover(workspaceId, mediaIds),
+    );
+  }
+
+  private async presentWithCover(
+    workspaceId: string,
+    record: TripRecord,
+  ): Promise<Trip> {
+    const covers = await this.resolveCovers(workspaceId, [record]);
+    return presentTrip(record, covers.get(record.id) ?? null);
   }
 
   private async assertMedia(

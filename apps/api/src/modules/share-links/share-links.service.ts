@@ -12,10 +12,13 @@ import {
   PublicTripResponseSchema,
   ShareLinkCreatedSchema,
   ShareLinkSchema,
+  tripDurationDays,
+  type PublicMedia,
   type PublicTripResponse,
   type ShareLink,
   type ShareLinkCreated,
   type ShareLinkListResponse,
+  type TripCover,
 } from "@roamlog/contracts";
 import {
   createHash,
@@ -31,6 +34,15 @@ import { parseRequest } from "../../common/services/request-validation.js";
 import { SanitizeService } from "../../common/services/sanitize.service.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { ActivitiesService } from "../activities/activities.service.js";
+import {
+  MediaUrlService,
+  type MediaUrlSource,
+  type SignedMediaUrls,
+} from "../media/media-url.service.js";
+import {
+  TripCoverService,
+  type CoverMediaSource,
+} from "../media/trip-cover.service.js";
 import { canonicalTripOrigin } from "../trips/content-values.js";
 import {
   ShareLinksRepository,
@@ -46,6 +58,15 @@ export class ShareLinksService {
     @Inject(ActivitiesService) private readonly activities: ActivitiesService,
     @Inject(SanitizeService) private readonly sanitizer: SanitizeService,
     @Inject(AppConfigService) private readonly config: AppConfigService,
+    // Optional at the type level only: `apps/api/test/collab-share.e2e-spec.ts`
+    // builds this service with the five pre-existing arguments and is owned by a
+    // different task. Nest still injects the provider by token, so a missing
+    // MediaModule registration fails at bootstrap rather than at request time.
+    @Inject(MediaUrlService) private readonly mediaUrls?: MediaUrlService,
+    // Same optionality rule as `mediaUrls`: `apps/api/test/collab-share.e2e-spec.ts`
+    // builds this service by hand with the five original arguments. Nest injects
+    // the provider from `MediaModule`, which re-exports `MediaUrlModule`.
+    @Inject(TripCoverService) private readonly covers?: TripCoverService,
   ) {}
 
   async create(
@@ -178,7 +199,7 @@ export class ShareLinksService {
     if (!bundle) {
       throw this.linkNotFound();
     }
-    const payload = this.publicPayload(bundle);
+    const payload = await this.publicPayload(bundle);
     const accessed = await this.repository.recordAccess(link.id, new Date());
     if (!accessed) {
       throw this.linkNotFound();
@@ -186,17 +207,24 @@ export class ShareLinksService {
     return payload;
   }
 
-  private publicPayload(bundle: PublicTripBundle): PublicTripResponse {
+  private async publicPayload(bundle: PublicTripBundle): Promise<PublicTripResponse> {
     const trip = bundle.trip;
+    const startDate = dateOnly(trip.startDate);
+    const endDate = dateOnly(trip.endDate);
+    const media = await this.publicMediaList(bundle.media);
+    const mediaById = new Map(media.map((item) => [item.id, item]));
+    const cover = await this.resolveCover(trip, bundle);
     return PublicTripResponseSchema.parse({
       trip: {
         id: trip.id,
         title: trip.title,
         summary: trip.summary,
         status: trip.status,
-        startDate: dateOnly(trip.startDate),
-        endDate: dateOnly(trip.endDate),
+        startDate,
+        endDate,
+        durationDays: tripDurationDays(startDate, endDate),
         coverMediaId: trip.coverMediaId ?? null,
+        cover,
         origin: canonicalTripOrigin(trip.origin),
         destinations: trip.destinations ?? [],
         countryCodes: trip.countryCodes ?? [],
@@ -226,24 +254,110 @@ export class ShareLinksService {
         contentHtml: this.sanitizer.sanitizeHtml(String(entry.contentHtml ?? "")),
         excerpt: entry.excerpt ?? "",
         tags: entry.tags ?? [],
-        media: (entry.media ?? []).map((media) => this.publicMedia(media)),
+        media: entryMediaViews(entry.media, mediaById),
       })),
-      media: bundle.media.map((media) => this.publicMedia(media)),
+      media,
       budget: bundle.budget ?? null,
     });
   }
 
-  private publicMedia(media: Record<string, unknown>) {
-    return {
-      id: media.id,
-      width: media.width ?? null,
-      height: media.height ?? null,
-      blurhash: media.blurhash ?? null,
-      variants: isJsonObject(media.variants) ? media.variants : {},
-      caption: media.caption ?? null,
-      date: media.date ? dateOnly(media.date) : null,
-      location: media.location ?? null,
-    };
+  /**
+   * Signs and projects public media rows into the strict `PublicMedia` shape.
+   *
+   * Rows that are not `ready`, or for which no signed URL could be produced, are
+   * dropped: a public share response must never contain an empty string, a
+   * placeholder link, or storage coordinates.
+   */
+  private async publicMediaList(
+    records: ReadonlyArray<Record<string, unknown>>,
+  ): Promise<PublicMedia[]> {
+    const sources: MediaUrlSource[] = [];
+    const rowsById = new Map<string, Record<string, unknown>>();
+    for (const record of records) {
+      const id = typeof record.id === "string" ? record.id : null;
+      const key = typeof record.key === "string" ? record.key : null;
+      const status = record.status;
+      if (!id || !key || typeof status !== "string" || rowsById.has(id)) {
+        continue;
+      }
+      rowsById.set(id, record);
+      sources.push({ id, key, status, variants: record.variants });
+    }
+
+    const signed: ReadonlyMap<string, SignedMediaUrls> =
+      sources.length > 0
+        ? await this.mediaUrlSigner().signMany(sources)
+        : new Map<string, SignedMediaUrls>();
+    const views: PublicMedia[] = [];
+    for (const source of sources) {
+      const row = rowsById.get(source.id);
+      const urls = signed.get(source.id);
+      if (!row || !urls || urls.url === null || urls.expiresAt === null) {
+        continue;
+      }
+      views.push({
+        id: source.id,
+        url: urls.url,
+        thumbUrl: urls.thumbUrl,
+        expiresAt: urls.expiresAt,
+        width: numberOrNull(row.width),
+        height: numberOrNull(row.height),
+        blurhash: stringOrNull(row.blurhash),
+        caption: stringOrNull(row.caption),
+        date: row.date ? dateOnly(row.date) : null,
+        location: stringOrNull(row.location),
+      });
+    }
+    return views;
+  }
+
+  /**
+   * Public cover projection, delegated to the projector the authenticated trip
+   * reads use ({@link TripCoverService.resolve}).
+   *
+   * Sharing the projector is the point: the login path and the share path must
+   * answer the same question the same way. A cover exists only when the media
+   * referenced by `coverMediaId` lives in this Workspace, is `ready`, and is
+   * either Workspace-level (`tripId = null`) or attached to this very trip.
+   *
+   * The loader below only exposes rows the repository already loaded — the
+   * Workspace-scoped `bundle.media` plus the separately loaded
+   * `bundle.coverMedia` — so the projector can never reach a row outside the
+   * tenant. When nothing qualifies the share reports `cover: null`; it never
+   * falls back to an unsigned, borrowed or placeholder URL.
+   */
+  private async resolveCover(
+    trip: Record<string, unknown>,
+    bundle: PublicTripBundle,
+  ): Promise<TripCover | null> {
+    const tripId = typeof trip.id === "string" ? trip.id : null;
+    const workspaceId = typeof trip.workspaceId === "string" ? trip.workspaceId : null;
+    const coverMediaId =
+      typeof trip.coverMediaId === "string" && trip.coverMediaId.length > 0
+        ? trip.coverMediaId
+        : null;
+    if (!tripId || !workspaceId || !coverMediaId) {
+      return null;
+    }
+    const candidates = coverCandidates(bundle);
+    const covers = await this.coverProjector().resolve(
+      [{ id: tripId, coverMediaId }],
+      async (mediaIds) => coverMediaSources(candidates, mediaIds, workspaceId),
+    );
+    return covers.get(tripId) ?? null;
+  }
+
+  private coverProjector(): TripCoverService {
+    return this.covers ?? new TripCoverService(this.mediaUrlSigner());
+  }
+
+  private mediaUrlSigner(): MediaUrlService {
+    if (!this.mediaUrls) {
+      throw new Error(
+        "MediaUrlService is not wired into ShareLinksModule; public media cannot be signed.",
+      );
+    }
+    return this.mediaUrls;
   }
 
   private present(record: ShareLinkRecord): ShareLink {
@@ -316,6 +430,76 @@ function dateOnly(value: unknown): string {
     : parsed.toISOString().slice(0, 10);
 }
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function entryMediaViews(
+  records: ReadonlyArray<Record<string, unknown>> | undefined,
+  mediaById: ReadonlyMap<string, PublicMedia>,
+): PublicMedia[] {
+  const views: PublicMedia[] = [];
+  for (const record of records ?? []) {
+    const view = typeof record.id === "string" ? mediaById.get(record.id) : undefined;
+    if (view) {
+      views.push(view);
+    }
+  }
+  return views;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+/**
+ * Rows the public cover projector may look at: the separately loaded cover row
+ * (a Workspace-level photo, usually) followed by the trip gallery.
+ */
+function coverCandidates(
+  bundle: PublicTripBundle,
+): ReadonlyArray<Record<string, unknown>> {
+  return bundle.coverMedia ? [bundle.coverMedia, ...bundle.media] : bundle.media;
+}
+
+/**
+ * Narrows already-loaded bundle rows to {@link CoverMediaSource} for the ids the
+ * projector asked for.
+ *
+ * The rows come from the repository's Workspace-scoped query, so this only drops
+ * rows the projector did not request. It never fetches or adds media: the public
+ * read stays at one media query and cannot widen the tenant boundary here.
+ */
+function coverMediaSources(
+  rows: ReadonlyArray<Record<string, unknown>>,
+  mediaIds: readonly string[],
+  workspaceId: string,
+): CoverMediaSource[] {
+  const requested = new Set(mediaIds);
+  const seen = new Set<string>();
+  const sources: CoverMediaSource[] = [];
+  for (const row of rows) {
+    const id = typeof row.id === "string" ? row.id : null;
+    if (!id || !requested.has(id) || seen.has(id)) {
+      continue;
+    }
+    // Defence in depth: the repository already scopes its media query by
+    // Workspace, and this second check makes a cross-tenant cover impossible even
+    // if a future caller hands over a foreign row.
+    if (row.workspaceId !== workspaceId) {
+      continue;
+    }
+    seen.add(id);
+    sources.push({
+      id,
+      key: typeof row.key === "string" ? row.key : "",
+      status: typeof row.status === "string" ? row.status : "",
+      variants: row.variants,
+      tripId: typeof row.tripId === "string" ? row.tripId : null,
+      width: numberOrNull(row.width),
+      height: numberOrNull(row.height),
+      blurhash: stringOrNull(row.blurhash),
+    });
+  }
+  return sources;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

@@ -95,6 +95,17 @@ export class MediaController {
     return this.media.listTrip(actor, membership, tripId, query);
   }
 
+  @Get("media/:mediaId")
+  @RequirePermission("media:read", "media")
+  @UseGuards(MediaTenantGuard, RolesGuard)
+  getOne(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("mediaId") mediaId: string,
+  ) {
+    return this.media.getOne(actor, membership, mediaId);
+  }
+
   @Delete("media/:mediaId")
   @HttpCode(200)
   @RequirePermission("media:delete", "media")

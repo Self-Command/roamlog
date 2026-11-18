@@ -16,6 +16,9 @@ export interface StopCreateData {
   endDate: Date;
   notes: string;
   order: number;
+  provider: string | null;
+  providerPlaceId: string | null;
+  timeZone: string | null;
   createdById: string;
   updatedById: string;
 }
@@ -30,6 +33,9 @@ export interface StopUpdateData {
   endDate?: Date;
   notes?: string;
   order?: number;
+  provider?: string | null;
+  providerPlaceId?: string | null;
+  timeZone?: string | null;
   updatedById: string;
 }
 

@@ -19,8 +19,10 @@ function emailRecord(overrides: Record<string, unknown> = {}) {
     template: "auth.verify-email",
     subject: "Verify your email",
     providerId: "provider-1",
-    status: "sent",
-    error: null,
+    // Only failed/bounced messages are resendable, so the default record models
+    // a failed delivery.
+    status: "failed",
+    error: "smtp timeout",
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -99,6 +101,33 @@ describe("AdminEmailsService", () => {
     await expect(
       service.resend(makeActor(USER_ADMIN_ID, { platformRole: "support" }), emailRecord().id),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("refuses to resend an email that is not failed or bounced", async () => {
+    const { prisma, queue, service } = setup();
+    prisma.client.emailLog.findUnique.mockResolvedValue(emailRecord({ status: "sent" }));
+
+    await expect(
+      service.resend(makeActor(USER_ADMIN_ID, { platformRole: "support" }), emailRecord().id),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(prisma.client.emailLog.create).not.toHaveBeenCalled();
+    expect(queue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("allows retrying a bounced email", async () => {
+    const { prisma, service } = setup();
+    prisma.client.emailLog.findUnique.mockResolvedValue(
+      emailRecord({ status: "bounced", error: "mailbox unavailable" }),
+    );
+    prisma.client.emailLog.create.mockResolvedValue(emailRecord({ status: "queued" }));
+
+    const result = await service.resend(
+      makeActor(USER_ADMIN_ID, { platformRole: "support" }),
+      emailRecord().id,
+    );
+
+    expect(result.status).toBe("queued");
   });
 });
 

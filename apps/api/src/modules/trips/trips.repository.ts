@@ -20,6 +20,10 @@ export interface TripCreateData {
   endDate: Date;
   coverMediaId: string | null;
   origin: string;
+  originLat: number | null;
+  originLng: number | null;
+  originCountryCode: string | null;
+  timeZone: string | null;
   destinations: string[];
   countryCodes: string[];
   tags: string[];
@@ -40,6 +44,10 @@ export interface TripUpdateData {
   endDate?: Date;
   coverMediaId?: string | null;
   origin?: string;
+  originLat?: number | null;
+  originLng?: number | null;
+  originCountryCode?: string | null;
+  timeZone?: string | null;
   destinations?: string[];
   countryCodes?: string[];
   tags?: string[];
@@ -216,6 +224,60 @@ export class TripsRepository {
     });
   }
 
+  /**
+   * Cover candidates for a page of trips, scoped to one Workspace.
+   *
+   * Deliberately returns the raw media rows (status, ownership and dimensions)
+   * rather than a boolean: the projector has to verify readiness and trip
+   * ownership before any URL is signed.
+   */
+  async findMediaForCover(
+    workspaceId: string,
+    mediaIds: readonly string[],
+  ): Promise<
+    Array<{
+      id: string;
+      tripId: string | null;
+      status: string;
+      key: string;
+      variants: unknown;
+      width: number | null;
+      height: number | null;
+      blurhash: string | null;
+    }>
+  > {
+    if (mediaIds.length === 0) {
+      return [];
+    }
+    const rows = await this.prisma.client.media.findMany({
+      where: {
+        id: { in: [...mediaIds] },
+        workspaceId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        tripId: true,
+        status: true,
+        key: true,
+        variants: true,
+        width: true,
+        height: true,
+        blurhash: true,
+      },
+    });
+    return rows as Array<{
+      id: string;
+      tripId: string | null;
+      status: string;
+      key: string;
+      variants: unknown;
+      width: number | null;
+      height: number | null;
+      blurhash: string | null;
+    }>;
+  }
+
   async listDuplicateChildren(
     tx: ContentTransaction,
     workspaceId: string,
@@ -269,6 +331,9 @@ export class TripsRepository {
           endDate: stop.endDate as Date,
           notes: String(stop.notes ?? ""),
           order: Number(stop.order ?? 0),
+          provider: (stop.provider as string | null) ?? null,
+          providerPlaceId: (stop.providerPlaceId as string | null) ?? null,
+          timeZone: (stop.timeZone as string | null) ?? null,
           version: 1,
           createdById: actorId,
           updatedById: actorId,
