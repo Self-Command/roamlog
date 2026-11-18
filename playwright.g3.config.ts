@@ -44,7 +44,7 @@ const apiEnvironment = {
 };
 
 export default defineConfig({
-  testDir: "./e2e/g3-api",
+  testDir: "./e2e/g3live",
   timeout: 120_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,

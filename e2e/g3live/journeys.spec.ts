@@ -5,11 +5,12 @@
  * Fixtures (users/workspace/session) come from `live.setup` → `.e2e-live/fixture.json`
  * through `loadLiveFixture()`; no hand-made accounts and no direct membership inserts.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
+import { LIVE_FIXTURE_FILE } from "../live-support/env";
 import { loadLiveFixture, type LiveFixture } from "../live-support/fixture";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -114,6 +115,19 @@ test.describe.configure({ mode: "serial" });
 
 test.describe("G3 live-base journeys", () => {
   test.beforeAll(() => {
+    // Guard for the unanchored project matchers in `playwright.config.ts`
+    // (`/api\/.*\.spec\.ts/` matched any path merely *containing* `api/`): if this file
+    // is ever collected by another project, skip instead of crashing on ENOENT.
+    //
+    // The check lives in `beforeAll`, not at file top level, on purpose: a top-level
+    // `test.skip()` is evaluated at load time — BEFORE the `g3-setup` project writes the
+    // fixture — which would silently skip this entire suite on a clean checkout.
+    // Measured: top-level guard => "1 skipped"; this hook => runs once setup has written
+    // the file, and still reports "skipped" (never failed) when it is missing.
+    test.skip(
+      !existsSync(LIVE_FIXTURE_FILE),
+      "requires playwright.g3.config.ts (live fixture is produced by its setup)",
+    );
     fixture = loadLiveFixture();
   });
 
