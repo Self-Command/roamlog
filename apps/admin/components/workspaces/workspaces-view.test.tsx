@@ -1,14 +1,126 @@
-import { render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import type { ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MOCK_ADMIN_WORKSPACES } from "../../lib/fixtures";
+import type { AdminWorkspaceDetail, AdminWorkspaceListItem } from "@roamlog/contracts";
+
+import type { AdminMutationPort } from "../../lib/admin-data-source";
+import { MOCK_ADMIN_USERS, MOCK_ADMIN_WORKSPACES } from "../../lib/fixtures";
 import { WorkspacesView } from "./workspaces-view";
+
+function renderWithClient(ui: ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+const owner = MOCK_ADMIN_USERS[1]!;
+const editor = MOCK_ADMIN_USERS[5]!;
+const workspaceId = "0199a0c2-1200-7000-8000-000000000001";
+
+function listWorkspace(): AdminWorkspaceListItem {
+  return {
+    id: workspaceId,
+    name: "Roamlog Crew",
+    slug: "roamlog-crew",
+    logoMediaId: null,
+    ownerId: owner.id,
+    plan: "team",
+    status: "active",
+    defaultCurrency: "CNY",
+    timezone: "Asia/Shanghai",
+    weekStartsOn: 1,
+    settings: {},
+    createdAt: "2026-06-09T02:00:00.000Z",
+    updatedAt: "2026-11-17T07:41:00.000Z",
+    deletedAt: null,
+    owner: { id: owner.id, name: owner.name, email: owner.email, image: null },
+    memberCount: 8,
+    tripCount: 9,
+    entryCount: 42,
+    mediaCount: 4,
+    mediaBytes: 1048576,
+  };
+}
+
+function detailWorkspace(): AdminWorkspaceDetail {
+  const row = listWorkspace();
+  return {
+    ...row,
+    memberCount: row.memberCount ?? 0,
+    tripCount: row.tripCount ?? 0,
+    entryCount: row.entryCount ?? 0,
+    owner: { id: owner.id, name: owner.name, email: owner.email, image: null },
+    mediaBytes: 1048576,
+    mediaCount: 4,
+    members: [
+      {
+        userId: owner.id,
+        name: owner.name,
+        email: owner.email,
+        image: null,
+        role: "owner",
+        status: "active",
+        joinedAt: "2026-06-09T02:00:00.000Z",
+      },
+      {
+        userId: editor.id,
+        name: editor.name,
+        email: editor.email,
+        image: null,
+        role: "editor",
+        status: "active",
+        joinedAt: "2026-09-14T04:30:00.000Z",
+      },
+    ],
+    invitations: [
+      {
+        id: "0199a0c5-1500-7000-8000-000000000001",
+        workspaceId,
+        email: "invitee@roamlog.test",
+        role: "viewer",
+        invitedById: owner.id,
+        expiresAt: "2026-12-01T00:00:00.000Z",
+        acceptedAt: null,
+        revokedAt: null,
+        createdAt: "2026-11-01T00:00:00.000Z",
+      },
+    ],
+  };
+}
+
+function setMode(mode: "api" | "fixture") {
+  process.env.NEXT_PUBLIC_ADMIN_DATA_MODE = mode;
+}
+
+beforeEach(() => {
+  setMode("fixture");
+  window.sessionStorage.clear();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  delete process.env.NEXT_PUBLIC_ADMIN_DATA_MODE;
+});
 
 describe("WorkspacesView", () => {
   it("requires the workspace name before suspension can be confirmed", async () => {
     const user = userEvent.setup();
-    render(<WorkspacesView role="support" workspaces={MOCK_ADMIN_WORKSPACES} />);
+    renderWithClient(<WorkspacesView role="support" workspaces={MOCK_ADMIN_WORKSPACES} />);
 
     const firstRow = screen.getByRole("row", { name: /Roamlog Crew/ });
     expect(within(firstRow).getByRole("button", { name: "删除工作区" })).toBeDisabled();
@@ -26,11 +138,190 @@ describe("WorkspacesView", () => {
   });
 
   it("keeps workspace destructive actions disabled for analysts", () => {
-    render(<WorkspacesView role="analyst" workspaces={MOCK_ADMIN_WORKSPACES} />);
+    renderWithClient(<WorkspacesView role="analyst" workspaces={MOCK_ADMIN_WORKSPACES} />);
 
     const firstRow = screen.getByRole("row", { name: /Roamlog Crew/ });
     expect(within(firstRow).getByRole("button", { name: "暂停工作区" })).toBeDisabled();
     expect(within(firstRow).getByRole("button", { name: "删除工作区" })).toBeDisabled();
     expect(screen.getByText("只读分析模式")).toBeInTheDocument();
+  });
+
+  it("renders real list metrics and owner data from the server response", async () => {
+    setMode("api");
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
+      jsonResponse({ items: [listWorkspace()], nextCursor: null, hasMore: false }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithClient(<WorkspacesView role="admin" mode="api" workspaces={[]} />);
+
+    const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
+    expect(within(row).getByText(owner.name)).toBeInTheDocument();
+    expect(within(row).getByText(owner.email)).toBeInTheDocument();
+    expect(within(row).getByText("8")).toBeInTheDocument();
+    expect(within(row).getByText("9")).toBeInTheDocument();
+    expect(within(row).getByText("42")).toBeInTheDocument();
+    expect(within(row).getByText("1 MB")).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("limit=25");
+  });
+
+  it("loads members, invitation status and storage from the workspace detail endpoint", async () => {
+    setMode("api");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/admin/workspaces/")) {
+        return jsonResponse(detailWorkspace());
+      }
+      if (url.includes("/v1/admin/trips")) {
+        return jsonResponse({ items: [], nextCursor: null, hasMore: false });
+      }
+      return jsonResponse({ items: [listWorkspace()], nextCursor: null, hasMore: false });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    renderWithClient(<WorkspacesView role="admin" mode="api" workspaces={[]} />);
+    const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
+    await user.click(within(row).getByRole("button", { name: "工作区详情" }));
+
+    expect(await screen.findByText(editor.name)).toBeInTheDocument();
+    expect(screen.getByText("editor")).toBeInTheDocument();
+    expect(screen.getByText("invitee@roamlog.test")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getAllByText("1 MB").length).toBeGreaterThan(1);
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input).includes(`/v1/admin/workspaces/${workspaceId}`)),
+    ).toBe(true);
+  });
+
+  it("submits a real plan change with confirmation", async () => {
+    setMode("api");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/admin/workspaces/")) {
+        return jsonResponse(detailWorkspace());
+      }
+      if (url.includes("/v1/admin/trips")) {
+        return jsonResponse({ items: [], nextCursor: null, hasMore: false });
+      }
+      return jsonResponse({ items: [listWorkspace()], nextCursor: null, hasMore: false });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const updateWorkspace = vi.fn().mockResolvedValue(undefined);
+    const mutations = { updateWorkspace } as unknown as AdminMutationPort;
+    const user = userEvent.setup();
+
+    renderWithClient(
+      <WorkspacesView role="admin" mode="api" workspaces={[]} mutations={mutations} />,
+    );
+    const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
+    await user.click(within(row).getByRole("button", { name: "工作区详情" }));
+    await screen.findByText(editor.name);
+    await user.click(screen.getByRole("button", { name: "变更套餐" }));
+
+    const dialog = screen.getByRole("dialog", { name: "变更套餐" });
+    await user.selectOptions(within(dialog).getByLabelText("新套餐"), "pro");
+    await user.type(within(dialog).getByLabelText("输入工作区名称确认"), "Roamlog Crew");
+    await user.click(within(dialog).getByRole("button", { name: "确认变更" }));
+
+    await waitFor(() => {
+      expect(updateWorkspace).toHaveBeenCalledWith(workspaceId, { plan: "pro" });
+    });
+  });
+
+  it("transfers ownership to an active member through PATCH", async () => {
+    setMode("api");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/admin/workspaces/")) {
+        return jsonResponse(detailWorkspace());
+      }
+      if (url.includes("/v1/admin/trips")) {
+        return jsonResponse({ items: [], nextCursor: null, hasMore: false });
+      }
+      return jsonResponse({ items: [listWorkspace()], nextCursor: null, hasMore: false });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const updateWorkspace = vi.fn().mockResolvedValue(undefined);
+    const mutations = { updateWorkspace } as unknown as AdminMutationPort;
+    const user = userEvent.setup();
+
+    renderWithClient(
+      <WorkspacesView role="admin" mode="api" workspaces={[]} mutations={mutations} />,
+    );
+    const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
+    await user.click(within(row).getByRole("button", { name: "工作区详情" }));
+    await screen.findByText(editor.name);
+    await user.click(screen.getByRole("button", { name: "转移所有权" }));
+
+    const dialog = screen.getByRole("dialog", { name: "转移所有权" });
+    expect(within(dialog).getByLabelText("新 Owner")).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText("输入工作区名称确认"), "Roamlog Crew");
+    await user.click(within(dialog).getByRole("button", { name: "确认转移" }));
+
+    await waitFor(() => {
+      expect(updateWorkspace).toHaveBeenCalledWith(workspaceId, { ownerId: editor.id });
+    });
+  });
+
+  it("exports with active filters and has no disabled export placeholder", async () => {
+    setMode("api");
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
+      jsonResponse({ items: [listWorkspace()], nextCursor: null, hasMore: false }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const exportCsv = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    renderWithClient(
+      <WorkspacesView role="admin" mode="api" workspaces={[]} exportCsv={exportCsv} />,
+    );
+    await screen.findByRole("row", { name: /Roamlog Crew/ });
+
+    const exportButton = screen.getByRole("button", { name: /导出 CSV/ });
+    expect(exportButton).toBeEnabled();
+    expect(screen.queryByText(/导出接口将在运营 Wave 接入/)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("搜索工作区"), "crew");
+    await waitFor(
+      () => {
+        expect(
+          fetchMock.mock.calls.some(([input]) => String(input).includes("q=crew")),
+        ).toBe(true);
+      },
+      { timeout: 2000 },
+    );
+    await user.click(exportButton);
+
+    await waitFor(() => {
+      expect(exportCsv).toHaveBeenCalledWith(
+        expect.objectContaining({ q: "crew", sort: "createdAt:desc", limit: 25 }),
+      );
+    });
+  });
+
+  it("renders the API error state instead of an empty table", async () => {
+    setMode("api");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          {
+            type: "https://roamlog.app/errors/forbidden",
+            title: "Forbidden",
+            status: 403,
+            detail: "Your platform role does not permit this Admin action.",
+            code: "ADMIN_ACTION_FORBIDDEN",
+          },
+          403,
+        ),
+      ),
+    );
+
+    renderWithClient(<WorkspacesView role="admin" mode="api" workspaces={[]} />);
+
+    expect(await screen.findByText("ADMIN_ACTION_FORBIDDEN")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });

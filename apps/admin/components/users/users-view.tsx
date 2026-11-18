@@ -1,10 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronRight, Download, MoreHorizontal, ShieldAlert } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Download, MoreHorizontal, ShieldAlert } from "lucide-react";
 
 import { canPlatform } from "@roamlog/contracts";
-import type { AccountStatus, AdminUserDetail, PlatformRole } from "@roamlog/contracts";
+import type {
+  AccountStatus,
+  AdminUserDetail,
+  AdminUserListItem,
+  PlatformRole,
+  WorkspaceRole,
+} from "@roamlog/contracts";
 import {
   Badge,
   Button,
@@ -19,10 +25,19 @@ import {
   SheetTitle,
 } from "@roamlog/ui";
 
-import { getAdminDataSource } from "../../lib/admin-data-source";
+import {
+  adminUsersExportUrl,
+  buildAdminCsv,
+  downloadAdminCsv,
+  downloadCsvText,
+  getAdminDataSource,
+  useAdminUserDetail,
+  useAdminUsersPage,
+  type AdminMutationPort,
+  type AdminUserListParams,
+} from "../../lib/admin-data-source";
 import type { AdminDataMode } from "../../lib/admin-data-mode";
 import { AdminMutationError } from "../../lib/admin-api-error";
-import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES, type AdminConsoleRole } from "../../lib/fixtures";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
@@ -35,20 +50,68 @@ import { DestructiveActionDialog } from "../admin-ui/destructive-action-dialog";
 import { AccountStatusBadge, PlatformRoleBadge } from "../admin-ui/status-badge";
 
 type UserAction =
-  | { kind: "suspend"; user: AdminUserDetail }
-  | { kind: "restore"; user: AdminUserDetail }
-  | { kind: "delete"; user: AdminUserDetail }
-  | { kind: "change-role"; user: AdminUserDetail }
-  | { kind: "force-logout"; user: AdminUserDetail }
-  | { kind: "reset-2fa"; user: AdminUserDetail }
-  | { kind: "bulk-suspend"; users: AdminUserDetail[] }
-  | { kind: "bulk-restore"; users: AdminUserDetail[] }
-  | { kind: "bulk-delete"; users: AdminUserDetail[] };
+  | { kind: "suspend"; user: AdminUserListItem }
+  | { kind: "restore"; user: AdminUserListItem }
+  | { kind: "delete"; user: AdminUserListItem }
+  | { kind: "change-role"; user: AdminUserListItem }
+  | { kind: "force-logout"; user: AdminUserListItem }
+  | { kind: "reset-2fa"; user: AdminUserListItem }
+  | { kind: "bulk-suspend"; users: AdminUserListItem[] }
+  | { kind: "bulk-restore"; users: AdminUserListItem[] }
+  | { kind: "bulk-delete"; users: AdminUserListItem[] };
 
 type BulkUserAction = Extract<
   UserAction,
   { kind: "bulk-suspend" | "bulk-restore" | "bulk-delete" }
 >;
+
+interface UsersViewProps {
+  role: AdminConsoleRole;
+  users?: readonly AdminUserListItem[];
+  mode?: AdminDataMode;
+  mutations?: AdminMutationPort;
+  exportCsv?: (params: AdminUserListParams) => Promise<void>;
+}
+
+interface StoredUserFilters {
+  query: string;
+  status: "all" | AccountStatus;
+  role: "all" | PlatformRole;
+  sort: string;
+}
+
+const USER_SORT_OPTIONS = [
+  { value: "createdAt:desc", label: "最新创建" },
+  { value: "createdAt:asc", label: "最早创建" },
+  { value: "lastActiveAt:desc", label: "最近活跃" },
+  { value: "name:asc", label: "姓名 A→Z" },
+] as const;
+
+const PAGE_SIZE = 25;
+const FILTER_STORAGE_KEY = "roamlog.admin.users.filters";
+const DEFAULT_FILTERS: StoredUserFilters = {
+  query: "",
+  status: "all",
+  role: "all",
+  sort: "createdAt:desc",
+};
+const USER_CSV_COLUMNS = [
+  "id",
+  "email",
+  "emailVerified",
+  "name",
+  "platformRole",
+  "status",
+  "createdAt",
+  "lastActiveAt",
+  "deletedAt",
+  "workspaceCount",
+  "tripCount",
+  "entryCount",
+  "commentCount",
+  "mediaCount",
+  "activeSessionCount",
+] as const;
 
 function isBulkUserAction(action: UserAction): action is BulkUserAction {
   return (
@@ -58,11 +121,46 @@ function isBulkUserAction(action: UserAction): action is BulkUserAction {
   );
 }
 
-interface UsersViewProps {
-  role: AdminConsoleRole;
-  users?: readonly AdminUserDetail[];
-  mode?: AdminDataMode;
-  mutations?: AdminMutationPort;
+function readStoredFilters(mode: AdminDataMode): StoredUserFilters {
+  if (mode !== "api" || typeof window === "undefined") {
+    return DEFAULT_FILTERS;
+  }
+  try {
+    const raw = window.sessionStorage.getItem(FILTER_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_FILTERS;
+    }
+    const parsed = JSON.parse(raw) as Partial<StoredUserFilters>;
+    return {
+      query: typeof parsed.query === "string" ? parsed.query : "",
+      status:
+        parsed.status === "active" || parsed.status === "suspended" || parsed.status === "deleted"
+          ? parsed.status
+          : "all",
+      role:
+        parsed.role === "user" ||
+        parsed.role === "support" ||
+        parsed.role === "analyst" ||
+        parsed.role === "admin" ||
+        parsed.role === "super_admin"
+          ? parsed.role
+          : "all",
+      sort: USER_SORT_OPTIONS.some((option) => option.value === parsed.sort)
+        ? (parsed.sort as string)
+        : "createdAt:desc",
+    };
+  } catch {
+    return DEFAULT_FILTERS;
+  }
+}
+
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
 }
 
 const userActionCopy: Record<
@@ -125,17 +223,22 @@ const userActionCopy: Record<
   },
 };
 
-export function UsersView({ role, users, mode = "fixture", mutations }: UsersViewProps) {
+export function UsersView({ role, users, mode = "fixture", mutations, exportCsv }: UsersViewProps) {
   const sourceUsers = users ?? getAdminDataSource().listUsers();
-  const [records, setRecords] = useState<readonly AdminUserDetail[]>(sourceUsers);
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>("all");
-  const [roleFilter, setRoleFilter] = useState<"all" | PlatformRole>("all");
+  const [records, setRecords] = useState<readonly AdminUserListItem[]>(sourceUsers);
+  const [storedFilters] = useState<StoredUserFilters>(() => readStoredFilters(mode));
+  const [query, setQuery] = useState(storedFilters.query);
+  const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>(storedFilters.status);
+  const [roleFilter, setRoleFilter] = useState<"all" | PlatformRole>(storedFilters.role);
+  const [sortFilter, setSortFilter] = useState(storedFilters.sort);
+  const [cursorStack, setCursorStack] = useState<Array<string | undefined>>([undefined]);
+  const [pageIndex, setPageIndex] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [detailUser, setDetailUser] = useState<AdminUserDetail | null>(null);
+  const [detailUser, setDetailUser] = useState<AdminUserListItem | null>(null);
   const [pendingAction, setPendingAction] = useState<UserAction | null>(null);
   const [nextRole, setNextRole] = useState<AdminConsoleRole>("support");
   const [statusMessage, setStatusMessage] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
 
   const readOnly = role === "analyst";
   const canSuspend = canPlatform(role, "admin:users:suspend");
@@ -144,6 +247,42 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
   const canChangeRole = canPlatform(role, "admin:users:change-role");
   const canForceLogout = canPlatform(role, "admin:users:force-logout");
   const canResetTwoFactor = canPlatform(role, "admin:users:reset-2fa");
+  const canExport = canPlatform(role, "admin:users:delete");
+  const isApi = mode === "api";
+
+  const debouncedQuery = useDebouncedValue(query, 250);
+  const apiParams = useMemo<AdminUserListParams>(
+    () => ({
+      q: debouncedQuery.trim() || undefined,
+      status: statusFilter === "all" ? undefined : statusFilter,
+      platformRole: roleFilter === "all" ? undefined : roleFilter,
+      sort: sortFilter,
+      cursor: cursorStack[pageIndex],
+      limit: PAGE_SIZE,
+    }),
+    [cursorStack, debouncedQuery, pageIndex, roleFilter, sortFilter, statusFilter],
+  );
+  const api = useAdminUsersPage(apiParams, isApi);
+  const detail = useAdminUserDetail(detailUser?.id ?? null, isApi && detailUser !== null);
+
+  useEffect(() => {
+    if (!isApi) {
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(
+        FILTER_STORAGE_KEY,
+        JSON.stringify({
+        query,
+        status: statusFilter,
+        role: roleFilter,
+        sort: sortFilter,
+      }),
+      );
+    } catch {
+      // Session storage can be unavailable in hardened browser contexts.
+    }
+  }, [isApi, query, roleFilter, sortFilter, statusFilter]);
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
@@ -157,8 +296,61 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
     });
   }, [query, records, roleFilter, statusFilter]);
 
+  const visibleUsers: readonly AdminUserListItem[] = isApi
+    ? (api.data?.items ?? [])
+    : filteredUsers;
   const allVisibleSelected =
-    filteredUsers.length > 0 && filteredUsers.every((user) => selectedIds.has(user.id));
+    visibleUsers.length > 0 && visibleUsers.every((user) => selectedIds.has(user.id));
+  const bulkUsers = visibleUsers.filter((user) => selectedIds.has(user.id));
+  const detailData: AdminUserDetail | null = isApi
+    ? (detail.data ?? null)
+    : ((detailUser as AdminUserDetail | null) ?? null);
+
+  function resetPagination() {
+    setCursorStack([undefined]);
+    setPageIndex(0);
+    setSelectedIds(new Set());
+  }
+
+  function changeQuery(value: string) {
+    setQuery(value);
+    resetPagination();
+  }
+
+  function changeStatus(value: "all" | AccountStatus) {
+    setStatusFilter(value);
+    resetPagination();
+  }
+
+  function changeRole(value: "all" | PlatformRole) {
+    setRoleFilter(value);
+    resetPagination();
+  }
+
+  function changeSort(value: string) {
+    if (USER_SORT_OPTIONS.some((option) => option.value === value)) {
+      setSortFilter(value);
+      resetPagination();
+    }
+  }
+
+  function goNextPage() {
+    const next = api.data?.nextCursor;
+    if (!next) {
+      return;
+    }
+    setCursorStack((current) => [...current.slice(0, pageIndex + 1), next]);
+    setPageIndex((current) => current + 1);
+    setSelectedIds(new Set());
+  }
+
+  function goPreviousPage() {
+    if (pageIndex === 0) {
+      return;
+    }
+    setPageIndex((current) => current - 1);
+    setSelectedIds(new Set());
+  }
 
   function setSelected(userId: string, checked: boolean) {
     setSelectedIds((current) => {
@@ -185,6 +377,12 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
     return isBulkUserAction(action) ? `${action.users.length} 位用户` : action.user.name;
   }
 
+  function mutationFailureMessage(error: unknown, fallback: string): string {
+    return error instanceof AdminMutationError
+      ? `操作失败：${error.failure.code} · ${error.failure.detail}`
+      : fallback;
+  }
+
   async function confirmAction() {
     if (!pendingAction) {
       return;
@@ -193,7 +391,7 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
     const action = pendingAction;
     const copy = userActionCopy[action.kind];
 
-    if (mode === "api" && mutations) {
+    if (isApi && mutations) {
       try {
         if (isBulkUserAction(action)) {
           await Promise.all(
@@ -220,13 +418,17 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
         }
       } catch (error) {
         setStatusMessage(
-          error instanceof AdminMutationError
-            ? `操作失败：${error.failure.code} · ${error.failure.detail}`
-            : "操作失败，请检查 API 与权限后重试。",
+          mutationFailureMessage(error, "操作失败，请检查 API 与权限后重试。"),
         );
         setPendingAction(null);
         return;
       }
+
+      setPendingAction(null);
+      setDetailUser(null);
+      setSelectedIds(new Set());
+      setStatusMessage(`已提交：${copy.action}（审计由后端写入）`);
+      return;
     }
 
     if (isBulkUserAction(action)) {
@@ -242,7 +444,6 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                     : action.kind === "bulk-delete"
                       ? "deleted"
                       : "suspended",
-                activeSessionCount: action.kind === "bulk-restore" ? user.activeSessionCount : 0,
               }
             : user,
         ),
@@ -252,19 +453,13 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
       const nextStatus: AccountStatus = action.kind === "suspend" ? "suspended" : "active";
       setRecords((current) =>
         current.map((user) =>
-          user.id === action.user.id
-            ? {
-                ...user,
-                status: nextStatus,
-                activeSessionCount: action.kind === "suspend" ? 0 : user.activeSessionCount,
-              }
-            : user,
+          user.id === action.user.id ? { ...user, status: nextStatus } : user,
         ),
       );
     } else if (action.kind === "delete") {
       setRecords((current) =>
         current.map((user) =>
-          user.id === action.user.id ? { ...user, status: "deleted", activeSessionCount: 0 } : user,
+          user.id === action.user.id ? { ...user, status: "deleted" } : user,
         ),
       );
     } else if (action.kind === "change-role") {
@@ -275,43 +470,133 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
       );
     }
 
-    if (mode === "fixture") {
-      recordMockAuditEvent({
-        action: copy.action,
-        targetType: "user",
-        targetId: isBulkUserAction(action) ? `batch-${action.users.length}` : action.user.id,
-        targetName: actionTargetName(action),
-        metadata: {
-          previousRole: role,
-          mock: true,
-          ...(action.kind === "change-role" ? { nextRole } : {}),
-        },
-      });
-    }
+    recordMockAuditEvent({
+      action: copy.action,
+      targetType: "user",
+      targetId: isBulkUserAction(action) ? `batch-${action.users.length}` : action.user.id,
+      targetName: actionTargetName(action),
+      metadata: {
+        previousRole: role,
+        mock: true,
+        ...(action.kind === "change-role" ? { nextRole } : {}),
+      },
+    });
 
-    setStatusMessage(
-      mode === "api"
-        ? `已提交：${copy.action}（审计由后端写入）`
-        : `模拟审计事件已记录：${copy.action}`,
-    );
+    setStatusMessage(`模拟审计事件已记录：${copy.action}`);
     setPendingAction(null);
   }
 
+  async function handleExport() {
+    if (isExporting || (isApi && !canExport)) {
+      return;
+    }
+    setIsExporting(true);
+    setStatusMessage("");
+    try {
+      if (exportCsv) {
+        await exportCsv(apiParams);
+      } else if (isApi) {
+        await downloadAdminCsv(
+          adminUsersExportUrl(apiParams),
+          "roamlog-admin-users.csv",
+        );
+      } else {
+        downloadCsvText(
+          buildAdminCsv(
+            USER_CSV_COLUMNS,
+            filteredUsers.map((user) => ({
+              ...user,
+              workspaceCount: (user as Partial<AdminUserDetail>).workspaceCount,
+              tripCount: (user as Partial<AdminUserDetail>).tripCount,
+              entryCount: (user as Partial<AdminUserDetail>).entryCount,
+              commentCount: (user as Partial<AdminUserDetail>).commentCount,
+              mediaCount: (user as Partial<AdminUserDetail>).mediaCount,
+            })),
+          ),
+          "roamlog-admin-users-preview.csv",
+        );
+      }
+      setStatusMessage(
+        isApi
+          ? "用户 CSV 已按当前筛选导出。"
+          : "预览用户 CSV 已导出（fixture 数据，不代表生产）。",
+      );
+    } catch (error) {
+      setStatusMessage(
+        mutationFailureMessage(error, "导出失败，请检查 Admin API 与会话后重试。"),
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   const copy = pendingAction ? userActionCopy[pendingAction.kind] : null;
-  const bulkUsers = records.filter((user) => selectedIds.has(user.id));
-  const userContext = mode === "fixture" && detailUser ? getUserContext(detailUser.id) : null;
+  const userContext = !isApi && detailUser ? getUserContext(detailUser.id) : null;
+
+  const memberships: ReadonlyArray<{
+    workspaceId: string;
+    workspaceName: string;
+    role: WorkspaceRole;
+    status?: "active" | "suspended";
+    joinedAt: string;
+  }> | undefined = isApi
+    ? detail.data?.workspaces === undefined
+      ? undefined
+      : detail.data.workspaces.map((membership) => ({
+          workspaceId: membership.workspaceId,
+          workspaceName: membership.workspaceName,
+          role: membership.role,
+          status: membership.status,
+          joinedAt: membership.joinedAt,
+        }))
+    : (userContext?.memberships ?? []);
+
+  const sessions: ReadonlyArray<{
+    id: string;
+    device: string;
+    ip: string;
+    lastSeenAt: string;
+    current?: boolean;
+  }> | undefined = isApi
+    ? detail.data?.sessions === undefined
+      ? undefined
+      : detail.data.sessions.map((session) => ({
+          id: session.id,
+          device: session.userAgent ?? "未记录客户端",
+          ip: session.ipAddress ?? "未记录 IP",
+          lastSeenAt: session.createdAt,
+        }))
+    : (userContext?.sessions ?? []);
+
+  const detailLoading = isApi && detail.isLoading && !detail.data;
+  const countValue = (value: number | undefined): string | number =>
+    value === undefined ? "未接入" : value;
 
   return (
     <div className="space-y-5">
       <AdminPageHeader
         eyebrow="TRUST & SAFETY / USERS"
         title="用户"
-        description="搜索平台账户、检查角色与会话状态，并通过带审计的二次确认执行受控操作。"
+        description="按服务端搜索、状态与平台角色筛选账户，查看真实体量并执行带审计的受控操作。"
         readOnly={readOnly}
         actions={
-          <Button variant="ghost" size="sm" disabled title="导出接口将在运营 Wave 接入">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isExporting || (isApi && !canExport)}
+            title={
+              isExporting
+                ? "正在生成 CSV"
+                : isApi && !canExport
+                  ? "仅 admin 及以上可导出用户 CSV（后端动作 admin:users:delete）"
+                  : isApi
+                    ? "按当前搜索与筛选导出全部匹配用户（服务端 CSV）"
+                    : "导出当前 fixture 预览数据"
+            }
+            onClick={() => void handleExport()}
+          >
             <Download aria-hidden="true" />
-            导出 CSV
+            {isExporting ? "导出中…" : "导出 CSV"}
           </Button>
         }
       />
@@ -322,9 +607,9 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
           <Input
             className="mt-1.5 h-9"
             type="search"
-            placeholder="姓名或邮箱"
+            placeholder="姓名、邮箱或 Workspace"
             value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
+            onChange={(event) => changeQuery(event.currentTarget.value)}
           />
         </label>
         <label className="w-full md:w-40">
@@ -332,9 +617,7 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
           <Select
             className="mt-1.5 h-9"
             value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.currentTarget.value as "all" | AccountStatus)
-            }
+            onChange={(event) => changeStatus(event.currentTarget.value as "all" | AccountStatus)}
           >
             <option value="all">全部状态</option>
             <option value="active">Active</option>
@@ -347,7 +630,7 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
           <Select
             className="mt-1.5 h-9"
             value={roleFilter}
-            onChange={(event) => setRoleFilter(event.currentTarget.value as "all" | PlatformRole)}
+            onChange={(event) => changeRole(event.currentTarget.value as "all" | PlatformRole)}
           >
             <option value="all">全部角色</option>
             <option value="user">User</option>
@@ -357,8 +640,24 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
             <option value="super_admin">Super admin</option>
           </Select>
         </label>
+        <label className="w-full md:w-44">
+          <span className="type-eyebrow">排序</span>
+          <Select
+            className="mt-1.5 h-9"
+            value={sortFilter}
+            onChange={(event) => changeSort(event.currentTarget.value)}
+          >
+            {USER_SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </label>
         <div className="flex h-9 items-center border-l border-hairline pl-3 font-mono text-[10px] text-muted max-md:hidden">
-          {filteredUsers.length} / {records.length}
+          {isApi
+            ? `${visibleUsers.length} 条 / 第 ${pageIndex + 1} 页`
+            : `${filteredUsers.length} / ${records.length}`}
         </div>
       </AdminFilterBar>
 
@@ -414,13 +713,29 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
           <div>
             <h2 className="text-[13px] font-medium text-ink">平台账户</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              users / cursor page 1
+              users / {isApi ? `server page ${pageIndex + 1}` : "fixture page 1"}
             </p>
           </div>
-          <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
+          <Badge tone={isApi ? "green" : "neutral"}>{mode}</Badge>
         </div>
 
-        {filteredUsers.length === 0 ? (
+        {isApi && api.error ? (
+          <div role="alert" className="m-4 rounded-control border border-accent-red/25 p-4">
+            <p className="type-eyebrow text-accent-red">ADMIN API ERROR</p>
+            <p className="mt-1 text-[12px] text-body">{api.error.detail}</p>
+            <div className="mt-2 flex items-center gap-2 font-mono text-[9px] text-muted">
+              <Badge tone="red">{api.error.code}</Badge>
+              <span>HTTP {api.error.status || "network"}</span>
+            </div>
+            <Button variant="ghost" size="sm" className="mt-3" onClick={() => api.refetch()}>
+              重试
+            </Button>
+          </div>
+        ) : isApi && api.isLoading && !api.data ? (
+          <p role="status" className="m-4 text-[12px] text-muted">
+            正在读取用户列表…
+          </p>
+        ) : visibleUsers.length === 0 ? (
           <EmptyState
             title="没有匹配用户"
             description="调整搜索关键词或筛选条件后再试。"
@@ -438,7 +753,7 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                       checked={allVisibleSelected}
                       onCheckedChange={(checked) => {
                         if (checked === true) {
-                          setSelectedIds(new Set(filteredUsers.map((user) => user.id)));
+                          setSelectedIds(new Set(visibleUsers.map((user) => user.id)));
                         } else {
                           setSelectedIds(new Set());
                         }
@@ -469,7 +784,7 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
-                {filteredUsers.map((user) => (
+                {visibleUsers.map((user) => (
                   <tr
                     key={user.id}
                     aria-label={`用户 ${user.name}`}
@@ -514,7 +829,13 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                       {user.emailVerified ? "VERIFIED" : "PENDING"}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
-                      {mode === "api" ? "—" : user.activeSessionCount}
+                      {typeof user.activeSessionCount === "number" ? (
+                        user.activeSessionCount
+                      ) : (
+                        <span title="列表响应未提供活跃会话计数，请打开详情读取 GET /v1/admin/users/:id">
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
                       {formatDateTime(user.lastActiveAt)}
@@ -544,6 +865,15 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                           variant={user.status === "active" ? "ghost" : "outline"}
                           size="sm"
                           aria-label={user.status === "active" ? "暂停账户" : "恢复账户"}
+                          title={
+                            user.status === "active"
+                              ? canSuspend
+                                ? "暂停账户"
+                                : "当前平台角色不可暂停账户"
+                              : canRestore
+                                ? "恢复账户"
+                                : "当前平台角色不可恢复账户"
+                          }
                           disabled={
                             user.status === "active"
                               ? !canSuspend
@@ -564,6 +894,13 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                           variant="danger"
                           size="sm"
                           aria-label="删除用户"
+                          title={
+                            canDelete
+                              ? user.status === "deleted"
+                                ? "用户已删除"
+                                : "软删除用户"
+                              : "当前平台角色不可删除用户"
+                          }
                           disabled={!canDelete || user.status === "deleted"}
                           onClick={() => openAction({ kind: "delete", user })}
                         >
@@ -577,6 +914,37 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
             </table>
           </div>
         )}
+
+        {isApi ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-2.5">
+            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
+              第 {pageIndex + 1} 页 · 本页 {visibleUsers.length} 条
+              {api.data?.hasMore ? " · 还有更多" : " · 已到最后一页"}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={pageIndex === 0 || api.isLoading}
+                title={pageIndex === 0 ? "已是第一页" : "上一页"}
+                onClick={goPreviousPage}
+              >
+                <ChevronLeft aria-hidden="true" />
+                上一页
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!api.data?.hasMore || api.isLoading}
+                title={!api.data?.hasMore ? "已到最后一页" : "下一页"}
+                onClick={goNextPage}
+              >
+                下一页
+                <ChevronRight aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <div role="status" aria-live="polite" className="min-h-4 font-mono text-[10px] text-muted">
@@ -602,19 +970,77 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
 
               <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline">
                 {[
-                  ["Workspace", detailUser.workspaceCount],
-                  ["旅行", detailUser.tripCount],
-                  ["日志", detailUser.entryCount],
-                  ["活跃会话", detailUser.activeSessionCount],
+                  ["注册时间", formatDateTime(detailData?.createdAt ?? detailUser.createdAt)],
+                  ["最近活跃", formatDateTime(detailData?.lastActiveAt ?? detailUser.lastActiveAt)],
+                  [
+                    "邮箱验证",
+                    (detailData?.emailVerified ?? detailUser.emailVerified) ? "VERIFIED" : "PENDING",
+                  ],
+                  [
+                    "2FA",
+                    detailLoading ? (
+                      "…"
+                    ) : detailData?.twoFactorEnabled === undefined ? (
+                      <span
+                        key="2fa-unavailable"
+                        title="需要 GET /v1/admin/users/:id 返回 twoFactorEnabled；当前详情响应未提供该字段"
+                      >
+                        未接入
+                      </span>
+                    ) : detailData.twoFactorEnabled ? (
+                      "已启用"
+                    ) : (
+                      "未启用"
+                    ),
+                  ],
                 ].map(([label, value]) => (
-                  <div key={label} className="bg-surface-1 p-3">
+                  <div key={String(label)} className="bg-surface-1 p-3">
                     <dt className="type-eyebrow">{label}</dt>
-                    <dd className="mt-1.5 font-serif text-2xl text-ink">
-                      {mode === "api" ? "—" : value}
+                    <dd className="mt-1.5 font-mono text-[11px] text-ink">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              {isApi && detail.error ? (
+                <div role="alert" className="mt-4 rounded-control border border-accent-red/25 p-3">
+                  <p className="type-eyebrow text-accent-red">DETAIL ERROR</p>
+                  <p className="mt-1 text-[11px] leading-5 text-body">{detail.error.detail}</p>
+                  <Button variant="ghost" size="sm" className="mt-2" onClick={() => detail.refetch()}>
+                    重试详情
+                  </Button>
+                </div>
+              ) : null}
+
+              <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline">
+                {[
+                  ["Workspace", detailData?.workspaceCount],
+                  ["旅行", detailData?.tripCount],
+                  ["日志", detailData?.entryCount],
+                  ["活跃会话", detailData?.activeSessionCount],
+                  ["评论", detailData?.commentCount],
+                  ["媒体", detailData?.mediaCount],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="bg-surface-1 p-3">
+                    <dt className="type-eyebrow">{label}</dt>
+                    <dd
+                      className="mt-1.5 font-serif text-2xl text-ink"
+                      title={
+                        value === undefined
+                          ? "需要 GET /v1/admin/users/:id 返回该计数；当前详情响应未提供"
+                          : undefined
+                      }
+                    >
+                      {detailLoading ? "…" : countValue(value as number | undefined)}
                     </dd>
                   </div>
                 ))}
               </dl>
+
+              {!isApi ? (
+                <p className="mt-2 text-[10px] leading-5 text-muted">
+                  fixture 预览不提供评论 / 媒体 / 2FA 计数；API 模式由详情接口返回。
+                </p>
+              ) : null}
 
               <div className="mt-6 space-y-5">
                 <section aria-labelledby="user-sessions-heading">
@@ -623,16 +1049,26 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                       活跃会话
                     </h3>
                     <span className="font-mono text-[9px] text-muted">
-                      {mode === "api" ? "—" : `${userContext?.sessions.length ?? 0} records`}
+                      {sessions === undefined
+                        ? detailLoading
+                          ? "读取中"
+                          : "未接入"
+                        : `${sessions.length} records`}
                     </span>
                   </div>
-                  {userContext && userContext.sessions.length > 0 ? (
+                  {sessions === undefined ? (
+                    <p className="mt-2 text-[11px] leading-5 text-muted">
+                      {detailLoading
+                        ? "正在读取会话明细…"
+                        : "未接入：需要 GET /v1/admin/users/:id 返回 sessions[]（id、ipAddress、userAgent、createdAt、expiresAt）。"}
+                    </p>
+                  ) : sessions.length > 0 ? (
                     <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
-                      {userContext.sessions.map((item) => (
+                      {sessions.map((item) => (
                         <li key={item.id} className="py-2.5">
                           <div className="flex items-center justify-between gap-3">
                             <span className="truncate text-[11px] text-body">{item.device}</span>
-                            {item.current ? <Badge tone="green">Current</Badge> : null}
+                            {!isApi && item.current ? <Badge tone="green">Current</Badge> : null}
                           </div>
                           <p className="mt-1 font-mono text-[9px] text-muted">
                             {item.ip} · {formatDateTime(item.lastSeenAt)}
@@ -641,11 +1077,7 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-[11px] text-muted">
-                      {mode === "api"
-                        ? "当前 Admin API 列表响应未提供会话明细。"
-                        : "没有活跃会话。"}
-                    </p>
+                    <p className="mt-2 text-[11px] text-muted">没有活跃会话。</p>
                   )}
                 </section>
 
@@ -655,12 +1087,22 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                       Workspace 成员关系
                     </h3>
                     <span className="font-mono text-[9px] text-muted">
-                      {mode === "api" ? "—" : `${userContext?.memberships.length ?? 0} records`}
+                      {memberships === undefined
+                        ? detailLoading
+                          ? "读取中"
+                          : "未接入"
+                        : `${memberships.length} records`}
                     </span>
                   </div>
-                  {userContext && userContext.memberships.length > 0 ? (
+                  {memberships === undefined ? (
+                    <p className="mt-2 text-[11px] leading-5 text-muted">
+                      {detailLoading
+                        ? "正在读取 Workspace 成员关系…"
+                        : "未接入：需要 GET /v1/admin/users/:id 返回 workspaces[]（workspaceId、workspaceName、role、status、joinedAt）。"}
+                    </p>
+                  ) : memberships.length > 0 ? (
                     <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
-                      {userContext.memberships.map((membership) => (
+                      {memberships.map((membership) => (
                         <li
                           key={membership.workspaceId}
                           className="flex items-center justify-between gap-3 py-2.5"
@@ -673,16 +1115,17 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                               加入 {formatDateTime(membership.joinedAt)}
                             </p>
                           </div>
-                          <Badge tone="slate">{membership.role}</Badge>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <Badge tone="slate">{membership.role}</Badge>
+                            {membership.status === "suspended" ? (
+                              <Badge tone="yellow">Suspended</Badge>
+                            ) : null}
+                          </div>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-[11px] text-muted">
-                      {mode === "api"
-                        ? "当前 Admin API 列表响应未提供 Workspace 成员关系明细。"
-                        : "没有 Workspace 成员关系。"}
-                    </p>
+                    <p className="mt-2 text-[11px] text-muted">没有 Workspace 成员关系。</p>
                   )}
                 </section>
               </div>
@@ -695,7 +1138,6 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                     disabled={!canForceLogout}
                     title={canForceLogout ? "撤销全部会话" : "当前角色不可执行"}
                     onClick={() => {
-                      setDetailUser(null);
                       openAction({ kind: "force-logout", user: detailUser });
                     }}
                   >
@@ -706,7 +1148,6 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                     disabled={!canResetTwoFactor}
                     title={canResetTwoFactor ? "重置双因素认证" : "仅 admin 及以上可重置 2FA"}
                     onClick={() => {
-                      setDetailUser(null);
                       openAction({ kind: "reset-2fa", user: detailUser });
                     }}
                   >
@@ -714,8 +1155,8 @@ export function UsersView({ role, users, mode = "fixture", mutations }: UsersVie
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  {mode === "api"
-                    ? "API 模式下操作会发送真实 Admin mutation，并由后端权限与审计规则约束。"
+                  {isApi
+                    ? "API 模式下操作会发送真实 Admin mutation，并由后端权限与审计规则约束；成功后列表与详情会自动刷新。"
                     : "Sheet 与确认对话框均只操作本地 fixture；不会发送真实暂停、删除或认证请求。"}
                 </p>
               </div>

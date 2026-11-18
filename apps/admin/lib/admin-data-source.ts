@@ -38,18 +38,38 @@ import {
   type UpdateAdminUserRequest,
   type UpdateAdminWorkspaceRequest,
 } from "@roamlog/api-client";
+import {
+  AdminTripPageSchema,
+  AdminUserDetailSchema,
+  AdminUserPageSchema,
+  AdminWorkspaceDetailSchema,
+  AdminWorkspacePageSchema,
+  type AdminTripPage,
+  type AdminUserDetail,
+  type AdminUserListItem,
+  type AdminUserPage,
+  type AdminWorkspaceDetail,
+  type AdminWorkspaceListItem,
+  type AdminWorkspacePage,
+  type AccountStatus,
+  type PlatformRole,
+  type WorkspacePlan,
+} from "@roamlog/contracts";
 import type {
-  AdminUserDetail,
-  AdminWorkspaceDetail,
+  AdminMetrics,
   AuditLog,
   EmailStatus,
   MediaStatus,
-  PlatformRole,
   TripVisibility,
 } from "@roamlog/contracts";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { assertAdminResponse, toAdminApiFailure, type AdminApiFailure } from "./admin-api-error";
+import {
+  assertAdminResponse,
+  toAdminApiFailure,
+  AdminMutationError,
+  type AdminApiFailure,
+} from "./admin-api-error";
 import { getAdminDataMode, type AdminDataMode } from "./admin-data-mode";
 import {
   MOCK_AUDIT_LOGS,
@@ -215,6 +235,421 @@ function combineResources<T>(
   };
 }
 
+interface AdminQueryLike<T> {
+  data?: T;
+  error: unknown;
+  isLoading: boolean;
+  refetch: () => unknown;
+}
+
+function queryResource<T>(
+  mode: AdminDataMode,
+  query: AdminQueryLike<T>,
+  fallback: T | null = null,
+): AdminResource<T> {
+  const error = query.error
+    ? query.error instanceof AdminMutationError
+      ? query.error.failure
+      : networkFailure(query.error)
+    : null;
+
+  return {
+    mode,
+    data: error ? null : (query.data ?? fallback),
+    isLoading: query.isLoading,
+    error,
+    degraded: [],
+    refetch: () => {
+      void query.refetch();
+    },
+  };
+}
+
+function adminUrl(
+  path: string,
+  params: Record<string, string | number | boolean | undefined> = {},
+): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") {
+      search.set(key, String(value));
+    }
+  }
+  const query = search.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+async function adminJsonRequest<T>(
+  url: string,
+  schema: { parse: (value: unknown) => T },
+): Promise<T> {
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  const text = await response.text();
+  const data = text ? parseJson(text) : null;
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new AdminMutationError(toAdminApiFailure(response.status, data, response.headers));
+  }
+  if (data === null) {
+    throw new AdminMutationError({
+      code: "ADMIN_RESPONSE_INVALID",
+      status: response.status,
+      title: "Admin API response was not JSON",
+      detail: "The Admin API returned an empty or malformed response.",
+      degraded: [],
+    });
+  }
+
+  try {
+    return schema.parse(data);
+  } catch (error) {
+    throw new AdminMutationError({
+      code: "ADMIN_RESPONSE_INVALID",
+      status: response.status,
+      title: "Admin API response did not match the contract",
+      detail: error instanceof Error ? error.message : "The Admin API response could not be parsed.",
+      degraded: [],
+    });
+  }
+}
+
+/**
+ * Same-origin write helper for Admin endpoints that the generated client does
+ * not cover yet (feature flag create/delete). Errors surface as
+ * `AdminMutationError`, exactly like the generated mutations.
+ */
+async function adminJsonMutation(
+  path: string,
+  method: "POST" | "DELETE",
+  body: unknown,
+): Promise<unknown> {
+  const response = await fetch(path, {
+    method,
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  const data = text ? parseJson(text) : null;
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new AdminMutationError(toAdminApiFailure(response.status, data, response.headers));
+  }
+
+  return data;
+}
+
+export interface AdminUserListParams {
+  q?: string;
+  status?: AccountStatus;
+  platformRole?: PlatformRole;
+  sort?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface AdminWorkspaceListParams {
+  q?: string;
+  status?: AccountStatus;
+  plan?: WorkspacePlan;
+  sort?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export function adminUsersExportUrl(params: AdminUserListParams): string {
+  return adminUrl("/v1/admin/users/export", {
+    q: params.q,
+    status: params.status,
+    platformRole: params.platformRole,
+    sort: params.sort,
+  });
+}
+
+export function adminWorkspacesExportUrl(params: AdminWorkspaceListParams): string {
+  return adminUrl("/v1/admin/workspaces/export", {
+    q: params.q,
+    status: params.status,
+    plan: params.plan,
+    sort: params.sort,
+  });
+}
+
+export function useAdminUsersPage(
+  params: AdminUserListParams,
+  enabled = true,
+): AdminResource<AdminUserPage> {
+  const mode = getAdminDataMode();
+  const query = useQuery({
+    queryKey: ["admin", "users", "page", params],
+    queryFn: () =>
+      adminJsonRequest(
+        adminUrl("/v1/admin/users", {
+          q: params.q,
+          status: params.status,
+          platformRole: params.platformRole,
+          sort: params.sort,
+          cursor: params.cursor,
+          limit: params.limit,
+        }),
+        AdminUserPageSchema,
+      ),
+    enabled: mode === "api" && enabled,
+  });
+
+  return queryResource<AdminUserPage>(mode, query);
+}
+
+export function useAdminUserDetail(
+  userId: string | null,
+  enabled = true,
+): AdminResource<AdminUserDetail> {
+  const mode = getAdminDataMode();
+  const query = useQuery({
+    queryKey: ["admin", "users", "detail", userId],
+    queryFn: () =>
+      adminJsonRequest(
+        adminUrl(`/v1/admin/users/${encodeURIComponent(userId ?? "")}`),
+        AdminUserDetailSchema,
+      ),
+    enabled: mode === "api" && enabled && Boolean(userId),
+  });
+
+  return queryResource<AdminUserDetail>(mode, query);
+}
+
+export function useAdminWorkspacesPage(
+  params: AdminWorkspaceListParams,
+  enabled = true,
+): AdminResource<AdminWorkspacePage> {
+  const mode = getAdminDataMode();
+  const query = useQuery({
+    queryKey: ["admin", "workspaces", "page", params],
+    queryFn: () =>
+      adminJsonRequest(
+        adminUrl("/v1/admin/workspaces", {
+          q: params.q,
+          status: params.status,
+          plan: params.plan,
+          sort: params.sort,
+          cursor: params.cursor,
+          limit: params.limit,
+        }),
+        AdminWorkspacePageSchema,
+      ),
+    enabled: mode === "api" && enabled,
+  });
+
+  return queryResource<AdminWorkspacePage>(mode, query);
+}
+
+export function useAdminWorkspaceDetail(
+  workspaceId: string | null,
+  enabled = true,
+): AdminResource<AdminWorkspaceDetail> {
+  const mode = getAdminDataMode();
+  const query = useQuery({
+    queryKey: ["admin", "workspaces", "detail", workspaceId],
+    queryFn: () =>
+      adminJsonRequest(
+        adminUrl(`/v1/admin/workspaces/${encodeURIComponent(workspaceId ?? "")}`),
+        AdminWorkspaceDetailSchema,
+      ),
+    enabled: mode === "api" && enabled && Boolean(workspaceId),
+  });
+
+  return queryResource<AdminWorkspaceDetail>(mode, query);
+}
+
+export function useAdminWorkspaceTrips(
+  workspaceId: string | null,
+  enabled = true,
+): AdminResource<AdminTripPage> {
+  const mode = getAdminDataMode();
+  const query = useQuery({
+    queryKey: ["admin", "workspaces", "trips", workspaceId],
+    queryFn: () =>
+      adminJsonRequest(
+        adminUrl("/v1/admin/trips", {
+          workspaceId: workspaceId ?? undefined,
+          limit: 5,
+          sort: "updatedAt:desc",
+        }),
+        AdminTripPageSchema,
+      ),
+    enabled: mode === "api" && enabled && Boolean(workspaceId),
+  });
+
+  return queryResource<AdminTripPage>(mode, query);
+}
+
+function csvCell(value: unknown): string {
+  const text =
+    value === null || value === undefined
+      ? ""
+      : typeof value === "object"
+        ? JSON.stringify(value)
+        : String(value);
+  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+
+/** Preview-mode CSV generation; API mode downloads the server-generated export. */
+export function buildAdminCsv(
+  columns: readonly string[],
+  rows: readonly Record<string, unknown>[],
+): string {
+  const lines = [
+    columns.join(","),
+    ...rows.map((row) => columns.map((column) => csvCell(row[column])).join(",")),
+  ];
+  return `\uFEFF${lines.join("\r\n")}\r\n`;
+}
+
+export function downloadCsvText(content: string, filename: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+export async function downloadAdminCsv(url: string, fallbackName: string): Promise<void> {
+  const response = await fetch(url, { headers: { Accept: "text/csv" } });
+  const text = await response.text();
+
+  if (response.status < 200 || response.status >= 300) {
+    const data = text ? parseJson(text) : null;
+    throw new AdminMutationError(toAdminApiFailure(response.status, data, response.headers));
+  }
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const filename = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? fallbackName;
+  downloadCsvText(text, filename);
+}
+
+export type AdminDashboardSourceStatus = "ready" | "loading" | "error";
+
+export interface AdminDashboardSourceState {
+  status: AdminDashboardSourceStatus;
+  error: AdminApiFailure | null;
+  refetch: () => void;
+}
+
+export interface AdminDashboardSources {
+  metrics: AdminDashboardSourceState;
+  emails: AdminDashboardSourceState;
+  audit: AdminDashboardSourceState;
+}
+
+export interface AdminDashboardResourceData extends AdminDashboardData {
+  sources: AdminDashboardSources;
+}
+
+const READY_DASHBOARD_SOURCES: AdminDashboardSources = {
+  metrics: { status: "ready", error: null, refetch: () => undefined },
+  emails: { status: "ready", error: null, refetch: () => undefined },
+  audit: { status: "ready", error: null, refetch: () => undefined },
+};
+
+const AUTH_FAILURE_CODES = new Set([
+  "ADMIN_ACCESS_DENIED",
+  "ADMIN_ACTION_FORBIDDEN",
+  "ADMIN_2FA_REQUIRED",
+  "UNAUTHENTICATED",
+]);
+
+const EMPTY_EMAIL_COUNTS: Record<EmailStatus, number> = {
+  queued: 0,
+  sent: 0,
+  delivered: 0,
+  bounced: 0,
+  complained: 0,
+  failed: 0,
+};
+
+const EMPTY_ADMIN_METRICS: AdminMetrics = {
+  users: { total: 0, active: 0, suspended: 0, new24h: 0 },
+  workspaces: { total: 0, active: 0, suspended: 0, new24h: 0 },
+  trips: 0,
+  entries: 0,
+  comments: 0,
+  media: { count: 0, bytes: 0 },
+  exports: { queued: 0, processing: 0, ready: 0, failed: 0, expired: 0 },
+  emails: EMPTY_EMAIL_COUNTS,
+  queues: [],
+  generatedAt: new Date(0).toISOString(),
+};
+
+function dashboardSourceState(query: ApiQuery<unknown>): AdminDashboardSourceState {
+  const error = failureFromQuery(query);
+  const refetch = () => {
+    void query.refetch();
+  };
+
+  if (error) {
+    return { status: "error", error, refetch };
+  }
+  if (query.data && query.data.status < 300) {
+    return { status: "ready", error: null, refetch };
+  }
+  return { status: "loading", error: null, refetch };
+}
+
+function combineDashboardResources(
+  mode: AdminDataMode,
+  queries: {
+    metrics: ApiQuery<unknown>;
+    emails: ApiQuery<unknown>;
+    audit: ApiQuery<unknown>;
+  },
+  map: () => AdminDashboardData,
+): AdminResource<AdminDashboardResourceData> {
+  const sources = {
+    metrics: dashboardSourceState(queries.metrics),
+    emails: dashboardSourceState(queries.emails),
+    audit: dashboardSourceState(queries.audit),
+  } satisfies AdminDashboardSources;
+  const failures = Object.values(sources).flatMap((source) =>
+    source.error ? [source.error] : [],
+  );
+  const authFailure = failures.find((failure) => AUTH_FAILURE_CODES.has(failure.code));
+  const allFailed = Object.values(sources).every((source) => source.status === "error");
+  const fatalError = authFailure ?? (allFailed ? (failures[0] ?? null) : null);
+
+  return {
+    mode,
+    data: fatalError ? null : { ...map(), sources },
+    isLoading: Object.values(queries).every((query) => query.isLoading),
+    error: fatalError,
+    degraded: degradedFromQueries(Object.values(queries)),
+    refetch: () => {
+      for (const query of Object.values(queries)) {
+        void query.refetch();
+      }
+    },
+  };
+}
+
 function workspaceName(
   workspaceId: string,
   workspaces: readonly AdminWorkspacePageItemsItem[],
@@ -232,15 +667,11 @@ function userName(userId: string | null, users: readonly AdminUserPageItemsItem[
 }
 
 export function mapAdminUsers(
-  users: readonly AdminUserPageItemsItem[],
-): readonly AdminUserDetail[] {
-  return users.map((user) => ({
-    ...user,
-    workspaceCount: 0,
-    tripCount: 0,
-    entryCount: 0,
-    activeSessionCount: 0,
-  }));
+  users: readonly AdminUserListItem[],
+): readonly AdminUserListItem[] {
+  // Detail counters are only authoritative on GET /admin/users/:id. The list
+  // response ships no invented zeros, so keep the rows exactly as served.
+  return users;
 }
 
 export function mapAdminWorkspaces(
@@ -383,22 +814,43 @@ export function mapAdminEmails(
   }));
 }
 
+/**
+ * Queue counters as served by `GET /v1/admin/metrics`. The extra operational
+ * fields are declared locally so this module keeps type-checking before the
+ * OpenAPI client is regenerated from `packages/contracts`.
+ */
+export interface AdminQueueMetricsRow {
+  name: string;
+  waiting: number;
+  active: number;
+  failed: number;
+  completed: number;
+  delayed?: number;
+  paused: boolean;
+  throughputPerMinute?: number | null;
+  throughputWindowSeconds?: number | null;
+  lastCompletedAt?: string | null;
+  lastFailedAt?: string | null;
+}
+
 const QUEUE_LABELS: Record<string, string> = {
-  "media-processing": "媒体处理",
+  media: "媒体处理",
   email: "邮件投递",
   export: "数据导出",
+  reminders: "行程提醒",
   maintenance: "维护任务",
+  // Fixture-only names kept so the local demo console still reads in Chinese.
+  "media-processing": "媒体处理",
+  "email-delivery": "邮件发送",
+  "archive-export": "档案导出",
+  "trip-reminders": "行程提醒",
 };
 
+/** `NaN` marks "not wired": Redis could not produce a completion window. */
+export const UNKNOWN_THROUGHPUT = Number.NaN;
+
 export function mapAdminQueues(
-  queues: readonly {
-    name: string;
-    waiting: number;
-    active: number;
-    failed: number;
-    completed: number;
-    paused: boolean;
-  }[],
+  queues: readonly AdminQueueMetricsRow[],
 ): readonly AdminQueueSummary[] {
   return queues.map((queue) => ({
     name: queue.name,
@@ -407,9 +859,30 @@ export function mapAdminQueues(
     active: queue.active,
     failed: queue.failed,
     completed: queue.completed,
-    throughputPerMinute: 0,
+    throughputPerMinute:
+      typeof queue.throughputPerMinute === "number" && Number.isFinite(queue.throughputPerMinute)
+        ? queue.throughputPerMinute
+        : UNKNOWN_THROUGHPUT,
     paused: queue.paused,
   }));
+}
+
+export function formatThroughput(value: number): string {
+  return Number.isFinite(value) ? `${value.toFixed(1)} jobs/min` : "未接入";
+}
+
+/**
+ * Recipient addresses are personal data; the console only ever renders the
+ * local-part initial plus the domain (`a***@domain`).
+ */
+export function maskEmail(value: string): string {
+  const separator = value.lastIndexOf("@");
+  if (separator <= 0) {
+    return "***";
+  }
+  const local = value.slice(0, separator);
+  const domain = value.slice(separator + 1);
+  return `${local.slice(0, 1)}***@${domain}`;
 }
 
 export function mapAdminJobs(jobs: readonly AdminJobPageItemsItem[]): readonly AdminFailedJob[] {
@@ -448,7 +921,43 @@ export function mapAdminFlags(
   });
 }
 
-export function mapAdminSystem(system: AdminSystem): AdminSystemSnapshot {
+export interface AdminWorkerSignalDetail {
+  signal: "consumer-clients" | "activity-derived" | "unavailable";
+  consumers: number;
+  blockedConsumers: number;
+  lastJobAt: string | null;
+  lastJobStatus: "completed" | "failed" | null;
+  lastJobQueue: string | null;
+}
+
+export interface AdminSystemQueueRow {
+  name: string;
+  waiting: number;
+  active: number;
+  failed: number;
+  delayed: number;
+  paused: boolean;
+}
+
+/**
+ * Extra operational detail that the Admin console needs but that the fixture
+ * snapshot type does not carry. Both fields are optional so a fixture snapshot
+ * stays assignable; the system view reads them defensively.
+ */
+export interface AdminSystemSnapshotDetail extends AdminSystemSnapshot {
+  workerSignal?: AdminWorkerSignalDetail | null;
+  queues?: readonly AdminSystemQueueRow[];
+}
+
+type AdminSystemWorkerWire = AdminSystem["worker"] & {
+  signal?: AdminWorkerSignalDetail["signal"];
+  blockedConsumers?: number;
+  lastJobAt?: string | null;
+  lastJobStatus?: "completed" | "failed" | null;
+  lastJobQueue?: string | null;
+};
+
+export function mapAdminSystem(system: AdminSystem): AdminSystemSnapshotDetail {
   const checks = Object.entries(system.checks).map(([name, value]) => ({
     name,
     status: value.status as "up" | "down",
@@ -466,10 +975,11 @@ export function mapAdminSystem(system: AdminSystem): AdminSystemSnapshot {
           },
         ]
       : [];
+  const worker = system.worker as AdminSystemWorkerWire;
 
   return {
     apiVersion: system.version,
-    workerVersion: system.worker.version,
+    workerVersion: worker.version,
     environment:
       system.environment === "production"
         ? "production"
@@ -477,13 +987,34 @@ export function mapAdminSystem(system: AdminSystem): AdminSystemSnapshot {
           ? "staging"
           : "local",
     nodeVersion: system.nodeVersion,
-    buildTime: system.buildTime,
+    // An absent build timestamp must stay absent: the API no longer substitutes
+    // the container start time, and the view renders "未接入" for empty values.
+    buildTime: system.buildTime ?? "",
     startedAt: system.startedAt,
     uptimeSeconds: system.uptimeSeconds,
-    workerStatus: system.worker.status,
-    workerConsumers: system.worker.consumers,
+    workerStatus: worker.status,
+    workerConsumers: worker.consumers,
     checks,
     migrations,
+    workerSignal:
+      worker.signal === undefined
+        ? null
+        : {
+            signal: worker.signal,
+            consumers: worker.consumers,
+            blockedConsumers: worker.blockedConsumers ?? worker.consumers,
+            lastJobAt: worker.lastJobAt ?? null,
+            lastJobStatus: worker.lastJobStatus ?? null,
+            lastJobQueue: worker.lastJobQueue ?? null,
+          },
+    queues: system.queues.map((queue) => ({
+      name: queue.name,
+      waiting: queue.waiting,
+      active: queue.active,
+      failed: queue.failed,
+      delayed: queue.delayed,
+      paused: queue.paused,
+    })),
   };
 }
 
@@ -539,47 +1070,50 @@ export function mapAdminDashboard(input: {
   };
 }
 
-export function useAdminDashboardResource(): AdminResource<AdminDashboardData> {
+export function useAdminDashboardResource(): AdminResource<AdminDashboardResourceData> {
   const mode = getAdminDataMode();
   const metrics = useGetAdminMetrics({ query: { enabled: mode === "api" } });
   const audit = useListAdminAudit({ limit: 6 }, { query: { enabled: mode === "api" } });
   const emails = useListAdminEmails({ limit: 100 }, { query: { enabled: mode === "api" } });
 
   if (mode === "fixture") {
-    return fixtureResource(MOCK_ADMIN_DASHBOARD);
+    return fixtureResource({ ...MOCK_ADMIN_DASHBOARD, sources: READY_DASHBOARD_SOURCES });
   }
 
-  return combineResources(mode, [metrics, audit, emails], () =>
+  return combineDashboardResources(mode, { metrics, audit, emails }, () =>
     mapAdminDashboard({
-      metrics: dataOf(metrics, {} as Parameters<typeof mapAdminDashboard>[0]["metrics"]),
+      metrics: dataOf(metrics, EMPTY_ADMIN_METRICS),
       audit: itemsOf<AuditLog>(audit),
       emails: itemsOf<AdminEmailPageItemsItem>(emails),
     }),
   );
 }
 
-export function useAdminUsersResource(): AdminResource<readonly AdminUserDetail[]> {
+export function useAdminUsersResource(): AdminResource<readonly AdminUserListItem[]> {
   const mode = getAdminDataMode();
-  const query = useListAdminUsers({ limit: 100 }, { query: { enabled: mode === "api" } });
+  // The page shell only needs a small, permission-checked request to gate the
+  // view. UsersView owns the searchable, cursor-paginated query below.
+  const query = useListAdminUsers(
+    { limit: 1, sort: "createdAt:desc" },
+    { query: { enabled: mode === "api" } },
+  );
   if (mode === "fixture") {
     return fixtureResource(MOCK_ADMIN_USERS);
   }
-  return combineResources(mode, [query], () => mapAdminUsers(itemsOf(query)));
+  return combineResources(mode, [query], () => itemsOf<AdminUserListItem>(query));
 }
 
-export function useAdminWorkspacesResource(): AdminResource<readonly AdminWorkspaceDetail[]> {
+export function useAdminWorkspacesResource(): AdminResource<readonly AdminWorkspaceListItem[]> {
   const mode = getAdminDataMode();
-  const workspaces = useListAdminWorkspaces({ limit: 100 }, { query: { enabled: mode === "api" } });
-  const users = useListAdminUsers({ limit: 100 }, { query: { enabled: mode === "api" } });
+  // See useAdminUsersResource: the view owns the real paginated query.
+  const query = useListAdminWorkspaces(
+    { limit: 1, sort: "createdAt:desc" },
+    { query: { enabled: mode === "api" } },
+  );
   if (mode === "fixture") {
     return fixtureResource(MOCK_ADMIN_WORKSPACES);
   }
-  return combineResources(mode, [workspaces, users], () =>
-    mapAdminWorkspaces(
-      itemsOf<AdminWorkspacePageItemsItem>(workspaces),
-      itemsOf<AdminUserPageItemsItem>(users),
-    ),
-  );
+  return combineResources(mode, [query], () => itemsOf<AdminWorkspaceListItem>(query));
 }
 
 export function useAdminContentResource(): AdminResource<readonly AdminContentItem[]> {
@@ -665,13 +1199,13 @@ export function useAdminQueuesResource(): AdminResource<{
   }
   return combineResources(mode, [metrics, jobs], () => ({
     queues: mapAdminQueues(
-      dataOf<{ queues: Parameters<typeof mapAdminQueues>[0] }>(metrics, { queues: [] }).queues,
+      dataOf<{ queues: readonly AdminQueueMetricsRow[] }>(metrics, { queues: [] }).queues,
     ),
     failedJobs: mapAdminJobs(itemsOf(jobs)),
   }));
 }
 
-export function useAdminSystemResource(): AdminResource<AdminSystemSnapshot> {
+export function useAdminSystemResource(): AdminResource<AdminSystemSnapshotDetail> {
   const mode = getAdminDataMode();
   const query = useGetAdminSystem({ query: { enabled: mode === "api" } });
   if (mode === "fixture") {
@@ -680,6 +1214,29 @@ export function useAdminSystemResource(): AdminResource<AdminSystemSnapshot> {
   return combineResources(mode, [query], () =>
     mapAdminSystem(dataOf<AdminSystem>(query, {} as AdminSystem)),
   );
+}
+
+/** Real per-status delivery totals aggregated in PostgreSQL by `/v1/admin/metrics`. */
+export function useAdminEmailCountsResource(): AdminResource<{
+  counts: Record<EmailStatus, number> | null;
+}> {
+  const mode = getAdminDataMode();
+  const metrics = useGetAdminMetrics({ query: { enabled: mode === "api" } });
+  if (mode === "fixture") {
+    const counts = { ...EMPTY_EMAIL_COUNTS };
+    for (const email of MOCK_ADMIN_EMAILS) {
+      counts[email.status] += 1;
+    }
+    return fixtureResource({ counts });
+  }
+  return combineResources(mode, [metrics], () => {
+    const data = dataOf<AdminMetrics>(metrics, EMPTY_ADMIN_METRICS);
+    // Older API payloads carry no per-status email aggregation; report that as
+    // "not wired" instead of rendering a zero that looks like a real count.
+    return {
+      counts: data.emails ? { ...EMPTY_EMAIL_COUNTS, ...data.emails } : null,
+    };
+  });
 }
 
 export interface AdminMutationPort {
@@ -701,6 +1258,14 @@ export interface AdminMutationPort {
       workspaceAllowlist: string[];
     },
   ): Promise<void>;
+  createFlag(data: {
+    key: string;
+    description: string;
+    enabled: boolean;
+    rolloutPercentage: number;
+    workspaceAllowlist: string[];
+  }): Promise<void>;
+  deleteFlag(key: string): Promise<void>;
   resendEmail(id: string): Promise<void>;
   retryJob(queue: string, jobId: string): Promise<void>;
   pauseQueue(queue: string): Promise<void>;
@@ -764,6 +1329,22 @@ export function useAdminMutationPort(): AdminMutationPort {
         }),
         "update feature flag",
       ),
+    createFlag: async (data) => {
+      await adminJsonMutation("/v1/admin/flags", "POST", {
+        key: data.key,
+        description: data.description,
+        enabled: data.enabled,
+        rolloutPercentage: data.rolloutPercentage,
+        ...(data.workspaceAllowlist.length > 0
+          ? { rules: { workspaceAllowlist: data.workspaceAllowlist } }
+          : {}),
+      });
+      await queryClient.invalidateQueries();
+    },
+    deleteFlag: async (key) => {
+      await adminJsonMutation(`/v1/admin/flags/${encodeURIComponent(key)}`, "DELETE", undefined);
+      await queryClient.invalidateQueries();
+    },
     resendEmail: async (id) =>
       complete(
         resendAdminEmail(id, {

@@ -10,6 +10,7 @@ import {
   generatedAdminAuthTransport,
   type AdminAuthTransport,
 } from "../../lib/admin-auth";
+import { getAdminPostLoginPath } from "../../lib/admin-paths";
 import { getAdminDataMode, type AdminDataMode } from "../../lib/admin-data-mode";
 
 interface LoginPanelProps {
@@ -18,11 +19,24 @@ interface LoginPanelProps {
   transport?: AdminAuthTransport;
 }
 
+const ADMIN_DEMO_EMAIL = "demo@roamlog.local";
+
+function resolvePostLoginPath(): string {
+  if (typeof window === "undefined") {
+    return getAdminPostLoginPath();
+  }
+  const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+  return getAdminPostLoginPath(returnTo);
+}
+
 export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps) {
   const activeMode = mode ?? getAdminDataMode();
   const auth = transport ?? generatedAdminAuthTransport;
+  // Explicit opt-in only: `NEXT_PUBLIC_ADMIN_DEMO=1` prefills a labelled demo
+  // address. Production builds never prefill the old fixture admin account.
+  const demoEnabled = process.env.NEXT_PUBLIC_ADMIN_DEMO === "1";
   const [step, setStep] = useState<"credentials" | "two-factor">("credentials");
-  const [email, setEmail] = useState("lin.zhixia@roamlog.local");
+  const [email, setEmail] = useState(() => (demoEnabled ? ADMIN_DEMO_EMAIL : ""));
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
@@ -33,7 +47,7 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
       onAuthenticated();
       return;
     }
-    window.location.assign("/admin");
+    window.location.assign(resolvePostLoginPath());
   }
 
   return (
@@ -53,9 +67,12 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
                 <p className="type-eyebrow mt-1 text-[8px] text-ash">platform control</p>
               </div>
             </div>
-            <Badge tone={activeMode === "api" ? "green" : "neutral"}>
-              {activeMode === "api" ? "LIVE API AUTH" : "LOGIN PLACEHOLDER"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {demoEnabled ? <Badge tone="orange">DEMO PREFILL</Badge> : null}
+              <Badge tone={activeMode === "api" ? "green" : "neutral"}>
+                {activeMode === "api" ? "LIVE API AUTH" : "LOGIN PLACEHOLDER"}
+              </Badge>
+            </div>
           </header>
 
           <div className="flex flex-1 items-center py-12">
@@ -114,7 +131,16 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
                     }
                   }}
                 >
-                  <FormField id="admin-email" label="管理员邮箱" required>
+                  <FormField
+                    id="admin-email"
+                    label="管理员邮箱"
+                    required
+                    hint={
+                      demoEnabled
+                        ? "DEMO：已通过 NEXT_PUBLIC_ADMIN_DEMO=1 预填演示邮箱，请勿用于生产。"
+                        : undefined
+                    }
+                  >
                     <Input
                       autoComplete="username"
                       type="email"

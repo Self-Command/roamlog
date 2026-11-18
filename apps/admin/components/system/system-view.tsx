@@ -1,13 +1,18 @@
 "use client";
 
-import { Activity, Clock3, GitCommitHorizontal, ServerCog } from "lucide-react";
+import { Activity, Clock3, GitCommitHorizontal, Layers, ServerCog } from "lucide-react";
 
 import { Badge } from "@roamlog/ui";
 
 import type { AdminConsoleRole } from "../../lib/fixtures";
 import type { AdminDataMode } from "../../lib/admin-data-mode";
+import type { AdminSystemSnapshotDetail } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
-import { MOCK_ADMIN_SYSTEM, formatUptime, type AdminSystemSnapshot } from "../../lib/ops-fixtures";
+import {
+  MOCK_ADMIN_SYSTEM,
+  formatUptime,
+  type AdminSystemSnapshot,
+} from "../../lib/ops-fixtures";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "../dashboard/admin-metric-card";
 
@@ -41,13 +46,37 @@ const workerTones = {
   down: "red",
 } as const;
 
+const signalSources = {
+  "consumer-clients": "Redis CLIENT LIST（阻塞消费者）+ 队列计数",
+  "activity-derived": "最近一次任务完成/失败时间 + 队列 active 数",
+  unavailable: "未接入",
+} as const;
+
+const UNCONFIGURED = "unconfigured";
+
+/** `null`-able operational values render as an explicit "not wired" state. */
+function notWired(value: string | null | undefined): boolean {
+  return !value || value === UNCONFIGURED;
+}
+
 export function SystemView({
   role,
   snapshot = MOCK_ADMIN_SYSTEM,
   mode = "fixture",
 }: SystemViewProps) {
   const readOnly = role === "analyst";
+  const detail = snapshot as AdminSystemSnapshotDetail;
   const upChecks = snapshot.checks.filter((check) => check.status === "up").length;
+  const workerSignal = detail.workerSignal ?? null;
+  const queues = detail.queues ?? [];
+
+  // The worker cannot be proven alive without a heartbeat; when neither the
+  // blocked-consumer count nor recent job activity is available the console
+  // says "not wired" instead of claiming DOWN.
+  const signal = workerSignal?.signal ?? "unavailable";
+  const workerObservable =
+    mode === "fixture" || (signal !== "unavailable" && workerSignal !== null);
+  const workerDerivation = workerSignal ? signalSources[workerSignal.signal] : "未接入";
 
   return (
     <div className="space-y-5">
@@ -56,7 +85,7 @@ export function SystemView({
         title="系统健康"
         description={
           mode === "api"
-            ? "检查 API、数据库、Redis 与对象存储的实时健康结果。"
+            ? "只展示 /v1/admin/system 实际返回的检查项；无法观测的项目标记为「未接入」。"
             : "检查 API、Worker、数据库、Redis、对象存储与迁移版本。当前读数为本地 fixture 快照。"
         }
         readOnly={readOnly}
@@ -71,8 +100,14 @@ export function SystemView({
       <section aria-label="版本与运行时间" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminMetricCard
           label="API 版本"
-          value={snapshot.apiVersion}
-          detail={`Worker 版本 ${snapshot.workerVersion}`}
+          value={notWired(snapshot.apiVersion) ? "未接入" : snapshot.apiVersion}
+          detail={
+            notWired(snapshot.apiVersion)
+              ? "需要 ROAMLOG_API_VERSION"
+              : `Worker 版本 ${
+                  notWired(snapshot.workerVersion) ? "未接入" : snapshot.workerVersion
+                }`
+          }
           tone="blue"
           icon={ServerCog}
         />
@@ -92,8 +127,12 @@ export function SystemView({
         />
         <AdminMetricCard
           label="最近构建"
-          value={formatDateTime(snapshot.buildTime)}
-          detail={`${mode} build metadata`}
+          value={notWired(snapshot.buildTime) ? "未接入" : formatDateTime(snapshot.buildTime)}
+          detail={
+            notWired(snapshot.buildTime)
+              ? "需要 ROAMLOG_BUILD_TIME（不再用容器启动时间替代）"
+              : `${mode} build metadata`
+          }
           tone="orange"
           icon={Activity}
         />
@@ -109,7 +148,9 @@ export function SystemView({
               </p>
             </div>
             <Badge tone={upChecks === snapshot.checks.length ? "green" : "yellow"}>
-              {upChecks} / {snapshot.checks.length} up
+              {snapshot.checks.length === 0
+                ? "未接入"
+                : `${upChecks} / ${snapshot.checks.length} up`}
             </Badge>
           </div>
           <div className="grid gap-px bg-hairline sm:grid-cols-2">
@@ -130,52 +171,96 @@ export function SystemView({
 
         <aside className="space-y-4">
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">WORKER / BULLMQ CLIENTS</p>
+            <p className="type-eyebrow">WORKER / OBSERVED SIGNAL</p>
             <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">后台 Worker</h2>
             <dl className="mt-3 space-y-2 text-[11px]">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted">版本</dt>
-                <dd className="font-mono text-[10px] text-body">v{snapshot.workerVersion}</dd>
+                <dd className="font-mono text-[10px] text-body">
+                  {notWired(snapshot.workerVersion) ? "未接入" : `v${snapshot.workerVersion}`}
+                </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted">消费者连接</dt>
+                <dt className="text-muted">阻塞消费者</dt>
                 <dd className="font-mono text-[10px] text-body">{snapshot.workerConsumers}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted">状态</dt>
                 <dd>
-                  <Badge tone={workerTones[snapshot.workerStatus]}>
-                    {workerLabels[snapshot.workerStatus]}
-                  </Badge>
+                  {!workerObservable ? (
+                    <Badge tone="slate" title="缺少 Worker heartbeat，无法证明存活或死亡">
+                      未接入
+                    </Badge>
+                  ) : (
+                    <Badge tone={workerTones[snapshot.workerStatus]}>
+                      {workerLabels[snapshot.workerStatus]}
+                    </Badge>
+                  )}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted">最近任务</dt>
+                <dd className="font-mono text-[10px] text-body">
+                  {workerSignal?.lastJobAt
+                    ? formatDateTime(workerSignal.lastJobAt)
+                    : "未接入"}
                 </dd>
               </div>
             </dl>
             <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
-              Redis CLIENT LIST · {snapshot.workerConsumers} BullMQ blocking consumers
+              推导口径：{workerDerivation}
+              {workerSignal?.lastJobStatus
+                ? ` · 最近 ${workerSignal.lastJobStatus} @ ${workerSignal.lastJobQueue ?? "?"}`
+                : ""}
             </p>
+            {!workerObservable ? (
+              <p className="mt-2 text-[9px] leading-4 text-muted">
+                Worker 未写入 heartbeat，也没有可观测的阻塞消费者或近期任务；需要 Worker
+                侧新增心跳键（如 <code className="font-mono">roamlog:worker:heartbeat</code>）
+                才能给出可信的健康判定。
+              </p>
+            ) : null}
           </section>
 
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">QUEUE / REDIS</p>
-            <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">队列与 Redis</h2>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="type-eyebrow">QUEUE / REDIS DISCOVERY</p>
+                <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">队列注册</h2>
+              </div>
+              <Layers aria-hidden="true" className="size-4 text-accent-blue" />
+            </div>
             <div className="mt-3 space-y-2 text-[11px]">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">连接</span>
-                <Badge tone="green">Up · 2 ms</Badge>
+                <span className="text-muted">已发现队列</span>
+                <span className="font-mono text-[10px] text-body">
+                  {mode === "api" ? `${queues.length} 个` : `${queues.length || "—"}`}
+                </span>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">Key prefix</span>
-                <span className="font-mono text-[10px] text-body">roamlog</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">maxRetriesPerRequest</span>
-                <span className="font-mono text-[10px] text-body">null</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">Worker consumers</span>
-                <span className="font-mono text-[10px] text-body">4 queues</span>
-              </div>
+              {queues.length === 0 ? (
+                <p className="text-[10px] leading-4 text-muted">
+                  {mode === "api"
+                    ? "Redis 中没有可识别的 BullMQ 队列键：当前没有已注册队列，或 Redis 不可达。"
+                    : "fixture 快照不包含队列注册信息。"}
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {queues.map((queue) => (
+                    <li key={queue.name} className="flex items-center justify-between gap-2">
+                      <span className="truncate font-mono text-[10px] text-body">{queue.name}</span>
+                      <span className="flex items-center gap-2 font-mono text-[9px] text-muted">
+                        <span>w{queue.waiting}</span>
+                        <span>a{queue.active}</span>
+                        {queue.paused ? <Badge tone="yellow">Paused</Badge> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+            <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
+              来源：Redis SCAN 匹配 BullMQ 状态键；不再渲染硬编码的 key prefix / 延迟 / 队列数。
+            </p>
           </section>
         </aside>
       </div>
@@ -189,7 +274,11 @@ export function SystemView({
             </p>
           </div>
           <Badge tone={snapshot.migrations.length > 0 ? "green" : "yellow"}>
-            {snapshot.migrations.length > 0 ? "Latest applied" : "No metadata"}
+            {snapshot.migrations.length > 0
+              ? "Latest applied"
+              : mode === "api"
+                ? "未接入"
+                : "No metadata"}
           </Badge>
         </div>
         <div className="overflow-x-auto">

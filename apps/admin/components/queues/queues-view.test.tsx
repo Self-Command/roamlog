@@ -1,10 +1,27 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import type { ReactElement } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminMutationPort } from "../../lib/admin-data-source";
-import { MOCK_ADMIN_FAILED_JOBS, MOCK_ADMIN_QUEUES } from "../../lib/ops-fixtures";
+import {
+  MOCK_ADMIN_FAILED_JOBS,
+  MOCK_ADMIN_QUEUES,
+  type AdminQueueSummary,
+} from "../../lib/ops-fixtures";
 import { QueuesView } from "./queues-view";
+
+function renderWithClient(ui: ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("QueuesView", () => {
   it("requires an explicit target confirmation before retrying a failed job", async () => {
@@ -103,7 +120,36 @@ describe("QueuesView", () => {
       resumeQueue: vi.fn().mockResolvedValue(undefined),
       clearQueue: vi.fn().mockResolvedValue(undefined),
     } as unknown as AdminMutationPort;
-    render(
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            version: "1.0.0",
+            environment: "development",
+            nodeVersion: "v24",
+            buildTime: null,
+            startedAt: "2026-11-17T00:00:00.000Z",
+            uptimeSeconds: 1,
+            migration: { version: null, appliedAt: null },
+            worker: {
+              status: "up",
+              version: "1.0.0",
+              consumers: 2,
+              signal: "consumer-clients",
+              blockedConsumers: 2,
+              lastJobAt: null,
+              lastJobStatus: null,
+              lastJobQueue: null,
+            },
+            checks: {},
+            queues: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    renderWithClient(
       <QueuesView
         role="super_admin"
         queues={MOCK_ADMIN_QUEUES}
@@ -130,5 +176,36 @@ describe("QueuesView", () => {
     await user.type(within(clearDialog).getByLabelText("输入队列名称确认"), "media-processing");
     await user.click(within(clearDialog).getByRole("button", { name: "确认清空" }));
     expect(mutations.clearQueue).toHaveBeenCalledWith("media-processing");
+  });
+
+  it("renders the measured throughput total and the discovered queue count", () => {
+    render(
+      <QueuesView
+        role="super_admin"
+        queues={MOCK_ADMIN_QUEUES}
+        failedJobs={MOCK_ADMIN_FAILED_JOBS}
+      />,
+    );
+
+    // 12.4 + 8.1 + 0.7 + 3.6 = 24.8 jobs/min, and four queues are shown.
+    expect(screen.getAllByText("24.8 jobs/min").length).toBeGreaterThan(0);
+    expect(screen.getByText("跨 4 个队列（Redis 发现）")).toBeInTheDocument();
+  });
+
+  it("shows 未接入 instead of 0.0 when the throughput window is unavailable", () => {
+    const queues: AdminQueueSummary[] = [
+      { ...MOCK_ADMIN_QUEUES[0]!, throughputPerMinute: Number.NaN },
+    ];
+    render(<QueuesView role="super_admin" queues={queues} failedJobs={[]} />);
+
+    expect(screen.getAllByText("未接入").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/0\.0 jobs\/min/)).not.toBeInTheDocument();
+  });
+
+  it("renders an empty state when Redis discovers no queues", () => {
+    render(<QueuesView role="super_admin" queues={[]} failedJobs={[]} />);
+
+    expect(screen.getByText("未发现队列")).toBeInTheDocument();
+    expect(screen.getByText("Redis 中未发现已注册队列")).toBeInTheDocument();
   });
 });

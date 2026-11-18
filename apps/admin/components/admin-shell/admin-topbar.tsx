@@ -1,28 +1,28 @@
 "use client";
 
-import { Bell, Command, Menu, Search, ShieldCheck } from "lucide-react";
+import { Command, Menu, Search } from "lucide-react";
 
 import { Avatar, Badge, IconButton } from "@roamlog/ui";
 
 import { cn } from "./cn";
 import { getBreadcrumbs } from "./admin-nav";
+import { resolveAdminEnvironment } from "./admin-environment";
 import { useAdminSession } from "./mock-session-provider";
 
 interface AdminTopbarProps {
   activePath: string;
   onOpenMobileNav: () => void;
   onOpenCommandPalette: () => void;
-  onOpenNotifications: () => void;
 }
 
 export function AdminTopbar({
   activePath,
   onOpenMobileNav,
   onOpenCommandPalette,
-  onOpenNotifications,
 }: AdminTopbarProps) {
   const { session } = useAdminSession();
   const breadcrumbs = getBreadcrumbs(activePath);
+  const environment = resolveAdminEnvironment();
 
   return (
     <header className="sticky top-0 z-20 h-14 border-b border-hairline bg-black/85 backdrop-blur-xl">
@@ -93,24 +93,11 @@ export function AdminTopbar({
             <Search aria-hidden="true" />
           </IconButton>
 
-          <Badge tone="slate" className="hidden sm:inline-flex">
-            {session.environment.toUpperCase()}
-          </Badge>
-
-          <IconButton
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="通知，2 条未读"
-            onClick={onOpenNotifications}
-            className="relative"
-          >
-            <Bell aria-hidden="true" />
-            <span
-              aria-hidden="true"
-              className="absolute right-1.5 top-1.5 size-1.5 rounded-pill bg-accent-orange"
-            />
-          </IconButton>
+          {environment ? (
+            <Badge tone="slate" className="hidden sm:inline-flex">
+              {environment}
+            </Badge>
+          ) : null}
 
           <div className="hidden h-5 w-px bg-hairline sm:block" />
 
@@ -118,9 +105,8 @@ export function AdminTopbar({
             <Avatar name={session.name} size={26} />
             <div className="hidden xl:block">
               <p className="text-[11px] leading-none text-ink">{session.name}</p>
-              <p className="mt-1 flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.08em] text-muted">
-                <ShieldCheck aria-hidden="true" className="size-2.5 text-accent-green" />
-                {session.twoFactorEnabled ? "2FA active" : "2FA gated"}
+              <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.08em] text-muted">
+                {session.role}
               </p>
             </div>
           </div>

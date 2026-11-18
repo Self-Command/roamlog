@@ -1,12 +1,14 @@
 "use client";
 
-import { Compass, LogOut, ShieldCheck } from "lucide-react";
+import { Compass, LogOut } from "lucide-react";
+import { useState } from "react";
 
 import { Avatar, Badge, Select } from "@roamlog/ui";
 
 import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES } from "../../lib/fixtures";
-import { getAdminLoginPath } from "../../lib/admin-paths";
+import { adminSignOutErrorMessage } from "./admin-session-client";
 import { cn } from "./cn";
+import { resolveAdminEnvironment } from "./admin-environment";
 import { useAdminSession } from "./mock-session-provider";
 import { ADMIN_NAV_GROUPS, isNavItemActive } from "./admin-nav";
 
@@ -17,7 +19,22 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebarProps) {
-  const { session, setRole, isRoleLocked } = useAdminSession();
+  const { session, setRole, isRoleLocked, signOut } = useAdminSession();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const environment = resolveAdminEnvironment();
+
+  async function handleSignOut() {
+    setSignOutError(null);
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } catch (error) {
+      setSignOutError(adminSignOutErrorMessage(error));
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
 
   return (
     <aside
@@ -37,16 +54,18 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
         </div>
       </div>
 
-      <div className="border-b border-hairline px-3 py-3">
-        <div className="flex items-center justify-between rounded-control border border-hairline bg-surface-1 px-2.5 py-2">
-          <span className="font-mono text-[9px] uppercase tracking-[0.11em] text-muted">
-            Environment
-          </span>
-          <Badge tone="slate" aria-label={`环境 ${session.environment}`}>
-            {session.environment.toUpperCase()}
-          </Badge>
+      {environment ? (
+        <div className="border-b border-hairline px-3 py-3">
+          <div className="flex items-center justify-between rounded-control border border-hairline bg-surface-1 px-2.5 py-2">
+            <span className="font-mono text-[9px] uppercase tracking-[0.11em] text-muted">
+              Environment
+            </span>
+            <Badge tone="slate" aria-label={`环境 ${environment}`}>
+              {environment}
+            </Badge>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <nav
         aria-label="管理后台主导航"
@@ -122,10 +141,6 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <Badge tone="neutral">{session.role}</Badge>
-            <span className="inline-flex items-center gap-1 font-mono text-[9px] text-accent-green">
-              <ShieldCheck aria-hidden="true" className="size-3" />
-              2FA 已启用
-            </span>
           </div>
           <label className="mt-3 block">
             <span className="type-eyebrow">
@@ -160,14 +175,20 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
               ? "API 模式下平台角色由 /v1/me 与后端 guard 决定。"
               : "角色切换仅用于本地 fixture 预览，不修改真实权限。"}
           </p>
-          <a
-            href={getAdminLoginPath()}
-            onClick={onNavigate}
-            className="mt-2 flex h-8 items-center gap-2 rounded-control px-1 text-[11px] text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ink"
+          <button
+            type="button"
+            onClick={() => void handleSignOut()}
+            disabled={isSigningOut}
+            className="mt-2 flex h-8 w-full items-center gap-2 rounded-control px-1 text-left text-[11px] text-muted outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ink disabled:opacity-60"
           >
             <LogOut aria-hidden="true" className="size-3.5" />
-            返回登录占位
-          </a>
+            {isSigningOut ? "正在退出…" : isRoleLocked ? "退出登录" : "退出本地预览"}
+          </button>
+          {signOutError ? (
+            <p role="alert" className="mt-1.5 text-[10px] leading-4 text-accent-red">
+              {signOutError}
+            </p>
+          ) : null}
         </div>
       </div>
     </aside>

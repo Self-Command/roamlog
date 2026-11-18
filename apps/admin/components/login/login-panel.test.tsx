@@ -1,11 +1,33 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { getAdminPostLoginPath } from "../../lib/admin-paths";
 import { LoginPanel } from "./login-panel";
 import type { AdminAuthTransport } from "../../lib/admin-auth";
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("LoginPanel", () => {
+  it("does not prefill a fixture email by default", () => {
+    render(<LoginPanel />);
+
+    expect(screen.getByLabelText(/管理员邮箱/)).toHaveValue("");
+    expect(screen.queryByText(/DEMO/)).not.toBeInTheDocument();
+  });
+
+  it("only prefills a labelled demo email when NEXT_PUBLIC_ADMIN_DEMO=1", () => {
+    vi.stubEnv("NEXT_PUBLIC_ADMIN_DEMO", "1");
+
+    render(<LoginPanel />);
+
+    expect(screen.getByLabelText(/管理员邮箱/)).toHaveValue("demo@roamlog.local");
+    expect(screen.getByText("DEMO PREFILL")).toBeInTheDocument();
+    expect(screen.getByText(/NEXT_PUBLIC_ADMIN_DEMO=1/)).toBeInTheDocument();
+  });
+
   it("progresses from the placeholder credentials step to the 2FA step", async () => {
     const user = userEvent.setup();
     const onAuthenticated = vi.fn();
@@ -13,8 +35,7 @@ describe("LoginPanel", () => {
 
     expect(screen.getByRole("heading", { name: "进入平台控制台" })).toBeInTheDocument();
     const emailInput = screen.getByLabelText(/管理员邮箱/);
-    await user.clear(emailInput);
-    await user.type(emailInput, "admin@roamlog.local");
+    await user.type(emailInput, "admin@roamlog.test");
     await user.type(screen.getByLabelText(/^密码/), "local-placeholder");
     await user.click(screen.getByRole("button", { name: "继续验证" }));
 
@@ -39,11 +60,12 @@ describe("LoginPanel", () => {
 
     render(<LoginPanel mode="api" transport={transport} onAuthenticated={onAuthenticated} />);
 
+    await user.type(screen.getByLabelText(/管理员邮箱/), "ops@roamlog.test");
     await user.type(screen.getByLabelText(/^密码/), "real-password");
     await user.click(screen.getByRole("button", { name: "继续验证" }));
 
     expect(transport.signIn).toHaveBeenCalledWith({
-      email: "lin.zhixia@roamlog.local",
+      email: "ops@roamlog.test",
       password: "real-password",
     });
     expect(screen.getByRole("heading", { name: "双因素认证" })).toBeInTheDocument();
@@ -53,5 +75,11 @@ describe("LoginPanel", () => {
 
     expect(transport.verifyTotp).toHaveBeenCalledWith("654321");
     expect(onAuthenticated).toHaveBeenCalledOnce();
+  });
+
+  it("returns to an admin path from a sanitized returnTo only", () => {
+    expect(getAdminPostLoginPath("/admin/audit")).toBe("/admin/audit");
+    expect(getAdminPostLoginPath("//evil.example/admin")).toBe("/admin");
+    expect(getAdminPostLoginPath("https://evil.example/admin")).toBe("/admin");
   });
 });

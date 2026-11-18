@@ -1,30 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MailCheck, MailWarning, RefreshCw, Send, ShieldAlert } from "lucide-react";
+import { MailCheck, MailWarning, RefreshCw, ShieldAlert } from "lucide-react";
 
 import { canPlatform } from "@roamlog/contracts";
 import type { EmailStatus } from "@roamlog/contracts";
-import {
-  Badge,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  EmptyState,
-  FormField,
-  Input,
-  Select,
-  Textarea,
-} from "@roamlog/ui";
+import { Badge, Button, EmptyState, Input, Select } from "@roamlog/ui";
 
 import type { AdminConsoleRole } from "../../lib/fixtures";
 import type { AdminDataMode } from "../../lib/admin-data-mode";
 import { AdminMutationError } from "../../lib/admin-api-error";
-import type { AdminMutationPort } from "../../lib/admin-data-source";
+import {
+  maskEmail,
+  useAdminEmailCountsResource,
+  type AdminMutationPort,
+} from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
 import { MOCK_ADMIN_EMAILS, type AdminEmailRecord } from "../../lib/ops-fixtures";
@@ -57,6 +47,49 @@ const emailStatusTones: Record<EmailStatus, "neutral" | "blue" | "green" | "red"
   failed: "red",
 };
 
+/**
+ * Re-sending a delivered/sent message duplicates a successful delivery, and a
+ * complained message must not be retried. Only genuinely failed deliveries are
+ * retryable, matching the API's `EMAIL_NOT_RESENDABLE` guard.
+ */
+const RESENDABLE_STATUSES: ReadonlySet<EmailStatus> = new Set<EmailStatus>(["failed", "bounced"]);
+
+const METRIC_ORDER: readonly EmailStatus[] = [
+  "sent",
+  "queued",
+  "delivered",
+  "bounced",
+  "complained",
+  "failed",
+];
+
+const metricIcons = {
+  sent: MailCheck,
+  queued: MailWarning,
+  delivered: MailCheck,
+  bounced: MailWarning,
+  complained: ShieldAlert,
+  failed: MailWarning,
+} as const;
+
+const metricLabels: Record<EmailStatus, string> = {
+  sent: "已发送",
+  queued: "排队中",
+  delivered: "已送达",
+  bounced: "退信",
+  complained: "投诉",
+  failed: "失败",
+};
+
+const metricTones: Record<EmailStatus, "neutral" | "blue" | "green" | "red" | "orange"> = {
+  sent: "blue",
+  queued: "neutral",
+  delivered: "green",
+  bounced: "orange",
+  complained: "red",
+  failed: "red",
+};
+
 export function EmailsView({
   role,
   emails = MOCK_ADMIN_EMAILS,
@@ -68,13 +101,8 @@ export function EmailsView({
   const [status, setStatus] = useState<"all" | EmailStatus>("all");
   const [template, setTemplate] = useState("all");
   const [statusMessage, setStatusMessage] = useState("");
-  const [testDialogOpen, setTestDialogOpen] = useState(false);
-  const [testRecipient, setTestRecipient] = useState("");
-  const [testSubject, setTestSubject] = useState("Roamlog 后台测试邮件");
-  const [testError, setTestError] = useState("");
 
   const canResend = canPlatform(role, "admin:emails:resend");
-  const canSendTest = mode === "fixture" && (role === "admin" || role === "super_admin");
   const readOnly = role === "analyst";
 
   useEffect(() => {
@@ -102,13 +130,28 @@ export function EmailsView({
     });
   }, [query, records, status, template]);
 
-  const delivered = records.filter((email) => email.status === "delivered").length;
-  const bounced = records.filter((email) => email.status === "bounced").length;
-  const complained = records.filter((email) => email.status === "complained").length;
-  const failed = records.filter((email) => email.status === "failed").length;
+  const latestFailure = useMemo(
+    () =>
+      records
+        .filter((email) => email.error)
+        .slice()
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null,
+    [records],
+  );
+
+  const fixtureCounts = useMemo(() => {
+    const counts = Object.fromEntries(METRIC_ORDER.map((key) => [key, 0])) as Record<
+      EmailStatus,
+      number
+    >;
+    for (const email of records) {
+      counts[email.status] += 1;
+    }
+    return counts;
+  }, [records]);
 
   async function resendEmail(record: AdminEmailRecord) {
-    if (!canResend) {
+    if (!canResend || !RESENDABLE_STATUSES.has(record.status)) {
       return;
     }
     if (mode === "api" && mutations) {
@@ -136,44 +179,11 @@ export function EmailsView({
         action: "admin.email.resend",
         targetType: "email_log",
         targetId: record.id,
-        targetName: record.to,
+        targetName: maskEmail(record.to),
         metadata: { mock: true, template: record.template, previousStatus: record.status },
       });
     }
-    setStatusMessage(`已重新加入队列：${record.to}`);
-  }
-
-  function sendTestEmail() {
-    const normalized = testRecipient.trim();
-    if (!normalized.includes("@")) {
-      setTestError("请输入有效的收件邮箱。");
-      return;
-    }
-    const now = new Date().toISOString();
-    const record: AdminEmailRecord = {
-      id: `fixture-email-${Date.now()}`,
-      to: normalized,
-      template: "admin-test",
-      subject: testSubject.trim() || "Roamlog 后台测试邮件",
-      providerId: null,
-      status: "queued",
-      error: null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    setRecords((current) => [record, ...current]);
-    recordMockAuditEvent({
-      action: "admin.email.test",
-      targetType: "email_log",
-      targetId: record.id,
-      targetName: normalized,
-      metadata: { mock: true, template: record.template },
-    });
-    setTestDialogOpen(false);
-    setTestRecipient("");
-    setTestSubject("Roamlog 后台测试邮件");
-    setTestError("");
-    setStatusMessage(`测试邮件已入队：${normalized}`);
+    setStatusMessage(`已重新加入队列：${maskEmail(record.to)}`);
   }
 
   return (
@@ -181,58 +191,11 @@ export function EmailsView({
       <AdminPageHeader
         eyebrow="DELIVERY / EMAIL"
         title="邮件"
-        description="检查 Resend 投递状态、退信与投诉，并重发失败邮件。"
+        description="检查 Resend 投递状态、退信与投诉；只有 failed / bounced 的邮件可以重发。收件人一律脱敏展示。"
         readOnly={readOnly}
-        actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!canSendTest}
-            title={
-              canSendTest
-                ? "发送测试邮件"
-                : mode === "api"
-                  ? "API 契约暂未提供测试邮件入口"
-                  : "仅 Admin 及以上可发送测试邮件"
-            }
-            onClick={() => setTestDialogOpen(true)}
-          >
-            <Send aria-hidden="true" />
-            测试邮件
-          </Button>
-        }
       />
 
-      <section aria-label="邮件指标" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard
-          label="已送达"
-          value={String(delivered)}
-          detail={mode === "api" ? "API delivery events" : "fixture delivery events"}
-          tone="green"
-          icon={MailCheck}
-        />
-        <AdminMetricCard
-          label="退信"
-          value={String(bounced)}
-          detail="mailbox unavailable"
-          tone={bounced > 0 ? "orange" : "neutral"}
-          icon={MailWarning}
-        />
-        <AdminMetricCard
-          label="投诉"
-          value={String(complained)}
-          detail="recipient marked as spam"
-          tone={complained > 0 ? "red" : "neutral"}
-          icon={ShieldAlert}
-        />
-        <AdminMetricCard
-          label="失败"
-          value={String(failed)}
-          detail="provider timeout"
-          tone={failed > 0 ? "red" : "neutral"}
-          icon={MailWarning}
-        />
-      </section>
+      {mode === "api" ? <ApiEmailCounts /> : <FixtureEmailCounts counts={fixtureCounts} />}
 
       <AdminFilterBar>
         <label className="min-w-0 flex-1">
@@ -287,7 +250,24 @@ export function EmailsView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          Analyst 可读取投递日志与失败原因；重发与测试邮件保持可见但禁用。
+          Analyst 可读取投递日志与失败原因；重发保持可见但禁用。
+        </div>
+      ) : null}
+
+      {latestFailure ? (
+        <div
+          role="note"
+          aria-label="最近错误原因"
+          className="rounded-control border border-hairline bg-surface-1 px-3 py-2"
+        >
+          <p className="type-eyebrow">最近错误原因</p>
+          <p className="mt-1 break-words font-mono text-[10px] leading-4 text-muted">
+            <span className="text-body">{latestFailure.error}</span>
+            <span className="mx-2 text-stone">·</span>
+            {maskEmail(latestFailure.to)}
+            <span className="mx-2 text-stone">·</span>
+            {formatDateTime(latestFailure.updatedAt)}
+          </p>
         </div>
       ) : null}
 
@@ -296,7 +276,7 @@ export function EmailsView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">投递日志</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              resend / {mode} webhook state
+              resend / {mode} delivery state
             </p>
           </div>
           <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
@@ -336,51 +316,65 @@ export function EmailsView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
-                {filteredEmails.map((email) => (
-                  <tr
-                    key={email.id}
-                    aria-label={`邮件 ${email.to}`}
-                    className="h-12 transition-colors hover:bg-surface-2/60"
-                  >
-                    <td className="px-3 py-2">
-                      <span className="block max-w-[280px] truncate text-[12px] text-ink">
-                        {email.subject}
-                      </span>
-                      <span className="block max-w-[280px] truncate font-mono text-[9px] text-muted">
-                        {email.to}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-body">{email.template}</td>
-                    <td className="px-3 py-2">
-                      <Badge tone={emailStatusTones[email.status]}>
-                        {emailStatusLabels[email.status]}
-                      </Badge>
-                    </td>
-                    <td className="max-w-[240px] px-3 py-2">
-                      <span className="block truncate font-mono text-[9px] text-muted">
-                        {email.error ?? "—"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-muted">
-                      {formatDateTime(email.updatedAt)}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`重发邮件至 ${email.to}`}
-                          disabled={!canResend}
-                          title={canResend ? "重新加入发送队列" : "当前角色不可重发邮件"}
-                          onClick={() => resendEmail(email)}
-                        >
-                          <RefreshCw aria-hidden="true" />
-                          重发
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredEmails.map((email) => {
+                  const resendable = RESENDABLE_STATUSES.has(email.status);
+                  const masked = maskEmail(email.to);
+                  return (
+                    <tr
+                      key={email.id}
+                      aria-label={`邮件 ${masked}`}
+                      className="h-12 transition-colors hover:bg-surface-2/60"
+                    >
+                      <td className="px-3 py-2">
+                        <span className="block max-w-[280px] truncate text-[12px] text-ink">
+                          {email.subject}
+                        </span>
+                        <span className="block max-w-[280px] truncate font-mono text-[9px] text-muted">
+                          {masked}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 font-mono text-[10px] text-body">{email.template}</td>
+                      <td className="px-3 py-2">
+                        <Badge tone={emailStatusTones[email.status]}>
+                          {emailStatusLabels[email.status]}
+                        </Badge>
+                      </td>
+                      <td className="max-w-[240px] px-3 py-2">
+                        <span className="block truncate font-mono text-[9px] text-muted">
+                          {email.error ?? "—"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 font-mono text-[10px] text-muted">
+                        {formatDateTime(email.updatedAt)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={
+                              resendable
+                                ? `重发邮件至 ${masked}`
+                                : `不可重发 ${masked}：当前状态 ${emailStatusLabels[email.status]}`
+                            }
+                            disabled={!canResend || !resendable}
+                            title={
+                              !canResend
+                                ? "当前角色不可重发邮件"
+                                : resendable
+                                  ? "重新加入发送队列"
+                                  : `仅 failed / bounced 可重发，当前为 ${emailStatusLabels[email.status]}`
+                            }
+                            onClick={() => resendEmail(email)}
+                          >
+                            <RefreshCw aria-hidden="true" />
+                            重发
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -391,53 +385,70 @@ export function EmailsView({
         {statusMessage}
       </div>
 
-      <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <p className="type-eyebrow">RESEND / TEST</p>
-            <DialogTitle>发送测试邮件</DialogTitle>
-            <DialogDescription>
-              {mode === "api"
-                ? "当前 Admin API 契约未提供测试邮件入口，API 模式下该操作保持禁用。"
-                : "测试邮件只写入本地 fixture 投递日志并记录模拟审计，不会调用真实 Resend API。"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <FormField id="test-email-recipient" label="收件邮箱" error={testError || undefined}>
-              <Input
-                type="email"
-                autoComplete="off"
-                value={testRecipient}
-                placeholder="ops@example.invalid"
-                onChange={(event) => {
-                  setTestRecipient(event.currentTarget.value);
-                  setTestError("");
-                }}
-              />
-            </FormField>
-            <FormField id="test-email-subject" label="主题">
-              <Input
-                value={testSubject}
-                onChange={(event) => setTestSubject(event.currentTarget.value)}
-              />
-            </FormField>
-            <FormField id="test-email-body" label="正文预览">
-              <Textarea
-                readOnly
-                value={
-                  "这是 Roamlog 后台的测试邮件。\n\n若你收到此邮件，说明本地 Resend 配置可被运营端触发。"
-                }
-              />
-            </FormField>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setTestDialogOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={sendTestEmail}>加入发送队列</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <section className="flex items-start gap-3 rounded-card border border-hairline bg-surface-1 p-4">
+        <MailCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-green" />
+        <div>
+          <h2 className="text-[12px] font-medium text-ink">测试邮件入口未接入</h2>
+          <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
+            当前 Admin API 没有测试邮件端点，因此页面不再显示“测试邮件”按钮。补齐
+            <code className="mx-1 font-mono">POST /v1/admin/emails/test</code>
+            与固定模板、频率限制后才会上线该能力。
+          </p>
+        </div>
+      </section>
     </div>
   );
+}
+
+function metricCards(counts: Record<EmailStatus, number>, sourceNote: string) {
+  return (
+    <section aria-label="邮件指标" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {METRIC_ORDER.map((key) => (
+        <AdminMetricCard
+          key={key}
+          label={metricLabels[key]}
+          value={String(counts[key])}
+          detail={sourceNote}
+          tone={metricTones[key]}
+          icon={metricIcons[key]}
+        />
+      ))}
+    </section>
+  );
+}
+
+/** Totals from `GET /v1/admin/metrics` (PostgreSQL aggregation, all statuses). */
+function ApiEmailCounts() {
+  const resource = useAdminEmailCountsResource();
+  const counts = resource.data?.counts ?? null;
+
+  if (!resource.data) {
+    return (
+      <section
+        aria-label="邮件指标"
+        className="rounded-card border border-hairline bg-surface-1 p-4 font-mono text-[10px] text-muted"
+      >
+        {resource.error
+          ? "未接入：/v1/admin/metrics 不可用，无法给出真实投递计数。"
+          : "读取投递计数…"}
+      </section>
+    );
+  }
+
+  if (!counts) {
+    return (
+      <section
+        aria-label="邮件指标"
+        className="rounded-card border border-hairline bg-surface-1 p-4 font-mono text-[10px] text-muted"
+      >
+        未接入：/v1/admin/metrics 未返回按状态聚合的邮件计数。
+      </section>
+    );
+  }
+
+  return metricCards(counts, "admin/metrics · 数据库聚合");
+}
+
+function FixtureEmailCounts({ counts }: { counts: Record<EmailStatus, number> }) {
+  return metricCards(counts, "fixture delivery events");
 }

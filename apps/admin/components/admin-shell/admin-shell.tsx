@@ -6,7 +6,6 @@ import { Sheet, SheetContent } from "@roamlog/ui";
 
 import type { AdminSession } from "../../lib/fixtures";
 import { AdminCommandPalette } from "./admin-command-palette";
-import { AdminNotificationsSheet } from "./admin-notifications-sheet";
 import { AdminSidebar } from "./admin-sidebar";
 import { AdminTopbar } from "./admin-topbar";
 import { MockSessionProvider } from "./mock-session-provider";
@@ -21,7 +20,6 @@ interface AdminShellProps {
 function AdminShellFrame({ activePath, children }: Omit<AdminShellProps, "session">) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -57,7 +55,6 @@ function AdminShellFrame({ activePath, children }: Omit<AdminShellProps, "sessio
           activePath={activePath}
           onOpenMobileNav={() => setMobileNavOpen(true)}
           onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-          onOpenNotifications={() => setNotificationsOpen(true)}
         />
 
         <main
@@ -76,7 +73,6 @@ function AdminShellFrame({ activePath, children }: Omit<AdminShellProps, "sessio
       </Sheet>
 
       <AdminCommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
-      <AdminNotificationsSheet open={notificationsOpen} onOpenChange={setNotificationsOpen} />
     </div>
   );
 }

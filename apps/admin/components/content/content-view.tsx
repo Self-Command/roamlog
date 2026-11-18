@@ -60,6 +60,46 @@ const statusTones: Record<ContentModerationStatus, "green" | "yellow" | "red"> =
   deleted: "red",
 };
 
+/**
+ * The platform has no Report/Moderation model, so API mode has no report data
+ * at all and renders "未接入". The fixture console still ships demo report
+ * numbers, which are only shown in fixture mode.
+ */
+const REPORT_SOURCE_AVAILABLE = false;
+
+const WEB_BASE_URL = process.env.NEXT_PUBLIC_WEB_BASE_URL?.trim().replace(/\/+$/, "") ?? "";
+
+function shareUrl(token: string): string | null {
+  return WEB_BASE_URL ? `${WEB_BASE_URL}/share/${token}` : null;
+}
+
+/**
+ * Fixture demo data may show the seeded report counts; API mode must not,
+ * because a fabricated 0 would read as "no reports to review".
+ */
+function reportsVisible(mode: AdminDataMode): boolean {
+  return mode !== "api" && !REPORT_SOURCE_AVAILABLE;
+}
+
+interface ReportCountCellProps {
+  count: number;
+  mode: AdminDataMode;
+}
+
+function ReportCountCell({ count, mode }: ReportCountCellProps) {
+  if (!reportsVisible(mode)) {
+    return (
+      <span
+        className="text-accent-slate"
+        title="未接入：缺少 Report/Moderation 模型与 /v1/admin/reports 端点"
+      >
+        未接入
+      </span>
+    );
+  }
+  return <span>{count}</span>;
+}
+
 export function ContentView({
   role,
   items = MOCK_ADMIN_CONTENT,
@@ -212,9 +252,18 @@ export function ContentView({
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
             <p className="type-eyebrow">待审核举报</p>
-            <p className="mt-1 font-mono text-[11px] text-body">
-              {records.reduce((total, item) => total + item.reportCount, 0)} reports
-            </p>
+            {!reportsVisible(mode) ? (
+              <Badge
+                tone="slate"
+                title="未接入：数据库没有 Report/Moderation 模型，Admin 也没有 /v1/admin/reports 端点"
+              >
+                未接入
+              </Badge>
+            ) : (
+              <p className="mt-1 font-mono text-[11px] text-body">
+                {records.reduce((total, item) => total + item.reportCount, 0)} reports
+              </p>
+            )}
           </div>
         }
       />
@@ -248,15 +297,23 @@ export function ContentView({
           <Select
             className="mt-1.5 h-9"
             value={status}
+            aria-describedby={mode === "api" ? "content-flagged-unavailable" : undefined}
             onChange={(event) =>
               setStatus(event.currentTarget.value as "all" | ContentModerationStatus)
             }
           >
             <option value="all">全部状态</option>
             <option value="published">已发布</option>
-            <option value="flagged">待审核</option>
+            <option value="flagged" disabled={mode === "api"}>
+              待审核{mode === "api" ? "（未接入）" : ""}
+            </option>
             <option value="deleted">已删除</option>
           </Select>
+          {mode === "api" ? (
+            <span id="content-flagged-unavailable" className="mt-1 block text-[9px] text-muted">
+              flagged 状态需要举报数据源，未接入前不可筛选。
+            </span>
+          ) : null}
         </label>
         <label className="w-full md:w-36">
           <span className="type-eyebrow">可见性</span>
@@ -295,6 +352,24 @@ export function ContentView({
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
           Analyst 仅可查看内容与审计信号；软删除和恢复保持可见但禁用。
+        </div>
+      ) : null}
+
+      {mode === "api" ? (
+        <div id="content-reports-not-wired" className="flex items-start gap-3 rounded-card border border-hairline bg-surface-1 p-4">
+          <ShieldAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-slate" />
+          <div>
+            <h2 className="text-[12px] font-medium text-ink">举报与审核队列未接入</h2>
+            <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
+              平台没有 Report / Moderation 模型，也没有 Admin 举报端点，因此“待审核举报”、
+              flagged 状态和举报数一律显示为「未接入」，不再展示固定 0。最小可行设计：新增
+              Report 模型（targetType/targetId/workspaceId/reporterId/reason/状态/
+              裁决人）、<code className="mx-1 font-mono">GET /v1/admin/reports</code> 与
+              <code className="mx-1 font-mono">POST /v1/admin/reports/:id/resolve</code>、
+              <code className="mx-1 font-mono">admin:reports:read/resolve</code> 权限，以及
+              举报去重与审核通知队列。内容删除/恢复已走真实 mutation 与审计。
+            </p>
+          </div>
         </div>
       ) : null}
 
@@ -436,7 +511,7 @@ export function ContentView({
                       </Badge>
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
-                      {item.reportCount}
+                      <ReportCountCell count={item.reportCount} mode={mode} />
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
                       {formatDateTime(item.updatedAt)}
@@ -509,7 +584,10 @@ export function ContentView({
               <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline">
                 {[
                   ["作者", detailItem.authorName],
-                  ["举报", String(detailItem.reportCount)],
+                  [
+                    "举报",
+                    reportsVisible(mode) ? String(detailItem.reportCount) : "未接入",
+                  ],
                   ["创建", formatDateTime(detailItem.createdAt)],
                   ["更新", formatDateTime(detailItem.updatedAt)],
                 ].map(([label, value]) => (
@@ -522,15 +600,27 @@ export function ContentView({
               {detailItem.shareToken ? (
                 <div className="mt-6 rounded-control border border-hairline bg-surface-1 p-3">
                   <p className="type-eyebrow">公开分享</p>
-                  <a
-                    className="mt-2 inline-flex items-center gap-2 font-mono text-[10px] text-accent-blue underline-offset-4 hover:underline"
-                    href={`http://localhost:3000/share/${detailItem.shareToken}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    /share/{detailItem.shareToken}
-                    <ExternalLink aria-hidden="true" className="size-3" />
-                  </a>
+                  {shareUrl(detailItem.shareToken) ? (
+                    <a
+                      className="mt-2 inline-flex items-center gap-2 font-mono text-[10px] text-accent-blue underline-offset-4 hover:underline"
+                      href={shareUrl(detailItem.shareToken) ?? undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      /share/{detailItem.shareToken}
+                      <ExternalLink aria-hidden="true" className="size-3" />
+                    </a>
+                  ) : (
+                    <div className="mt-2">
+                      <code className="font-mono text-[10px] text-body">
+                        {detailItem.shareToken}
+                      </code>
+                      <p className="mt-1 text-[9px] leading-4 text-muted">
+                        未接入可点击链接：需要配置 <code className="font-mono">NEXT_PUBLIC_WEB_BASE_URL</code>
+                        （不再硬编码 http://localhost:3000）。
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : null}
               <p className="mt-6 text-[11px] leading-5 text-muted">

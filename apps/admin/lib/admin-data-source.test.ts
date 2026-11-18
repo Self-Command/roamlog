@@ -62,7 +62,7 @@ describe("admin data mode and API adapter", () => {
     ).toThrow(AdminMutationError);
   });
 
-  it("maps API users without inventing detail counters and keeps backend roles authoritative", () => {
+  it("keeps API user rows unchanged instead of inventing detail counters", () => {
     const users = mapAdminUsers([
       {
         id: "0199a0c1-1100-7000-8000-000000000001",
@@ -83,9 +83,9 @@ describe("admin data mode and API adapter", () => {
 
     expect(users[0]).toMatchObject({
       platformRole: "admin",
-      workspaceCount: 0,
-      activeSessionCount: 0,
     });
+    expect(users[0]).not.toHaveProperty("workspaceCount");
+    expect(users[0]).not.toHaveProperty("activeSessionCount");
     expect(platformRoleOf("super_admin")).toBe("super_admin");
     expect(platformRoleOf("user")).toBe("user");
     expect(platformRoleOf("owner")).toBe("user");

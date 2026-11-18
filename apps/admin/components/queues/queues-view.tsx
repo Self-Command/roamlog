@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Gauge, Pause, Play, RotateCcw, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Gauge, Pause, Play, RotateCcw, ShieldAlert, Waypoints } from "lucide-react";
 
 import { canPlatform } from "@roamlog/contracts";
 import {
@@ -18,7 +18,12 @@ import {
 import type { AdminConsoleRole } from "../../lib/fixtures";
 import type { AdminDataMode } from "../../lib/admin-data-mode";
 import { AdminMutationError } from "../../lib/admin-api-error";
-import type { AdminMutationPort } from "../../lib/admin-data-source";
+import {
+  UNKNOWN_THROUGHPUT,
+  formatThroughput,
+  useAdminSystemResource,
+  type AdminMutationPort,
+} from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import { recordMockAuditEvent } from "../../lib/mock-audit";
 import {
@@ -63,8 +68,16 @@ export function QueuesView({
   const readOnly = role === "analyst";
   const totalFailed = queueRecords.reduce((total, queue) => total + queue.failed, 0);
   const totalWaiting = queueRecords.reduce((total, queue) => total + queue.waiting, 0);
-  const throughput = queueRecords.reduce((total, queue) => total + queue.throughputPerMinute, 0);
   const pausedQueues = queueRecords.filter((queue) => queue.paused).length;
+  // Throughput is a measured window per queue; if Redis could not provide the
+  // window the console shows "未接入" instead of a fabricated 0.
+  const throughputKnown =
+    queueRecords.length > 0 &&
+    queueRecords.every((queue) => Number.isFinite(queue.throughputPerMinute));
+  const throughput = throughputKnown
+    ? queueRecords.reduce((total, queue) => total + queue.throughputPerMinute, 0)
+    : UNKNOWN_THROUGHPUT;
+  const throughputLabel = formatThroughput(throughput);
 
   const queueByJob = useMemo(
     () => new Map(queueRecords.map((queue) => [queue.name, queue])),
@@ -226,9 +239,7 @@ export function QueuesView({
             <Gauge aria-hidden="true" className="size-4 text-accent-blue" />
             <div>
               <p className="type-eyebrow">总吞吐</p>
-              <p className="mt-0.5 font-mono text-[10px] text-body">
-                {throughput.toFixed(1)} jobs/min
-              </p>
+              <p className="mt-0.5 font-mono text-[10px] text-body">{throughputLabel}</p>
             </div>
           </div>
         }
@@ -238,7 +249,11 @@ export function QueuesView({
         <AdminMetricCard
           label="等待任务"
           value={String(totalWaiting)}
-          detail="跨四个队列"
+          detail={
+            queueRecords.length === 0
+              ? "Redis 中未发现已注册队列"
+              : `跨 ${queueRecords.length} 个队列（Redis 发现）`
+          }
           tone="blue"
           icon={RotateCcw}
         />
@@ -258,12 +273,18 @@ export function QueuesView({
         />
         <AdminMetricCard
           label="吞吐"
-          value={throughput.toFixed(1)}
-          detail="jobs / minute"
+          value={Number.isFinite(throughput) ? throughput.toFixed(1) : "未接入"}
+          detail={
+            Number.isFinite(throughput)
+              ? "5 分钟窗口内 BullMQ 完成时间戳推算 · jobs/min"
+              : "Redis 无法提供完成窗口"
+          }
           tone="green"
           icon={Gauge}
         />
       </section>
+
+      {mode === "api" ? <QueueWorkerPanel /> : null}
 
       {!canManageQueue ? (
         <div
@@ -280,7 +301,28 @@ export function QueuesView({
       ) : null}
 
       <section aria-label="队列卡片" className="grid gap-3 sm:grid-cols-2">
-        {queueRecords.map((queue) => (
+        {queueRecords.length === 0 ? (
+          <EmptyState
+            icon={RotateCcw}
+            title="未发现队列"
+            description="Redis 中没有可识别的 BullMQ 队列状态键。队列列表来自 Redis 扫描，不再使用硬编码清单；Worker 尚未注册队列时这里保持为空。"
+            className="sm:col-span-2"
+          />
+        ) : null}
+        {queueRecords.map((queue) => {
+          // The badge reports the queue state that is actually observable; a
+          // queue is never labelled "healthy" from counters alone.
+          const queueState = queue.paused
+            ? { label: "Paused", tone: "yellow" as const }
+            : queue.failed > 0
+              ? { label: "Needs review", tone: "red" as const }
+              : queue.active > 0
+                ? { label: "Processing", tone: "blue" as const }
+                : queue.waiting > 0
+                  ? { label: "Backlog", tone: "orange" as const }
+                  : { label: "Idle", tone: "neutral" as const };
+
+          return (
           <article
             key={queue.name}
             aria-label={`队列 ${queue.name}`}
@@ -293,9 +335,7 @@ export function QueuesView({
                   {queue.label}
                 </h2>
               </div>
-              <Badge tone={queue.paused ? "yellow" : queue.failed > 0 ? "red" : "green"}>
-                {queue.paused ? "Paused" : queue.failed > 0 ? "Needs review" : "Healthy"}
-              </Badge>
+              <Badge tone={queueState.tone}>{queueState.label}</Badge>
             </div>
 
             <dl className="mt-4 grid grid-cols-4 gap-px overflow-hidden rounded-control border border-hairline bg-hairline">
@@ -314,7 +354,7 @@ export function QueuesView({
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
               <span className="font-mono text-[9px] text-muted">
-                {queue.throughputPerMinute.toFixed(1)} jobs/min throughput
+                {formatThroughput(queue.throughputPerMinute)} · 5 min window
               </span>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button
@@ -352,7 +392,8 @@ export function QueuesView({
               </div>
             </div>
           </article>
-        ))}
+          );
+        })}
       </section>
 
       <section className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1">
@@ -531,5 +572,114 @@ export function QueuesView({
         onConfirm={confirmAction}
       />
     </div>
+  );
+}
+
+const workerTones = {
+  up: "green",
+  degraded: "yellow",
+  down: "red",
+} as const;
+
+const workerLabels = {
+  up: "Healthy",
+  degraded: "Degraded",
+  down: "Down",
+} as const;
+
+const signalSources = {
+  "consumer-clients": "Redis CLIENT LIST 中阻塞在 BullMQ BZPOPMIN 的消费者 + 队列计数",
+  "activity-derived": "最近一次任务完成/失败时间 + 队列 active 数",
+  unavailable: "未接入",
+} as const;
+
+/**
+ * Worker health cannot be derived from queue counters alone. This panel calls
+ * `/v1/admin/system` so the queue page shows the same observed worker signal,
+ * and says "未接入" when the API could not prove liveness either way.
+ */
+function QueueWorkerPanel() {
+  const resource = useAdminSystemResource();
+  const snapshot = resource.data;
+
+  if (resource.isLoading && !snapshot) {
+    return (
+      <section
+        aria-label="Worker 消费端"
+        className="rounded-card border border-hairline bg-surface-1 p-4 font-mono text-[10px] text-muted"
+      >
+        读取 Worker 观测信号…
+      </section>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <section
+        aria-label="Worker 消费端"
+        className="flex items-start gap-3 rounded-card border border-hairline bg-surface-1 p-4"
+      >
+        <Waypoints aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-slate" />
+        <div>
+          <h2 className="text-[12px] font-medium text-ink">Worker 消费端</h2>
+          <p className="mt-1 text-[10px] leading-5 text-muted">
+            未接入：/v1/admin/system 没有返回 Worker 信号，无法判断消费者是否存活。
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  const signal = snapshot.workerSignal ?? null;
+  const observable = signal !== null && signal.signal !== "unavailable";
+
+  return (
+    <section
+      aria-label="Worker 消费端"
+      className="rounded-card border border-hairline-strong bg-surface-1 p-4"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="type-eyebrow">WORKER / OBSERVED SIGNAL</p>
+          <h2 className="mt-1 font-serif text-lg tracking-[-0.02em] text-ink">Worker 消费端</h2>
+        </div>
+        {observable ? (
+          <Badge tone={workerTones[snapshot.workerStatus]}>
+            {workerLabels[snapshot.workerStatus]}
+          </Badge>
+        ) : (
+          <Badge tone="slate" title="缺少 Worker heartbeat，无法证明存活或死亡">
+            未接入
+          </Badge>
+        )}
+      </div>
+
+      <dl className="mt-3 grid gap-2 text-[11px] sm:grid-cols-2">
+        <div className="flex items-center justify-between gap-3">
+          <dt className="text-muted">阻塞消费者</dt>
+          <dd className="font-mono text-[10px] text-body">{snapshot.workerConsumers}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <dt className="text-muted">最近任务</dt>
+          <dd className="font-mono text-[10px] text-body">
+            {signal?.lastJobAt ? formatDateTime(signal.lastJobAt) : "未接入"}
+          </dd>
+        </div>
+      </dl>
+
+      <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
+        推导口径：{signal ? signalSources[signal.signal] : "未接入"}
+        {signal?.lastJobStatus
+          ? ` · 最近 ${signal.lastJobStatus} @ ${signal.lastJobQueue ?? "?"}`
+          : ""}
+      </p>
+      {!observable ? (
+        <p className="mt-2 text-[9px] leading-4 text-muted">
+          队列健康不再由计数推导：需要 Worker 写入 heartbeat 键，或由 Worker 侧暴露 BullMQ
+          <code className="mx-1 font-mono">getWorkers()</code>（当前版本的 Worker 不设置 CLIENT
+          SETNAME，按连接名匹配会永久误报 DOWN）。
+        </p>
+      ) : null}
+    </section>
   );
 }
