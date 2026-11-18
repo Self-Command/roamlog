@@ -235,6 +235,20 @@ docker compose --env-file /opt/roamlog/config/.env.production \
   -f docker/compose.production.yml up -d --no-build
 ```
 
+The object-storage bucket must exist before the first upload. `minio-init` is an
+**opt-in profile** because the bootstrap script is a shell script and the pinned
+`mc` images are distroless (no `/bin/sh`), so it must never gate API or worker
+startup. Run it deliberately, once, with an `mc` image that ships a shell:
+
+```bash
+docker compose --env-file /opt/roamlog/config/.env.production \
+  -f docker/compose.production.yml --profile init run --rm minio-init
+```
+
+Media CORS is answered by MinIO itself through `MINIO_API_CORS_ALLOW_ORIGIN`
+(populated from `MEDIA_CORS_ORIGINS`); MinIO does not implement the S3 bucket
+CORS API, so there is nothing to configure inside the bucket.
+
 Watch `migrate` exit `0` before API/worker become healthy:
 
 ```bash
