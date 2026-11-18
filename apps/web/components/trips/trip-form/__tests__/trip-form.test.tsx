@@ -1,0 +1,377 @@
+import type { CreateTripRequest, Place } from "@roamlog/contracts";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+
+import type { CoverMediaClient } from "@/lib/api/media";
+import { ApiError } from "@/lib/api/errors";
+import {
+  addDays,
+  formatDateOnlyLabel,
+  formatMonthLabel,
+  parseDateOnly,
+  todayDateOnly,
+} from "../date-utils";
+import { DEFAULT_TRIP_NIGHTS } from "../trip-form-state";
+import {
+  COVER_MEDIA_ID,
+  createFakeMediaClient,
+  makeTripCover,
+  type FakeMediaClientCalls,
+} from "@/test/cover-upload-doubles";
+import { makeTrip } from "@/test/fake-data";
+import { renderWithQuery } from "@/test/query-harness";
+
+import { TripForm, type TripFormPlaceSearch, type TripFormSubmitContext } from "../trip-form";
+
+/**
+ * The only network seam the form owns is the media client; swap it for the
+ * deterministic double so the real `CoverUploader` runs end to end.
+ */
+const mediaClient = vi.hoisted(() => ({
+  current: null as CoverMediaClient | null,
+}));
+
+vi.mock("@/lib/api/media", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/media")>();
+  return {
+    ...actual,
+    createCoverMediaClient: () => mediaClient.current ?? actual.createCoverMediaClient(),
+  };
+});
+
+const KYOTO: Place = {
+  provider: "photon",
+  providerPlaceId: "k-1",
+  name: "京都",
+  country: "日本",
+  countryCode: "JP",
+  lat: 35.0116,
+  lng: 135.7681,
+  timeZone: "Asia/Tokyo",
+  type: "city",
+};
+
+const searchPlaces: TripFormPlaceSearch = vi.fn(async () => ({ items: [KYOTO], degraded: false }));
+
+const today = todayDateOnly();
+
+let calls: FakeMediaClientCalls;
+
+beforeAll(() => {
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    writable: true,
+    value: vi.fn(() => "blob:cover-preview"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    writable: true,
+    value: vi.fn(),
+  });
+});
+
+function useFakeMediaClient() {
+  const doubles = createFakeMediaClient();
+  mediaClient.current = doubles.client;
+  calls = doubles.calls;
+  return doubles;
+}
+
+function makeImage(name = "cover.jpg", type = "image/jpeg", size = 2_048): File {
+  const file = new File(["image-bytes"], name, { type });
+  Object.defineProperty(file, "size", { value: size });
+  return file;
+}
+
+describe("TripForm create", () => {
+  it("blocks submit and surfaces the required-title error", async () => {
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+
+    renderWithQuery(
+      <TripForm
+        mode="create"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref="/w/roamlog-crew/trips"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "创建旅行" }));
+
+    expect(await screen.findByText("请填写旅行标题")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "创建旅行" })).toBeEnabled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("captures the full CreateTripRequest from the real field components", async () => {
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    const { client, calls: fakeCalls } = useFakeMediaClient();
+    void client;
+
+    renderWithQuery(
+      <TripForm
+        mode="create"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        workspaceName="漫游小组"
+        searchPlaces={searchPlaces}
+        cancelHref="/w/roamlog-crew/trips"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/旅行标题/), "京都七日");
+
+    // Origin: pick a real place, which must carry lat/lng/country/timezone.
+    await user.type(screen.getByRole("combobox", { name: "旅行起点" }), "京都");
+    await user.click(await screen.findByRole("option", { name: /^京都/ }));
+
+    // Destination: manual entry (no coordinates invented).
+    await user.type(screen.getByLabelText("手动添加目的地"), "金泽");
+    await user.click(screen.getByRole("button", { name: "添加" }));
+
+    await user.type(screen.getByLabelText("预算金额"), "12000.50");
+    await user.type(screen.getByRole("combobox", { name: "搜索币种" }), "CNY");
+    await user.click(await screen.findByRole("option", { name: /^CNY/ }));
+
+    await user.type(screen.getByRole("textbox", { name: "添加标签" }), "寺庙{Enter}");
+    await user.type(screen.getByRole("textbox", { name: "添加同行人" }), "小林{Enter}");
+
+    await user.click(screen.getByRole("button", { name: "创建旅行" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const [payload, context] = onSubmit.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+      { coverMediaId: string | null },
+    ];
+
+    expect(payload).toEqual({
+      title: "京都七日",
+      status: "planning",
+      visibility: "workspace",
+      startDate: today,
+      endDate: addDays(today, DEFAULT_TRIP_NIGHTS),
+      origin: "京都",
+      originLat: KYOTO.lat,
+      originLng: KYOTO.lng,
+      originCountryCode: "JP",
+      timeZone: "Asia/Tokyo",
+      destinations: ["金泽"],
+      countryCodes: ["JP"],
+      tags: ["寺庙"],
+      guestNames: ["小林"],
+      budgetAmountMinor: 1200050,
+      budgetCurrency: "CNY",
+    });
+    expect(context).toEqual({ coverMediaId: null });
+    expect(fakeCalls.setCover).toHaveLength(0);
+  });
+
+  it("opens a one-week window, allows a future start and moves the end with it", async () => {
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="create"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref="/w/roamlog-crew/trips"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: `选择日期：${formatDateOnlyLabel(today)}` }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: `选择日期：${formatDateOnlyLabel(addDays(today, DEFAULT_TRIP_NIGHTS))}`,
+      }),
+    ).toBeInTheDocument();
+
+    // One day beyond the default window used to be outside `max={endDate}`.
+    const future = addDays(today, DEFAULT_TRIP_NIGHTS + 1);
+    await user.click(
+      screen.getByRole("button", { name: `选择日期：${formatDateOnlyLabel(today)}` }),
+    );
+    const grid = await screen.findByRole("grid", { name: "选择出发日期" });
+
+    const futureParts = parseDateOnly(future);
+    if (!futureParts) throw new Error(`invalid test date: ${future}`);
+    const targetMonth = formatMonthLabel(futureParts.year, futureParts.month);
+    for (let step = 0; step < 2 && !screen.queryByText(targetMonth); step += 1) {
+      await user.click(screen.getByRole("button", { name: "下个月" }));
+    }
+
+    const cell = within(grid).getByRole("gridcell", { name: String(futureParts.day) });
+    expect(cell).not.toHaveAttribute("aria-disabled");
+    await user.click(cell);
+
+    // The start pick moved and the end followed, so both triggers now agree.
+    expect(
+      screen.getAllByRole("button", { name: `选择日期：${formatDateOnlyLabel(future)}` }),
+    ).toHaveLength(2);
+  });
+
+  it("forwards the uploaded coverMediaId and keeps the media when create fails", async () => {
+    const onSubmit = vi
+      .fn<(input: CreateTripRequest, context: TripFormSubmitContext) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    const { client } = useFakeMediaClient();
+    void client;
+
+    renderWithQuery(
+      <TripForm
+        mode="create"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref="/w/roamlog-crew/trips"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/旅行标题/), "带封面");
+    await user.upload(screen.getByLabelText("选择旅行封面"), makeImage());
+
+    expect(await screen.findByText("图片已上传完成，创建旅行后即可使用。")).toBeInTheDocument();
+
+    const submit = screen.getByRole("button", { name: "创建旅行" });
+    await waitFor(() => expect(submit).toBeEnabled());
+    await user.click(submit);
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    await screen.findByRole("alert");
+
+    await user.click(screen.getByRole("button", { name: "创建旅行" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+
+    expect(onSubmit.mock.calls[0]?.[1]).toEqual({ coverMediaId: COVER_MEDIA_ID });
+    expect(onSubmit.mock.calls[1]?.[1]).toEqual({ coverMediaId: COVER_MEDIA_ID });
+    // The form uploads only; binding the cover to the new trip belongs to the shell.
+    expect(calls.setCover).toHaveLength(0);
+  });
+});
+
+describe("TripForm edit", () => {
+  it("submits only the changed field plus version", async () => {
+    const trip = makeTrip({ version: 4, countryCodes: ["CN", "JP"] });
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const title = screen.getByLabelText(/旅行标题/);
+    await user.clear(title);
+    await user.type(title, "冬季京都");
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith({ version: 4, title: "冬季京都" });
+  });
+
+  it("explains that nothing changed instead of sending an empty patch", async () => {
+    const trip = makeTrip({ countryCodes: ["CN", "JP"] });
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+
+    expect(await screen.findByText("没有检测到修改，未提交请求。")).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("passes the trip to the cover uploader for edit mode and binds no new cover", async () => {
+    const trip = makeTrip({
+      countryCodes: ["CN", "JP"],
+      coverMediaId: COVER_MEDIA_ID,
+      cover: makeTripCover(),
+    });
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "当前旅行封面" })).toHaveAttribute(
+      "src",
+      "https://media.example.test/trips/cover-large.jpg",
+    );
+
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+    expect(await screen.findByText("没有检测到修改，未提交请求。")).toBeInTheDocument();
+
+    expect(calls.setCover).toHaveLength(0);
+    expect(calls.clearCover).toHaveLength(0);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("turns a 409 into a conflict banner with a reload action", async () => {
+    const trip = makeTrip({ countryCodes: ["CN", "JP"], version: 2 });
+    const onSubmit = vi.fn(async () => {
+      throw new ApiError(409, "Trip was updated by someone else.", "VERSION_CONFLICT");
+    });
+    const onReload = vi.fn();
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+        onReload={onReload}
+      />,
+    );
+
+    const title = screen.getByLabelText(/旅行标题/);
+    await user.clear(title);
+    await user.type(title, "被覆盖的标题");
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent("409 版本冲突");
+    await user.click(screen.getByRole("button", { name: "重新加载最新版本" }));
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+});

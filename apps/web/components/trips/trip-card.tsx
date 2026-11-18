@@ -4,12 +4,10 @@ import { ArrowUpRight, Heart, MapPin } from "lucide-react";
 import Link from "next/link";
 
 import {
-  coverClassForTrip,
   formatBudget,
   formatDateRange,
   getTripStatusLabel,
   getTripStatusTone,
-  tripDurationDays,
 } from "@/lib/trip-presentation";
 
 interface TripCardProps {
@@ -19,13 +17,14 @@ interface TripCardProps {
   ownerName: string;
 }
 
-export function TripCard({ trip, workspaceSlug, index, ownerName }: TripCardProps) {
+export function TripCard({ trip, workspaceSlug, ownerName }: TripCardProps) {
+  const coverUrl = trip.cover?.url ?? trip.cover?.thumbUrl ?? null;
+  const hasBudget = trip.budgetAmountMinor !== null && trip.budgetCurrency !== null;
   const participants = [
-    { id: "owner", name: ownerName, online: trip.status === "active" },
+    { id: "owner", name: ownerName },
     ...trip.guestNames.map((name, participantIndex) => ({
-      id: `guest-${index}-${participantIndex}`,
+      id: `guest-${trip.id}-${participantIndex}`,
       name,
-      online: trip.status === "active" && participantIndex === 0,
     })),
   ];
 
@@ -34,10 +33,17 @@ export function TripCard({ trip, workspaceSlug, index, ownerName }: TripCardProp
       href={`/w/${workspaceSlug}/trips/${trip.id}`}
       className="group block overflow-hidden rounded-card border border-hairline-strong bg-surface-1 outline-none transition-colors hover:border-white/20 focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
-      <div
-        className={`trip-cover ${coverClassForTrip(index)} aspect-[16/8] border-b border-hairline`}
-      >
-        <div className="flex h-full flex-col justify-between p-4">
+      <div className="relative aspect-[16/8] overflow-hidden border-b border-hairline bg-surface-2">
+        {coverUrl ? (
+          <img
+            src={coverUrl}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
+        <div className="relative flex h-full flex-col justify-between p-4">
           <div className="flex items-start justify-between gap-2">
             <Badge tone={getTripStatusTone(trip.status)}>{getTripStatusLabel(trip.status)}</Badge>
             {trip.favorite ? (
@@ -50,7 +56,8 @@ export function TripCard({ trip, workspaceSlug, index, ownerName }: TripCardProp
             ) : null}
           </div>
           <p className="font-mono text-[9px] uppercase tracking-[0.13em] text-white/60">
-            {trip.origin} → {trip.destinations.join(" · ")}
+            {trip.origin}
+            {trip.destinations.length > 0 ? ` → ${trip.destinations.join(" · ")}` : ""}
           </p>
         </div>
       </div>
@@ -61,7 +68,9 @@ export function TripCard({ trip, workspaceSlug, index, ownerName }: TripCardProp
             <h2 className="font-serif text-2xl leading-tight tracking-[-0.025em] text-ink transition-colors group-hover:text-white">
               {trip.title}
             </h2>
-            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted">{trip.summary}</p>
+            {trip.summary ? (
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted">{trip.summary}</p>
+            ) : null}
           </div>
           <ArrowUpRight
             aria-hidden="true"
@@ -71,14 +80,18 @@ export function TripCard({ trip, workspaceSlug, index, ownerName }: TripCardProp
 
         <div className="mt-4 grid grid-cols-2 gap-2 border-t border-hairline pt-3 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
           <span>{formatDateRange(trip.startDate, trip.endDate)}</span>
-          <span className="text-right">{tripDurationDays(trip.startDate, trip.endDate)} 天</span>
+          <span className="text-right">{trip.durationDays} 天</span>
           <span className="flex items-center gap-1">
             <MapPin aria-hidden="true" className="size-3" />
             {trip.destinations.length} 站
           </span>
-          <span className="text-right">
-            {formatBudget(trip.budgetAmountMinor, trip.budgetCurrency)}
-          </span>
+          {hasBudget ? (
+            <span className="text-right">
+              {formatBudget(trip.budgetAmountMinor, trip.budgetCurrency)}
+            </span>
+          ) : (
+            <span />
+          )}
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-3">

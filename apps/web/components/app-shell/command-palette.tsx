@@ -53,7 +53,7 @@ export function CommandPalette({
         : []),
       {
         label: "新建旅行",
-        hint: "表单骨架将在本轮提供",
+        hint: "打开新建旅行表单",
         href: `/w/${workspaceSlug}/trips/new`,
         icon: Sparkles,
       },
@@ -127,9 +127,6 @@ export function CommandPalette({
           ) : (
             <div className="px-3 py-8 text-center">
               <p className="text-sm text-muted">没有匹配的命令</p>
-              <Badge tone="slate" className="mt-3">
-                COMMAND PALETTE PLACEHOLDER
-              </Badge>
             </div>
           )}
         </div>

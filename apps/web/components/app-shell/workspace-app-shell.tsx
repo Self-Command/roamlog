@@ -3,11 +3,15 @@
 import { Button, EmptyState, ErrorState, Skeleton, type ShellLinkProps } from "@roamlog/ui";
 import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
-import { useMeQuery, useTripsQuery, useWorkspacesQuery } from "@/lib/query";
+import { useMeQuery, useMembersQuery, useNotificationsQuery, useTripsQuery, useWorkspacesQuery } from "@/lib/query";
 
 import { AppShellView } from "./app-shell-view";
+
+/** Module-level constants keep the react-query keys stable across renders. */
+const MEMBER_STRIP_PARAMS = { limit: 24 };
+const UNREAD_NOTIFICATIONS_PARAMS = { unreadOnly: true, limit: 20 };
 
 function NextAppLink({ href, ...props }: ShellLinkProps) {
   return <Link href={href} {...props} />;
@@ -50,6 +54,17 @@ export function WorkspaceAppShell({ children }: { children: ReactNode }) {
   const workspacesQuery = useWorkspacesQuery();
   const workspace = workspacesQuery.data?.find((candidate) => candidate.slug === workspaceSlug);
   const tripsQuery = useTripsQuery(workspace?.id);
+
+  // Top-bar data comes from real queries only. Both are allowed to fail or stay
+  // empty: the shell then simply renders no avatars and no unread badge.
+  const membersQuery = useMembersQuery(workspace?.id, MEMBER_STRIP_PARAMS);
+  const notificationsQuery = useNotificationsQuery(UNREAD_NOTIFICATIONS_PARAMS);
+  const topbarMembers = useMemo(
+    () => (membersQuery.data?.items ?? []).filter((member) => member.status === "active"),
+    [membersQuery.data],
+  );
+  const unreadNotificationCount = notificationsQuery.data?.items.length ?? 0;
+  const unreadNotificationsHaveMore = notificationsQuery.data?.hasMore ?? false;
 
   if (meQuery.isLoading || workspacesQuery.isLoading) {
     return <LoadingShell />;
@@ -125,6 +140,9 @@ export function WorkspaceAppShell({ children }: { children: ReactNode }) {
         currentWorkspace={workspace}
         trips={[]}
         pathname={pathname}
+        members={topbarMembers}
+        unreadNotificationCount={unreadNotificationCount}
+        unreadNotificationsHaveMore={unreadNotificationsHaveMore}
         linkComponent={NextAppLink}
       >
         <EmptyState
@@ -148,6 +166,9 @@ export function WorkspaceAppShell({ children }: { children: ReactNode }) {
       currentWorkspace={workspace}
       trips={tripsQuery.data?.items ?? []}
       pathname={pathname}
+      members={topbarMembers}
+      unreadNotificationCount={unreadNotificationCount}
+      unreadNotificationsHaveMore={unreadNotificationsHaveMore}
       linkComponent={NextAppLink}
     >
       {children}

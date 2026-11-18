@@ -2,9 +2,13 @@
 
 import { MapPin } from "lucide-react";
 
-import { shortDate } from "@/lib/demo-format";
-
 import type { MapPoint, MapStop } from "./map-types";
+
+function shortDate(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric" }).format(
+    new Date(`${value}T12:00:00`),
+  );
+}
 
 interface MapFallbackProps {
   stops: MapStop[];
@@ -100,10 +104,12 @@ export function SchematicRouteMap({
   points,
   selectedId,
   onSelect,
+  showRoute = true,
 }: {
   points: MapPoint[];
   selectedId?: string;
   onSelect?: (id: string) => void;
+  showRoute?: boolean;
 }) {
   const projected = points.map((point) => ({
     ...point,
@@ -147,7 +153,7 @@ export function SchematicRouteMap({
         <path d="M658 318 716 306 752 332 738 365 694 376 664 350Z" />
       </g>
 
-      {projected.length > 1 ? (
+      {showRoute && projected.length > 1 ? (
         <polyline
           points={projected.map((point) => `${point.x},${point.y}`).join(" ")}
           fill="none"
@@ -199,7 +205,7 @@ export function SchematicRouteMap({
       })}
 
       <text x="20" y="500" fill="rgba(255,255,255,0.35)" fontSize="8" fontFamily="monospace">
-        SCHEMATIC WORLD / FIXTURE COORDINATES
+        SCHEMATIC WORLD / REAL STOP COORDINATES
       </text>
     </svg>
   );

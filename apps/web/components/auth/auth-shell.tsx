@@ -1,31 +1,9 @@
 import { Badge, PageGlow } from "@roamlog/ui";
-import { CalendarDays, MapPin, Users } from "lucide-react";
 import type { ReactNode } from "react";
 
 interface AuthShellProps {
   children: ReactNode;
 }
-
-const activityRows = [
-  {
-    actor: "Mira",
-    action: "在「首尔，晚秋与夜航」补了一篇日志",
-    time: "09:42",
-    icon: CalendarDays,
-  },
-  {
-    actor: "顾南",
-    action: "把广藏市场加入 11 月 17 日行程",
-    time: "08:15",
-    icon: MapPin,
-  },
-  {
-    actor: "林晚",
-    action: "邀请你一起维护京都红叶慢行",
-    time: "昨天",
-    icon: Users,
-  },
-];
 
 export function AuthShell({ children }: AuthShellProps) {
   return (
@@ -55,29 +33,15 @@ export function AuthShell({ children }: AuthShellProps) {
               Workspace。不是社交动态，是一份可以共同维护的旅行档案。
             </p>
 
-            <div className="mt-8 rounded-card border border-hairline-strong bg-surface-1/70 p-4 backdrop-blur-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-hairline pb-3">
-                <p className="type-eyebrow">RECENT WORKSPACE ACTIVITY</p>
-                <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                  local fixture
-                </span>
-              </div>
-              <div className="divide-y divide-divider">
-                {activityRows.map((row) => {
-                  const Icon = row.icon;
-                  return (
-                    <div key={`${row.actor}-${row.time}`} className="flex items-start gap-3 py-3">
-                      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-pill border border-hairline bg-surface-2 text-muted">
-                        <Icon aria-hidden="true" className="size-3.5" />
-                      </span>
-                      <p className="min-w-0 flex-1 text-xs leading-5 text-body">
-                        <span className="text-ink">{row.actor}</span> {row.action}
-                      </p>
-                      <span className="font-mono text-[9px] text-stone">{row.time}</span>
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="mt-8 rounded-card border border-hairline-strong bg-surface-1/70 p-5 backdrop-blur-sm">
+              <p className="type-eyebrow">SHARED, NOT SOCIAL</p>
+              <p className="mt-3 text-sm leading-6 text-body">
+                每位成员按角色阅读和评论，改动留在它发生的位置。没有公开主页，
+                也没有推荐信息流；对外分享需要成员显式创建链接。
+              </p>
+              <p className="mt-4 border-t border-hairline pt-3 font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
+                private by default · opt-in share links
+              </p>
             </div>
           </div>
 

@@ -1,11 +1,14 @@
 import {
   PublicTripResponseSchema,
+  type PublicMedia,
   type PublicTripResponse,
 } from "@roamlog/contracts";
 import { demoFixtureState } from "@roamlog/api-mocks/fixtures";
 
 const SHARE_STORAGE_PREFIX = "roamlog:mock-share:";
 const DEFAULT_PASSWORD = "roamlog";
+const MOCK_MEDIA_ORIGIN = "https://media.example.invalid";
+const MOCK_MEDIA_EXPIRES_AT = "2027-01-01T00:00:00.000Z";
 
 export interface MockShareMeta {
   password?: string;
@@ -98,7 +101,9 @@ export function buildDemoPublicTrip({
       status: trip.status,
       startDate: trip.startDate,
       endDate: trip.endDate,
+      durationDays: trip.durationDays,
       coverMediaId: trip.coverMediaId,
+      cover: trip.cover,
       origin: trip.origin,
       destinations: trip.destinations,
       countryCodes: trip.countryCodes,
@@ -135,13 +140,15 @@ export function buildDemoPublicTrip({
   });
 }
 
-function publicMedia(media: (typeof demoFixtureState.media)[number]) {
+function publicMedia(media: (typeof demoFixtureState.media)[number]): PublicMedia {
   return {
     id: media.id,
+    url: `${MOCK_MEDIA_ORIGIN}/mock/display/${media.id}.jpg`,
+    thumbUrl: `${MOCK_MEDIA_ORIGIN}/mock/thumb/${media.id}.jpg`,
+    expiresAt: MOCK_MEDIA_EXPIRES_AT,
     width: media.width,
     height: media.height,
     blurhash: media.blurhash,
-    variants: media.variants,
     caption: media.caption,
     date: media.date,
     location: media.location,

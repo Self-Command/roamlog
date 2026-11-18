@@ -1,8 +1,7 @@
 "use client";
 
-import type { Trip, User, WorkspaceWithRole } from "@roamlog/contracts";
+import type { Trip, User, WorkspaceMemberWithUser, WorkspaceWithRole } from "@roamlog/contracts";
 import {
-  AvatarGroup,
   Button,
   IconButton,
   MobileNav,
@@ -15,7 +14,7 @@ import {
   SidebarContent,
   type ShellLinkComponent,
 } from "@roamlog/ui";
-import { Bell, Menu, Plus, Search } from "lucide-react";
+import { Menu, Plus, Search } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { getNextTrip } from "@/lib/trip-presentation";
@@ -23,6 +22,8 @@ import { getNextTrip } from "@/lib/trip-presentation";
 import { breadcrumbFor, buildShellNavigation } from "./app-shell-nav";
 import { CommandPalette } from "./command-palette";
 import { NextTripCard } from "./next-trip-card";
+import { NotificationBell } from "./notification-bell";
+import { TopbarMembers } from "./topbar-members";
 import { UserFooter } from "./user-footer";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -34,6 +35,12 @@ export interface AppShellViewProps {
   currentWorkspace: WorkspaceWithRole;
   trips: Trip[];
   pathname: string;
+  /** Real workspace members. Omitted or empty hides the top-bar member strip. */
+  members?: WorkspaceMemberWithUser[];
+  /** Real unread notification count. 0 hides the badge. */
+  unreadNotificationCount?: number;
+  /** True when the unread page was capped before the total was known. */
+  unreadNotificationsHaveMore?: boolean;
   linkComponent?: ShellLinkComponent;
   children: ReactNode;
 }
@@ -44,6 +51,9 @@ export function AppShellView({
   currentWorkspace,
   trips,
   pathname,
+  members = [],
+  unreadNotificationCount = 0,
+  unreadNotificationsHaveMore = false,
   linkComponent: Link = DefaultLink,
   children,
 }: AppShellViewProps) {
@@ -132,23 +142,23 @@ export function AppShellView({
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-hairline bg-black/80 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-hairline bg-black/80 px-4 backdrop-blur-xl sm:gap-3 sm:px-6 lg:px-8">
           <IconButton
             type="button"
             variant="outline"
             size="sm"
             aria-label="打开导航"
             onClick={() => setNavigationOpen(true)}
-            className="lg:hidden"
+            className="shrink-0 lg:hidden"
           >
             <Menu aria-hidden="true" />
           </IconButton>
 
           <nav aria-label="面包屑" className="flex min-w-0 items-center gap-2 text-xs">
-            <span className="hidden max-w-36 truncate text-muted sm:inline">
+            <span className="hidden max-w-28 truncate text-muted lg:inline">
               {currentWorkspace.name}
             </span>
-            <span aria-hidden="true" className="hidden text-stone sm:inline">
+            <span aria-hidden="true" className="hidden text-stone lg:inline">
               /
             </span>
             <span className="truncate text-ink" aria-current="page">
@@ -161,7 +171,7 @@ export function AppShellView({
             variant="ghost"
             onClick={() => setCommandOpen(true)}
             aria-label="搜索或运行命令 ⌘K"
-            className="ml-auto h-11 min-w-11 max-w-64 flex-1 items-center justify-start gap-2 px-3 text-muted md:h-9 md:flex-none"
+            className="ml-auto size-11 shrink-0 justify-center px-0 text-muted md:h-9 md:w-auto md:max-w-64 md:flex-1 md:justify-start md:gap-2 md:px-3"
           >
             <Search aria-hidden="true" className="size-3.5" />
             <span className="hidden truncate text-xs md:inline">搜索或运行命令</span>
@@ -170,45 +180,34 @@ export function AppShellView({
             </kbd>
           </Button>
 
-          <AvatarGroup
-            className="hidden sm:flex"
-            size={26}
-            label={`${Math.min(3, trips.length + 1)} 位协作者在线`}
-            members={[
-              { id: currentUser.id, name: currentUser.name, online: true },
-              {
-                id: trips[0]?.guestNames[0] ?? "guest-a",
-                name: trips[0]?.guestNames[0] ?? "同行者",
-                online: true,
-              },
-              {
-                id: trips[1]?.guestNames[0] ?? "guest-b",
-                name: trips[1]?.guestNames[0] ?? "编辑者",
-              },
-            ]}
+          {/* Visibility lives on this wrapper so the member strip keeps a single, non-conflicting display class.
+              With no real members the whole slot disappears instead of leaving dead space. */}
+          {members.length > 0 ? (
+            <div className="hidden shrink-0 items-center md:flex">
+              <TopbarMembers
+                members={members}
+                workspaceSlug={currentWorkspace.slug}
+                linkComponent={Link}
+              />
+            </div>
+          ) : null}
+
+          <NotificationBell
+            href={`${workspaceRoot}/notifications`}
+            unreadCount={unreadNotificationCount}
+            unreadHasMore={unreadNotificationsHaveMore}
+            linkComponent={Link}
           />
 
-          <Link
-            href={`${workspaceRoot}/notifications`}
-            aria-label="通知"
-            className="relative inline-flex size-11 items-center justify-center rounded-control border border-hairline-strong bg-surface-2 text-ink outline-none hover:bg-[#151518] focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas md:size-9"
-          >
-            <Bell aria-hidden="true" className="size-4" />
-            <span
-              aria-hidden="true"
-              className="absolute right-2 top-2 size-1.5 rounded-pill bg-accent-orange"
-            />
-          </Link>
-
-          <IconButton
-            type="button"
+          <Button
+            asChild
             variant="outline"
-            size="sm"
-            aria-label="快速新建"
-            onClick={() => setCommandOpen(true)}
+            className="hidden size-11 shrink-0 px-0 sm:inline-flex md:size-9"
           >
-            <Plus aria-hidden="true" />
-          </IconButton>
+            <Link href={`${workspaceRoot}/trips/new`} aria-label="新建旅行">
+              <Plus aria-hidden="true" />
+            </Link>
+          </Button>
         </header>
 
         <main className="mx-auto w-full max-w-[1440px] flex-1 overflow-x-clip px-4 pb-28 pt-6 sm:px-6 md:pb-10 lg:px-8 lg:pt-8">

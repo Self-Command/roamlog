@@ -1,40 +1,27 @@
 "use client";
 
-import type { Trip } from "@roamlog/contracts";
-
-const COUNTRY_POINTS: Record<string, [number, number]> = {
-  KR: [815, 235],
-  JP: [842, 223],
-  IS: [466, 124],
-  PT: [449, 205],
-  IT: [520, 191],
-  CL: [266, 378],
-  AR: [282, 392],
-  GR: [535, 214],
-  MA: [456, 239],
-};
-
-const HOME_POINT: [number, number] = [803, 249];
-
-function pointForTrip(trip: Trip, index: number): [number, number] {
-  const code = trip.countryCodes[0] ?? "";
-  const base = COUNTRY_POINTS[code] ?? [500, 250];
-  return [base[0] + (index % 3) * 7, base[1] - (index % 2) * 7];
-}
+import type { MapPoint } from "./map-types";
 
 interface WorldMapProps {
-  trips: Trip[];
-  selectedTripId?: string;
-  onSelect?: (tripId: string) => void;
+  points: MapPoint[];
+  selectedId?: string;
+  onSelect?: (pointId: string) => void;
   className?: string;
+  label?: string;
 }
 
-export function WorldMap({ trips, selectedTripId, onSelect, className }: WorldMapProps) {
+export function WorldMap({
+  points,
+  selectedId,
+  onSelect,
+  className,
+  label = "真实停靠点地图",
+}: WorldMapProps) {
   return (
     <svg
       viewBox="0 0 1000 520"
       role="img"
-      aria-label={`世界旅行足迹地图，显示 ${trips.length} 趟旅行`}
+      aria-label={`${label}，显示 ${points.length} 个停靠点`}
       data-testid="world-map"
       className={className ?? "h-auto w-full"}
     >
@@ -73,65 +60,48 @@ export function WorldMap({ trips, selectedTripId, onSelect, className }: WorldMa
         <path d="M658 318 716 306 752 332 738 365 694 376 664 350Z" />
       </g>
 
-      {trips.map((trip, index) => {
-        const [x, y] = pointForTrip(trip, index);
-        const selected = trip.id === selectedTripId;
+      {points.map((point) => {
+        const x = ((point.lng + 180) / 360) * 1000;
+        const y = ((90 - point.lat) / 180) * 520;
+        const selected = point.id === selectedId;
         return (
-          <g key={trip.id}>
-            <path
-              d={`M${HOME_POINT[0]} ${HOME_POINT[1]} Q ${(HOME_POINT[0] + x) / 2} ${
-                Math.min(HOME_POINT[1], y) - 34
-              } ${x} ${y}`}
-              fill="none"
-              stroke={selected ? "rgba(255,128,31,0.75)" : "rgba(255,255,255,0.12)"}
-              strokeDasharray={trip.status === "completed" ? undefined : "4 5"}
-              strokeWidth={selected ? 1.7 : 0.9}
-            />
+          <g
+            key={point.id}
+            role={onSelect ? "button" : "img"}
+            tabIndex={onSelect ? 0 : undefined}
+            aria-label={point.label}
+            aria-pressed={selected}
+            className={onSelect ? "cursor-pointer outline-none focus-visible:opacity-80" : ""}
+            onClick={() => onSelect?.(point.id)}
+            onKeyDown={(event) => {
+              if (!onSelect) return;
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(point.id);
+              }
+            }}
+          >
             <circle cx={x} cy={y} r="19" fill="url(#marker-glow)" />
-            <g
-              role={onSelect ? "button" : "img"}
-              tabIndex={onSelect ? 0 : undefined}
-              aria-label={`${trip.title}，${trip.status}`}
-              className={onSelect ? "cursor-pointer outline-none focus-visible:opacity-80" : ""}
-              onClick={() => onSelect?.(trip.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onSelect?.(trip.id);
-                }
-              }}
-            >
-              <circle
-                cx={x}
-                cy={y}
-                r={selected ? 6.5 : 4.5}
-                fill={selected ? "#ff801f" : "rgba(252,253,255,0.74)"}
-                stroke={selected ? "#fff" : "rgba(0,0,0,0.8)"}
-                strokeWidth="1.5"
-              />
-              {selected ? (
-                <text
-                  x={x + 11}
-                  y={y + 3}
-                  fill="#fcfdff"
-                  fontSize="10"
-                  fontFamily="monospace"
-                >
-                  {trip.title.slice(0, 10)}
-                </text>
-              ) : null}
-            </g>
+            <circle
+              cx={x}
+              cy={y}
+              r={selected ? 6.5 : 4.5}
+              fill={selected ? "#ff801f" : "rgba(252,253,255,0.74)"}
+              stroke={selected ? "#fff" : "rgba(0,0,0,0.8)"}
+              strokeWidth="1.5"
+            />
+            {selected ? (
+              <text x={x + 11} y={y + 3} fill="#fcfdff" fontSize="10" fontFamily="monospace">
+                {point.label.slice(0, 10)}
+              </text>
+            ) : null}
           </g>
         );
       })}
 
       <g transform="translate(20 484)">
-        <circle cx="4" cy="4" r="3" fill="#ff801f" />
-        <text x="14" y="8" fill="rgba(255,255,255,0.55)" fontSize="9" fontFamily="monospace">
-          HOME · SHANGHAI
-        </text>
-        <text x="820" y="8" fill="rgba(255,255,255,0.35)" fontSize="8" fontFamily="monospace">
-          SCHEMATIC WORLD / FIXTURE COORDINATES
+        <text x="0" y="8" fill="rgba(255,255,255,0.35)" fontSize="8" fontFamily="monospace">
+          SCHEMATIC WORLD / REAL STOP COORDINATES
         </text>
       </g>
     </svg>

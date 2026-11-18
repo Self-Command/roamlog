@@ -15,9 +15,9 @@ import {
 import { CalendarDays, ChevronRight, MapPin, Route, Sparkles } from "lucide-react";
 import Link from "next/link";
 
+import { useDataMode } from "@/lib/data-provider";
 import { useItineraryQuery, useMeQuery, useTripsQuery, useWorkspaceBySlug } from "@/lib/query";
 import {
-  coverClassForTrip,
   daysUntil,
   formatBudget,
   formatDateRange,
@@ -62,13 +62,15 @@ function DashboardLoading() {
 }
 
 export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
+  const mode = useDataMode();
   const meQuery = useMeQuery();
   const { workspace, workspacesQuery } = useWorkspaceBySlug(workspaceSlug);
   const tripsQuery = useTripsQuery(workspace?.id);
   const trips = tripsQuery.data?.items ?? [];
   const nextTrip = getNextTrip(trips);
+  const nextCoverUrl = nextTrip?.cover?.url ?? nextTrip?.cover?.thumbUrl ?? null;
   const itineraryQuery = useItineraryQuery(nextTrip?.id);
-  const currentUserName = meQuery.data?.name ?? "创建者";
+  const currentUserName = meQuery.data?.name ?? "—";
 
   if (workspacesQuery.isLoading || tripsQuery.isLoading) {
     return <DashboardLoading />;
@@ -78,7 +80,7 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
     return (
       <ErrorState
         title="总览暂时不可用"
-        description="Workspace 或旅行数据没有返回。检查 mock 边界后重试。"
+        description="Workspace 或旅行数据没有返回。请检查网络与 API 状态后重试。"
         retryAction={
           <Button
             type="button"
@@ -127,10 +129,14 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
       />
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <Badge tone="green">MSW DEVELOPMENT DATA</Badge>
-        <span className="text-xs text-muted">
-          当前数据来自 `/v1/me`、`/v1/workspaces` 与旅行 fixtures；没有生产后端写入。
-        </span>
+        {mode === "mock" ? (
+          <>
+            <Badge tone="green">本地演示数据（非真实）</Badge>
+            <span className="text-xs text-muted">
+              当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。
+            </span>
+          </>
+        ) : null}
       </div>
 
       <section
@@ -159,9 +165,15 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
         <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
           <section className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1">
             <div
-              className={`trip-cover ${coverClassForTrip(0)} aspect-[16/7] border-b border-hairline`}
+              className={`relative aspect-[16/7] overflow-hidden border-b border-hairline ${
+                nextCoverUrl ? "bg-surface-deep" : "bg-surface-2"
+              }`}
             >
-              <div className="flex h-full flex-col justify-between p-5">
+              {nextCoverUrl ? (
+                <img src={nextCoverUrl} alt="" className="size-full object-cover" loading="lazy" />
+              ) : null}
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+              <div className="relative flex h-full flex-col justify-between p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={getTripStatusTone(nextTrip.status)}>
                     {getTripStatusLabel(nextTrip.status)}
@@ -197,7 +209,10 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
                   </p>
                   <p className="mt-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-body">
                     <Route aria-hidden="true" className="size-3.5 text-muted" />
-                    {nextTrip.origin} → {nextTrip.destinations.join(" → ")}
+                    {nextTrip.origin}
+                    {nextTrip.destinations.length > 0
+                      ? ` → ${nextTrip.destinations.join(" → ")}`
+                      : ""}
                   </p>
                 </div>
                 <Button asChild variant="outline" size="md">
@@ -220,16 +235,17 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
                   <div>
                     <p className="type-eyebrow">BUDGET</p>
                     <p className="mt-1 text-sm text-ink">
-                      {formatBudget(nextTrip.budgetAmountMinor, nextTrip.budgetCurrency)}
+                      {nextTrip.budgetAmountMinor !== null && nextTrip.budgetCurrency !== null
+                        ? formatBudget(nextTrip.budgetAmountMinor, nextTrip.budgetCurrency)
+                        : "—"}
                     </p>
                   </div>
                   <AvatarGroup
                     members={[
-                      { id: "owner", name: currentUserName, online: true },
+                      { id: "owner", name: currentUserName },
                       ...nextTrip.guestNames.map((name, index) => ({
                         id: `next-guest-${index}`,
                         name,
-                        online: index === 0,
                       })),
                     ]}
                     max={4}
@@ -246,7 +262,9 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
                 <p className="type-eyebrow">UP NEXT</p>
                 <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">接下来</h2>
               </div>
-              <Badge tone="orange">{nextTrip.countryCodes.join(" · ")}</Badge>
+              {nextTrip.countryCodes.length > 0 ? (
+                <Badge tone="orange">{nextTrip.countryCodes.join(" · ")}</Badge>
+              ) : null}
             </div>
 
             <div className="mt-5 space-y-3">
@@ -277,7 +295,7 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
               ) : (
                 <EmptyState
                   title="行程尚未排定"
-                  description="这趟旅行的 itinerary fixtures 还没有可展示的下一项。"
+                  description="这趟旅行还没有可展示的下一项行程。"
                   className="px-4 py-8"
                 />
               )}
@@ -297,7 +315,13 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
         />
       )}
 
-      <DashboardRecent trips={trips} workspaceSlug={workspaceSlug} />
+      {trips.length > 0 ? (
+        <DashboardRecent
+          trips={trips}
+          workspaceSlug={workspaceSlug}
+          currency={workspace.defaultCurrency}
+        />
+      ) : null}
     </div>
   );
 }

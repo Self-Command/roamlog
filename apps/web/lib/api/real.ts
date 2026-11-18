@@ -2,6 +2,7 @@ import {
   CommentPageSchema,
   CommentSchema,
   EntryPageSchema,
+  ExpensePageSchema,
   InvitationPageSchema,
   InvitationSchema,
   ItineraryItemSchema,
@@ -14,6 +15,7 @@ import {
   NotificationSchema,
   ReadAllNotificationsResponseSchema,
   SearchResponseSchema,
+  StopListResponseSchema,
   TripPageSchema,
   TripSchema,
   UpdateWorkspaceRequestSchema,
@@ -36,10 +38,12 @@ import {
   getTrip as getTripRequest,
   inviteWorkspaceMember as inviteWorkspaceMemberRequest,
   listComments as listCommentsRequest,
+  listExpenses as listExpensesRequest,
   listItinerary as listItineraryRequest,
   listMyNotifications as listMyNotificationsRequest,
   listMyWorkspaces as listMyWorkspacesRequest,
   listPacking as listPackingRequest,
+  listStops as listStopsRequest,
   listTripEntries as listTripEntriesRequest,
   listTrips as listTripsRequest,
   listWorkspaceActivity as listWorkspaceActivityRequest,
@@ -180,6 +184,22 @@ const realAdapter = {
 
   async fetchTrip(tripId, signal) {
     return unwrap(await getTripRequest(tripId, { signal }), TripSchema, `/v1/trips/${tripId}`);
+  },
+
+  async fetchStops(tripId, signal) {
+    return unwrap(
+      await listStopsRequest(tripId, { signal }),
+      StopListResponseSchema,
+      `/v1/trips/${tripId}/stops`,
+    );
+  },
+
+  async fetchExpenses(tripId, params = {}, signal) {
+    return unwrap(
+      await listExpensesRequest(tripId, params as Record<string, never>, { signal }),
+      ExpensePageSchema,
+      `/v1/trips/${tripId}/expenses`,
+    );
   },
 
   async createTrip(workspaceId, input, signal) {

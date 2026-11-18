@@ -26,7 +26,12 @@ import { useState, type FormEvent } from "react";
 
 import { DATA_MODE } from "@/lib/data-mode";
 
-import { registerMockShare } from "./demo-share";
+/** Fixture boundary: demo share registration is lazy-loaded and absent from api builds. */
+const isApiBuild = process.env.NEXT_PUBLIC_DATA_MODE === "api";
+
+const loadDemoShare = isApiBuild
+  ? undefined
+  : () => import("@/components/legacy-mock/share/demo-share");
 
 const EXPIRY_OPTIONS = [
   { value: "7", label: "7 天后" },
@@ -91,6 +96,11 @@ export function ShareLinkDialog({
     setPending(true);
     try {
       if (DATA_MODE === "mock") {
+        if (!loadDemoShare) {
+          setError("演示分享模块不可用。");
+          return;
+        }
+        const { registerMockShare } = await loadDemoShare();
         const token = `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
         registerMockShare(token, {
           password: input.password,

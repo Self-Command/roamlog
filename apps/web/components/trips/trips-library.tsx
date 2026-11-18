@@ -16,6 +16,7 @@ import { Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 
+import { useDataMode } from "@/lib/data-provider";
 import { useMeQuery, useTripsQuery, useWorkspaceBySlug } from "@/lib/query";
 
 import { TripCard } from "./trip-card";
@@ -49,15 +50,16 @@ interface TripsLibraryProps {
 }
 
 export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
+  const mode = useDataMode();
   const meQuery = useMeQuery();
   const { workspace, workspacesQuery } = useWorkspaceBySlug(workspaceSlug);
-  const tripsQuery = useTripsQuery(workspace?.id);
+  const tripsQuery = useTripsQuery(workspace?.id, { limit: 100 });
   const [status, setStatus] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("updated");
   const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase("zh-CN"));
   const trips = tripsQuery.data?.items ?? [];
-  const ownerName = meQuery.data?.name ?? "创建者";
+  const ownerName = meQuery.data?.name ?? "—";
 
   if (workspacesQuery.isLoading || tripsQuery.isLoading) {
     return (
@@ -78,7 +80,7 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
     return (
       <ErrorState
         title="旅行库暂时不可用"
-        description="Workspace 或旅行列表没有返回。检查 mock 边界后重试。"
+        description="Workspace 或旅行列表没有返回。请检查网络与 API 状态后重试。"
         retryAction={
           <Button type="button" variant="primary" onClick={() => void tripsQuery.refetch()}>
             重新加载
@@ -114,7 +116,11 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
       <PageHeader
         eyebrow={`${workspace.name.toUpperCase()} / TRIP LIBRARY`}
         title="旅行库"
-        description={`按状态、地点和标签整理 ${trips.length} 趟旅行。所有卡片都来自本地 fixtures，并连接到旅行详情骨架。`}
+        description={
+          mode === "mock"
+            ? `按状态、地点和标签整理 ${trips.length} 趟本地演示旅行；仅用于开发演示。`
+            : `按状态、地点和标签整理 ${trips.length} 趟真实旅行。卡片只展示旅行自身已保存的封面、预算与天数。`
+        }
         actions={
           <Button asChild variant="primary">
             <Link href={`/w/${workspaceSlug}/trips/new`}>
@@ -124,6 +130,15 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
           </Button>
         }
       />
+
+      {mode === "mock" ? (
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          <Badge tone="green">本地演示数据（非真实）</Badge>
+          <span className="text-xs text-muted">
+            当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。
+          </span>
+        </div>
+      ) : null}
 
       <section className="mt-8 rounded-card border border-hairline-strong bg-surface-1 p-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -195,14 +210,13 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
           SHOWING {filteredTrips.length} OF {trips.length}
+          {tripsQuery.data?.hasMore ? " · 前 100 趟" : ""}
         </p>
         {filtersActive ? (
           <Button type="button" variant="link" size="sm" onClick={clearFilters}>
             清除筛选
           </Button>
-        ) : (
-          <Badge tone="neutral">URL 状态将在 Wave 1 接入</Badge>
-        )}
+        ) : null}
       </div>
 
       {filteredTrips.length > 0 ? (

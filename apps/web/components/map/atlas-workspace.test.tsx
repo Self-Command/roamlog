@@ -1,31 +1,153 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderWithDemo } from "@/test/demo-render";
+import { createFakeAdapter, makeStop, makeTrip } from "@/test/fake-data";
+import { renderWithQuery } from "@/test/query-harness";
 
 import { AtlasWorkspace } from "./atlas-workspace";
 
-describe("AtlasWorkspace", () => {
-  it("falls back from the schematic map to the accessible trip list", async () => {
-    const user = userEvent.setup();
-    renderWithDemo(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
+const harness = vi.hoisted(() => ({
+  mode: "api" as "api" | "mock",
+  adapter: undefined as unknown as import("@/lib/api").DataAdapter,
+}));
 
-    expect(screen.getByTestId("world-map")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "列表" }));
+vi.mock("@/lib/data-provider", () => ({
+  useDataAdapter: () => harness.adapter,
+  useDataMode: () => harness.mode,
+}));
 
-    expect(screen.queryByTestId("world-map")).not.toBeInTheDocument();
-    expect(
-      screen.getByText("低带宽列表视图：地图不可用或不需要瓦片时，所有旅行仍可访问。"),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("巴塔哥尼亚穿越").length).toBeGreaterThan(0);
+const TRIP_A = "0198f000-0000-7000-8000-000000000011";
+const TRIP_B = "0198f000-0000-7000-8000-000000000012";
+
+function trips() {
+  return [
+    makeTrip({
+      id: TRIP_A,
+      title: "京都慢行",
+      status: "completed",
+      startDate: "2026-11-01",
+      endDate: "2026-11-03",
+      destinations: ["京都"],
+      countryCodes: ["JP"],
+    }),
+    makeTrip({
+      id: TRIP_B,
+      title: "巴黎周末",
+      status: "planning",
+      startDate: "2026-12-01",
+      endDate: "2026-12-05",
+      destinations: ["巴黎"],
+      countryCodes: ["FR"],
+    }),
+  ];
+}
+
+describe("AtlasWorkspace data truthfulness", () => {
+  beforeEach(() => {
+    harness.mode = "api";
+    harness.adapter = createFakeAdapter();
   });
 
-  it("filters the trip sidebar by search text", async () => {
-    const user = userEvent.setup();
-    renderWithDemo(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
-    await user.type(screen.getByRole("searchbox", { name: "搜索旅行足迹" }), "冰岛");
-    expect(screen.getAllByText("冰岛环岛手记").length).toBeGreaterThan(0);
+  it("plots only real stop coordinates in api mode", async () => {
+    harness.adapter = createFakeAdapter({
+      trips: trips(),
+      stops: [
+        makeStop({
+          id: "0198f000-0000-7000-8000-000000000041",
+          tripId: TRIP_A,
+          city: "京都",
+          country: "日本",
+          countryCode: "JP",
+        }),
+        makeStop({
+          id: "0198f000-0000-7000-8000-000000000042",
+          tripId: TRIP_B,
+          city: "巴黎",
+          country: "法国",
+          countryCode: "FR",
+          lat: 48.8566,
+          lng: 2.3522,
+        }),
+      ],
+    });
+
+    renderWithQuery(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
+
+    expect(await screen.findByTestId("world-map")).toBeInTheDocument();
+    expect(screen.getByText(/2 STOPS · REAL COORDINATES/)).toBeInTheDocument();
+    expect(document.querySelector("polyline")).toBeNull();
     expect(screen.queryByText("首尔，晚秋与夜航")).not.toBeInTheDocument();
+    expect(screen.queryByText("冰岛环岛手记")).not.toBeInTheDocument();
+    expect(screen.queryByText(/FIXTURE COORDINATES/)).not.toBeInTheDocument();
+    expect(screen.queryByText("本地演示数据（非真实）")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty state without fixture markers when no stop has coordinates", async () => {
+    harness.adapter = createFakeAdapter({
+      trips: trips(),
+      stops: [
+        makeStop({
+          id: "0198f000-0000-7000-8000-000000000043",
+          tripId: TRIP_A,
+          lat: null,
+          lng: null,
+        }),
+      ],
+    });
+
+    renderWithQuery(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
+
+    expect(await screen.findByText("还没有可显示的地图坐标")).toBeInTheDocument();
+    expect(screen.getByText(/另有 1 个停靠点缺少经纬度/)).toBeInTheDocument();
+    expect(screen.queryByTestId("world-map")).not.toBeInTheDocument();
+    expect(screen.queryByText(/9 个国家/)).not.toBeInTheDocument();
+  });
+
+  it("filters the trip sidebar by real search text", async () => {
+    harness.adapter = createFakeAdapter({
+      trips: trips(),
+      stops: [
+        makeStop({
+          id: "0198f000-0000-7000-8000-000000000044",
+          tripId: TRIP_A,
+        }),
+        makeStop({
+          id: "0198f000-0000-7000-8000-000000000045",
+          tripId: TRIP_B,
+          city: "巴黎",
+          country: "法国",
+          countryCode: "FR",
+          lat: 48.8566,
+          lng: 2.3522,
+        }),
+      ],
+    });
+
+    const user = userEvent.setup();
+    renderWithQuery(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
+    await screen.findByTestId("world-map");
+
+    await user.type(screen.getByRole("searchbox", { name: "搜索旅行足迹" }), "巴黎");
+    expect(screen.getAllByText("巴黎周末").length).toBeGreaterThan(0);
+    expect(screen.queryByText("京都慢行")).not.toBeInTheDocument();
+  });
+
+  it("shows the local demo notice only in mock mode", async () => {
+    harness.mode = "mock";
+    harness.adapter = createFakeAdapter({
+      trips: [
+        makeTrip({
+          id: TRIP_A,
+          title: "演示旅行",
+        }),
+      ],
+      stops: [makeStop({ tripId: TRIP_A })],
+    });
+
+    renderWithQuery(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
+
+    expect(await screen.findByText("本地演示数据（非真实）")).toBeInTheDocument();
+    expect(screen.getByText(/本地 MSW fixtures/)).toBeInTheDocument();
   });
 });

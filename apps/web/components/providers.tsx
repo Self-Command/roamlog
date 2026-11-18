@@ -1,22 +1,60 @@
 "use client";
 
 import { Button, TooltipProvider } from "@roamlog/ui";
-import {
-  MutationCache,
-  QueryCache,
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 import { isUnauthorized } from "@/lib/api";
 import { DATA_MODE } from "@/lib/data-mode";
 import { DataProvider } from "@/lib/data-provider";
-import { startMockWorker } from "@/lib/msw";
-import { DemoDataProvider } from "@/lib/demo-store";
 import { useSessionQuery } from "@/lib/query";
 
-const mocksEnabled = DATA_MODE === "mock" && process.env.NODE_ENV !== "production";
+/**
+ * Mount gate for the demo store — depends on the data mode **only**.
+ *
+ * A production `next build && next start` in mock mode (local smoke test, E2E
+ * against a production server, a demo deployment) still needs
+ * `DemoDataProvider`, otherwise every `useDemoStore` page throws. Whether the
+ * fixture code is *shipped at all* is decided separately by `isApiBuild`
+ * below; the two concerns are orthogonal.
+ */
+const mockModeEnabled = DATA_MODE === "mock";
+
+/**
+ * MSW itself stays development/test only — same contract as the loading copy
+ * rendered below. A production mock build therefore mounts the demo store
+ * without the service worker.
+ */
+const mswEnabled = mockModeEnabled && process.env.NODE_ENV !== "production";
+
+/**
+ * Build-time guard for the fixture boundary.
+ *
+ * `next/dynamic` always emits its own chunk, so the import has to sit inside a
+ * branch the bundler can constant-fold. `process.env.NEXT_PUBLIC_DATA_MODE` is
+ * inlined at build time, which makes `isApiBuild` a literal `true`/`false`, and
+ * the unused branch (plus its `import()`) is dropped from an api build.
+ *
+ * The comparison is kept literal on purpose — routing it through
+ * `resolveDataMode()` would hide it from the bundler's constant folding.
+ */
+const isApiBuild = process.env.NEXT_PUBLIC_DATA_MODE === "api";
+
+type MockRootComponent = ComponentType<{ children: ReactNode }>;
+
+/** Lazily loaded legacy demo boundary — never part of an api-mode bundle. */
+const LegacyMockRoot: MockRootComponent | undefined = isApiBuild
+  ? undefined
+  : dynamic(
+      () => import("@/components/legacy-mock/mock-root").then((module) => module.LegacyMockRoot),
+      { ssr: false, loading: () => <MockBootScreen /> },
+    );
+
+/** Starts MSW through the same lazy boundary so the mock package stays out of api builds. */
+const startMockRuntime: (() => Promise<void>) | undefined = isApiBuild
+  ? undefined
+  : () => import("@/components/legacy-mock/mock-root").then((module) => module.startMockWorker());
 
 type MockState = "starting" | "ready" | "failed";
 
@@ -47,18 +85,18 @@ export function Providers({ children }: ProvidersProps) {
         },
       }),
   );
-  const [mockState, setMockState] = useState<MockState>(mocksEnabled ? "starting" : "ready");
+  const [mockState, setMockState] = useState<MockState>(mswEnabled ? "starting" : "ready");
   const [mockError, setMockError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!mocksEnabled) return;
+    if (!mswEnabled || !startMockRuntime) return;
 
     let active = true;
     setMockState("starting");
     setMockError(null);
 
-    startMockWorker()
+    startMockRuntime()
       .then(() => {
         if (active) setMockState("ready");
       })
@@ -73,22 +111,11 @@ export function Providers({ children }: ProvidersProps) {
     };
   }, [attempt]);
 
-  if (mockState === "starting") {
-    return (
-      <div
-        role="status"
-        className="flex min-h-dvh items-center justify-center bg-canvas px-6 text-center"
-      >
-        <div>
-          <p className="type-eyebrow">LOCAL DEVELOPMENT BOUNDARY</p>
-          <p className="mt-3 font-serif text-2xl text-ink">正在准备本地旅行数据</p>
-          <p className="mt-2 text-sm text-muted">MSW 只在 development / test 环境启动。</p>
-        </div>
-      </div>
-    );
+  if (mswEnabled && mockState === "starting") {
+    return <MockBootScreen />;
   }
 
-  if (mockState === "failed") {
+  if (mswEnabled && mockState === "failed") {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas px-6">
         <div className="w-full max-w-md rounded-card border border-accent-red/20 bg-accent-red/5 p-6">
@@ -116,10 +143,29 @@ export function Providers({ children }: ProvidersProps) {
       <TooltipProvider delayDuration={200}>
         <DataProvider>
           {DATA_MODE === "api" ? <SessionBootstrap /> : null}
-          <DemoDataProvider>{children}</DemoDataProvider>
+          {mockModeEnabled && LegacyMockRoot ? (
+            <LegacyMockRoot>{children}</LegacyMockRoot>
+          ) : (
+            children
+          )}
         </DataProvider>
       </TooltipProvider>
     </QueryClientProvider>
+  );
+}
+
+function MockBootScreen() {
+  return (
+    <div
+      role="status"
+      className="flex min-h-dvh items-center justify-center bg-canvas px-6 text-center"
+    >
+      <div>
+        <p className="type-eyebrow">LOCAL DEVELOPMENT BOUNDARY</p>
+        <p className="mt-3 font-serif text-2xl text-ink">正在准备本地旅行数据</p>
+        <p className="mt-2 text-sm text-muted">MSW 只在 development / test 环境启动。</p>
+      </div>
+    </div>
   );
 }
 

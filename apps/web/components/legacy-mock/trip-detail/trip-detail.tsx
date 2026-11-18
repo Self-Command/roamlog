@@ -34,14 +34,14 @@ import {
   tripDurationDays,
 } from "@/lib/trip-presentation";
 
-import { TripActivityTab } from "../trip-detail/activity-tab";
-import { BudgetTab } from "../trip-detail/budget-tab";
-import { ItineraryTab } from "../trip-detail/itinerary-tab";
-import { TripJournalTab } from "../trip-detail/journal-tab";
-import { TripOverviewTab } from "../trip-detail/overview-tab";
-import { PackingTab } from "../trip-detail/packing-tab";
-import { PhotosTab } from "../trip-detail/photos-tab";
-import { TripMapTab } from "../trip-detail/trip-map-tab";
+import { TripActivityTab } from "./activity-tab";
+import { BudgetTab } from "./budget-tab";
+import { ItineraryTab } from "./itinerary-tab";
+import { TripJournalTab } from "./journal-tab";
+import { TripOverviewTab } from "./overview-tab";
+import { PackingTab } from "./packing-tab";
+import { PhotosTab } from "./photos-tab";
+import { TripMapTab } from "./trip-map-tab";
 
 interface TripDetailProps {
   workspaceSlug: string;

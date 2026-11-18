@@ -7,6 +7,8 @@ import type {
   CreateJournalEntryRequest,
   CreateTripRequest,
   EntryPage,
+  ExpenseCategory,
+  ExpensePage,
   InvitationPage,
   ItineraryItem,
   ItineraryListResponse,
@@ -16,6 +18,7 @@ import type {
   NotificationPage,
   NotificationPreferencesResponse,
   SearchResponse,
+  Stop,
   Trip,
   TripPage,
   UpdateItineraryItemRequest,
@@ -49,6 +52,16 @@ export interface EntryListParams {
   from?: string;
   to?: string;
   favorite?: boolean;
+  sort?: string;
+}
+
+export interface ExpenseListParams {
+  cursor?: string;
+  limit?: number;
+  category?: ExpenseCategory;
+  from?: string;
+  to?: string;
+  participantId?: string;
   sort?: string;
 }
 
@@ -131,6 +144,12 @@ export interface DataAdapter {
     signal?: AbortSignal,
   ): Promise<TripPage>;
   fetchTrip(tripId: string, signal?: AbortSignal): Promise<Trip>;
+  fetchStops(tripId: string, signal?: AbortSignal): Promise<Stop[]>;
+  fetchExpenses(
+    tripId: string,
+    params?: ExpenseListParams,
+    signal?: AbortSignal,
+  ): Promise<ExpensePage>;
   createTrip(
     workspaceId: string,
     input: CreateTripRequest,

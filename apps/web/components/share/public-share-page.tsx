@@ -12,8 +12,20 @@ import { useEffect, useState, type FormEvent } from "react";
 import { DATA_MODE } from "@/lib/data-mode";
 import { getPublicTrip } from "@roamlog/api-client";
 
-import { resolveDemoShare, type DemoShareResolution } from "./demo-share";
+import type { DemoShareResolution } from "@/components/legacy-mock/share/demo-share";
+
 import { ShareArticle } from "./share-article";
+
+/**
+ * Fixture boundary: demo share payloads come from a lazy-loaded legacy module,
+ * so an api build never ships fixture data. The real share path below stays
+ * statically imported.
+ */
+const isApiBuild = process.env.NEXT_PUBLIC_DATA_MODE === "api";
+
+const loadDemoShare = isApiBuild
+  ? undefined
+  : () => import("@/components/legacy-mock/share/demo-share");
 
 type ShareScreen =
   | { kind: "loading" }
@@ -32,9 +44,21 @@ export function PublicSharePage({ token }: { token: string }) {
     setScreen({ kind: "loading" });
 
     if (DATA_MODE === "mock") {
-      const resolution = resolveDemoShare(token);
-      if (!active) return;
-      setScreen(resolutionToScreen(resolution));
+      if (!loadDemoShare) return;
+      loadDemoShare()
+        .then(({ resolveDemoShare }) => {
+          if (!active) return;
+          setScreen(resolutionToScreen(resolveDemoShare(token)));
+        })
+        .catch(() => {
+          if (!active) return;
+          setScreen({
+            kind: "error",
+            title: "演示分享没有加载",
+            description: "本地演示模块不可用，请刷新页面后重试。",
+            retryable: true,
+          });
+        });
       return () => {
         active = false;
       };
@@ -94,6 +118,8 @@ export function PublicSharePage({ token }: { token: string }) {
     if (!password.trim() || pending) return;
 
     if (DATA_MODE === "mock") {
+      if (!loadDemoShare) return;
+      const { resolveDemoShare } = await loadDemoShare();
       const resolution = resolveDemoShare(token, password);
       setScreen(resolutionToScreen(resolution));
       if (resolution.status === "invalid-password") setPassword("");

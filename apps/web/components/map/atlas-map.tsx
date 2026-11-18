@@ -1,6 +1,5 @@
 "use client";
 
-import type { Trip } from "@roamlog/contracts";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 
 import { SchematicRouteMap } from "./map-fallback";
@@ -8,27 +7,19 @@ import type { MapPoint } from "./map-types";
 
 const MapCanvas = lazy(() => import("./map-canvas"));
 
-const COUNTRY_CENTERS: Record<string, [number, number]> = {
-  KR: [36.5, 127.8],
-  JP: [36.2, 138.2],
-  IS: [64.9, -18.6],
-  PT: [39.4, -8.2],
-  IT: [42.7, 12.5],
-  CL: [-33.4, -70.6],
-  AR: [-38.4, -63.6],
-  GR: [39.0, 22.0],
-  MA: [31.8, -7.1],
-};
+export interface AtlasPoint extends MapPoint {
+  tripId: string;
+}
 
 export function AtlasMap({
-  trips,
+  points,
   selectedTripId,
-  onSelect,
+  onSelectTrip,
   forceFallback = false,
 }: {
-  trips: Trip[];
+  points: AtlasPoint[];
   selectedTripId?: string;
-  onSelect?: (tripId: string) => void;
+  onSelectTrip?: (tripId: string) => void;
   forceFallback?: boolean;
 }) {
   const [mapFailed, setMapFailed] = useState(false);
@@ -44,29 +35,36 @@ export function AtlasMap({
     }
   }, [forceFallback]);
 
-  const points = useMemo<MapPoint[]>(
+  const mapPoints = useMemo<MapPoint[]>(
     () =>
-      trips.flatMap((trip, index) => {
-        const code = trip.countryCodes[0] ?? "";
-        const center = COUNTRY_CENTERS[code];
-        if (!center) return [];
-        return [
-          {
-            id: trip.id,
-            label: trip.title,
-            sublabel: trip.destinations.join(" · "),
-            lat: center[0] + (index % 3) * 0.25,
-            lng: center[1] - (index % 2) * 0.3,
-          },
-        ];
-      }),
-    [trips],
+      points.map((point) => ({
+        id: point.id,
+        label: point.label,
+        sublabel: point.sublabel,
+        lat: point.lat,
+        lng: point.lng,
+      })),
+    [points],
   );
+  const selectedPointId = points.find((point) => point.tripId === selectedTripId)?.id;
+  const tripIdByPointId = useMemo(
+    () => new Map(points.map((point) => [point.id, point.tripId])),
+    [points],
+  );
+  const selectPoint = (pointId: string) => {
+    const tripId = tripIdByPointId.get(pointId);
+    if (tripId) onSelectTrip?.(tripId);
+  };
 
   if (forceFallback || mapFailed || !webglAvailable) {
     return (
       <div className="relative">
-        <SchematicRouteMap points={points} selectedId={selectedTripId} onSelect={onSelect} />
+        <SchematicRouteMap
+          points={mapPoints}
+          selectedId={selectedPointId}
+          onSelect={selectPoint}
+          showRoute={false}
+        />
         <div className="absolute left-3 top-3 rounded-pill border border-hairline-strong bg-black/65 px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-white/65">
           TILE FALLBACK / SCHEMATIC WORLD
         </div>
@@ -85,9 +83,9 @@ export function AtlasMap({
       }
     >
       <MapCanvas
-        points={points}
-        selectedId={selectedTripId}
-        onSelect={onSelect}
+        points={mapPoints}
+        selectedId={selectedPointId}
+        onSelect={selectPoint}
         onError={() => setMapFailed(true)}
       />
     </Suspense>

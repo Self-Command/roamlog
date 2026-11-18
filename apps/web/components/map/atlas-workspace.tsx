@@ -2,12 +2,14 @@
 
 import type { Trip } from "@roamlog/contracts";
 import {
-  AvatarGroup,
   Badge,
   Button,
+  EmptyState,
+  ErrorState,
   Input,
   PageHeader,
   Select,
+  Skeleton,
 } from "@roamlog/ui";
 import {
   ArrowUpRight,
@@ -21,47 +23,80 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { useDemoStore } from "@/lib/demo-store";
-import { shortDate } from "@/lib/demo-format";
+import { useDataMode } from "@/lib/data-provider";
 import {
   formatDateRange,
   getTripStatusLabel,
   getTripStatusTone,
-  tripDurationDays,
 } from "@/lib/trip-presentation";
-import { AtlasMap } from "@/components/map/atlas-map";
 
-const COUNTRY_NAMES: Record<string, string> = {
-  KR: "韩国",
-  JP: "日本",
-  IS: "冰岛",
-  PT: "葡萄牙",
-  IT: "意大利",
-  CL: "智利",
-  AR: "阿根廷",
-  GR: "希腊",
-  MA: "摩洛哥",
-};
+import { useAtlasData } from "./atlas-data";
+import { AtlasMap, type AtlasPoint } from "./atlas-map";
+
+function countryLabel(code: string | undefined): string {
+  if (!code) return "—";
+  try {
+    return new Intl.DisplayNames(["zh-CN"], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+function AtlasLoading() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-5 w-32" />
+      <Skeleton className="h-12 w-56" />
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <Skeleton className="h-[480px] rounded-card" />
+        <Skeleton className="h-[480px] rounded-card" />
+      </div>
+    </div>
+  );
+}
+
+function DemoDataNotice() {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge tone="green">本地演示数据（非真实）</Badge>
+      <span className="text-xs text-muted">
+        当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。
+      </span>
+    </div>
+  );
+}
 
 export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
-  const { state } = useDemoStore();
+  const mode = useDataMode();
+  const {
+    workspace,
+    workspacesQuery,
+    tripsQuery,
+    trips,
+    tripsTruncated,
+    stopsByTrip,
+    isLoading,
+    error,
+    retry,
+  } = useAtlasData(workspaceSlug);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [year, setYear] = useState("all");
   const [view, setView] = useState<"map" | "list">("map");
-  const [selectedId, setSelectedId] = useState(state.trips[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState("");
+
   const years = useMemo(
     () =>
-      [...new Set(state.trips.map((trip) => trip.startDate.slice(0, 4)))].sort((a, b) =>
-        b.localeCompare(a),
+      [...new Set(trips.map((trip) => trip.startDate.slice(0, 4)))].sort((left, right) =>
+        right.localeCompare(left),
       ),
-    [state.trips],
+    [trips],
   );
-  const filtered = useMemo(
+  const filteredTrips = useMemo(
     () =>
-      state.trips.filter((trip) => {
+      trips.filter((trip) => {
         const text = `${trip.title} ${trip.destinations.join(" ")} ${trip.tags.join(" ")} ${trip.countryCodes
-          .map((code) => COUNTRY_NAMES[code] ?? code)
+          .map((code) => countryLabel(code))
           .join(" ")}`.toLocaleLowerCase("zh-CN");
         return (
           (!query.trim() || text.includes(query.trim().toLocaleLowerCase("zh-CN"))) &&
@@ -69,28 +104,90 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
           (year === "all" || trip.startDate.startsWith(year))
         );
       }),
-    [query, state.trips, status, year],
+    [query, status, trips, year],
   );
-  const selected = filtered.find((trip) => trip.id === selectedId) ?? filtered[0];
+  const selected = filteredTrips.find((trip) => trip.id === selectedId) ?? filteredTrips[0];
   const groups = useMemo(() => {
     const map = new Map<string, Trip[]>();
-    filtered.forEach((trip) =>
+    filteredTrips.forEach((trip) =>
       map.set(trip.startDate.slice(0, 4), [
         ...(map.get(trip.startDate.slice(0, 4)) ?? []),
         trip,
       ]),
     );
-    return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
-  }, [filtered]);
-  const countries = new Set(filtered.flatMap((trip) => trip.countryCodes));
-  const cities = new Set(filtered.flatMap((trip) => trip.destinations));
+    return [...map.entries()].sort(([left], [right]) => right.localeCompare(left));
+  }, [filteredTrips]);
 
-  return (
-    <div className="space-y-6">
+  const points = useMemo<AtlasPoint[]>(
+    () =>
+      filteredTrips.flatMap((trip) =>
+        (stopsByTrip.get(trip.id) ?? []).flatMap((stop) => {
+          if (stop.lat === null || stop.lng === null) return [];
+          return [
+            {
+              id: `${trip.id}:${stop.id}`,
+              tripId: trip.id,
+              label: stop.city,
+              sublabel: `${trip.title} · ${stop.country}`,
+              lat: stop.lat,
+              lng: stop.lng,
+            },
+          ];
+        }),
+      ),
+    [filteredTrips, stopsByTrip],
+  );
+  const visibleStopCount = filteredTrips.reduce(
+    (total, trip) => total + (stopsByTrip.get(trip.id)?.length ?? 0),
+    0,
+  );
+  const mappedStops = filteredTrips.flatMap((trip) =>
+    (stopsByTrip.get(trip.id) ?? []).filter(
+      (stop): stop is typeof stop & { lat: number; lng: number } =>
+        stop.lat !== null && stop.lng !== null,
+    ),
+  );
+  const countries = new Set(mappedStops.map((stop) => stop.countryCode));
+  const cities = new Set(mappedStops.map((stop) => stop.city));
+  const totalDays = filteredTrips.reduce((sum, trip) => sum + trip.durationDays, 0);
+  const unmappedCount = visibleStopCount - mappedStops.length;
+  const coverUrl = selected?.cover?.thumbUrl ?? selected?.cover?.url ?? null;
+
+  if (isLoading) {
+    return <AtlasLoading />;
+  }
+
+  if (error || !workspace || tripsQuery.isError || !tripsQuery.data) {
+    return (
+      <ErrorState
+        title="旅行地图暂时不可用"
+        description="工作区、旅行或停靠点没有返回。请检查网络与 API 状态后重试。"
+        retryAction={
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => {
+              void workspacesQuery.refetch();
+              retry();
+            }}
+          >
+            重新加载
+          </Button>
+        }
+      />
+    );
+  }
+
+  const header = (
+    <>
       <PageHeader
-        eyebrow={`ATLAS / ${filtered.length} TRIPS · ${countries.size} COUNTRIES`}
+        eyebrow={`ATLAS / ${filteredTrips.length} TRIPS · ${countries.size} COUNTRIES`}
         title="世界足迹"
-        description="从上海出发，把每次出发和归来的坐标收进同一张地图。选择标记，回到那段旅程。"
+        description={
+          mode === "mock"
+            ? "本地演示停靠点仅用于开发预览；没有坐标时显示空状态，不会生成占位标记。"
+            : "只使用停靠点中带经纬度的真实坐标；没有坐标的停靠点不会出现在地图上。"
+        }
         actions={
           <div className="flex items-center rounded-control border border-hairline-strong bg-surface-1 p-1">
             <Button
@@ -118,6 +215,31 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
           </div>
         }
       />
+      {mode === "mock" ? (
+        <div className="mt-6">
+          <DemoDataNotice />
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (trips.length === 0) {
+    return (
+      <div>
+        {header}
+        <EmptyState
+          className="mt-6"
+          icon={Globe2}
+          title="还没有旅行足迹"
+          description="创建旅行并添加带经纬度的停靠点后，这里会显示真实地图标记。"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {header}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="surface-card overflow-hidden">
@@ -125,28 +247,28 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
             <span className="size-1.5 rounded-pill bg-accent-orange" />
             <p className="type-eyebrow text-body">WORLD / FOOTPRINT</p>
             <span className="ml-auto hidden font-mono text-[8px] uppercase tracking-[0.08em] text-stone sm:inline">
-              {filtered.length} MARKERS · FIXTURE COORDINATES
+              {points.length} STOPS · {mode === "mock" ? "DEMO STOPS" : "REAL COORDINATES"}
             </span>
           </div>
 
           {view === "map" ? (
             <div className="relative">
-              <AtlasMap
-                trips={filtered}
-                selectedTripId={selected?.id}
-                onSelect={setSelectedId}
-              />
-              {!filtered.length ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/65 p-6 backdrop-blur-sm">
-                  <div className="max-w-xs rounded-card border border-hairline-strong bg-surface-1 p-5 text-center">
-                    <Globe2 aria-hidden="true" className="mx-auto size-5 text-stone" />
-                    <p className="mt-3 font-serif text-2xl text-ink">这片地图还没有足迹</p>
-                    <p className="mt-2 text-xs leading-5 text-muted">
-                      放宽年份或状态筛选，再把散落的坐标找回来。
-                    </p>
-                  </div>
+              {points.length > 0 ? (
+                <AtlasMap
+                  points={points}
+                  selectedTripId={selected?.id}
+                  onSelectTrip={setSelectedId}
+                />
+              ) : (
+                <div className="flex min-h-80 items-center justify-center p-6">
+                  <EmptyState
+                    className="w-full max-w-md px-4 py-10"
+                    icon={Globe2}
+                    title="还没有可显示的地图坐标"
+                    description="停靠点补齐经纬度后，这里会出现真实标记；地图不会使用国家中心点或占位坐标。"
+                  />
                 </div>
-              ) : null}
+              )}
             </div>
           ) : (
             <div className="min-h-80 p-4">
@@ -154,39 +276,48 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
                 <List aria-hidden="true" className="size-3.5" />
                 低带宽列表视图：地图不可用或不需要瓦片时，所有旅行仍可访问。
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {filtered.map((trip) => (
-                  <button
-                    key={trip.id}
-                    type="button"
-                    onClick={() => setSelectedId(trip.id)}
-                    className={`rounded-card border p-3 text-left ${
-                      selected?.id === trip.id
-                        ? "border-hairline-strong bg-surface-2"
-                        : "border-hairline bg-surface-1 hover:bg-surface-2"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="truncate font-serif text-lg text-ink">{trip.title}</p>
-                      <Badge tone={getTripStatusTone(trip.status)}>
-                        {getTripStatusLabel(trip.status)}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 truncate text-[11px] text-muted">
-                      {trip.destinations.join(" · ")}
-                    </p>
-                    <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.08em] text-stone">
-                      {trip.countryCodes.map((code) => COUNTRY_NAMES[code] ?? code).join(" · ")}
-                    </p>
-                  </button>
-                ))}
-              </div>
+              {filteredTrips.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {filteredTrips.map((trip) => (
+                    <button
+                      key={trip.id}
+                      type="button"
+                      onClick={() => setSelectedId(trip.id)}
+                      className={`rounded-card border p-3 text-left ${
+                        selected?.id === trip.id
+                          ? "border-hairline-strong bg-surface-2"
+                          : "border-hairline bg-surface-1 hover:bg-surface-2"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate font-serif text-lg text-ink">{trip.title}</p>
+                        <Badge tone={getTripStatusTone(trip.status)}>
+                          {getTripStatusLabel(trip.status)}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 truncate text-[11px] text-muted">
+                        {trip.destinations.join(" · ")}
+                      </p>
+                      <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.08em] text-stone">
+                        {trip.countryCodes.map((code) => countryLabel(code)).join(" · ")}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  className="mt-3 px-4 py-10"
+                  title="没有匹配的旅行"
+                  description="换一个关键词或清除筛选，查看全部旅行。"
+                />
+              )}
             </div>
           )}
 
           <div className="flex h-10 items-center justify-between gap-3 border-t border-hairline px-4">
             <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-muted">
-              VISIBLE {filtered.length} / {state.trips.length} · {countries.size} COUNTRIES
+              VISIBLE {filteredTrips.length} / {trips.length} · {countries.size} COUNTRIES
+              {tripsTruncated ? " · 前 100 趟" : ""}
             </p>
             <p className="truncate font-mono text-[8px] uppercase tracking-[0.1em] text-stone">
               {selected ? `SELECTED / ${selected.title}` : "NO SELECTION"}
@@ -197,14 +328,21 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
         <aside className="surface-card flex flex-col gap-3 p-3 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-6rem)]">
           {selected ? (
             <div className="overflow-hidden rounded-card border border-hairline-strong bg-surface-2">
-              <div className="relative h-28 bg-[radial-gradient(circle_at_28%_22%,rgba(255,128,31,0.3),transparent_50%),linear-gradient(135deg,#20140c,#070708)]">
+              <div className="relative h-28 bg-surface-deep">
+                {coverUrl ? (
+                  <img src={coverUrl} alt="" className="size-full object-cover" loading="lazy" />
+                ) : (
+                  <div className="flex size-full items-center justify-center">
+                    <MapPin aria-hidden="true" className="size-5 text-stone" />
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
                 <div className="absolute inset-x-3 bottom-3">
                   <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-white/55">
-                    {selected.countryCodes
-                      .map((code) => COUNTRY_NAMES[code] ?? code)
-                      .join(" · ")}{" "}
-                    / {getTripStatusLabel(selected.status)}
+                    {selected.countryCodes.length > 0
+                      ? `${selected.countryCodes.map((code) => countryLabel(code)).join(" · ")} / `
+                      : ""}
+                    {getTripStatusLabel(selected.status)}
                   </p>
                   <h2 className="mt-1 truncate font-serif text-[23px] leading-none text-white">
                     {selected.title}
@@ -240,8 +378,8 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
             {[
               ["国家 / 地区", countries.size],
               ["城市", cities.size],
-              ["旅行天数", filtered.reduce((sum, trip) => sum + tripDurationDays(trip.startDate, trip.endDate), 0)],
-              ["旅行", filtered.length],
+              ["旅行天数", totalDays],
+              ["旅行", filteredTrips.length],
             ].map(([label, value]) => (
               <div key={label} className="bg-surface-1 px-3 py-2.5">
                 <p className="type-eyebrow">{label}</p>
@@ -294,37 +432,42 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
           </div>
 
           <div className="min-h-52 flex-1 overflow-y-auto pr-1">
-            {groups.map(([groupYear, trips]) => (
+            {groups.map(([groupYear, groupTrips]) => (
               <div key={groupYear}>
                 <div className="sticky top-0 z-10 flex items-center gap-2 bg-surface-1 py-2">
                   <span className="font-mono text-[10px] text-ink">{groupYear}</span>
                   <span className="h-px flex-1 bg-hairline" />
-                  <span className="font-mono text-[8px] text-stone">{trips.length}</span>
+                  <span className="font-mono text-[8px] text-stone">{groupTrips.length}</span>
                 </div>
-                {trips.map((trip) => (
+                {groupTrips.map((trip) => (
                   <button
                     key={trip.id}
                     type="button"
                     onClick={() => setSelectedId(trip.id)}
                     aria-pressed={trip.id === selected?.id}
                     className={`flex w-full items-start gap-2.5 rounded-control p-2 text-left ${
-                      trip.id === selected?.id
-                        ? "bg-surface-2"
-                        : "hover:bg-white/[0.025]"
+                      trip.id === selected?.id ? "bg-surface-2" : "hover:bg-white/[0.025]"
                     }`}
                   >
-                    <span className="relative size-10 shrink-0 overflow-hidden rounded-control border border-hairline bg-[radial-gradient(circle_at_30%_20%,rgba(255,128,31,0.25),transparent_55%),#111]">
-                      <MapPin className="absolute inset-0 m-auto size-3.5 text-white/60" />
+                    <span className="relative size-10 shrink-0 overflow-hidden rounded-control border border-hairline bg-surface-2">
+                      {trip.cover?.thumbUrl || trip.cover?.url ? (
+                        <img
+                          src={trip.cover.thumbUrl ?? trip.cover.url ?? ""}
+                          alt=""
+                          className="size-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <MapPin className="absolute inset-0 m-auto size-3.5 text-stone" />
+                      )}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] text-body">
-                        {trip.title}
-                      </span>
+                      <span className="block truncate text-[12px] text-body">{trip.title}</span>
                       <span className="mt-0.5 block truncate text-[9px] text-muted">
                         {trip.destinations.join(" · ")}
                       </span>
                       <span className="mt-1 flex items-center justify-between font-mono text-[8px] uppercase text-stone">
-                        <span>{shortDate(trip.startDate)}</span>
+                        <span>{trip.startDate}</span>
                         <span>{getTripStatusLabel(trip.status)}</span>
                       </span>
                     </span>
@@ -334,20 +477,21 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
             ))}
           </div>
 
-          {selected ? (
-            <div className="border-t border-hairline pt-2">
-              <AvatarGroup
-                members={selected.guestNames.map((name, index) => ({
-                  id: `${selected.id}-${index}`,
-                  name,
-                  online: index === 0,
-                }))}
-                size={24}
-              />
-            </div>
+          {unmappedCount > 0 ? (
+            <p className="border-t border-hairline pt-2 text-[10px] leading-4 text-stone">
+              另有 {unmappedCount} 个停靠点缺少经纬度，未显示在地图上。
+            </p>
+          ) : null}
+          {selected && selected.guestNames.length > 0 ? (
+            <p className="truncate border-t border-hairline pt-2 text-[10px] text-muted">
+              同行：{selected.guestNames.join(" · ")}
+            </p>
           ) : null}
         </aside>
       </div>
+      <p className="text-[10px] leading-5 text-stone">
+        地图标记、国家与城市统计只来自停靠点记录；缺少坐标的记录不会生成占位标记。
+      </p>
     </div>
   );
 }

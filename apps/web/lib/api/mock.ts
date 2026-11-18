@@ -2,6 +2,7 @@ import {
   CommentPageSchema,
   CommentSchema,
   EntryPageSchema,
+  ExpensePageSchema,
   InvitationPageSchema,
   InvitationSchema,
   ItineraryItemSchema,
@@ -14,6 +15,7 @@ import {
   NotificationSchema,
   ReadAllNotificationsResponseSchema,
   SearchResponseSchema,
+  StopListResponseSchema,
   TripPageSchema,
   TripSchema,
   UserSchema,
@@ -165,6 +167,28 @@ const mockAdapter = {
       await requestJson(`/v1/trips/${encodeURIComponent(tripId)}`, { signal }),
       TripSchema,
       `/v1/trips/${tripId}`,
+    );
+  },
+
+  async fetchStops(tripId, signal) {
+    return parse(
+      await requestJson(`/v1/trips/${encodeURIComponent(tripId)}/stops`, { signal }),
+      StopListResponseSchema,
+      `/v1/trips/${tripId}/stops`,
+    );
+  },
+
+  async fetchExpenses(tripId, params, signal) {
+    return parse(
+      await requestJson(
+        pathWithQuery(
+          `/v1/trips/${encodeURIComponent(tripId)}/expenses`,
+          params as Record<string, unknown> | undefined,
+        ),
+        { signal },
+      ),
+      ExpensePageSchema,
+      `/v1/trips/${tripId}/expenses`,
     );
   },
 

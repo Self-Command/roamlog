@@ -12,7 +12,8 @@ export function UserFooter({ user }: { user: User }) {
 
   return (
     <div className="flex items-center gap-2.5 px-1 py-1">
-      <Avatar name={user.name} src={user.image ?? undefined} size={30} online />
+      {/* No realtime presence channel exists, so the avatar never claims to be online. */}
+      <Avatar name={user.name} src={user.image ?? undefined} size={30} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-xs text-ink">{user.name}</span>
         <span className="block truncate text-[10px] text-muted">{user.email}</span>

@@ -1,7 +1,6 @@
 "use client";
 
-import type { ExpenseCategory } from "@roamlog/contracts";
-import { Badge, Button, PageHeader } from "@roamlog/ui";
+import { Badge, Button, EmptyState, ErrorState, PageHeader, Skeleton } from "@roamlog/ui";
 import {
   CalendarRange,
   Download,
@@ -13,68 +12,83 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { useDemoStore } from "@/lib/demo-store";
-import { formatMinor, shortDate } from "@/lib/demo-format";
-import { tripDurationDays } from "@/lib/trip-presentation";
+import { useDataMode } from "@/lib/data-provider";
 
-const categoryLabels: Record<ExpenseCategory, string> = {
-  transport: "交通",
-  stay: "住宿",
-  food: "餐饮",
-  activity: "活动",
-  shopping: "购物",
-  other: "其他",
-};
+import { useInsightsData } from "./insights-data";
+import {
+  aggregateTripStats,
+  annualTrips,
+  budgetRows,
+  categoryColors,
+  categoryLabels,
+  categoryTotals,
+  expenseCsv,
+  formatMoney,
+  heatmapRows,
+  insightRecords,
+  monthlySpend,
+  totalByCurrency,
+} from "./insights-model";
 
-const categoryColors: Record<ExpenseCategory, string> = {
-  transport: "bg-accent-blue",
-  stay: "bg-accent-orange",
-  food: "bg-accent-yellow",
-  activity: "bg-accent-green",
-  shopping: "bg-accent-red",
-  other: "bg-accent-slate",
-};
-
-export function InsightsWorkspace() {
-  const { state } = useDemoStore();
-  const [notice, setNotice] = useState<string | null>(null);
-  const totalDays = state.trips.reduce(
-    (sum, trip) => sum + tripDurationDays(trip.startDate, trip.endDate),
-    0,
+function InsightsLoading() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-5 w-28" />
+      <Skeleton className="h-12 w-56" />
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline-strong bg-hairline xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-28 rounded-none" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-12">
+        <Skeleton className="h-72 rounded-card lg:col-span-4" />
+        <Skeleton className="h-72 rounded-card lg:col-span-8" />
+        <Skeleton className="h-64 rounded-card lg:col-span-5" />
+        <Skeleton className="h-64 rounded-card lg:col-span-7" />
+      </div>
+    </div>
   );
-  const countries = new Set(state.trips.flatMap((trip) => trip.countryCodes));
-  const cities = new Set(state.trips.flatMap((trip) => trip.destinations));
-  const totalSpent = state.expenses.reduce((sum, expense) => sum + expense.amountMinor, 0);
+}
 
-  const annual = useMemo(() => {
-    const map = new Map<string, number>();
-    state.trips.forEach((trip) => {
-      const year = trip.startDate.slice(0, 4);
-      map.set(year, (map.get(year) ?? 0) + 1);
-    });
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [state.trips]);
+function DemoDataNotice() {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge tone="green">本地演示数据（非真实）</Badge>
+      <span className="text-xs text-muted">
+        当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。
+      </span>
+    </div>
+  );
+}
+
+export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
+  const mode = useDataMode();
+  const [notice, setNotice] = useState<string | null>(null);
+  const {
+    workspace,
+    workspacesQuery,
+    tripsQuery,
+    trips,
+    tripsTruncated,
+    entries,
+    expenses,
+    secondaryLoading,
+    secondaryError,
+    truncated,
+    retrySecondary,
+  } = useInsightsData(workspaceSlug);
+
+  const stats = useMemo(() => aggregateTripStats(trips), [trips]);
+  const annual = useMemo(() => annualTrips(trips), [trips]);
   const annualMax = Math.max(1, ...annual.map(([, count]) => count));
-
-  const monthly = useMemo(() => {
-    const points: Array<{ key: string; label: string; amountMinor: number }> = [];
-    const latest = "2026-11";
-    const [yearText, monthText] = latest.split("-");
-    const base = new Date(Number(yearText), Number(monthText) - 1, 1);
-    for (let offset = 11; offset >= 0; offset -= 1) {
-      const date = new Date(base.getFullYear(), base.getMonth() - offset, 1);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      points.push({
-        key,
-        label: `${String(date.getMonth() + 1).padStart(2, "0")}月`,
-        amountMinor: state.expenses
-          .filter((expense) => expense.date.startsWith(key))
-          .reduce((sum, expense) => sum + expense.amountMinor, 0),
-      });
-    }
-    return points;
-  }, [state.expenses]);
+  const currency = workspace?.defaultCurrency ?? "CNY";
+  const displayExpenses = useMemo(
+    () => expenses.filter((expense) => expense.currency === currency),
+    [currency, expenses],
+  );
+  const monthly = useMemo(() => monthlySpend(displayExpenses, currency), [currency, displayExpenses]);
   const monthlyMax = Math.max(1, ...monthly.map((point) => point.amountMinor));
+  const monthlyTotal = monthly.reduce((sum, point) => sum + point.amountMinor, 0);
   const linePoints = monthly
     .map((point, index) => {
       const x = 10 + (index / Math.max(1, monthly.length - 1)) * 580;
@@ -83,106 +97,154 @@ export function InsightsWorkspace() {
     })
     .join(" ");
   const areaPoints = `10,160 ${linePoints} 590,160`;
-
   const categories = useMemo(
-    () =>
-      (Object.keys(categoryLabels) as ExpenseCategory[])
-        .map((category) => ({
-          category,
-          total: state.expenses
-            .filter((expense) => expense.category === category)
-            .reduce((sum, expense) => sum + expense.amountMinor, 0),
-        }))
-        .filter((item) => item.total > 0)
-        .sort((left, right) => right.total - left.total),
-    [state.expenses],
+    () => categoryTotals(expenses, currency),
+    [currency, expenses],
   );
   const categoryTotal = categories.reduce((sum, item) => sum + item.total, 0);
-  const budgetRows = state.trips
-    .map((trip) => ({
-      trip,
-      spent: state.expenses
-        .filter((expense) => expense.tripId === trip.id)
-        .reduce((sum, expense) => sum + expense.amountMinor, 0),
-    }))
-    .filter((row) => row.trip.budgetAmountMinor)
-    .sort((left, right) => (right.trip.budgetAmountMinor ?? 0) - (left.trip.budgetAmountMinor ?? 0))
-    .slice(0, 6);
-
-  const heatmap = useMemo(() => {
-    const years = [...new Set(state.entries.map((entry) => entry.date.slice(0, 4)))].sort();
-    return years.map((year) => ({
-      year,
-      months: Array.from({ length: 12 }, (_, index) => {
-        const key = `${year}-${String(index + 1).padStart(2, "0")}`;
-        return {
-          key,
-          count:
-            state.entries.filter((entry) => entry.date.startsWith(key)).length +
-            state.expenses.filter((expense) => expense.date.startsWith(key)).length,
-        };
-      }),
-    }));
-  }, [state.entries, state.expenses]);
+  const budgets = useMemo(() => budgetRows(trips, expenses), [expenses, trips]);
+  const heatmap = useMemo(() => heatmapRows(entries, expenses), [entries, expenses]);
+  const records = useMemo(() => insightRecords(trips, entries), [entries, trips]);
+  const currencyTotals = useMemo(() => totalByCurrency(expenses), [expenses]);
+  const displayTotal = currencyTotals.find((total) => total.currency === currency);
+  const otherCurrencies = currencyTotals.filter((total) => total.currency !== currency);
 
   function exportCsv() {
-    const tripById = new Map(state.trips.map((trip) => [trip.id, trip.title]));
-    const rows = state.expenses.map((expense) =>
-      [
-        expense.date,
-        tripById.get(expense.tripId) ?? expense.tripId,
-        categoryLabels[expense.category],
-        expense.note,
-        expense.amountMinor / 100,
-        expense.currency,
-      ]
-        .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
-        .join(","),
-    );
-    const blob = new Blob(
-      [`日期,旅行,分类,备注,金额,币种\n${rows.join("\n")}`],
-      { type: "text/csv;charset=utf-8" },
-    );
+    if (expenses.length === 0) return;
+    const blob = new Blob([expenseCsv(expenses, trips)], {
+      type: "text/csv;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "roamlog-expenses.csv";
     anchor.click();
     URL.revokeObjectURL(url);
-    setNotice("已导出当前本地 fixture 的 20 笔支出。");
+    setNotice(`已导出 ${expenses.length} 笔真实支出记录。`);
   }
 
-  return (
-    <div className="space-y-4">
+  if (workspacesQuery.isLoading || tripsQuery.isLoading) {
+    return <InsightsLoading />;
+  }
+
+  if (!workspace || tripsQuery.isError || !tripsQuery.data) {
+    return (
+      <ErrorState
+        title="洞察暂时不可用"
+        description="工作区或旅行列表没有返回。请检查网络与 API 状态后重试。"
+        retryAction={
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => {
+              void workspacesQuery.refetch();
+              void tripsQuery.refetch();
+            }}
+          >
+            重新加载
+          </Button>
+        }
+      />
+    );
+  }
+
+  const header = (
+    <>
       <PageHeader
-        eyebrow="INSIGHTS / 2024—2027"
+        eyebrow={`INSIGHTS / ${stats.years.length ? `${stats.years[0]}—${stats.years.at(-1)}` : "NO DATA"}`}
         title="旅行洞察"
-        description="年度旅行、月度支出、分类、预算对比和记录热力图，全部由当前本地旅行与花费数据计算。"
+        description={
+          mode === "mock"
+            ? "年度旅行、支出、分类与记录热力图来自本地演示数据，仅用于开发预览。"
+            : "年度旅行、支出、分类与记录热力图，全部来自当前工作区的真实数据；无法计算的指标会明确标注。"
+        }
         actions={
-          <Button type="button" variant="outline" size="sm" onClick={exportCsv}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={expenses.length === 0}
+          >
             <Download aria-hidden="true" />
             导出支出
           </Button>
         }
       />
+      {mode === "mock" ? (
+        <div className="mt-6">
+          <DemoDataNotice />
+        </div>
+      ) : null}
       {notice ? (
         <p
           role="status"
-          className="rounded-control border border-accent-green/20 bg-accent-green/5 px-3 py-2 text-xs text-accent-green"
+          className="mt-4 rounded-control border border-accent-green/20 bg-accent-green/5 px-3 py-2 text-xs text-accent-green"
         >
           {notice}
         </p>
       ) : null}
+    </>
+  );
+
+  if (trips.length === 0) {
+    return (
+      <div>
+        {header}
+        <EmptyState
+          className="mt-6"
+          icon={Plane}
+          title="还没有足够的旅行数据"
+          description="创建旅行并记录支出与日志后，洞察会基于真实数据生成年度、分类与热力图。"
+        />
+      </div>
+    );
+  }
+
+  if (secondaryLoading) {
+    return <InsightsLoading />;
+  }
+
+  if (secondaryError) {
+    return (
+      <ErrorState
+        title="洞察数据读取失败"
+        description="旅行、日志或支出记录没有完整返回。请稍后重试。"
+        retryAction={
+          <Button type="button" variant="primary" onClick={retrySecondary}>
+            重新加载
+          </Button>
+        }
+      />
+    );
+  }
+
+  const spentValue = displayTotal ? formatMoney(displayTotal.amountMinor, currency) : "—";
+  const spentHint =
+    expenses.length === 0
+      ? "尚未有支出记录"
+      : displayTotal
+        ? `${displayExpenses.length} 笔 ${currency} 明细`
+        : `仅有其他币种支出，未折算为 ${currency}`;
+
+  return (
+    <div className="space-y-4">
+      {header}
 
       <section className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline-strong bg-hairline xl:grid-cols-4">
         {[
-          { label: "旅行次数", value: state.trips.length, hint: "含愿望与计划", icon: Plane },
-          { label: "旅行天数", value: totalDays, hint: "按起止日期计算", icon: CalendarRange },
-          { label: "国家 / 地区", value: countries.size, hint: `${cities.size} 座城市`, icon: Globe2 },
+          { label: "旅行次数", value: stats.tripCount, hint: "含愿望与计划", icon: Plane },
+          { label: "旅行天数", value: stats.totalDays, hint: "按真实起止日期计算", icon: CalendarRange },
+          {
+            label: "国家 / 地区",
+            value: stats.countries,
+            hint: `${stats.cities} 座城市`,
+            icon: Globe2,
+          },
           {
             label: "总支出",
-            value: formatMinor(totalSpent),
-            hint: `${state.expenses.length} 笔明细`,
+            value: spentValue,
+            hint: spentHint,
             icon: Wallet,
           },
         ].map((stat) => (
@@ -197,6 +259,15 @@ export function InsightsWorkspace() {
         ))}
       </section>
 
+      {tripsTruncated || truncated ? (
+        <p
+          role="status"
+          className="rounded-control border border-accent-yellow/20 bg-accent-yellow/5 px-3 py-2 text-[11px] text-accent-yellow"
+        >
+          当前最多加载前 100 趟旅行与 20 页记录，统计范围是已加载的真实数据；完整分页尚未接入。
+        </p>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-12">
         <section className="surface-card p-5 lg:col-span-4">
           <div className="flex items-start justify-between gap-3">
@@ -204,7 +275,7 @@ export function InsightsWorkspace() {
               <p className="type-eyebrow">ANNUAL TRIPS</p>
               <h2 className="mt-1.5 font-serif text-2xl text-ink">年度旅行次数</h2>
             </div>
-            <Badge tone="neutral">{state.trips.length}</Badge>
+            <Badge tone="neutral">{stats.tripCount}</Badge>
           </div>
           <div className="mt-6 flex h-44 items-end gap-3">
             {annual.map(([year, count]) => (
@@ -237,73 +308,89 @@ export function InsightsWorkspace() {
               <h2 className="mt-1.5 font-serif text-2xl text-ink">月度支出节奏</h2>
             </div>
             <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-              LAST 12 MONTHS · {formatMinor(monthly.reduce((sum, item) => sum + item.amountMinor, 0))}
+              LAST 12 MONTHS · {formatMoney(monthlyTotal, currency)}
             </p>
           </div>
-          <div className="mt-4 overflow-hidden rounded-control border border-hairline bg-surface-2 p-2">
-            <svg
-              viewBox="0 0 600 170"
-              role="img"
-              aria-label="最近十二个月支出面积图"
-              className="h-44 w-full"
-            >
-              <defs>
-                <linearGradient id="spend-area" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#ff801f" stopOpacity="0.34" />
-                  <stop offset="1" stopColor="#ff801f" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {[0, 40, 80, 120, 160].map((y) => (
-                <line
-                  key={y}
-                  x1="10"
-                  y1={y}
-                  x2="590"
-                  y2={y}
-                  stroke="rgba(255,255,255,0.07)"
-                  strokeWidth="1"
+          {monthlyTotal === 0 ? (
+            <EmptyState
+              className="mt-4 px-4 py-10"
+              title="最近 12 个月没有支出记录"
+              description={`记录 ${currency} 支出后，这里会显示真实的月度节奏。`}
+            />
+          ) : (
+            <div className="mt-4 overflow-hidden rounded-control border border-hairline bg-surface-2 p-2">
+              <svg
+                viewBox="0 0 600 170"
+                role="img"
+                aria-label="最近十二个月支出面积图"
+                className="h-44 w-full"
+              >
+                <defs>
+                  <linearGradient id="spend-area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#ff801f" stopOpacity="0.34" />
+                    <stop offset="1" stopColor="#ff801f" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {[0, 40, 80, 120, 160].map((y) => (
+                  <line
+                    key={y}
+                    x1="10"
+                    y1={y}
+                    x2="590"
+                    y2={y}
+                    stroke="rgba(255,255,255,0.07)"
+                    strokeWidth="1"
+                  />
+                ))}
+                <polygon points={areaPoints} fill="url(#spend-area)" />
+                <polyline
+                  points={linePoints}
+                  fill="none"
+                  stroke="#ff801f"
+                  strokeWidth="2"
+                  strokeLinejoin="round"
                 />
-              ))}
-              <polygon points={areaPoints} fill="url(#spend-area)" />
-              <polyline
-                points={linePoints}
-                fill="none"
-                stroke="#ff801f"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
-              {monthly.map((point, index) => {
-                const x = 10 + (index / Math.max(1, monthly.length - 1)) * 580;
-                const y = 150 - (point.amountMinor / monthlyMax) * 120;
-                return (
-                  <circle
-                    key={point.key}
-                    cx={x}
-                    cy={y}
-                    r="2.5"
-                    fill="#070708"
-                    stroke="#ff801f"
-                    strokeWidth="1.5"
+                {monthly.map((point, index) => {
+                  const x = 10 + (index / Math.max(1, monthly.length - 1)) * 580;
+                  const y = 150 - (point.amountMinor / monthlyMax) * 120;
+                  return (
+                    <circle
+                      key={point.key}
+                      cx={x}
+                      cy={y}
+                      r="2.5"
+                      fill="#070708"
+                      stroke="#ff801f"
+                      strokeWidth="1.5"
+                    >
+                      <title>{`${point.label} · ${formatMoney(point.amountMinor, currency)}`}</title>
+                    </circle>
+                  );
+                })}
+                {monthly.map((point, index) => (
+                  <text
+                    key={`${point.key}-label`}
+                    x={10 + (index / Math.max(1, monthly.length - 1)) * 580}
+                    y="166"
+                    textAnchor="middle"
+                    fill="rgba(255,255,255,0.35)"
+                    fontSize="7"
+                    fontFamily="monospace"
                   >
-                    <title>{`${point.label} · ${formatMinor(point.amountMinor)}`}</title>
-                  </circle>
-                );
-              })}
-              {monthly.map((point, index) => (
-                <text
-                  key={`${point.key}-label`}
-                  x={10 + (index / Math.max(1, monthly.length - 1)) * 580}
-                  y="166"
-                  textAnchor="middle"
-                  fill="rgba(255,255,255,0.35)"
-                  fontSize="7"
-                  fontFamily="monospace"
-                >
-                  {index % 2 === 0 ? point.label : ""}
-                </text>
-              ))}
-            </svg>
-          </div>
+                    {index % 2 === 0 ? point.label : ""}
+                  </text>
+                ))}
+              </svg>
+            </div>
+          )}
+          {otherCurrencies.length > 0 ? (
+            <p className="mt-3 font-mono text-[9px] text-stone">
+              其他币种支出未折算：
+              {otherCurrencies
+                .map((total) => formatMoney(total.amountMinor, total.currency))
+                .join(" · ")}
+            </p>
+          ) : null}
         </section>
 
         <section className="surface-card p-5 lg:col-span-5">
@@ -312,36 +399,47 @@ export function InsightsWorkspace() {
               <p className="type-eyebrow">CATEGORY MIX</p>
               <h2 className="mt-1.5 font-serif text-2xl text-ink">分类支出</h2>
             </div>
-            <Badge tone="neutral">{state.expenses.length} 笔</Badge>
+            <Badge tone="neutral">{displayExpenses.length} 笔</Badge>
           </div>
-          <div className="mt-4 flex h-3 overflow-hidden rounded-pill bg-white/5">
-            {categories.map((item) => (
-              <div
-                key={item.category}
-                className={categoryColors[item.category]}
-                style={{ width: `${(item.total / Math.max(1, categoryTotal)) * 100}%` }}
-                title={`${categoryLabels[item.category]} ${formatMinor(item.total)}`}
-              />
-            ))}
-          </div>
-          <div className="mt-4 space-y-3">
-            {categories.map((item) => (
-              <div key={item.category}>
-                <div className="flex items-center justify-between gap-3 text-[11px]">
-                  <span className="inline-flex items-center gap-2 text-body">
-                    <span
-                      aria-hidden="true"
-                      className={`size-1.5 rounded-pill ${categoryColors[item.category]}`}
-                    />
-                    {categoryLabels[item.category]}
-                  </span>
-                  <span className="font-mono text-muted">
-                    {formatMinor(item.total)} · {Math.round((item.total / Math.max(1, categoryTotal)) * 100)}%
-                  </span>
-                </div>
+          {categories.length === 0 ? (
+            <EmptyState
+              className="mt-4 px-4 py-10"
+              title="还没有分类支出"
+              description={`记录 ${currency} 支出后，这里会按真实分类汇总。`}
+            />
+          ) : (
+            <>
+              <div className="mt-4 flex h-3 overflow-hidden rounded-pill bg-white/5">
+                {categories.map((item) => (
+                  <div
+                    key={item.category}
+                    className={categoryColors[item.category]}
+                    style={{ width: `${(item.total / Math.max(1, categoryTotal)) * 100}%` }}
+                    title={`${categoryLabels[item.category]} ${formatMoney(item.total, currency)}`}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+              <div className="mt-4 space-y-3">
+                {categories.map((item) => (
+                  <div key={item.category}>
+                    <div className="flex items-center justify-between gap-3 text-[11px]">
+                      <span className="inline-flex items-center gap-2 text-body">
+                        <span
+                          aria-hidden="true"
+                          className={`size-1.5 rounded-pill ${categoryColors[item.category]}`}
+                        />
+                        {categoryLabels[item.category]}
+                      </span>
+                      <span className="font-mono text-muted">
+                        {formatMoney(item.total, currency)} ·{" "}
+                        {Math.round((item.total / Math.max(1, categoryTotal)) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </section>
 
         <section className="surface-card p-5 lg:col-span-7">
@@ -352,35 +450,44 @@ export function InsightsWorkspace() {
             </div>
             <span className="font-mono text-[9px] uppercase text-stone">TOP 6 BUDGETS</span>
           </div>
-          <div className="mt-4 space-y-4">
-            {budgetRows.map(({ trip, spent }) => {
-              const budget = trip.budgetAmountMinor ?? 1;
-              const percent = Math.round((spent / Math.max(1, budget)) * 100);
-              return (
-                <div key={trip.id}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px] text-body">{trip.title}</p>
-                      <p className="mt-0.5 font-mono text-[8px] uppercase text-stone">
-                        {trip.destinations[0]} · {percent}%
-                      </p>
+          {budgets.length === 0 ? (
+            <EmptyState
+              className="mt-4 px-4 py-10"
+              title="还没有设置预算"
+              description="为旅行填写预算后，这里会对比同币种的真实支出。"
+            />
+          ) : (
+            <div className="mt-4 space-y-4">
+              {budgets.map(({ trip, currency: budgetCurrency, budgetAmountMinor, spentAmountMinor, hasOtherCurrencySpend }) => {
+                const percent = Math.round((spentAmountMinor / Math.max(1, budgetAmountMinor)) * 100);
+                return (
+                  <div key={trip.id}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] text-body">{trip.title}</p>
+                        <p className="mt-0.5 font-mono text-[8px] uppercase text-stone">
+                          {trip.destinations[0] ?? "—"} · {percent}%
+                          {hasOtherCurrencySpend ? " · 其他币种未计入" : ""}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-[10px] text-muted">
+                        {formatMoney(spentAmountMinor, budgetCurrency)} /{" "}
+                        {formatMoney(budgetAmountMinor, budgetCurrency)}
+                      </span>
                     </div>
-                    <span className="shrink-0 font-mono text-[10px] text-muted">
-                      {formatMinor(spent)} / {formatMinor(budget)}
-                    </span>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-pill bg-white/5">
+                      <div
+                        className={`h-full rounded-pill ${
+                          spentAmountMinor > budgetAmountMinor ? "bg-accent-red" : "bg-accent-orange"
+                        }`}
+                        style={{ width: `${Math.min(100, percent)}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-pill bg-white/5">
-                    <div
-                      className={`h-full rounded-pill ${
-                        spent > budget ? "bg-accent-red" : "bg-accent-orange"
-                      }`}
-                      style={{ width: `${Math.min(100, percent)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="surface-card p-5 lg:col-span-8">
@@ -408,33 +515,41 @@ export function InsightsWorkspace() {
               多
             </div>
           </div>
-          <div className="mt-4 space-y-2 overflow-x-auto">
-            {heatmap.map((row) => (
-              <div key={row.year} className="flex min-w-[520px] items-center gap-2">
-                <span className="w-10 shrink-0 font-mono text-[8px] text-stone">{row.year}</span>
-                <div className="grid flex-1 grid-cols-12 gap-1">
-                  {row.months.map((cell) => (
-                    <div
-                      key={cell.key}
-                      tabIndex={0}
-                      role="img"
-                      aria-label={`${cell.key} 记录 ${cell.count} 条`}
-                      className={`h-7 rounded-[3px] outline-none focus-visible:ring-1 focus-visible:ring-ink ${
-                        cell.count === 0
-                          ? "bg-white/[0.045]"
-                          : cell.count < 2
-                            ? "bg-accent-green/20"
-                            : cell.count < 5
-                              ? "bg-accent-green/45"
-                              : "bg-accent-green/80"
-                      }`}
-                      title={`${cell.key} · ${cell.count} 条记录`}
-                    />
-                  ))}
+          {heatmap.length === 0 ? (
+            <EmptyState
+              className="mt-4 px-4 py-10"
+              title="还没有日志或支出记录"
+              description="记录日志或支出后，这里会显示真实的月度活跃热力图。"
+            />
+          ) : (
+            <div className="mt-4 space-y-2 overflow-x-auto">
+              {heatmap.map((row) => (
+                <div key={row.year} className="flex min-w-[520px] items-center gap-2">
+                  <span className="w-10 shrink-0 font-mono text-[8px] text-stone">{row.year}</span>
+                  <div className="grid flex-1 grid-cols-12 gap-1">
+                    {row.months.map((cell) => (
+                      <div
+                        key={cell.key}
+                        tabIndex={0}
+                        role="img"
+                        aria-label={`${cell.key} 记录 ${cell.count} 条`}
+                        className={`h-7 rounded-[3px] outline-none focus-visible:ring-1 focus-visible:ring-ink ${
+                          cell.count === 0
+                            ? "bg-white/[0.045]"
+                            : cell.count < 2
+                              ? "bg-accent-green/20"
+                              : cell.count < 5
+                                ? "bg-accent-green/45"
+                                : "bg-accent-green/80"
+                        }`}
+                        title={`${cell.key} · ${cell.count} 条记录`}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="surface-card p-5 lg:col-span-4">
@@ -445,29 +560,26 @@ export function InsightsWorkspace() {
               {
                 icon: CalendarRange,
                 label: "最长旅行",
-                value: [...state.trips].sort(
-                  (left, right) =>
-                    tripDurationDays(right.startDate, right.endDate) -
-                    tripDurationDays(left.startDate, left.endDate),
-                )[0]?.title,
+                value: records.longestTrip,
+                hint: "按真实起止天数",
               },
               {
                 icon: Wallet,
                 label: "最高预算",
-                value: [...state.trips].sort(
-                  (left, right) =>
-                    (right.budgetAmountMinor ?? 0) - (left.budgetAmountMinor ?? 0),
-                )[0]?.title,
+                value: records.highestBudget,
+                hint: "按旅行预算设置值",
               },
               {
                 icon: MapPin,
                 label: "最常去国家",
-                value: "日本 · 2 段",
+                value: records.mostVisitedCountry,
+                hint: "按真实国家码统计",
               },
               {
                 icon: Route,
-                label: "最远目的地",
-                value: "百内 · 巴塔哥尼亚",
+                label: "路线距离",
+                value: "—",
+                hint: "尚未接入",
               },
             ].map((record) => (
               <div
@@ -480,15 +592,20 @@ export function InsightsWorkspace() {
                     {record.label}
                   </p>
                   <p className="mt-1 truncate text-[12px] text-ink">{record.value}</p>
+                  <p className="mt-0.5 text-[9px] text-stone">{record.hint}</p>
                 </div>
               </div>
             ))}
           </div>
           <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.08em] text-stone">
-            LAST ENTRY {state.entries[0] ? shortDate(state.entries[0].date) : "—"}
+            LAST ENTRY {records.lastEntryDate}
           </p>
         </section>
       </div>
+
+      <p className="text-[10px] leading-5 text-stone">
+        多币种统一换算与路线距离聚合尚未接入：支出按币种分别统计，未做汇率折算；距离指标显示 —。
+      </p>
     </div>
   );
 }
