@@ -6,12 +6,19 @@ import {
   EntryMediaSchema,
   ExpenseParticipantSchema,
   ExpenseWithSplitsSchema,
+  GetMediaResponseSchema,
   InvitationSchema,
   IsoTimestampSchema,
   JournalEntrySchema,
+  PlaceSearchQuerySchema,
+  PlaceSearchResponseSchema,
+  PublicMediaSchema,
   ShareLinkSchema,
+  StopSchema,
+  TripCoverSchema,
   TripParticipantSchema,
   TripSchema,
+  UpdateTripRequestSchema,
   UuidV7Schema,
 } from "../index";
 
@@ -22,6 +29,7 @@ const WORKSPACE = "0192f4c5-6a7b-7c8d-b123-456789abcdef";
 const TRIP = "0192f4c5-6a7b-7c8d-8123-456789abcdef";
 const ENTRY = "0192f4c5-6a7b-7c8d-9123-456789abcdef";
 const EXPENSE = "0192f4c5-6a7b-7c8d-a923-456789abcdef";
+const MEDIA = "0192f4c5-6a7b-7c8d-b123-456789abcdea";
 const TS = "2026-11-17T08:00:00.000Z";
 const DAY = "2026-11-17";
 
@@ -33,8 +41,14 @@ const trip = {
   status: "upcoming",
   startDate: "2026-11-21",
   endDate: "2026-11-29",
+  durationDays: 9,
   coverMediaId: null,
+  cover: null,
   origin: "Shanghai",
+  originLat: null,
+  originLng: null,
+  originCountryCode: null,
+  timeZone: "Asia/Tokyo",
   destinations: ["Kyoto", "Osaka"],
   countryCodes: ["JP"],
   tags: ["autumn", "food"],
@@ -114,12 +128,159 @@ describe("entity contracts", () => {
     expect(TripSchema.safeParse({ ...trip, endDate: "2026-11-20" }).success).toBe(false);
     expect(TripSchema.safeParse({ ...trip, startDate: "2026-13-01" }).success).toBe(false);
     expect(TripSchema.safeParse({ ...trip, budgetAmountMinor: 10.5 }).success).toBe(false);
+    expect(TripSchema.safeParse({ ...trip, durationDays: 8 }).success).toBe(false);
+    expect(TripSchema.safeParse({ ...trip, originLat: 31.2304 }).success).toBe(false);
+    expect(TripSchema.safeParse({ ...trip, timeZone: "Asia Shanghai" }).success).toBe(false);
+  });
+
+  it("enforces unique, bounded trip tags, destinations, and guest names", () => {
+    expect(TripSchema.safeParse({ ...trip, tags: ["autumn", "Autumn"] }).success).toBe(false);
+    expect(TripSchema.safeParse({ ...trip, destinations: ["Kyoto", " Kyoto "] }).success).toBe(
+      false,
+    );
+    expect(
+      TripSchema.safeParse({
+        ...trip,
+        tags: Array.from({ length: 21 }, (_, index) => `tag-${index}`),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("projects a serializable cover without storage secrets", () => {
+    const cover = {
+      mediaId: MEDIA,
+      status: "ready" as const,
+      url: "https://media.example.com/large.webp?signature=one",
+      thumbUrl: "https://media.example.com/thumb.webp?signature=two",
+      width: 4000,
+      height: 3000,
+      blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj",
+      expiresAt: TS,
+    };
+
+    const parsed = TripCoverSchema.parse(cover);
+    expect(JSON.parse(JSON.stringify(parsed))).toEqual(parsed);
+    expect(parsed).not.toHaveProperty("bucket");
+    expect(parsed).not.toHaveProperty("key");
+    expect(TripCoverSchema.safeParse({ ...cover, url: null }).success).toBe(false);
+    expect(TripCoverSchema.safeParse({ ...cover, expiresAt: null }).success).toBe(false);
+  });
+
+  it("keeps trip updates partial while routing cover writes through the cover endpoint", () => {
+    expect(
+      UpdateTripRequestSchema.safeParse({ version: 3, title: "Winter in Kyoto" }).success,
+    ).toBe(true);
+    expect(UpdateTripRequestSchema.safeParse({ version: 3, coverMediaId: MEDIA }).success).toBe(
+      false,
+    );
+    expect(UpdateTripRequestSchema.safeParse({ version: 3, coverMediaId: null }).success).toBe(
+      true,
+    );
+  });
+
+  it("validates stop place metadata without breaking stop CRUD fields", () => {
+    const stop = {
+      id: OTHER,
+      tripId: TRIP,
+      workspaceId: WORKSPACE,
+      city: "Kyoto",
+      country: "Japan",
+      countryCode: "JP",
+      lat: 35.0116,
+      lng: 135.7681,
+      provider: "photon" as const,
+      providerPlaceId: "photon:kyoto",
+      timeZone: "Asia/Tokyo",
+      startDate: "2026-11-21",
+      endDate: "2026-11-24",
+      notes: "",
+      order: 0,
+      version: 1,
+      createdById: USER,
+      updatedById: USER,
+      createdAt: TS,
+      updatedAt: TS,
+      deletedAt: null,
+    };
+
+    expect(StopSchema.parse(stop).providerPlaceId).toBe("photon:kyoto");
+    expect(StopSchema.safeParse({ ...stop, timeZone: "local time" }).success).toBe(false);
+  });
+
+  it("defines bounded place search input and output", () => {
+    expect(PlaceSearchQuerySchema.parse({ q: "  Kyoto  " })).toEqual({
+      q: "Kyoto",
+      limit: 6,
+    });
+    expect(PlaceSearchQuerySchema.parse({ q: "Kyoto", limit: "10" }).limit).toBe(10);
+    expect(PlaceSearchQuerySchema.safeParse({ q: "Kyoto", limit: 11 }).success).toBe(false);
+    expect(PlaceSearchQuerySchema.safeParse({ q: "   " }).success).toBe(false);
+    expect(
+      PlaceSearchResponseSchema.parse({
+        items: [],
+        provider: "local",
+        degraded: true,
+        cached: false,
+      }).items,
+    ).toEqual([]);
+  });
+
+  it("exposes media display URLs without bucket, object key, or raw variants", () => {
+    const media = {
+      id: MEDIA,
+      workspaceId: WORKSPACE,
+      tripId: TRIP,
+      uploaderId: USER,
+      mimeType: "image/webp",
+      size: 123456,
+      width: 4000,
+      height: 3000,
+      blurhash: null,
+      status: "ready" as const,
+      error: null,
+      caption: null,
+      date: null,
+      location: null,
+      createdAt: TS,
+      updatedAt: TS,
+      deletedAt: null,
+      url: "https://media.example.com/large.webp?signature=one",
+      thumbUrl: "https://media.example.com/thumb.webp?signature=two",
+      expiresAt: TS,
+    };
+
+    const parsedMedia = GetMediaResponseSchema.parse(media);
+    expect(JSON.parse(JSON.stringify(parsedMedia))).toEqual(parsedMedia);
+    expect(parsedMedia.status).toBe("ready");
+    expect(parsedMedia).not.toHaveProperty("bucket");
+    expect(parsedMedia).not.toHaveProperty("key");
+    expect(parsedMedia).not.toHaveProperty("variants");
+    expect(GetMediaResponseSchema.safeParse({ ...media, url: null }).success).toBe(false);
+    expect(GetMediaResponseSchema.safeParse({ ...media, expiresAt: null }).success).toBe(false);
+
+    const parsedPublicMedia = PublicMediaSchema.parse({
+      id: MEDIA,
+      url: media.url,
+      thumbUrl: media.thumbUrl,
+      expiresAt: TS,
+      width: media.width,
+      height: media.height,
+      blurhash: null,
+      caption: null,
+      date: null,
+      location: null,
+    });
+    expect(parsedPublicMedia).not.toHaveProperty("bucket");
+    expect(parsedPublicMedia).not.toHaveProperty("key");
+    expect(parsedPublicMedia).not.toHaveProperty("variants");
   });
 
   it("validates journal entries without floating point money", () => {
     expect(JournalEntrySchema.parse(journalEntry).id).toBe(ENTRY);
     expect(JournalEntrySchema.safeParse({ ...journalEntry, id: "not-a-uuid" }).success).toBe(false);
-    expect(JournalEntrySchema.safeParse({ ...journalEntry, date: "11/17/2026" }).success).toBe(false);
+    expect(JournalEntrySchema.safeParse({ ...journalEntry, date: "11/17/2026" }).success).toBe(
+      false,
+    );
   });
 
   it("accepts exact custom splits and rejects totals that do not reconcile", () => {

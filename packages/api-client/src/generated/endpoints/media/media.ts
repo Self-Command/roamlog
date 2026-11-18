@@ -23,6 +23,7 @@ import type {
 
 import type {
   CompleteMediaRequest,
+  GetMediaResponse,
   ListTripMediaParams,
   ListWorkspaceMediaParams,
   Media,
@@ -766,6 +767,174 @@ export function useListTripMedia<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getListTripMediaQueryOptions(tripId, params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type getMediaResponse200 = {
+  data: GetMediaResponse;
+  status: 200;
+};
+
+export type getMediaResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type getMediaResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type getMediaResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type getMediaResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type getMediaResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type getMediaResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getMediaResponseSuccess = getMediaResponse200 & {
+  headers: Headers;
+};
+export type getMediaResponseError = (
+  | getMediaResponse400
+  | getMediaResponse401
+  | getMediaResponse403
+  | getMediaResponse404
+  | getMediaResponse429
+  | getMediaResponse500
+) & {
+  headers: Headers;
+};
+
+export type getMediaResponse = getMediaResponseSuccess | getMediaResponseError;
+
+export const getGetMediaUrl = (mediaId: string) => {
+  return `/v1/media/${mediaId}`;
+};
+
+/**
+ * @summary Get one media asset with signed display URLs
+ */
+export const getMedia = async (
+  mediaId: string,
+  options?: RequestInit,
+): Promise<getMediaResponse> => {
+  const res = await fetch(getGetMediaUrl(mediaId), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMediaResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getMediaResponse;
+};
+
+export const getGetMediaQueryKey = (mediaId: string) => {
+  return [`/v1/media/${mediaId}`] as const;
+};
+
+export const getGetMediaQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMedia>>,
+  TError = ProblemDetails,
+>(
+  mediaId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMedia>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMediaQueryKey(mediaId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMedia>>> = ({ signal }) =>
+    getMedia(mediaId, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: mediaId !== null && mediaId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getMedia>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetMediaQueryResult = NonNullable<Awaited<ReturnType<typeof getMedia>>>;
+export type GetMediaQueryError = ProblemDetails;
+
+/** @summary Get one media asset with signed display URLs */
+export function useGetMedia<TData = Awaited<ReturnType<typeof getMedia>>, TError = ProblemDetails>(
+  mediaId: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMedia>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMedia>>,
+          TError,
+          Awaited<ReturnType<typeof getMedia>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get one media asset with signed display URLs */
+export function useGetMedia<TData = Awaited<ReturnType<typeof getMedia>>, TError = ProblemDetails>(
+  mediaId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMedia>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMedia>>,
+          TError,
+          Awaited<ReturnType<typeof getMedia>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get one media asset with signed display URLs */
+export function useGetMedia<TData = Awaited<ReturnType<typeof getMedia>>, TError = ProblemDetails>(
+  mediaId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMedia>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get one media asset with signed display URLs */
+export function useGetMedia<TData = Awaited<ReturnType<typeof getMedia>>, TError = ProblemDetails>(
+  mediaId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMedia>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetMediaQueryOptions(mediaId, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;

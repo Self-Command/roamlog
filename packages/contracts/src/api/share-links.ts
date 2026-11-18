@@ -1,14 +1,9 @@
 import { z } from "zod";
 
-import {
-  CountryCodeSchema,
-  DateOnlySchema,
-  IsoTimestampSchema,
-  UuidV7Schema,
-} from "../common/ids";
+import { CountryCodeSchema, DateOnlySchema, IsoTimestampSchema, UuidV7Schema } from "../common/ids";
 import { ShareLinkCreatedSchema, ShareLinkSchema } from "../entities/share-link";
-import { MediaSchema } from "../entities/media";
 import { JournalEntrySchema } from "../entities/journal";
+import { TripCoverSchema, TripDestinationListSchema, TripTagListSchema } from "../entities/trip";
 import { TripStatusSchema } from "../entities/enums";
 import { BudgetSummarySchema } from "./expenses";
 import { MessageResponseSchema } from "./common";
@@ -47,11 +42,13 @@ export const PublicTripSchema = z
     status: TripStatusSchema,
     startDate: DateOnlySchema,
     endDate: DateOnlySchema,
+    durationDays: z.number().int().positive(),
     coverMediaId: UuidV7Schema.nullable(),
+    cover: TripCoverSchema.nullable(),
     origin: z.string().min(1).max(120),
-    destinations: z.array(z.string().min(1).max(120)),
+    destinations: TripDestinationListSchema,
     countryCodes: z.array(CountryCodeSchema),
-    tags: z.array(z.string().min(1).max(40)),
+    tags: TripTagListSchema,
   })
   .strict();
 export type PublicTrip = z.infer<typeof PublicTripSchema>;
@@ -72,16 +69,20 @@ export const PublicStopSchema = z
   .strict();
 export type PublicStop = z.infer<typeof PublicStopSchema>;
 
-export const PublicMediaSchema = MediaSchema.pick({
-  id: true,
-  width: true,
-  height: true,
-  blurhash: true,
-  variants: true,
-  caption: true,
-  date: true,
-  location: true,
-});
+export const PublicMediaSchema = z
+  .object({
+    id: UuidV7Schema,
+    url: z.url().describe("Signed display URL."),
+    thumbUrl: z.url().nullable().describe("Signed thumbnail URL, when available."),
+    expiresAt: IsoTimestampSchema,
+    width: z.number().int().positive().nullable(),
+    height: z.number().int().positive().nullable(),
+    blurhash: z.string().max(200).nullable(),
+    caption: z.string().max(500).nullable(),
+    date: DateOnlySchema.nullable(),
+    location: z.string().max(200).nullable(),
+  })
+  .strict();
 export type PublicMedia = z.infer<typeof PublicMediaSchema>;
 
 export const PublicEntrySchema = JournalEntrySchema.pick({

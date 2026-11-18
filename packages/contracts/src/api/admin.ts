@@ -11,18 +11,52 @@ import { createSortSchema, CursorPageSchema, CursorQuerySchema } from "../common
 import { ActivitySchema } from "../entities/activity";
 import { AuditLogSchema } from "../entities/audit-log";
 import { CommentSchema } from "../entities/comment";
-import { AuditActorTypeSchema, EmailStatusSchema, ExportStatusSchema } from "../entities/enums";
+import {
+  AccountStatusSchema,
+  AuditActorTypeSchema,
+  EmailStatusSchema,
+  ExportStatusSchema,
+  MemberStatusSchema,
+  WorkspacePlanSchema,
+} from "../entities/enums";
 import { EmailLogSchema } from "../entities/email-log";
 import { ExportSchema } from "../entities/export";
 import { FeatureFlagSchema } from "../entities/feature-flag";
+import { InvitationSchema } from "../entities/invitation";
 import { JournalEntrySchema } from "../entities/journal";
 import { MediaSchema } from "../entities/media";
 import { TripSchema } from "../entities/trip";
 import { UserSchema } from "../entities/user";
 import { WorkspaceSchema } from "../entities/workspace";
-import { AccountStatusSchema, WorkspacePlanSchema } from "../entities/enums";
-import { PlatformRoleSchema } from "../permissions";
+import { PlatformRoleSchema, WorkspaceRoleSchema } from "../permissions";
 import { MessageResponseSchema } from "./common";
+
+/**
+ * Real BullMQ queue counters read from Redis. `throughputPerMinute` is derived
+ * from the timestamps BullMQ writes into the `completed` sorted set inside a
+ * fixed sliding window; it is `null` when Redis cannot provide the window, so
+ * clients must render an explicit "not wired" state instead of a number.
+ *
+ * The operational extras stay optional so snapshots captured before this
+ * expansion (dashboard fixtures, cached responses) remain valid and are
+ * rendered as "not wired" rather than as fabricated zeros.
+ */
+export const AdminQueueMetricsSchema = z
+  .object({
+    name: z.string().min(1).max(80),
+    waiting: z.number().int().nonnegative(),
+    active: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    completed: z.number().int().nonnegative(),
+    delayed: z.number().int().nonnegative().optional(),
+    paused: z.boolean(),
+    throughputPerMinute: z.number().nonnegative().nullable().optional(),
+    throughputWindowSeconds: z.number().int().positive().nullable().optional(),
+    lastCompletedAt: IsoTimestampSchema.nullable().optional(),
+    lastFailedAt: IsoTimestampSchema.nullable().optional(),
+  })
+  .strict();
+export type AdminQueueMetrics = z.infer<typeof AdminQueueMetricsSchema>;
 
 export const AdminMetricsSchema = z
   .object({
@@ -52,18 +86,8 @@ export const AdminMetricsSchema = z
       })
       .strict(),
     exports: z.record(ExportStatusSchema, z.number().int().nonnegative()),
-    queues: z.array(
-      z
-        .object({
-          name: z.string().min(1).max(80),
-          waiting: z.number().int().nonnegative(),
-          active: z.number().int().nonnegative(),
-          failed: z.number().int().nonnegative(),
-          completed: z.number().int().nonnegative(),
-          paused: z.boolean(),
-        })
-        .strict(),
-    ),
+    emails: z.record(EmailStatusSchema, z.number().int().nonnegative()).optional(),
+    queues: z.array(AdminQueueMetricsSchema),
     generatedAt: IsoTimestampSchema,
   })
   .strict();
@@ -77,16 +101,63 @@ export const AdminUserQuerySchema = CursorQuerySchema.extend({
 });
 export type AdminUserQuery = z.infer<typeof AdminUserQuerySchema>;
 
-export const AdminUserPageSchema = CursorPageSchema(UserSchema);
+export const AdminUserListItemSchema = UserSchema.extend({
+  activeSessionCount: z.number().int().nonnegative().optional(),
+});
+export type AdminUserListItem = z.infer<typeof AdminUserListItemSchema>;
+
+export const AdminUserPageSchema = CursorPageSchema(AdminUserListItemSchema);
 export type AdminUserPage = z.infer<typeof AdminUserPageSchema>;
+
+export const AdminUserMembershipSchema = z
+  .object({
+    workspaceId: UuidV7Schema,
+    workspaceName: z.string().min(1).max(120),
+    workspaceSlug: z.string().min(1).max(120),
+    role: WorkspaceRoleSchema,
+    status: MemberStatusSchema,
+    joinedAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AdminUserMembership = z.infer<typeof AdminUserMembershipSchema>;
+
+export const AdminUserSessionSchema = z
+  .object({
+    id: UuidV7Schema,
+    ipAddress: z.string().max(64).nullable(),
+    userAgent: z.string().max(2048).nullable(),
+    createdAt: IsoTimestampSchema,
+    expiresAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AdminUserSession = z.infer<typeof AdminUserSessionSchema>;
 
 export const AdminUserDetailSchema = UserSchema.extend({
   workspaceCount: z.number().int().nonnegative(),
   tripCount: z.number().int().nonnegative(),
   entryCount: z.number().int().nonnegative(),
   activeSessionCount: z.number().int().nonnegative(),
+  // Optional so fixtures written before the operational detail expansion remain valid.
+  twoFactorEnabled: z.boolean().optional(),
+  commentCount: z.number().int().nonnegative().optional(),
+  mediaCount: z.number().int().nonnegative().optional(),
+  workspaces: z.array(AdminUserMembershipSchema).optional(),
+  sessions: z.array(AdminUserSessionSchema).optional(),
 });
 export type AdminUserDetail = z.infer<typeof AdminUserDetailSchema>;
+
+export const AdminUserExportQuerySchema = AdminUserQuerySchema.omit({
+  cursor: true,
+  limit: true,
+});
+export type AdminUserExportQuery = z.infer<typeof AdminUserExportQuerySchema>;
+
+export const AdminUserCsvResponseSchema = z
+  .string()
+  .describe(
+    "UTF-8 CSV attachment. Columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt.",
+  );
+export type AdminUserCsvResponse = z.infer<typeof AdminUserCsvResponseSchema>;
 
 export const UpdateAdminUserRequestSchema = z
   .object({
@@ -120,16 +191,65 @@ export const AdminWorkspaceQuerySchema = CursorQuerySchema.extend({
 });
 export type AdminWorkspaceQuery = z.infer<typeof AdminWorkspaceQuerySchema>;
 
-export const AdminWorkspacePageSchema = CursorPageSchema(WorkspaceSchema);
+export const AdminWorkspaceOwnerSchema = UserSchema.pick({
+  id: true,
+  name: true,
+  email: true,
+  image: true,
+});
+export type AdminWorkspaceOwner = z.infer<typeof AdminWorkspaceOwnerSchema>;
+
+export const AdminWorkspaceMemberSchema = z
+  .object({
+    userId: UuidV7Schema,
+    name: z.string().min(1).max(120),
+    email: EmailSchema,
+    image: z.url().nullable(),
+    role: WorkspaceRoleSchema,
+    status: MemberStatusSchema,
+    joinedAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AdminWorkspaceMember = z.infer<typeof AdminWorkspaceMemberSchema>;
+
+export const AdminWorkspaceListItemSchema = WorkspaceSchema.extend({
+  owner: AdminWorkspaceOwnerSchema.optional(),
+  memberCount: z.number().int().nonnegative().optional(),
+  tripCount: z.number().int().nonnegative().optional(),
+  entryCount: z.number().int().nonnegative().optional(),
+  mediaCount: z.number().int().nonnegative().optional(),
+  mediaBytes: z.number().int().nonnegative().optional(),
+});
+export type AdminWorkspaceListItem = z.infer<typeof AdminWorkspaceListItemSchema>;
+
+export const AdminWorkspacePageSchema = CursorPageSchema(AdminWorkspaceListItemSchema);
 export type AdminWorkspacePage = z.infer<typeof AdminWorkspacePageSchema>;
 
 export const AdminWorkspaceDetailSchema = WorkspaceSchema.extend({
   memberCount: z.number().int().nonnegative(),
   tripCount: z.number().int().nonnegative(),
   entryCount: z.number().int().nonnegative(),
-  owner: UserSchema.pick({ id: true, name: true, email: true, image: true }),
+  owner: AdminWorkspaceOwnerSchema,
+  // Optional so fixtures written before the operational detail expansion remain valid.
+  mediaCount: z.number().int().nonnegative().optional(),
+  mediaBytes: z.number().int().nonnegative().optional(),
+  members: z.array(AdminWorkspaceMemberSchema).optional(),
+  invitations: z.array(InvitationSchema).optional(),
 });
 export type AdminWorkspaceDetail = z.infer<typeof AdminWorkspaceDetailSchema>;
+
+export const AdminWorkspaceExportQuerySchema = AdminWorkspaceQuerySchema.omit({
+  cursor: true,
+  limit: true,
+});
+export type AdminWorkspaceExportQuery = z.infer<typeof AdminWorkspaceExportQuerySchema>;
+
+export const AdminWorkspaceCsvResponseSchema = z
+  .string()
+  .describe(
+    "UTF-8 CSV attachment. Columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt.",
+  );
+export type AdminWorkspaceCsvResponse = z.infer<typeof AdminWorkspaceCsvResponseSchema>;
 
 export const UpdateAdminWorkspaceRequestSchema = z
   .object({
@@ -202,6 +322,27 @@ export type AdminAuditPage = z.infer<typeof AdminAuditPageSchema>;
 
 export const AdminFlagListResponseSchema = z.array(FeatureFlagSchema);
 export type AdminFlagListResponse = z.infer<typeof AdminFlagListResponseSchema>;
+
+export const FeatureFlagKeySchema = z
+  .string()
+  .min(2)
+  .max(80)
+  .regex(
+    /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/,
+    "Feature flag keys use lowercase segments separated by '.', '_' or '-'.",
+  );
+export type FeatureFlagKey = z.infer<typeof FeatureFlagKeySchema>;
+
+export const CreateFeatureFlagRequestSchema = z
+  .object({
+    key: FeatureFlagKeySchema,
+    description: z.string().trim().min(1).max(500),
+    enabled: z.boolean().default(false),
+    rolloutPercentage: z.number().int().min(0).max(100).default(0),
+    rules: JsonObjectSchema.optional(),
+  })
+  .strict();
+export type CreateFeatureFlagRequest = z.infer<typeof CreateFeatureFlagRequestSchema>;
 
 export const UpdateFeatureFlagRequestSchema = z
   .object({
@@ -299,11 +440,35 @@ export const ClearAdminQueueResponseSchema = z
   .strict();
 export type ClearAdminQueueResponse = z.infer<typeof ClearAdminQueueResponseSchema>;
 
+/**
+ * Worker health as far as it can actually be proven without a worker heartbeat.
+ *
+ * - `consumer-clients`: counted from Redis `CLIENT LIST` entries blocked inside a
+ *   BullMQ blocking call (`BZPOPMIN` on the queue marker). This is a direct
+ *   observation of live consumers.
+ * - `activity-derived`: no blocked consumer was observed, so the status is
+ *   inferred from the newest job completion/failure timestamp plus the queue
+ *   counters. Clients must show the derivation.
+ * - `unavailable`: neither signal could be obtained; clients must render
+ *   "not wired" instead of a fabricated `down`.
+ */
+export const AdminWorkerSignalSchema = z.enum([
+  "consumer-clients",
+  "activity-derived",
+  "unavailable",
+]);
+export type AdminWorkerSignal = z.infer<typeof AdminWorkerSignalSchema>;
+
 export const AdminSystemWorkerSchema = z
   .object({
     status: z.enum(["up", "degraded", "down"]),
     version: z.string().min(1).max(40),
     consumers: z.number().int().nonnegative(),
+    signal: AdminWorkerSignalSchema,
+    blockedConsumers: z.number().int().nonnegative(),
+    lastJobAt: IsoTimestampSchema.nullable(),
+    lastJobStatus: z.enum(["completed", "failed"]).nullable(),
+    lastJobQueue: z.string().min(1).max(80).nullable(),
   })
   .strict();
 export type AdminSystemWorker = z.infer<typeof AdminSystemWorkerSchema>;
@@ -321,7 +486,9 @@ export const AdminSystemSchema = z
     version: z.string().min(1).max(40),
     environment: z.enum(["development", "test", "staging", "production"]),
     nodeVersion: z.string().min(1).max(40),
-    buildTime: IsoTimestampSchema,
+    // Null when the deployment does not inject a build timestamp; clients must
+    // render "not wired" instead of substituting the container start time.
+    buildTime: IsoTimestampSchema.nullable(),
     startedAt: IsoTimestampSchema,
     uptimeSeconds: z.number().int().nonnegative(),
     migration: AdminSystemMigrationSchema,

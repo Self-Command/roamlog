@@ -47,4 +47,6 @@ export type AdminUserPageItemsItem = {
    * @nullable
    */
   deletedAt: string | null;
+  /** @minimum 0 */
+  activeSessionCount?: number;
 };

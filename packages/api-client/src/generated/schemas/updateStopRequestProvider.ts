@@ -6,4 +6,13 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type PublicTripResponseMediaItemVariants = { [key: string]: unknown };
+/**
+ * @nullable
+ */
+export type UpdateStopRequestProvider =
+  (typeof UpdateStopRequestProvider)[keyof typeof UpdateStopRequestProvider] | null;
+
+export const UpdateStopRequestProvider = {
+  photon: "photon",
+  local: "local",
+} as const;

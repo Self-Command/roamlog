@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminWorkspacePageItemsItemOwner } from "./adminWorkspacePageItemsItemOwner";
 import type { AdminWorkspacePageItemsItemPlan } from "./adminWorkspacePageItemsItemPlan";
 import type { AdminWorkspacePageItemsItemSettings } from "./adminWorkspacePageItemsItemSettings";
 import type { AdminWorkspacePageItemsItemStatus } from "./adminWorkspacePageItemsItemStatus";
@@ -59,4 +60,15 @@ export type AdminWorkspacePageItemsItem = {
    * @nullable
    */
   deletedAt: string | null;
+  owner?: AdminWorkspacePageItemsItemOwner;
+  /** @minimum 0 */
+  memberCount?: number;
+  /** @minimum 0 */
+  tripCount?: number;
+  /** @minimum 0 */
+  entryCount?: number;
+  /** @minimum 0 */
+  mediaCount?: number;
+  /** @minimum 0 */
+  mediaBytes?: number;
 };

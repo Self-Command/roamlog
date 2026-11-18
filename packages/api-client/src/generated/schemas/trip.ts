@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { TripCoverProperty } from "./tripCoverProperty";
 import type { TripStatus } from "./tripStatus";
 import type { TripVisibility } from "./tripVisibility";
 
@@ -25,17 +26,49 @@ export interface Trip {
   startDate: string;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
   endDate: string;
+  /** @exclusiveMinimum 0 */
+  durationDays: number;
   /**
    * Sortable UUIDv7 identifier.
    * @nullable
    */
   coverMediaId: string | null;
+  /** @nullable */
+  cover: TripCoverProperty;
   /**
    * @minLength 1
    * @maxLength 120
    */
   origin: string;
   /**
+   * @minimum -90
+   * @maximum 90
+   * @nullable
+   */
+  originLat: number | null;
+  /**
+   * @minimum -180
+   * @maximum 180
+   * @nullable
+   */
+  originLng: number | null;
+  /**
+   * @minLength 2
+   * @maxLength 2
+   * @nullable
+   * @pattern ^[A-Z]{2}$
+   */
+  originCountryCode: string | null;
+  /**
+   * IANA time zone name, for example Asia/Shanghai.
+   * @minLength 1
+   * @maxLength 64
+   * @nullable
+   * @pattern ^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$
+   */
+  timeZone: string | null;
+  /**
+   * @maxItems 30
    * @items.minLength 1
    * @items.maxLength 120
    */
@@ -47,11 +80,13 @@ export interface Trip {
    */
   countryCodes: string[];
   /**
+   * @maxItems 20
    * @items.minLength 1
    * @items.maxLength 40
    */
   tags: string[];
   /**
+   * @maxItems 30
    * @items.minLength 1
    * @items.maxLength 120
    */

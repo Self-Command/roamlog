@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { ReorderStopsResponseItemProvider } from "./reorderStopsResponseItemProvider";
 
 export type ReorderStopsResponseItem = {
   /** Sortable UUIDv7 identifier. */
@@ -41,6 +42,22 @@ export type ReorderStopsResponseItem = {
    * @nullable
    */
   lng: number | null;
+  /** @nullable */
+  provider: ReorderStopsResponseItemProvider;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   * @nullable
+   */
+  providerPlaceId: string | null;
+  /**
+   * IANA time zone name, for example Asia/Shanghai.
+   * @minLength 1
+   * @maxLength 64
+   * @nullable
+   * @pattern ^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$
+   */
+  timeZone: string | null;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
   startDate: string;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */

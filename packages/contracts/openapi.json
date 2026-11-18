@@ -65,6 +65,10 @@
       "description": "Direct uploads, media metadata, and trip covers."
     },
     {
+      "name": "Places",
+      "description": "Normalized place search for trip origins and stops."
+    },
+    {
       "name": "Expenses",
       "description": "Integer-minor-unit expense records and participant splits."
     },
@@ -263,7 +267,7 @@
                 "id": {
                   "type": "string",
                   "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
                 },
                 "actorId": {
                   "type": [
@@ -271,7 +275,7 @@
                     "null"
                   ],
                   "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
                 },
                 "actorType": {
                   "type": "string",
@@ -294,7 +298,7 @@
                 "targetId": {
                   "type": "string",
                   "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
                 },
                 "workspaceId": {
                   "type": [
@@ -302,7 +306,7 @@
                     "null"
                   ],
                   "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
                 },
                 "ip": {
                   "type": [
@@ -1503,6 +1507,35 @@
               }
             }
           },
+          "emails": {
+            "type": "object",
+            "properties": {
+              "queued": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sent": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "delivered": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "bounced": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "complained": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
           "queues": {
             "type": "array",
             "items": {
@@ -1529,8 +1562,42 @@
                   "type": "integer",
                   "minimum": 0
                 },
+                "delayed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "paused": {
                   "type": "boolean"
+                },
+                "throughputPerMinute": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "throughputWindowSeconds": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "exclusiveMinimum": 0
+                },
+                "lastCompletedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "lastFailedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
                 }
               },
               "required": [
@@ -1586,7 +1653,10 @@
             "maxLength": 40
           },
           "buildTime": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "ISO 8601 timestamp with an explicit UTC offset."
           },
@@ -1644,12 +1714,56 @@
               "consumers": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "signal": {
+                "type": "string",
+                "enum": [
+                  "consumer-clients",
+                  "activity-derived",
+                  "unavailable"
+                ]
+              },
+              "blockedConsumers": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "lastJobAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "lastJobStatus": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "completed",
+                  "failed",
+                  null
+                ]
+              },
+              "lastJobQueue": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 80
               }
             },
             "required": [
               "status",
               "version",
-              "consumers"
+              "consumers",
+              "signal",
+              "blockedConsumers",
+              "lastJobAt",
+              "lastJobStatus",
+              "lastJobQueue"
             ],
             "additionalProperties": false
           },
@@ -1837,12 +1951,56 @@
           "consumers": {
             "type": "integer",
             "minimum": 0
+          },
+          "signal": {
+            "type": "string",
+            "enum": [
+              "consumer-clients",
+              "activity-derived",
+              "unavailable"
+            ]
+          },
+          "blockedConsumers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastJobAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "lastJobStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "completed",
+              "failed",
+              null
+            ]
+          },
+          "lastJobQueue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 80
           }
         },
         "required": [
           "status",
           "version",
-          "consumers"
+          "consumers",
+          "signal",
+          "blockedConsumers",
+          "lastJobAt",
+          "lastJobStatus",
+          "lastJobQueue"
         ],
         "additionalProperties": false
       },
@@ -1893,6 +2051,10 @@
                   "format": "date",
                   "description": "Calendar date in YYYY-MM-DD form, without a timezone."
                 },
+                "durationDays": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
                 "coverMediaId": {
                   "type": [
                     "string",
@@ -1901,10 +2063,123 @@
                   "format": "uuid",
                   "description": "Sortable UUIDv7 identifier."
                 },
+                "cover": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "mediaId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "processing",
+                        "ready",
+                        "failed"
+                      ]
+                    },
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri",
+                      "description": "Signed display URL, preferring the large variant."
+                    },
+                    "thumbUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri",
+                      "description": "Signed thumbnail URL for cards and compact layouts."
+                    },
+                    "width": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "height": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "blurhash": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "expiresAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    }
+                  },
+                  "required": [
+                    "mediaId",
+                    "status",
+                    "url",
+                    "thumbUrl",
+                    "width",
+                    "height",
+                    "blurhash",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                },
                 "origin": {
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 120
+                },
+                "originLat": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "originLng": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "originCountryCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 2,
+                  "maxLength": 2,
+                  "pattern": "^[A-Z]{2}$"
+                },
+                "timeZone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+                  "description": "IANA time zone name, for example Asia/Shanghai."
                 },
                 "destinations": {
                   "type": "array",
@@ -1912,7 +2187,8 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 120
-                  }
+                  },
+                  "maxItems": 30
                 },
                 "countryCodes": {
                   "type": "array",
@@ -1929,7 +2205,8 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 40
-                  }
+                  },
+                  "maxItems": 20
                 },
                 "guestNames": {
                   "type": "array",
@@ -1937,7 +2214,8 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 120
-                  }
+                  },
+                  "maxItems": 30
                 },
                 "budgetAmountMinor": {
                   "type": [
@@ -2009,8 +2287,14 @@
                 "status",
                 "startDate",
                 "endDate",
+                "durationDays",
                 "coverMediaId",
+                "cover",
                 "origin",
+                "originLat",
+                "originLng",
+                "originCountryCode",
+                "timeZone",
                 "destinations",
                 "countryCodes",
                 "tags",
@@ -2143,6 +2427,115 @@
           "activeSessionCount": {
             "type": "integer",
             "minimum": 0
+          },
+          "twoFactorEnabled": {
+            "type": "boolean"
+          },
+          "commentCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mediaCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "workspaceId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "workspaceName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "workspaceSlug": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "admin",
+                    "editor",
+                    "viewer"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "suspended"
+                  ]
+                },
+                "joinedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                }
+              },
+              "required": [
+                "workspaceId",
+                "workspaceName",
+                "workspaceSlug",
+                "role",
+                "status",
+                "joinedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "ipAddress": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 64
+                },
+                "userAgent": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 2048
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                }
+              },
+              "required": [
+                "id",
+                "ipAddress",
+                "userAgent",
+                "createdAt",
+                "expiresAt"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -2252,6 +2645,10 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "activeSessionCount": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -2501,6 +2898,150 @@
               "image"
             ],
             "additionalProperties": false
+          },
+          "mediaCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mediaBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "email": {
+                  "type": "string",
+                  "maxLength": 254,
+                  "format": "email"
+                },
+                "image": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uri"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "admin",
+                    "editor",
+                    "viewer"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "suspended"
+                  ]
+                },
+                "joinedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                }
+              },
+              "required": [
+                "userId",
+                "name",
+                "email",
+                "image",
+                "role",
+                "status",
+                "joinedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "invitations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "workspaceId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "email": {
+                  "type": "string",
+                  "maxLength": 254,
+                  "format": "email"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "admin",
+                    "editor",
+                    "viewer"
+                  ]
+                },
+                "invitedById": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "acceptedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "revokedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                }
+              },
+              "required": [
+                "id",
+                "workspaceId",
+                "email",
+                "role",
+                "invitedById",
+                "expiresAt",
+                "acceptedAt",
+                "revokedAt",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -2653,6 +3194,60 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "owner": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "email": {
+                      "type": "string",
+                      "maxLength": 254,
+                      "format": "email"
+                    },
+                    "image": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "image"
+                  ],
+                  "additionalProperties": false
+                },
+                "memberCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "tripCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "entryCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "mediaCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "mediaBytes": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -2809,7 +3404,7 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
           },
           "actorId": {
             "type": [
@@ -2817,7 +3412,7 @@
               "null"
             ],
             "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
           },
           "actorType": {
             "type": "string",
@@ -2840,7 +3435,7 @@
           "targetId": {
             "type": "string",
             "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
           },
           "workspaceId": {
             "type": [
@@ -2848,7 +3443,7 @@
               "null"
             ],
             "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
           },
           "ip": {
             "type": [
@@ -4204,6 +4799,35 @@
             "minimum": -180,
             "maximum": 180
           },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "photon",
+              "local",
+              null
+            ]
+          },
+          "providerPlaceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+            "description": "IANA time zone name, for example Asia/Shanghai."
+          },
           "startDate": {
             "type": "string",
             "format": "date",
@@ -4265,17 +4889,48 @@
             "description": "Calendar date in YYYY-MM-DD form, without a timezone."
           },
           "coverMediaId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "type": "null",
+            "description": "Omit or send null. Set a cover through POST /v1/trips/{tripId}/cover."
           },
           "origin": {
             "type": "string",
             "minLength": 1,
             "maxLength": 120
+          },
+          "originLat": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -90,
+            "maximum": 90
+          },
+          "originLng": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -180,
+            "maximum": 180
+          },
+          "originCountryCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 2,
+            "maxLength": 2,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+            "description": "IANA time zone name, for example Asia/Shanghai."
           },
           "destinations": {
             "type": "array",
@@ -4283,7 +4938,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 120
-            }
+            },
+            "maxItems": 30
           },
           "countryCodes": {
             "type": "array",
@@ -4300,7 +4956,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 40
-            }
+            },
+            "maxItems": 20
           },
           "guestNames": {
             "type": "array",
@@ -4308,7 +4965,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 120
-            }
+            },
+            "maxItems": 30
           },
           "budgetAmountMinor": {
             "type": [
@@ -6071,6 +6729,167 @@
         ],
         "additionalProperties": false
       },
+      "GetMediaResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "tripId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "uploaderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "mimeType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0
+          },
+          "blurhash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "ready",
+              "failed"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "caption": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "deletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "Signed display URL, preferring the large variant."
+          },
+          "thumbUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "Signed thumbnail URL for cards and compact layouts."
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "tripId",
+          "uploaderId",
+          "mimeType",
+          "size",
+          "width",
+          "height",
+          "blurhash",
+          "status",
+          "error",
+          "caption",
+          "date",
+          "location",
+          "createdAt",
+          "updatedAt",
+          "deletedAt",
+          "url",
+          "thumbUrl",
+          "expiresAt"
+        ],
+        "additionalProperties": false
+      },
       "HealthResponse": {
         "type": "object",
         "properties": {
@@ -6096,6 +6915,13 @@
           "uptimeSeconds"
         ],
         "additionalProperties": false
+      },
+      "IanaTimeZone": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+        "description": "IANA time zone name, for example Asia/Shanghai."
       },
       "IdempotencyKey": {
         "type": "string",
@@ -8043,6 +8869,235 @@
         ],
         "additionalProperties": false
       },
+      "Place": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "photon",
+              "local"
+            ]
+          },
+          "providerPlaceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "country": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "countryCode": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+            "description": "IANA time zone name, for example Asia/Shanghai."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "city",
+              "region",
+              "country",
+              "poi",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "provider",
+          "providerPlaceId",
+          "name",
+          "country",
+          "countryCode",
+          "lat",
+          "lng",
+          "timeZone",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "PlaceProvider": {
+        "type": "string",
+        "enum": [
+          "photon",
+          "local"
+        ]
+      },
+      "PlaceSearchQuery": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 6
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "zh",
+              "en"
+            ]
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      },
+      "PlaceSearchResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "photon",
+                    "local"
+                  ]
+                },
+                "providerPlaceId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "country": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "countryCode": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 2,
+                  "pattern": "^[A-Z]{2}$"
+                },
+                "lat": {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lng": {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "timeZone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+                  "description": "IANA time zone name, for example Asia/Shanghai."
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "city",
+                    "region",
+                    "country",
+                    "poi",
+                    "other"
+                  ]
+                }
+              },
+              "required": [
+                "provider",
+                "providerPlaceId",
+                "name",
+                "country",
+                "countryCode",
+                "lat",
+                "lng",
+                "timeZone",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 10
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "photon",
+              "local"
+            ]
+          },
+          "degraded": {
+            "type": "boolean"
+          },
+          "cached": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "provider",
+          "degraded",
+          "cached"
+        ],
+        "additionalProperties": false
+      },
+      "PlaceType": {
+        "type": "string",
+        "enum": [
+          "city",
+          "region",
+          "country",
+          "poi",
+          "other"
+        ]
+      },
       "PlatformRole": {
         "type": "string",
         "enum": [
@@ -8357,6 +9412,24 @@
                   "format": "uuid",
                   "description": "Sortable UUIDv7 identifier."
                 },
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Signed display URL."
+                },
+                "thumbUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uri",
+                  "description": "Signed thumbnail URL, when available."
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
                 "width": {
                   "type": [
                     "integer",
@@ -8377,10 +9450,6 @@
                     "null"
                   ],
                   "maxLength": 200
-                },
-                "variants": {
-                  "type": "object",
-                  "additionalProperties": {}
                 },
                 "caption": {
                   "type": [
@@ -8407,10 +9476,12 @@
               },
               "required": [
                 "id",
+                "url",
+                "thumbUrl",
+                "expiresAt",
                 "width",
                 "height",
                 "blurhash",
-                "variants",
                 "caption",
                 "date",
                 "location"
@@ -8443,6 +9514,24 @@
             "format": "uuid",
             "description": "Sortable UUIDv7 identifier."
           },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Signed display URL."
+          },
+          "thumbUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "Signed thumbnail URL, when available."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
           "width": {
             "type": [
               "integer",
@@ -8463,10 +9552,6 @@
               "null"
             ],
             "maxLength": 200
-          },
-          "variants": {
-            "type": "object",
-            "additionalProperties": {}
           },
           "caption": {
             "type": [
@@ -8493,10 +9578,12 @@
         },
         "required": [
           "id",
+          "url",
+          "thumbUrl",
+          "expiresAt",
           "width",
           "height",
           "blurhash",
-          "variants",
           "caption",
           "date",
           "location"
@@ -8623,6 +9710,10 @@
             "format": "date",
             "description": "Calendar date in YYYY-MM-DD form, without a timezone."
           },
+          "durationDays": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
           "coverMediaId": {
             "type": [
               "string",
@@ -8630,6 +9721,84 @@
             ],
             "format": "uuid",
             "description": "Sortable UUIDv7 identifier."
+          },
+          "cover": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "mediaId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Sortable UUIDv7 identifier."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "processing",
+                  "ready",
+                  "failed"
+                ]
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri",
+                "description": "Signed display URL, preferring the large variant."
+              },
+              "thumbUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri",
+                "description": "Signed thumbnail URL for cards and compact layouts."
+              },
+              "width": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "blurhash": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "expiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              }
+            },
+            "required": [
+              "mediaId",
+              "status",
+              "url",
+              "thumbUrl",
+              "width",
+              "height",
+              "blurhash",
+              "expiresAt"
+            ],
+            "additionalProperties": false
           },
           "origin": {
             "type": "string",
@@ -8642,7 +9811,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 120
-            }
+            },
+            "maxItems": 30
           },
           "countryCodes": {
             "type": "array",
@@ -8659,7 +9829,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 40
-            }
+            },
+            "maxItems": 20
           }
         },
         "required": [
@@ -8669,7 +9840,9 @@
           "status",
           "startDate",
           "endDate",
+          "durationDays",
           "coverMediaId",
+          "cover",
           "origin",
           "destinations",
           "countryCodes",
@@ -8717,6 +9890,10 @@
                 "format": "date",
                 "description": "Calendar date in YYYY-MM-DD form, without a timezone."
               },
+              "durationDays": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
               "coverMediaId": {
                 "type": [
                   "string",
@@ -8724,6 +9901,84 @@
                 ],
                 "format": "uuid",
                 "description": "Sortable UUIDv7 identifier."
+              },
+              "cover": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "mediaId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Sortable UUIDv7 identifier."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "processing",
+                      "ready",
+                      "failed"
+                    ]
+                  },
+                  "url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uri",
+                    "description": "Signed display URL, preferring the large variant."
+                  },
+                  "thumbUrl": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uri",
+                    "description": "Signed thumbnail URL for cards and compact layouts."
+                  },
+                  "width": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "exclusiveMinimum": 0
+                  },
+                  "height": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "exclusiveMinimum": 0
+                  },
+                  "blurhash": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 200
+                  },
+                  "expiresAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time",
+                    "description": "ISO 8601 timestamp with an explicit UTC offset."
+                  }
+                },
+                "required": [
+                  "mediaId",
+                  "status",
+                  "url",
+                  "thumbUrl",
+                  "width",
+                  "height",
+                  "blurhash",
+                  "expiresAt"
+                ],
+                "additionalProperties": false
               },
               "origin": {
                 "type": "string",
@@ -8736,7 +9991,8 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 120
-                }
+                },
+                "maxItems": 30
               },
               "countryCodes": {
                 "type": "array",
@@ -8753,7 +10009,8 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 40
-                }
+                },
+                "maxItems": 20
               }
             },
             "required": [
@@ -8763,7 +10020,9 @@
               "status",
               "startDate",
               "endDate",
+              "durationDays",
               "coverMediaId",
+              "cover",
               "origin",
               "destinations",
               "countryCodes",
@@ -8944,6 +10203,24 @@
                         "format": "uuid",
                         "description": "Sortable UUIDv7 identifier."
                       },
+                      "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Signed display URL."
+                      },
+                      "thumbUrl": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "uri",
+                        "description": "Signed thumbnail URL, when available."
+                      },
+                      "expiresAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "ISO 8601 timestamp with an explicit UTC offset."
+                      },
                       "width": {
                         "type": [
                           "integer",
@@ -8964,10 +10241,6 @@
                           "null"
                         ],
                         "maxLength": 200
-                      },
-                      "variants": {
-                        "type": "object",
-                        "additionalProperties": {}
                       },
                       "caption": {
                         "type": [
@@ -8994,10 +10267,12 @@
                     },
                     "required": [
                       "id",
+                      "url",
+                      "thumbUrl",
+                      "expiresAt",
                       "width",
                       "height",
                       "blurhash",
-                      "variants",
                       "caption",
                       "date",
                       "location"
@@ -9033,6 +10308,24 @@
                   "format": "uuid",
                   "description": "Sortable UUIDv7 identifier."
                 },
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Signed display URL."
+                },
+                "thumbUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uri",
+                  "description": "Signed thumbnail URL, when available."
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
                 "width": {
                   "type": [
                     "integer",
@@ -9053,10 +10346,6 @@
                     "null"
                   ],
                   "maxLength": 200
-                },
-                "variants": {
-                  "type": "object",
-                  "additionalProperties": {}
                 },
                 "caption": {
                   "type": [
@@ -9083,10 +10372,12 @@
               },
               "required": [
                 "id",
+                "url",
+                "thumbUrl",
+                "expiresAt",
                 "width",
                 "height",
                 "blurhash",
-                "variants",
                 "caption",
                 "date",
                 "location"
@@ -10765,6 +12056,35 @@
               "minimum": -180,
               "maximum": 180
             },
+            "provider": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "photon",
+                "local",
+                null
+              ]
+            },
+            "providerPlaceId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "timeZone": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+              "description": "IANA time zone name, for example Asia/Shanghai."
+            },
             "startDate": {
               "type": "string",
               "format": "date",
@@ -10825,6 +12145,9 @@
             "countryCode",
             "lat",
             "lng",
+            "provider",
+            "providerPlaceId",
+            "timeZone",
             "startDate",
             "endDate",
             "notes",
@@ -11801,6 +13124,35 @@
             "minimum": -180,
             "maximum": 180
           },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "photon",
+              "local",
+              null
+            ]
+          },
+          "providerPlaceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+            "description": "IANA time zone name, for example Asia/Shanghai."
+          },
           "startDate": {
             "type": "string",
             "format": "date",
@@ -11861,6 +13213,9 @@
           "countryCode",
           "lat",
           "lng",
+          "provider",
+          "providerPlaceId",
+          "timeZone",
           "startDate",
           "endDate",
           "notes",
@@ -11926,6 +13281,35 @@
               "minimum": -180,
               "maximum": 180
             },
+            "provider": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "photon",
+                "local",
+                null
+              ]
+            },
+            "providerPlaceId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "timeZone": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+              "description": "IANA time zone name, for example Asia/Shanghai."
+            },
             "startDate": {
               "type": "string",
               "format": "date",
@@ -11986,6 +13370,9 @@
             "countryCode",
             "lat",
             "lng",
+            "provider",
+            "providerPlaceId",
+            "timeZone",
             "startDate",
             "endDate",
             "notes",
@@ -12056,6 +13443,10 @@
             "format": "date",
             "description": "Calendar date in YYYY-MM-DD form, without a timezone."
           },
+          "durationDays": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
           "coverMediaId": {
             "type": [
               "string",
@@ -12064,10 +13455,123 @@
             "format": "uuid",
             "description": "Sortable UUIDv7 identifier."
           },
+          "cover": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "mediaId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Sortable UUIDv7 identifier."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "processing",
+                  "ready",
+                  "failed"
+                ]
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri",
+                "description": "Signed display URL, preferring the large variant."
+              },
+              "thumbUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri",
+                "description": "Signed thumbnail URL for cards and compact layouts."
+              },
+              "width": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "blurhash": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "expiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              }
+            },
+            "required": [
+              "mediaId",
+              "status",
+              "url",
+              "thumbUrl",
+              "width",
+              "height",
+              "blurhash",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
           "origin": {
             "type": "string",
             "minLength": 1,
             "maxLength": 120
+          },
+          "originLat": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -90,
+            "maximum": 90
+          },
+          "originLng": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -180,
+            "maximum": 180
+          },
+          "originCountryCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 2,
+            "maxLength": 2,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+            "description": "IANA time zone name, for example Asia/Shanghai."
           },
           "destinations": {
             "type": "array",
@@ -12075,7 +13579,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 120
-            }
+            },
+            "maxItems": 30
           },
           "countryCodes": {
             "type": "array",
@@ -12092,7 +13597,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 40
-            }
+            },
+            "maxItems": 20
           },
           "guestNames": {
             "type": "array",
@@ -12100,7 +13606,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 120
-            }
+            },
+            "maxItems": 30
           },
           "budgetAmountMinor": {
             "type": [
@@ -12172,8 +13679,14 @@
           "status",
           "startDate",
           "endDate",
+          "durationDays",
           "coverMediaId",
+          "cover",
           "origin",
+          "originLat",
+          "originLng",
+          "originCountryCode",
+          "timeZone",
           "destinations",
           "countryCodes",
           "tags",
@@ -12303,6 +13816,81 @@
             "description": "Whitelisted sort expression: createdAt:asc|desc."
           }
         }
+      },
+      "TripCover": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "ready",
+              "failed"
+            ]
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "Signed display URL, preferring the large variant."
+          },
+          "thumbUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "Signed thumbnail URL for cards and compact layouts."
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0
+          },
+          "blurhash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "mediaId",
+          "status",
+          "url",
+          "thumbUrl",
+          "width",
+          "height",
+          "blurhash",
+          "expiresAt"
+        ],
+        "additionalProperties": false
       },
       "TripEntryListQuery": {
         "type": "object",
@@ -12485,6 +14073,10 @@
                   "format": "date",
                   "description": "Calendar date in YYYY-MM-DD form, without a timezone."
                 },
+                "durationDays": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
                 "coverMediaId": {
                   "type": [
                     "string",
@@ -12493,10 +14085,123 @@
                   "format": "uuid",
                   "description": "Sortable UUIDv7 identifier."
                 },
+                "cover": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "mediaId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "processing",
+                        "ready",
+                        "failed"
+                      ]
+                    },
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri",
+                      "description": "Signed display URL, preferring the large variant."
+                    },
+                    "thumbUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri",
+                      "description": "Signed thumbnail URL for cards and compact layouts."
+                    },
+                    "width": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "height": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "blurhash": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "expiresAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    }
+                  },
+                  "required": [
+                    "mediaId",
+                    "status",
+                    "url",
+                    "thumbUrl",
+                    "width",
+                    "height",
+                    "blurhash",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                },
                 "origin": {
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 120
+                },
+                "originLat": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "originLng": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "originCountryCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 2,
+                  "maxLength": 2,
+                  "pattern": "^[A-Z]{2}$"
+                },
+                "timeZone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+                  "description": "IANA time zone name, for example Asia/Shanghai."
                 },
                 "destinations": {
                   "type": "array",
@@ -12504,7 +14209,8 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 120
-                  }
+                  },
+                  "maxItems": 30
                 },
                 "countryCodes": {
                   "type": "array",
@@ -12521,7 +14227,8 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 40
-                  }
+                  },
+                  "maxItems": 20
                 },
                 "guestNames": {
                   "type": "array",
@@ -12529,7 +14236,8 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 120
-                  }
+                  },
+                  "maxItems": 30
                 },
                 "budgetAmountMinor": {
                   "type": [
@@ -12601,8 +14309,14 @@
                 "status",
                 "startDate",
                 "endDate",
+                "durationDays",
                 "coverMediaId",
+                "cover",
                 "origin",
+                "originLat",
+                "originLng",
+                "originCountryCode",
+                "timeZone",
                 "destinations",
                 "countryCodes",
                 "tags",
@@ -13442,6 +15156,35 @@
             "minimum": -180,
             "maximum": 180
           },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "photon",
+              "local",
+              null
+            ]
+          },
+          "providerPlaceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+            "description": "IANA time zone name, for example Asia/Shanghai."
+          },
           "startDate": {
             "type": "string",
             "format": "date",
@@ -13503,17 +15246,48 @@
             "description": "Calendar date in YYYY-MM-DD form, without a timezone."
           },
           "coverMediaId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "type": "null",
+            "description": "Send null to clear a cover. Set a cover through POST /v1/trips/{tripId}/cover."
           },
           "origin": {
             "type": "string",
             "minLength": 1,
             "maxLength": 120
+          },
+          "originLat": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -90,
+            "maximum": 90
+          },
+          "originLng": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -180,
+            "maximum": 180
+          },
+          "originCountryCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 2,
+            "maxLength": 2,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+            "description": "IANA time zone name, for example Asia/Shanghai."
           },
           "destinations": {
             "type": "array",
@@ -13521,7 +15295,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 120
-            }
+            },
+            "maxItems": 30
           },
           "countryCodes": {
             "type": "array",
@@ -13538,7 +15313,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 40
-            }
+            },
+            "maxItems": 20
           },
           "guestNames": {
             "type": "array",
@@ -13546,7 +15322,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 120
-            }
+            },
+            "maxItems": 30
           },
           "budgetAmountMinor": {
             "type": [
@@ -14094,7 +15871,7 @@
                 "id": {
                   "type": "string",
                   "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
                 },
                 "actorId": {
                   "type": [
@@ -14102,7 +15879,7 @@
                     "null"
                   ],
                   "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
                 },
                 "actorType": {
                   "type": "string",
@@ -14125,7 +15902,7 @@
                 "targetId": {
                   "type": "string",
                   "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
                 },
                 "workspaceId": {
                   "type": [
@@ -14133,7 +15910,7 @@
                     "null"
                   ],
                   "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
                 },
                 "ip": {
                   "type": [
@@ -22536,6 +24313,98 @@
       }
     },
     "/v1/media/{mediaId}": {
+      "get": {
+        "operationId": "getMedia",
+        "tags": [
+          "Media"
+        ],
+        "summary": "Get one media asset with signed display URLs",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "mediaId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMediaResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "operationId": "deleteMedia",
         "tags": [
@@ -22824,6 +24693,113 @@
           },
           "500": {
             "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/places/search": {
+      "get": {
+        "operationId": "searchPlaces",
+        "tags": [
+          "Places"
+        ],
+        "summary": "Search normalized places for trip origins and stops",
+        "description": "Authenticated place search with a bounded query and result set. A successful degraded response returns the local fallback list with `degraded=true`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 6
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh",
+                "en"
+              ]
+            },
+            "required": false,
+            "name": "lang",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -25846,6 +27822,139 @@
         }
       }
     },
+    "/v1/admin/users/export": {
+      "get": {
+        "operationId": "exportAdminUsersCsv",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Export filtered platform users as CSV",
+        "description": "Returns a UTF-8 CSV attachment with columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "suspended",
+                "deleted"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "support",
+                "analyst",
+                "admin",
+                "super_admin"
+              ]
+            },
+            "required": false,
+            "name": "platformRole",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:createdAt|lastActiveAt|name):(?:asc|desc)$",
+              "description": "Whitelisted sort expression: createdAt|lastActiveAt|name:asc|desc."
+            },
+            "required": false,
+            "description": "Whitelisted sort expression: createdAt|lastActiveAt|name:asc|desc.",
+            "name": "sort",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform user CSV attachment.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "description": "UTF-8 CSV attachment. Columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/workspaces": {
       "get": {
         "operationId": "listAdminWorkspaces",
@@ -26217,6 +28326,137 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/workspaces/export": {
+      "get": {
+        "operationId": "exportAdminWorkspacesCsv",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Export filtered platform Workspaces as CSV",
+        "description": "Returns a UTF-8 CSV attachment with columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "suspended",
+                "deleted"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "free",
+                "pro",
+                "team"
+              ]
+            },
+            "required": false,
+            "name": "plan",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:createdAt|name):(?:asc|desc)$",
+              "description": "Whitelisted sort expression: createdAt|name:asc|desc."
+            },
+            "required": false,
+            "description": "Whitelisted sort expression: createdAt|name:asc|desc.",
+            "name": "sort",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform Workspace CSV attachment.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "description": "UTF-8 CSV attachment. Columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt."
                 }
               }
             }

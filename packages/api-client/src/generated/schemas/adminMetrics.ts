@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminMetricsEmails } from "./adminMetricsEmails";
 import type { AdminMetricsExports } from "./adminMetricsExports";
 import type { AdminMetricsMedia } from "./adminMetricsMedia";
 import type { AdminMetricsQueuesItem } from "./adminMetricsQueuesItem";
@@ -22,6 +23,7 @@ export interface AdminMetrics {
   comments: number;
   media: AdminMetricsMedia;
   exports: AdminMetricsExports;
+  emails?: AdminMetricsEmails;
   queues: AdminMetricsQueuesItem[];
   /** ISO 8601 timestamp with an explicit UTC offset. */
   generatedAt: string;

@@ -13,6 +13,7 @@ export * from "./media/media";
 export * from "./members/members";
 export * from "./packing/packing";
 export * from "./participants/participants";
+export * from "./places/places";
 export * from "./realtime/realtime";
 export * from "./search/search";
 export * from "./share-links/share-links";

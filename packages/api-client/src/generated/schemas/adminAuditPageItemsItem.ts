@@ -9,10 +9,10 @@ import type { AdminAuditPageItemsItemActorType } from "./adminAuditPageItemsItem
 import type { AdminAuditPageItemsItemMetadata } from "./adminAuditPageItemsItemMetadata";
 
 export type AdminAuditPageItemsItem = {
-  /** Sortable UUIDv7 identifier. */
+  /** Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values. */
   id: string;
   /**
-   * Sortable UUIDv7 identifier.
+   * Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values.
    * @nullable
    */
   actorId: string | null;
@@ -27,10 +27,10 @@ export type AdminAuditPageItemsItem = {
    * @maxLength 60
    */
   targetType: string;
-  /** Sortable UUIDv7 identifier. */
+  /** Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values. */
   targetId: string;
   /**
-   * Sortable UUIDv7 identifier.
+   * Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values.
    * @nullable
    */
   workspaceId: string | null;

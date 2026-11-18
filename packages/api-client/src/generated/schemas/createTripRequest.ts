@@ -22,16 +22,44 @@ export interface CreateTripRequest {
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
   endDate: string;
   /**
-   * Sortable UUIDv7 identifier.
+   * Omit or send null. Set a cover through POST /v1/trips/{tripId}/cover.
    * @nullable
    */
-  coverMediaId?: string | null;
+  coverMediaId?: null;
   /**
    * @minLength 1
    * @maxLength 120
    */
   origin?: string;
   /**
+   * @minimum -90
+   * @maximum 90
+   * @nullable
+   */
+  originLat?: number | null;
+  /**
+   * @minimum -180
+   * @maximum 180
+   * @nullable
+   */
+  originLng?: number | null;
+  /**
+   * @minLength 2
+   * @maxLength 2
+   * @nullable
+   * @pattern ^[A-Z]{2}$
+   */
+  originCountryCode?: string | null;
+  /**
+   * IANA time zone name, for example Asia/Shanghai.
+   * @minLength 1
+   * @maxLength 64
+   * @nullable
+   * @pattern ^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$
+   */
+  timeZone?: string | null;
+  /**
+   * @maxItems 30
    * @items.minLength 1
    * @items.maxLength 120
    */
@@ -43,11 +71,13 @@ export interface CreateTripRequest {
    */
   countryCodes?: string[];
   /**
+   * @maxItems 20
    * @items.minLength 1
    * @items.maxLength 40
    */
   tags?: string[];
   /**
+   * @maxItems 30
    * @items.minLength 1
    * @items.maxLength 120
    */

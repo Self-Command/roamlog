@@ -11,6 +11,7 @@ import { registerContentPaths } from "./openapi/paths-content";
 import { registerHealthPaths } from "./openapi/paths-health";
 import { registerMediaPaths } from "./openapi/paths-media";
 import { registerMoneyPaths } from "./openapi/paths-money";
+import { registerPlacePaths } from "./openapi/paths-places";
 import { registerSharingPaths } from "./openapi/paths-sharing";
 import { registerTripPaths } from "./openapi/paths-trips";
 import { registerWorkspacePaths } from "./openapi/paths-workspaces";
@@ -34,6 +35,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
   registerTripPaths(registry);
   registerContentPaths(registry);
   registerMediaPaths(registry);
+  registerPlacePaths(registry);
   registerMoneyPaths(registry);
   registerSharingPaths(registry);
   registerAdminPaths(registry);
@@ -59,19 +61,32 @@ export function buildOpenApiDocument(): OpenApiDocument {
       { name: "Auth", description: "Better Auth handlers." },
       { name: "Me", description: "Current user, sessions, notifications, and account export." },
       { name: "Workspaces", description: "Tenant boundary and Workspace settings." },
-      { name: "Members", description: "Workspace membership, roles, ownership, audit, and activity." },
+      {
+        name: "Members",
+        description: "Workspace membership, roles, ownership, audit, and activity.",
+      },
       { name: "Invitations", description: "Invite, revoke, and accept Workspace invitations." },
       { name: "Trips", description: "Trip planning, visibility, duplication, and activity." },
-      { name: "Participants", description: "Trip participant subset used for sharing and assignment." },
+      {
+        name: "Participants",
+        description: "Trip participant subset used for sharing and assignment.",
+      },
       { name: "Stops", description: "Geographic trip stops and ordering." },
       { name: "Itinerary", description: "Dated itinerary items and ordering." },
       { name: "Journal", description: "Journal entries, favorites, and revisions." },
       { name: "Comments", description: "Threaded comments, mentions, and resolution." },
       { name: "Media", description: "Direct uploads, media metadata, and trip covers." },
-      { name: "Expenses", description: "Integer-minor-unit expense records and participant splits." },
+      { name: "Places", description: "Normalized place search for trip origins and stops." },
+      {
+        name: "Expenses",
+        description: "Integer-minor-unit expense records and participant splits.",
+      },
       { name: "Budget", description: "Multi-currency budget summaries and settle-up suggestions." },
       { name: "Packing", description: "Packing checklists and bulk updates." },
-      { name: "Share Links", description: "Hashed public share links and the public read projection." },
+      {
+        name: "Share Links",
+        description: "Hashed public share links and the public read projection.",
+      },
       { name: "Exports", description: "Asynchronous trip, Workspace, and account exports." },
       { name: "Search", description: "Workspace-scoped search." },
       { name: "Realtime", description: "Socket.IO namespace and typed cache-invalidation events." },

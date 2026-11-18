@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { CountryCodeSchema, DateOnlySchema, UuidV7Schema } from "../common/ids";
 import { ItineraryItemSchema } from "../entities/itinerary";
-import { StopSchema } from "../entities/stop";
+import { PlaceProviderSchema, StopSchema } from "../entities/stop";
+import { IanaTimeZoneSchema } from "../entities/trip";
 import { ItineraryItemTypeSchema, TimeOfDaySchema } from "../entities/enums";
 import { MessageResponseSchema } from "./common";
 
@@ -16,6 +17,9 @@ export const CreateStopRequestSchema = z
     countryCode: CountryCodeSchema,
     lat: z.number().min(-90).max(90).nullable().optional(),
     lng: z.number().min(-180).max(180).nullable().optional(),
+    provider: PlaceProviderSchema.nullable().optional(),
+    providerPlaceId: z.string().min(1).max(200).nullable().optional(),
+    timeZone: IanaTimeZoneSchema.nullable().optional(),
     startDate: DateOnlySchema,
     endDate: DateOnlySchema,
     notes: z.string().max(4000).optional(),
@@ -41,6 +45,9 @@ export const UpdateStopRequestSchema = z
     countryCode: CountryCodeSchema.optional(),
     lat: z.number().min(-90).max(90).nullable().optional(),
     lng: z.number().min(-180).max(180).nullable().optional(),
+    provider: PlaceProviderSchema.nullable().optional(),
+    providerPlaceId: z.string().min(1).max(200).nullable().optional(),
+    timeZone: IanaTimeZoneSchema.nullable().optional(),
     startDate: DateOnlySchema.optional(),
     endDate: DateOnlySchema.optional(),
     notes: z.string().max(4000).optional(),
@@ -64,9 +71,7 @@ export type UpdateStopRequest = z.infer<typeof UpdateStopRequestSchema>;
 export const ReorderStopsRequestSchema = z
   .object({
     items: z
-      .array(
-        z.object({ id: UuidV7Schema, order: z.number().int().nonnegative() }).strict(),
-      )
+      .array(z.object({ id: UuidV7Schema, order: z.number().int().nonnegative() }).strict())
       .min(1),
   })
   .strict();

@@ -5,6 +5,8 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminSystemWorkerPropertyLastJobStatus } from "./adminSystemWorkerPropertyLastJobStatus";
+import type { AdminSystemWorkerPropertySignal } from "./adminSystemWorkerPropertySignal";
 import type { AdminSystemWorkerPropertyStatus } from "./adminSystemWorkerPropertyStatus";
 
 export type AdminSystemWorkerProperty = {
@@ -16,4 +18,20 @@ export type AdminSystemWorkerProperty = {
   version: string;
   /** @minimum 0 */
   consumers: number;
+  signal: AdminSystemWorkerPropertySignal;
+  /** @minimum 0 */
+  blockedConsumers: number;
+  /**
+   * ISO 8601 timestamp with an explicit UTC offset.
+   * @nullable
+   */
+  lastJobAt: string | null;
+  /** @nullable */
+  lastJobStatus: AdminSystemWorkerPropertyLastJobStatus;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   * @nullable
+   */
+  lastJobQueue: string | null;
 };

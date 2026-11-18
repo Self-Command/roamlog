@@ -6,4 +6,12 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type PublicEntryMediaItemVariants = { [key: string]: unknown };
+export type PublicTripCoverStatus =
+  (typeof PublicTripCoverStatus)[keyof typeof PublicTripCoverStatus];
+
+export const PublicTripCoverStatus = {
+  pending: "pending",
+  processing: "processing",
+  ready: "ready",
+  failed: "failed",
+} as const;

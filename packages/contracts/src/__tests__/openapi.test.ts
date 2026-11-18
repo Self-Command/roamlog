@@ -32,7 +32,61 @@ describe("OpenAPI document", () => {
 
   it("covers the expected application surface", () => {
     const doc = document();
-    expect(Object.keys(doc.paths)).toHaveLength(91);
+    const paths = Object.keys(doc.paths);
+
+    // Exact assertions for the endpoints anchoring each product area. A route
+    // disappearing from the contract fails here instead of surfacing only as a
+    // changed total, which is why these stay curated rather than generated.
+    for (const required of [
+      "/v1/auth/{path}",
+      "/v1/me",
+      "/v1/me/sessions",
+      "/v1/me/notifications",
+      "/v1/workspaces",
+      "/v1/workspaces/{workspaceId}/members",
+      "/v1/workspaces/{workspaceId}/invitations",
+      "/v1/invitations/{token}/accept",
+      "/v1/workspaces/{workspaceId}/audit",
+      "/v1/workspaces/{workspaceId}/trips",
+      "/v1/trips/{tripId}",
+      "/v1/trips/{tripId}/participants",
+      "/v1/trips/{tripId}/stops",
+      "/v1/trips/{tripId}/itinerary",
+      "/v1/workspaces/{workspaceId}/entries",
+      "/v1/entries/{entryId}/revisions",
+      "/v1/comments",
+      "/v1/workspaces/{workspaceId}/media",
+      "/v1/media/{mediaId}",
+      "/v1/trips/{tripId}/cover",
+      "/v1/places/search",
+      "/v1/trips/{tripId}/expenses",
+      "/v1/trips/{tripId}/budget/summary",
+      "/v1/trips/{tripId}/packing",
+      "/v1/trips/{tripId}/share-links",
+      "/v1/public/trips/{token}",
+      "/v1/exports",
+      "/v1/workspaces/{workspaceId}/search",
+      "/v1/admin/metrics",
+      "/v1/admin/users/export",
+      "/v1/admin/workspaces/export",
+      "/v1/admin/audit/export",
+      "/v1/admin/flags",
+      "/v1/admin/flags/{key}",
+      "/v1/admin/jobs",
+      "/v1/admin/system",
+      "/v1/health",
+      "/v1/ready",
+      "/v1/ws",
+    ]) {
+      expect(paths, `missing OpenAPI path: ${required}`).toContain(required);
+    }
+
+    // The exact total is owned by `pnpm contracts:check`, which diffs the whole
+    // generated document against the committed openapi.json. A lower bound here
+    // keeps unrelated test edits out of every new-endpoint change while the
+    // curated assertions above still catch a deleted route.
+    expect(paths.length).toBeGreaterThanOrEqual(94);
+
     const operations = Object.values(doc.paths).reduce(
       (count, pathItem) =>
         count +
@@ -44,10 +98,17 @@ describe("OpenAPI document", () => {
     expect(operations).toBeGreaterThanOrEqual(120);
     expect(doc.paths["/v1/trips/{tripId}"]).toHaveProperty("get");
     expect(doc.paths["/v1/trips/{tripId}"]).toHaveProperty("patch");
+    expect(doc.paths["/v1/places/search"]).toHaveProperty("get");
+    expect(doc.paths["/v1/media/{mediaId}"]).toHaveProperty("get");
     expect(doc.paths["/v1/workspaces/{workspaceId}/members"]).toHaveProperty("get");
     expect(doc.paths["/v1/entries/{entryId}/revisions"]).toHaveProperty("get");
     expect(doc.paths["/v1/admin/system"]).toHaveProperty("get");
     expect(doc.paths["/v1/admin/audit/export"]).toHaveProperty("get");
+    expect(doc.paths["/v1/admin/users/export"]).toHaveProperty("get");
+    expect(doc.paths["/v1/admin/workspaces/export"]).toHaveProperty("get");
+    expect(doc.paths["/v1/admin/flags"]).toHaveProperty("get");
+    expect(doc.paths["/v1/admin/flags/{key}"]).toHaveProperty("patch");
+    expect(doc.paths["/v1/trips/{tripId}/cover"]).toHaveProperty("post");
     expect(doc.paths["/v1/admin/jobs/{queue}/pause"]).toHaveProperty("post");
     expect(doc.paths["/v1/admin/jobs/{queue}/resume"]).toHaveProperty("post");
     expect(doc.paths["/v1/admin/jobs/{queue}/clear"]).toHaveProperty("post");
@@ -77,6 +138,59 @@ describe("OpenAPI document", () => {
     expect(shareLink).toBeDefined();
     expect(shareLink).not.toHaveProperty("properties.tokenHash");
     expect(shareLink).not.toHaveProperty("properties.passwordHash");
+  });
+
+  it("publishes cover and public media URLs without storage secrets", () => {
+    const doc = document();
+    const tripCover = doc.components.schemas.TripCover;
+    const getMedia = doc.components.schemas.GetMediaResponse;
+    const publicMedia = doc.components.schemas.PublicMedia;
+
+    expect(tripCover).toMatchObject({
+      type: "object",
+      properties: {
+        mediaId: { type: "string", format: "uuid" },
+        url: { type: ["string", "null"], format: "uri" },
+        thumbUrl: { type: ["string", "null"], format: "uri" },
+      },
+    });
+    expect(tripCover).not.toHaveProperty("properties.bucket");
+    expect(tripCover).not.toHaveProperty("properties.key");
+    expect(getMedia).not.toHaveProperty("properties.bucket");
+    expect(getMedia).not.toHaveProperty("properties.key");
+    expect(getMedia).not.toHaveProperty("properties.variants");
+    expect(publicMedia).toMatchObject({
+      type: "object",
+      properties: {
+        url: { type: "string", format: "uri" },
+        thumbUrl: { type: ["string", "null"], format: "uri" },
+        expiresAt: { type: "string", format: "date-time" },
+      },
+    });
+    expect(publicMedia).not.toHaveProperty("properties.bucket");
+    expect(publicMedia).not.toHaveProperty("properties.key");
+    expect(publicMedia).not.toHaveProperty("properties.variants");
+
+    const publicTrip = doc.components.schemas.PublicTrip;
+    expect(publicTrip).toMatchObject({
+      type: "object",
+      properties: {
+        cover: {
+          type: ["object", "null"],
+        },
+        durationDays: { type: "integer", exclusiveMinimum: 0 },
+      },
+    });
+    expect(publicTrip).not.toHaveProperty("properties.cover.properties.bucket");
+    expect(publicTrip).not.toHaveProperty("properties.cover.properties.key");
+  });
+
+  it("keeps cover writes off the partial trip PATCH contract", () => {
+    const doc = document();
+    const updateTrip = doc.components.schemas.UpdateTripRequest as {
+      properties?: Record<string, { type?: string }>;
+    };
+    expect(updateTrip.properties?.coverMediaId).toMatchObject({ type: "null" });
   });
 
   it("publishes the audit CSV contract as a text/csv attachment", () => {

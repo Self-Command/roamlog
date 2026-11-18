@@ -48,6 +48,15 @@ export function registerMediaPaths(registry: OpenAPIRegistry): void {
     response: c.MediaPageSchema,
   });
   registerOperation(registry, {
+    method: "get",
+    path: "/v1/media/{mediaId}",
+    operationId: "getMedia",
+    tag: "Media",
+    summary: "Get one media asset with signed display URLs",
+    params: c.MediaParamsSchema,
+    response: c.GetMediaResponseSchema,
+  });
+  registerOperation(registry, {
     method: "delete",
     path: "/v1/media/{mediaId}",
     operationId: "deleteMedia",

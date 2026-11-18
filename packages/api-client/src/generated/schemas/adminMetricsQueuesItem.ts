@@ -20,5 +20,27 @@ export type AdminMetricsQueuesItem = {
   failed: number;
   /** @minimum 0 */
   completed: number;
+  /** @minimum 0 */
+  delayed?: number;
   paused: boolean;
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  throughputPerMinute?: number | null;
+  /**
+   * @exclusiveMinimum 0
+   * @nullable
+   */
+  throughputWindowSeconds?: number | null;
+  /**
+   * ISO 8601 timestamp with an explicit UTC offset.
+   * @nullable
+   */
+  lastCompletedAt?: string | null;
+  /**
+   * ISO 8601 timestamp with an explicit UTC offset.
+   * @nullable
+   */
+  lastFailedAt?: string | null;
 };

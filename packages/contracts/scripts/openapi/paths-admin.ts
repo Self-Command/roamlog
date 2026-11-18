@@ -72,6 +72,19 @@ export function registerAdminPaths(registry: OpenAPIRegistry): void {
   });
   registerOperation(registry, {
     method: "get",
+    path: "/v1/admin/users/export",
+    operationId: "exportAdminUsersCsv",
+    tag: "Admin",
+    summary: "Export filtered platform users as CSV",
+    description:
+      "Returns a UTF-8 CSV attachment with columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt.",
+    query: c.AdminUserExportQuerySchema,
+    response: c.AdminUserCsvResponseSchema,
+    responseContentType: "text/csv",
+    responseDescription: "Platform user CSV attachment.",
+  });
+  registerOperation(registry, {
+    method: "get",
     path: "/v1/admin/workspaces",
     operationId: "listAdminWorkspaces",
     tag: "Admin",
@@ -107,6 +120,19 @@ export function registerAdminPaths(registry: OpenAPIRegistry): void {
     params: c.AdminIdParamsSchema,
     status: 200,
     response: c.AdminDeleteResponseSchema,
+  });
+  registerOperation(registry, {
+    method: "get",
+    path: "/v1/admin/workspaces/export",
+    operationId: "exportAdminWorkspacesCsv",
+    tag: "Admin",
+    summary: "Export filtered platform Workspaces as CSV",
+    description:
+      "Returns a UTF-8 CSV attachment with columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt.",
+    query: c.AdminWorkspaceExportQuerySchema,
+    response: c.AdminWorkspaceCsvResponseSchema,
+    responseContentType: "text/csv",
+    responseDescription: "Platform Workspace CSV attachment.",
   });
   registerOperation(registry, {
     method: "get",

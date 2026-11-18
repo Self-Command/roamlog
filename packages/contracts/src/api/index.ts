@@ -8,6 +8,7 @@ export * from "./health";
 export * from "./journal";
 export * from "./media";
 export * from "./packing";
+export * from "./places";
 export * from "./realtime";
 export * from "./search";
 export * from "./share-links";

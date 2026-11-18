@@ -6,4 +6,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type PublicTripResponseEntriesItemMediaItemVariants = { [key: string]: unknown };
+export type PlaceProviderProperty =
+  (typeof PlaceProviderProperty)[keyof typeof PlaceProviderProperty];
+
+export const PlaceProviderProperty = {
+  photon: "photon",
+  local: "local",
+} as const;

@@ -6,7 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminUserDetailPlatformRole } from "./adminUserDetailPlatformRole";
+import type { AdminUserDetailSessionsItem } from "./adminUserDetailSessionsItem";
 import type { AdminUserDetailStatus } from "./adminUserDetailStatus";
+import type { AdminUserDetailWorkspacesItem } from "./adminUserDetailWorkspacesItem";
 
 export interface AdminUserDetail {
   /** Sortable UUIDv7 identifier. */
@@ -55,4 +57,11 @@ export interface AdminUserDetail {
   entryCount: number;
   /** @minimum 0 */
   activeSessionCount: number;
+  twoFactorEnabled?: boolean;
+  /** @minimum 0 */
+  commentCount?: number;
+  /** @minimum 0 */
+  mediaCount?: number;
+  workspaces?: AdminUserDetailWorkspacesItem[];
+  sessions?: AdminUserDetailSessionsItem[];
 }

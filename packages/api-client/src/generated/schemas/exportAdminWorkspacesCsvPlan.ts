@@ -6,4 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type PublicMediaVariants = { [key: string]: unknown };
+export type ExportAdminWorkspacesCsvPlan =
+  (typeof ExportAdminWorkspacesCsvPlan)[keyof typeof ExportAdminWorkspacesCsvPlan];
+
+export const ExportAdminWorkspacesCsvPlan = {
+  free: "free",
+  pro: "pro",
+  team: "team",
+} as const;

@@ -4,7 +4,14 @@ import { CountryCodeSchema, DateOnlySchema, UuidV7Schema } from "../common/ids";
 import { AmountMinorSchema, CurrencyCodeSchema } from "../common/money";
 import { createSortSchema, CursorPageSchema, CursorQuerySchema } from "../common/pagination";
 import { ActivitySchema } from "../entities/activity";
-import { TripParticipantSchema, TripSchema } from "../entities/trip";
+import {
+  IanaTimeZoneSchema,
+  TripDestinationListSchema,
+  TripGuestNameListSchema,
+  TripParticipantSchema,
+  TripSchema,
+  TripTagListSchema,
+} from "../entities/trip";
 import { TripStatusSchema, TripVisibilitySchema } from "../entities/enums";
 import { MessageResponseSchema } from "./common";
 
@@ -29,12 +36,19 @@ const CreateTripShape = {
   status: TripStatusSchema.optional(),
   startDate: DateOnlySchema,
   endDate: DateOnlySchema,
-  coverMediaId: UuidV7Schema.nullable().optional(),
+  coverMediaId: z
+    .null()
+    .optional()
+    .describe("Omit or send null. Set a cover through POST /v1/trips/{tripId}/cover."),
   origin: z.string().min(1).max(120).optional(),
-  destinations: z.array(z.string().min(1).max(120)).optional(),
+  originLat: z.number().min(-90).max(90).nullable().optional(),
+  originLng: z.number().min(-180).max(180).nullable().optional(),
+  originCountryCode: CountryCodeSchema.nullable().optional(),
+  timeZone: IanaTimeZoneSchema.nullable().optional(),
+  destinations: TripDestinationListSchema.optional(),
   countryCodes: z.array(CountryCodeSchema).optional(),
-  tags: z.array(z.string().min(1).max(40)).optional(),
-  guestNames: z.array(z.string().min(1).max(120)).optional(),
+  tags: TripTagListSchema.optional(),
+  guestNames: TripGuestNameListSchema.optional(),
   budgetAmountMinor: AmountMinorSchema.nullable().optional(),
   budgetCurrency: CurrencyCodeSchema.nullable().optional(),
   visibility: TripVisibilitySchema.optional(),
@@ -59,6 +73,15 @@ export const CreateTripRequestSchema = z
         path: ["budgetAmountMinor"],
       });
     }
+    const hasOriginLat = trip.originLat !== null && trip.originLat !== undefined;
+    const hasOriginLng = trip.originLng !== null && trip.originLng !== undefined;
+    if (hasOriginLat !== hasOriginLng) {
+      ctx.addIssue({
+        code: "custom",
+        message: "originLat and originLng must be provided together.",
+        path: ["originLng"],
+      });
+    }
   });
 export type CreateTripRequest = z.infer<typeof CreateTripRequestSchema>;
 
@@ -69,12 +92,19 @@ const UpdateTripShape = {
   status: TripStatusSchema.optional(),
   startDate: DateOnlySchema.optional(),
   endDate: DateOnlySchema.optional(),
-  coverMediaId: UuidV7Schema.nullable().optional(),
+  coverMediaId: z
+    .null()
+    .optional()
+    .describe("Send null to clear a cover. Set a cover through POST /v1/trips/{tripId}/cover."),
   origin: z.string().min(1).max(120).optional(),
-  destinations: z.array(z.string().min(1).max(120)).optional(),
+  originLat: z.number().min(-90).max(90).nullable().optional(),
+  originLng: z.number().min(-180).max(180).nullable().optional(),
+  originCountryCode: CountryCodeSchema.nullable().optional(),
+  timeZone: IanaTimeZoneSchema.nullable().optional(),
+  destinations: TripDestinationListSchema.optional(),
   countryCodes: z.array(CountryCodeSchema).optional(),
-  tags: z.array(z.string().min(1).max(40)).optional(),
-  guestNames: z.array(z.string().min(1).max(120)).optional(),
+  tags: TripTagListSchema.optional(),
+  guestNames: TripGuestNameListSchema.optional(),
   budgetAmountMinor: AmountMinorSchema.nullable().optional(),
   budgetCurrency: CurrencyCodeSchema.nullable().optional(),
   visibility: TripVisibilitySchema.optional(),

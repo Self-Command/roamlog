@@ -40,6 +40,8 @@ import type {
   ClearAdminQueueResponse,
   EmailLog,
   ExportAdminAuditCsvParams,
+  ExportAdminUsersCsvParams,
+  ExportAdminWorkspacesCsvParams,
   FeatureFlag,
   ForceLogoutResponse,
   ListAdminAuditParams,
@@ -1197,6 +1199,226 @@ export const useResetAdminUserTwoFactor = <TError = ProblemDetails, TContext = u
 > => {
   return useMutation(getResetAdminUserTwoFactorMutationOptions(options), queryClient);
 };
+export type exportAdminUsersCsvResponse200 = {
+  data: string;
+  status: 200;
+};
+
+export type exportAdminUsersCsvResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type exportAdminUsersCsvResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type exportAdminUsersCsvResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type exportAdminUsersCsvResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type exportAdminUsersCsvResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type exportAdminUsersCsvResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type exportAdminUsersCsvResponseSuccess = exportAdminUsersCsvResponse200 & {
+  headers: Headers;
+};
+export type exportAdminUsersCsvResponseError = (
+  | exportAdminUsersCsvResponse400
+  | exportAdminUsersCsvResponse401
+  | exportAdminUsersCsvResponse403
+  | exportAdminUsersCsvResponse404
+  | exportAdminUsersCsvResponse429
+  | exportAdminUsersCsvResponse500
+) & {
+  headers: Headers;
+};
+
+export type exportAdminUsersCsvResponse =
+  exportAdminUsersCsvResponseSuccess | exportAdminUsersCsvResponseError;
+
+export const getExportAdminUsersCsvUrl = (params?: ExportAdminUsersCsvParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/admin/users/export?${stringifiedParams}`
+    : `/v1/admin/users/export`;
+};
+
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt.
+ * @summary Export filtered platform users as CSV
+ */
+export const exportAdminUsersCsv = async (
+  params?: ExportAdminUsersCsvParams,
+  options?: RequestInit,
+): Promise<exportAdminUsersCsvResponse> => {
+  const res = await fetch(getExportAdminUsersCsvUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: exportAdminUsersCsvResponse["data"] = body
+    ? contentType.includes("json")
+      ? JSON.parse(body)
+      : body
+    : {};
+  return { data, status: res.status, headers: res.headers } as exportAdminUsersCsvResponse;
+};
+
+export const getExportAdminUsersCsvQueryKey = (params?: ExportAdminUsersCsvParams) => {
+  return [`/v1/admin/users/export`, ...(params ? [params] : [])] as const;
+};
+
+export const getExportAdminUsersCsvQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportAdminUsersCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminUsersCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminUsersCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportAdminUsersCsvQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportAdminUsersCsv>>> = ({ signal }) =>
+    exportAdminUsersCsv(params, { signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportAdminUsersCsv>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ExportAdminUsersCsvQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportAdminUsersCsv>>
+>;
+export type ExportAdminUsersCsvQueryError = ProblemDetails;
+
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt.
+ * @summary Export filtered platform users as CSV
+ */
+export function useExportAdminUsersCsv<
+  TData = Awaited<ReturnType<typeof exportAdminUsersCsv>>,
+  TError = ProblemDetails,
+>(
+  params: undefined | ExportAdminUsersCsvParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminUsersCsv>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportAdminUsersCsv>>,
+          TError,
+          Awaited<ReturnType<typeof exportAdminUsersCsv>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt.
+ * @summary Export filtered platform users as CSV
+ */
+export function useExportAdminUsersCsv<
+  TData = Awaited<ReturnType<typeof exportAdminUsersCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminUsersCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminUsersCsv>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportAdminUsersCsv>>,
+          TError,
+          Awaited<ReturnType<typeof exportAdminUsersCsv>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt.
+ * @summary Export filtered platform users as CSV
+ */
+export function useExportAdminUsersCsv<
+  TData = Awaited<ReturnType<typeof exportAdminUsersCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminUsersCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminUsersCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, email, emailVerified, name, platformRole, status, createdAt, lastActiveAt, deletedAt.
+ * @summary Export filtered platform users as CSV
+ */
+export function useExportAdminUsersCsv<
+  TData = Awaited<ReturnType<typeof exportAdminUsersCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminUsersCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminUsersCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getExportAdminUsersCsvQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 export type listAdminWorkspacesResponse200 = {
   data: AdminWorkspacePage;
   status: 200;
@@ -1866,6 +2088,227 @@ export const useDeleteAdminWorkspace = <TError = ProblemDetails, TContext = unkn
 > => {
   return useMutation(getDeleteAdminWorkspaceMutationOptions(options), queryClient);
 };
+export type exportAdminWorkspacesCsvResponse200 = {
+  data: string;
+  status: 200;
+};
+
+export type exportAdminWorkspacesCsvResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type exportAdminWorkspacesCsvResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type exportAdminWorkspacesCsvResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type exportAdminWorkspacesCsvResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type exportAdminWorkspacesCsvResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type exportAdminWorkspacesCsvResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type exportAdminWorkspacesCsvResponseSuccess = exportAdminWorkspacesCsvResponse200 & {
+  headers: Headers;
+};
+export type exportAdminWorkspacesCsvResponseError = (
+  | exportAdminWorkspacesCsvResponse400
+  | exportAdminWorkspacesCsvResponse401
+  | exportAdminWorkspacesCsvResponse403
+  | exportAdminWorkspacesCsvResponse404
+  | exportAdminWorkspacesCsvResponse429
+  | exportAdminWorkspacesCsvResponse500
+) & {
+  headers: Headers;
+};
+
+export type exportAdminWorkspacesCsvResponse =
+  exportAdminWorkspacesCsvResponseSuccess | exportAdminWorkspacesCsvResponseError;
+
+export const getExportAdminWorkspacesCsvUrl = (params?: ExportAdminWorkspacesCsvParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/admin/workspaces/export?${stringifiedParams}`
+    : `/v1/admin/workspaces/export`;
+};
+
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt.
+ * @summary Export filtered platform Workspaces as CSV
+ */
+export const exportAdminWorkspacesCsv = async (
+  params?: ExportAdminWorkspacesCsvParams,
+  options?: RequestInit,
+): Promise<exportAdminWorkspacesCsvResponse> => {
+  const res = await fetch(getExportAdminWorkspacesCsvUrl(params), {
+    ...options,
+    method: "GET",
+  });
+
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: exportAdminWorkspacesCsvResponse["data"] = body
+    ? contentType.includes("json")
+      ? JSON.parse(body)
+      : body
+    : {};
+  return { data, status: res.status, headers: res.headers } as exportAdminWorkspacesCsvResponse;
+};
+
+export const getExportAdminWorkspacesCsvQueryKey = (params?: ExportAdminWorkspacesCsvParams) => {
+  return [`/v1/admin/workspaces/export`, ...(params ? [params] : [])] as const;
+};
+
+export const getExportAdminWorkspacesCsvQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminWorkspacesCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportAdminWorkspacesCsvQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>> = ({
+    signal,
+  }) => exportAdminWorkspacesCsv(params, { signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ExportAdminWorkspacesCsvQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>
+>;
+export type ExportAdminWorkspacesCsvQueryError = ProblemDetails;
+
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt.
+ * @summary Export filtered platform Workspaces as CSV
+ */
+export function useExportAdminWorkspacesCsv<
+  TData = Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>,
+  TError = ProblemDetails,
+>(
+  params: undefined | ExportAdminWorkspacesCsvParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>,
+          TError,
+          Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt.
+ * @summary Export filtered platform Workspaces as CSV
+ */
+export function useExportAdminWorkspacesCsv<
+  TData = Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminWorkspacesCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>,
+          TError,
+          Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt.
+ * @summary Export filtered platform Workspaces as CSV
+ */
+export function useExportAdminWorkspacesCsv<
+  TData = Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminWorkspacesCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns a UTF-8 CSV attachment with columns: id, name, slug, ownerId, plan, status, defaultCurrency, timezone, memberCount, tripCount, entryCount, mediaBytes, createdAt, updatedAt, deletedAt.
+ * @summary Export filtered platform Workspaces as CSV
+ */
+export function useExportAdminWorkspacesCsv<
+  TData = Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>,
+  TError = ProblemDetails,
+>(
+  params?: ExportAdminWorkspacesCsvParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof exportAdminWorkspacesCsv>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getExportAdminWorkspacesCsvQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 export type listAdminTripsResponse200 = {
   data: AdminTripPage;
   status: 200;

@@ -5,11 +5,19 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
-import type { PublicTripResponseMediaItemVariants } from "./publicTripResponseMediaItemVariants";
 
 export type PublicTripResponseMediaItem = {
   /** Sortable UUIDv7 identifier. */
   id: string;
+  /** Signed display URL. */
+  url: string;
+  /**
+   * Signed thumbnail URL, when available.
+   * @nullable
+   */
+  thumbUrl: string | null;
+  /** ISO 8601 timestamp with an explicit UTC offset. */
+  expiresAt: string;
   /**
    * @exclusiveMinimum 0
    * @nullable
@@ -25,7 +33,6 @@ export type PublicTripResponseMediaItem = {
    * @nullable
    */
   blurhash: string | null;
-  variants: PublicTripResponseMediaItemVariants;
   /**
    * @maxLength 500
    * @nullable

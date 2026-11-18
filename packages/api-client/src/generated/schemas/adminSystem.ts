@@ -23,8 +23,11 @@ export interface AdminSystem {
    * @maxLength 40
    */
   nodeVersion: string;
-  /** ISO 8601 timestamp with an explicit UTC offset. */
-  buildTime: string;
+  /**
+   * ISO 8601 timestamp with an explicit UTC offset.
+   * @nullable
+   */
+  buildTime: string | null;
   /** ISO 8601 timestamp with an explicit UTC offset. */
   startedAt: string;
   /** @minimum 0 */

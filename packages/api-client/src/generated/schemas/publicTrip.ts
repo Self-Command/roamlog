@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { PublicTripCover } from "./publicTripCover";
 import type { PublicTripStatus } from "./publicTripStatus";
 
 export interface PublicTrip {
@@ -22,17 +23,22 @@ export interface PublicTrip {
   startDate: string;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
   endDate: string;
+  /** @exclusiveMinimum 0 */
+  durationDays: number;
   /**
    * Sortable UUIDv7 identifier.
    * @nullable
    */
   coverMediaId: string | null;
+  /** @nullable */
+  cover: PublicTripCover;
   /**
    * @minLength 1
    * @maxLength 120
    */
   origin: string;
   /**
+   * @maxItems 30
    * @items.minLength 1
    * @items.maxLength 120
    */
@@ -44,6 +50,7 @@ export interface PublicTrip {
    */
   countryCodes: string[];
   /**
+   * @maxItems 20
    * @items.minLength 1
    * @items.maxLength 40
    */
