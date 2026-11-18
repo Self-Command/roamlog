@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Build and verify images without pushing to GHCR"
+        description: "Build and load images without pushing or creating a release"
         required: true
         default: true
         type: boolean
       image_tag:
-        description: "Extra image tag for a manually published staging build"
+        description: "Optional extra tag for a manually published staging build"
         required: false
         default: staging
         type: string
@@ -24,8 +24,46 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    name: Validate release inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate release tag and optional image tag
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF: ${{ github.ref }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          EXTRA_IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            if [[ ! "$REF_NAME" =~ ^v[A-Za-z0-9_][A-Za-z0-9_.-]{0,126}$ ]]; then
+              echo "::error::Release tags must be valid GHCR tags matching v[A-Za-z0-9_][A-Za-z0-9_.-]{0,126}; got '$REF_NAME'."
+              exit 1
+            fi
+          elif [[ -n "$EXTRA_IMAGE_TAG" ]]; then
+            if [[ ! "$EXTRA_IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+              echo "::error::image_tag must be a valid Docker tag; got '$EXTRA_IMAGE_TAG'."
+              exit 1
+            fi
+            if [[ "$EXTRA_IMAGE_TAG" == "latest" ]]; then
+              echo "::error::image_tag=latest is not allowed; staging publishes are reproducible by SHA."
+              exit 1
+            fi
+          fi
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$DRY_RUN_INPUT" != "true" && "$REF" != "refs/heads/main" ]]; then
+            echo "::error::Manual staging publication must run from refs/heads/main; got '$REF'."
+            exit 1
+          fi
+
   quality-gate:
     name: Reuse CI quality gate
+    needs: validate
     uses: ./.github/workflows/ci.yml
 
   images:
@@ -36,6 +74,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      PUBLISH: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
     strategy:
       fail-fast: true
       matrix:
@@ -67,11 +108,7 @@ jobs:
         run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/${{ matrix.component }}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
-        if: >-
-          ${{
-            (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) ||
-            (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-          }}
+        if: env.PUBLISH == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -83,12 +120,18 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.image.outputs.name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.event_name == 'workflow_dispatch' && 'staging' || github.ref_name }}
           tags: |
             type=sha,prefix=sha-
-            type=raw,value=${{ inputs.image_tag || 'staging' }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=ref,event=tag,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=tag,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=staging,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=${{ inputs.image_tag || 'staging' }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.image_tag != '' && inputs.image_tag != 'staging' }}
 
       - name: Build release image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -96,12 +139,8 @@ jobs:
           target: ${{ matrix.target }}
           platforms: linux/amd64
           pull: true
-          push: >-
-            ${{
-              (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) ||
-              (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-            }}
-          load: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          push: ${{ env.PUBLISH == 'true' }}
+          load: ${{ env.DRY_RUN == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -112,13 +151,151 @@ jobs:
             NEXT_PUBLIC_GEOCODER_URL=${{ vars.NEXT_PUBLIC_GEOCODER_URL || 'https://nominatim.openstreetmap.org' }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
-          provenance: ${{ github.event_name == 'push' }}
-          sbom: ${{ github.event_name == 'push' }}
+          provenance: ${{ env.PUBLISH == 'true' && 'mode=max' || false }}
+          sbom: ${{ env.PUBLISH == 'true' }}
+
+      - name: Verify pushed image manifests
+        if: env.PUBLISH == 'true'
+        shell: bash
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r image_ref; do
+            if [[ -z "$image_ref" ]]; then
+              continue
+            fi
+            echo "Inspecting $image_ref"
+            docker buildx imagetools inspect "$image_ref" >/dev/null
+          done <<< "$IMAGE_TAGS"
+
+      - name: Write image manifest
+        if: env.PUBLISH == 'true'
+        env:
+          RELEASE_COMPONENT: ${{ matrix.component }}
+          RELEASE_IMAGE: ${{ steps.image.outputs.name }}
+          RELEASE_TAGS: ${{ steps.meta.outputs.tags }}
+          RELEASE_DIGEST: ${{ steps.build.outputs.digest }}
+          RELEASE_PLATFORM: linux/amd64
+          RELEASE_DOCKERFILE: ${{ matrix.dockerfile }}
+          RELEASE_TARGET: ${{ matrix.target }}
+          RELEASE_REVISION: ${{ github.sha }}
+          RELEASE_SOURCE: ${{ github.server_url }}/${{ github.repository }}
+          RELEASE_OUTPUT_DIR: release-manifests
+        run: node tooling/scripts/release-manifest.mjs
+
+      - name: Upload image manifest
+        if: env.PUBLISH == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-manifest-${{ matrix.component }}
+          path: release-manifests/${{ matrix.component }}.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
 
       - name: Record release mode
+        shell: bash
+        env:
+          COMPONENT: ${{ matrix.component }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PUBLISHED: ${{ env.PUBLISH }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
-            echo "Dry run: \`${{ matrix.component }}\` image built locally and was not pushed." >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          {
+            echo "### ${COMPONENT}"
+            echo
+            if [[ "$PUBLISHED" == "true" ]]; then
+              echo "Published to GHCR and verified:"
+            else
+              echo "Dry run: built and loaded locally; nothing was pushed."
+            fi
+            echo
+            echo '```text'
+            echo "$IMAGE_TAGS"
+            if [[ -n "$IMAGE_DIGEST" ]]; then
+              echo "digest: $IMAGE_DIGEST"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Create GitHub Release
+    needs: images
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+
+      - name: Download image manifests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: image-manifest-*
+          path: release-manifests
+          merge-multiple: true
+
+      - name: Generate categorized release notes
+        shell: bash
+        env:
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="$RELEASE_TAG" \
+            -f target_commitish="$TARGET_SHA" \
+            > generated-release-notes.json
+
+      - name: Compose release notes with image digests
+        env:
+          GENERATED_NOTES_JSON: generated-release-notes.json
+          IMAGE_MANIFEST_DIR: release-manifests
+          RELEASE_SHA: ${{ github.sha }}
+          QUALITY_GATE_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_OUTPUT: release-notes.md
+        run: node tooling/scripts/release-notes.mjs
+
+      - name: Create or update GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_title="Roamlog ${RELEASE_TAG}"
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')"
+            if [[ "$is_draft" == "true" ]]; then
+              echo "::error::Draft release $RELEASE_TAG already exists. Publish or delete it before rerunning this workflow."
+              exit 1
+            fi
+            gh release edit "$RELEASE_TAG" --title "$release_title" --notes-file release-notes.md
+            mode="updated"
           else
-            echo "Published \`${{ matrix.component }}\`: ${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+            release_args=(create "$RELEASE_TAG" --verify-tag --title "$release_title" --notes-file release-notes.md)
+            if [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+              release_args+=(--prerelease)
+            fi
+            gh release "${release_args[@]}"
+            mode="created"
           fi
+
+          release_url="$(gh release view "$RELEASE_TAG" --json url --jq '.url')"
+          {
+            echo "### GitHub Release ${mode}"
+            echo
+            echo "$release_url"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -34,7 +34,7 @@ tooling/k6/artifacts/
 # Test and coverage artifacts
 playwright-report/
 test-results/
-screenshots/
+/screenshots/
 e2e/screenshots/
 .e2e-live/
 .nyc_output/
