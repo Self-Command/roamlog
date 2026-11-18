@@ -1,0 +1,21 @@
+# API_PLACES checkpoint
+
+- Task: `GET /v1/places/search` (Photon proxy, Redis cache, rate limit, timeout degradation).
+- Status: **DONE** (module implemented, 57 tests green, report written).
+- Preconditions verified:
+  - `codegraph status` → `[OK] Index is up to date`.
+  - `codegraph explore "PlaceSearchQuery PlaceSearchResponse places search redis rate limit"` executed.
+  - Contract read: `packages/contracts/src/api/places.ts`.
+  - Audit read: `.audit/2026-11-18-fullstack-gap-audit.md` §7 (places/route), §9 (auth/error codes), §11 (API changes).
+- Delivered:
+  - `apps/api/src/modules/places/**` (settings, normalizer, client, cache, limiter, guard, service, controller, module).
+  - `apps/api/src/modules/places/__tests__/**` (5 spec files + fixtures, 57 tests).
+  - `apps/api/src/app.module.ts`: registration only (2 lines).
+  - `.audit/api-places-report.md`.
+- Verification:
+  - `pnpm --filter @roamlog/api exec vitest run src/modules/places` → 57 passed.
+  - `pnpm --filter @roamlog/api typecheck` → exit 0 at 19:40; 20:01 re-run only fails in `packages/db/src/factories.ts` (another task's in-flight Prisma drift). Compiler-API full-program scan at 20:10: `diagnostics=1 ignoredForeign=1 relevant=0` → zero diagnostics for the whole api package apart from that foreign file.
+  - Live Photon check: `zh` no longer forwarded (public instance 400s on `lang=zh`); zh returns local names in ~1.9s, en in ~0.9s.
+- Key decision: public Photon supports only `default|de|en|fr`; `zh` maps to upstream default, `en` forwarded, 400-on-forwarded-lang retries once without `lang` in the same 2.5s budget.
+- Boundary note: shared `RateLimitService` policy union is closed and `common/security/**` + `config/**` are outside the writable set, so the module owns a fail-open limiter built on `RedisService.incrementFixedWindow`.
+- Remaining external noise: repo-wide typecheck currently red because of another agent's `packages/db/schema.prisma` + generated types in flight.

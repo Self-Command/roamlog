@@ -1,0 +1,154 @@
+{
+  "generatedAt": "2026-11-18T06:30:14.742Z",
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/v1/admin/metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/audit"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/emails"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/audit"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/emails"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/audit"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/emails"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/users"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/users"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/audit"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/emails"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/audit"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/emails"
+    }
+  ],
+  "websockets": [],
+  "sessionCookies": [
+    {
+      "name": "__Secure-roamlog.session_token",
+      "secure": true,
+      "httpOnly": true,
+      "sameSite": "Lax",
+      "domain": ".we.spacedo.org",
+      "path": "/",
+      "session": false
+    }
+  ],
+  "shellStatus": {
+    "headerHasLocal": false,
+    "headerHas2faGated": true,
+    "sidebarHas2faEnabled": true
+  },
+  "dashboardRetry": {
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/v1/admin/metrics"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/admin/audit"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/admin/emails"
+      }
+    ],
+    "stillError": true
+  },
+  "notificationBefore": "通知，2 条未读",
+  "notificationAfterMarkRead": "通知，2 条未读",
+  "notificationAfterReload": "通知，2 条未读",
+  "usersBulk": {
+    "text": [
+      {
+        "label": "批量恢复",
+        "disabled": true
+      },
+      {
+        "label": "批量暂停",
+        "disabled": false
+      },
+      {
+        "label": "批量删除",
+        "disabled": false
+      },
+      {
+        "label": "清除选择",
+        "disabled": false
+      }
+    ],
+    "dialog": {
+      "heading": "批量暂停账户",
+      "hasCountConfirmation": true,
+      "confirmDisabled": true
+    }
+  },
+  "mobileNav": {
+    "present": true,
+    "navLinks": 11,
+    "width": 300
+  },
+  "logout": {
+    "href": "/admin/login",
+    "urlAfterClick": "/admin/login",
+    "authRequestsAfterClick": [],
+    "cookiesAfterClick": [
+      "__Secure-roamlog.session_token"
+    ],
+    "afterRevisit": {
+      "url": "/admin",
+      "h1": null,
+      "needsLogin": false,
+      "apiError": true
+    }
+  }
+}

@@ -1,0 +1,4213 @@
+{
+  "generatedAt": "2026-11-18T06:11:36.965Z",
+  "pages": {
+    "dashboard": {
+      "title": "Roamlog Admin",
+      "h1": "",
+      "h2": [
+        "Internal Server Error"
+      ],
+      "alertTexts": [
+        "ADMIN API ERRORInternal Server ErrorInternal Server ErrorINTERNAL_SERVER_ERRORHTTP 500重试"
+      ],
+      "emptyText": null,
+      "tableData": [],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 342,
+      "mainScrollHeight": 342,
+      "inputs": [],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "重试",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/audit",
+          "status": 500
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/metrics",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/emails",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 18,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/1mbsix-j0vhi2.js",
+          "/admin-assets/_next/static/chunks/0vzc5clm9378_.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/3r0k9yk_4sup5.js",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 17,
+        "disabled": 1,
+        "links": 13,
+        "buttons": 3,
+        "selects": 1,
+        "rowControls": 0
+      },
+      "recoveredHeading": null
+    },
+    "users": {
+      "title": "Roamlog Admin",
+      "h1": "用户",
+      "h2": [
+        "平台账户"
+      ],
+      "alertTexts": [],
+      "emptyText": null,
+      "tableData": [
+        {
+          "caption": "平台用户列表",
+          "headers": [
+            "",
+            "用户",
+            "平台角色",
+            "状态",
+            "邮箱验证",
+            "活跃会话",
+            "最近活跃",
+            "操作"
+          ],
+          "rows": 2,
+          "sortableHeaders": 1,
+          "wrapperClientWidth": 1154,
+          "wrapperScrollWidth": 1154
+        }
+      ],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 633,
+      "mainScrollHeight": 633,
+      "inputs": [
+        {
+          "type": "search",
+          "name": null,
+          "autocomplete": null,
+          "placeholder": "姓名或邮箱",
+          "hasLabel": true,
+          "required": false
+        }
+      ],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/users",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "导出接口将在运营 Wave 接入",
+          "disabled": true,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "label": "[input]",
+          "disabled": false,
+          "href": null,
+          "inputType": "search",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部状态Active已暂停已删除",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部角色UserSupportAnalystAdminSuper admin",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 6,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "checkbox",
+          "label": "全选当前用户",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "checkbox",
+          "label": "选择 [row]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "checkbox",
+          "label": "选择 [row]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/users",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 19,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 33,
+        "disabled": 2,
+        "links": 13,
+        "buttons": 16,
+        "selects": 3,
+        "rowControls": 12
+      }
+    },
+    "workspaces": {
+      "title": "Roamlog Admin",
+      "h1": "工作区",
+      "h2": [
+        "Workspace 列表"
+      ],
+      "alertTexts": [],
+      "emptyText": null,
+      "tableData": [
+        {
+          "caption": "Workspace 平台列表",
+          "headers": [
+            "",
+            "工作区",
+            "套餐",
+            "状态",
+            "Owner",
+            "成员",
+            "旅行",
+            "日志",
+            "更新",
+            "操作"
+          ],
+          "rows": 2,
+          "sortableHeaders": 1,
+          "wrapperClientWidth": 1154,
+          "wrapperScrollWidth": 1154
+        }
+      ],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 633,
+      "mainScrollHeight": 633,
+      "inputs": [
+        {
+          "type": "search",
+          "name": null,
+          "autocomplete": null,
+          "placeholder": "名称或 slug",
+          "hasLabel": true,
+          "required": false
+        }
+      ],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/workspaces",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "label": "[input]",
+          "disabled": false,
+          "href": null,
+          "inputType": "search",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部状态Active已暂停已删除",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部套餐FreeProTeam",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "checkbox",
+          "label": "全选当前工作区",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "checkbox",
+          "label": "选择 [row]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "工作区 [row]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "checkbox",
+          "label": "选择 [row]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "工作区 [row]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/workspaces",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/users",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 19,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 30,
+        "disabled": 1,
+        "links": 13,
+        "buttons": 13,
+        "selects": 3,
+        "rowControls": 10
+      }
+    },
+    "content": {
+      "title": "Roamlog Admin",
+      "h1": "内容审核",
+      "h2": [
+        "内容列表"
+      ],
+      "alertTexts": [],
+      "emptyText": null,
+      "tableData": [
+        {
+          "caption": "内容审核列表",
+          "headers": [
+            "",
+            "内容",
+            "Workspace / 作者",
+            "可见性",
+            "状态",
+            "举报",
+            "更新",
+            "操作"
+          ],
+          "rows": 1,
+          "sortableHeaders": 1,
+          "wrapperClientWidth": 1154,
+          "wrapperScrollWidth": 1154
+        }
+      ],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 588,
+      "mainScrollHeight": 588,
+      "inputs": [
+        {
+          "type": "search",
+          "name": null,
+          "autocomplete": null,
+          "placeholder": "例如 [已脱敏]",
+          "hasLabel": true,
+          "required": false
+        }
+      ],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/content",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "label": "[input]",
+          "disabled": false,
+          "href": null,
+          "inputType": "search",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部旅行日志评论",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部状态已发布待审核已删除",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部WorkspacePrivatePublic link",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部 Workspaceluo hua 的旅行档案",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 2,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "checkbox",
+          "label": "全选当前内容",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "checkbox",
+          "label": "选择 [row]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "查看内容 [row]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/trips",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/entries",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/workspaces",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/comments",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/users",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 19,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 26,
+        "disabled": 1,
+        "links": 13,
+        "buttons": 7,
+        "selects": 5,
+        "rowControls": 4
+      }
+    },
+    "media": {
+      "title": "Roamlog Admin",
+      "h1": "媒体库",
+      "h2": [],
+      "alertTexts": [],
+      "emptyText": null,
+      "tableData": [],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 842,
+      "mainScrollHeight": 842,
+      "inputs": [
+        {
+          "type": "search",
+          "name": null,
+          "autocomplete": null,
+          "placeholder": "文件名或 Workspace",
+          "hasLabel": true,
+          "required": false
+        }
+      ],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/media",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "label": "[input]",
+          "disabled": false,
+          "href": null,
+          "inputType": "search",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部状态ReadyProcessingFailed",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": "switch",
+          "label": "仅显示孤儿对象",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": "false",
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/media",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/workspaces",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 19,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 19,
+        "disabled": 1,
+        "links": 13,
+        "buttons": 3,
+        "selects": 2,
+        "rowControls": 0
+      }
+    },
+    "audit": {
+      "title": "Roamlog Admin",
+      "h1": "",
+      "h2": [
+        "Internal Server Error"
+      ],
+      "alertTexts": [
+        "ADMIN API ERRORInternal Server ErrorInternal Server ErrorINTERNAL_SERVER_ERRORHTTP 500重试"
+      ],
+      "emptyText": null,
+      "tableData": [],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 342,
+      "mainScrollHeight": 342,
+      "inputs": [],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/audit",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "重试",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/audit",
+          "status": 500
+        }
+      ],
+      "assets": {
+        "count": 19,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 17,
+        "disabled": 1,
+        "links": 13,
+        "buttons": 3,
+        "selects": 1,
+        "rowControls": 0
+      }
+    },
+    "flags": {
+      "title": "Roamlog Admin",
+      "h1": "功能开关",
+      "h2": [
+        "灰度与白名单同时生效"
+      ],
+      "alertTexts": [],
+      "emptyText": null,
+      "tableData": [],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 391,
+      "mainScrollHeight": 391,
+      "inputs": [],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/flags",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/flags",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/users",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/workspaces",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 18,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 16,
+        "disabled": 1,
+        "links": 13,
+        "buttons": 2,
+        "selects": 1,
+        "rowControls": 0
+      }
+    },
+    "emails": {
+      "title": "Roamlog Admin",
+      "h1": "邮件",
+      "h2": [
+        "投递日志"
+      ],
+      "alertTexts": [],
+      "emptyText": null,
+      "tableData": [
+        {
+          "caption": "邮件投递日志",
+          "headers": [
+            "收件人 / 主题",
+            "模板",
+            "状态",
+            "错误",
+            "时间",
+            "操作"
+          ],
+          "rows": 3,
+          "sortableHeaders": 0,
+          "wrapperClientWidth": 1154,
+          "wrapperScrollWidth": 1154
+        }
+      ],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 853,
+      "mainScrollHeight": 853,
+      "inputs": [
+        {
+          "type": "search",
+          "name": null,
+          "autocomplete": null,
+          "placeholder": "email 或模板",
+          "hasLabel": true,
+          "required": false
+        }
+      ],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/emails",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "API 契约暂未提供测试邮件入口",
+          "disabled": true,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "input",
+          "role": null,
+          "label": "[input]",
+          "disabled": false,
+          "href": null,
+          "inputType": "search",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部状态DeliveredQueuedSentBouncedComplainedFailed",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 7,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部模板auth.reset-passwordauth.verify-email",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 3,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "[row control]",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/emails",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 19,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 23,
+        "disabled": 2,
+        "links": 13,
+        "buttons": 6,
+        "selects": 3,
+        "rowControls": 3
+      }
+    },
+    "queues": {
+      "title": "Roamlog Admin",
+      "h1": "队列",
+      "h2": [
+        "media",
+        "邮件投递",
+        "数据导出",
+        "reminders",
+        "维护任务",
+        "失败任务"
+      ],
+      "alertTexts": [],
+      "emptyText": "失败任务failed / dead-letter review · api0 jobs没有失败任务当前 api 数据中没有待处理失败任务。",
+      "tableData": [],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 1536,
+      "mainScrollHeight": 1536,
+      "inputs": [],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/queues",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "清空队列 media",
+          "disabled": true,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "暂停队列 media",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "清空队列 email",
+          "disabled": true,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "暂停队列 email",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "清空队列 export",
+          "disabled": true,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "暂停队列 export",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "清空队列 reminders",
+          "disabled": true,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "暂停队列 reminders",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "清空队列 maintenance",
+          "disabled": true,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "暂停队列 maintenance",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/jobs",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/metrics",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 19,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 26,
+        "disabled": 6,
+        "links": 13,
+        "buttons": 12,
+        "selects": 1,
+        "rowControls": 0
+      }
+    },
+    "system": {
+      "title": "Roamlog Admin",
+      "h1": "系统健康",
+      "h2": [
+        "依赖健康检查",
+        "后台 Worker",
+        "队列与 Redis",
+        "数据库迁移"
+      ],
+      "alertTexts": [],
+      "emptyText": null,
+      "tableData": [
+        {
+          "caption": "数据库迁移版本",
+          "headers": [
+            "Version",
+            "Name",
+            "Applied at",
+            "Status"
+          ],
+          "rows": 1,
+          "sortableHeaders": 0,
+          "wrapperClientWidth": 1154,
+          "wrapperScrollWidth": 1154
+        }
+      ],
+      "pageClientWidth": 1440,
+      "pageScrollWidth": 1440,
+      "mainClientWidth": 1220,
+      "mainScrollWidth": 1220,
+      "mainClientHeight": 1030,
+      "mainScrollHeight": 1030,
+      "inputs": [],
+      "dateInputs": 0,
+      "searchableComboboxes": 0,
+      "paginationControls": 0,
+      "documentStatus": 200,
+      "finalUrl": "/admin/system",
+      "controls": [
+        {
+          "tag": "a",
+          "role": null,
+          "label": "跳至主要内容",
+          "disabled": false,
+          "href": "#admin-main-content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "总览",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "用户",
+          "disabled": false,
+          "href": "/admin/users",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "工作区",
+          "disabled": false,
+          "href": "/admin/workspaces",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "审计日志",
+          "disabled": false,
+          "href": "/admin/audit",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "内容审核",
+          "disabled": false,
+          "href": "/admin/content",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "媒体库",
+          "disabled": false,
+          "href": "/admin/media",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "邮件",
+          "disabled": false,
+          "href": "/admin/emails",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "队列",
+          "disabled": false,
+          "href": "/admin/queues",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "功能开关",
+          "disabled": false,
+          "href": "/admin/flags",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "系统健康",
+          "disabled": false,
+          "href": "/admin/system",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "返回登录占位",
+          "disabled": false,
+          "href": "/admin/login",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "a",
+          "role": null,
+          "label": "OPS",
+          "disabled": false,
+          "href": "/admin",
+          "inputType": null,
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "button",
+          "role": null,
+          "label": "通知，2 条未读",
+          "disabled": false,
+          "href": null,
+          "inputType": "button",
+          "selectOptions": null,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "api": [
+        {
+          "method": "GET",
+          "path": "/v1/me",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/admin/system",
+          "status": 200
+        }
+      ],
+      "assets": {
+        "count": 18,
+        "errors": [],
+        "sample": [
+          "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+          "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+          "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+          "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+          "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+          "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+          "/admin-assets/_next/static/chunks/457165b3sy977.js",
+          "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js",
+          "/admin-assets/_next/static/chunks/turbopack-1wyewk5zxg2_h.js",
+          "/admin-assets/_next/static/chunks/3gnlkoz_8aepr.js",
+          "/admin-assets/_next/static/chunks/07qgtjgd_e6o4.js",
+          "/admin-assets/_next/static/chunks/1eameptnc7q15.js"
+        ]
+      },
+      "controlsSummary": {
+        "total": 16,
+        "disabled": 1,
+        "links": 13,
+        "buttons": 2,
+        "selects": 1,
+        "rowControls": 0
+      }
+    }
+  },
+  "global": {
+    "searchButton": {
+      "aria": "搜索页面、用户或工作区 K",
+      "text": "搜索页面、用户或工作区K",
+      "disabled": false
+    },
+    "search": {
+      "inputPlaceholder": "搜索页面、用户或工作区…",
+      "text": "全局搜索搜索后台页面；用户与 Workspace 实体搜索由对应列表页的 API 筛选完成。总览前往平台页面page用户前往平台页面page工作区前往平台页面page审计日志前往平台页面page内容审核前往平台页面page媒体库前往平台页面page邮件前往平台页面page队列前往平台页面page功能开关前往平台页面page系统健康前往平台页面pageFixture search boundaryESC 关闭",
+      "optionCount": 0
+    },
+    "notificationTriggerAria": "通知，2 条未读",
+    "notifications": {
+      "heading": "通知",
+      "labels": [
+        "队列失败率上升",
+        "邮件退信需要复核",
+        "媒体存储每日报告"
+      ],
+      "buttons": [
+        {
+          "label": "全部标为已读",
+          "disabled": false
+        },
+        {
+          "label": "关闭",
+          "disabled": false
+        }
+      ],
+      "inputs": [],
+      "valueFlags": [],
+      "hint": "本地 fixture 通知，用于展示队列、邮件和安全事件的告警入口。",
+      "text": "Operations inbox通知本地 fixture 通知，用于展示队列、邮件和安全事件的告警入口。2 条未读全部标为已读队列失败率上升archive-export 在最近 15 分钟出现 2 次连续失败。21 小时前邮件退信需要复核有一条新退信与 workspace-invitation 模板相关。21 小时前媒体存储每日报告过去 24 小时新增 4.8 GB，仍在当日预算内。23 小时前"
+    },
+    "logoutLink": {
+      "text": "返回登录占位",
+      "href": "/admin/login"
+    },
+    "unknownRoute": {
+      "status": null,
+      "url": "/admin/does-not-exist",
+      "h1": "页面不存在",
+      "bodyIncludes404": true
+    }
+  },
+  "interactions": {
+    "users": {
+      "filters": [
+        {
+          "tag": "select",
+          "role": null,
+          "label": "模拟平台角色",
+          "disabled": true,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部状态Active已暂停已删除",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 4,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        },
+        {
+          "tag": "select",
+          "role": null,
+          "label": "全部角色UserSupportAnalystAdminSuper admin",
+          "disabled": false,
+          "href": null,
+          "inputType": null,
+          "selectOptions": 6,
+          "checked": null,
+          "expanded": null,
+          "describedBy": null
+        }
+      ],
+      "roleDialog": {
+        "heading": "修改平台角色",
+        "labels": [
+          "新平台角色",
+          "输入用户姓名确认"
+        ],
+        "buttons": [
+          {
+            "label": "取消",
+            "disabled": false
+          },
+          {
+            "label": "确认修改",
+            "disabled": true
+          },
+          {
+            "label": "关闭",
+            "disabled": false
+          }
+        ],
+        "inputs": [
+          {
+            "tag": "select",
+            "type": null,
+            "placeholder": null,
+            "options": 4,
+            "valueIsEmpty": false,
+            "required": false
+          },
+          {
+            "tag": "input",
+            "type": null,
+            "placeholder": "luo hua",
+            "options": null,
+            "valueIsEmpty": true,
+            "required": false
+          }
+        ],
+        "valueFlags": [],
+        "hint": "该操作会记录模拟审计事件。当前没有连接真实 API。"
+      },
+      "detail": {
+        "heading": "[user name redacted]",
+        "labels": [
+          "Workspace",
+          "旅行",
+          "日志",
+          "活跃会话",
+          "活跃会话",
+          "Workspace 成员关系",
+          "安全操作"
+        ],
+        "buttons": [
+          {
+            "label": "强制登出",
+            "disabled": false
+          },
+          {
+            "label": "重置 2FA",
+            "disabled": false
+          },
+          {
+            "label": "关闭",
+            "disabled": false
+          }
+        ],
+        "inputs": [],
+        "valueFlags": [
+          {
+            "dash": true,
+            "empty": false
+          },
+          {
+            "dash": true,
+            "empty": false
+          },
+          {
+            "dash": true,
+            "empty": false
+          },
+          {
+            "dash": true,
+            "empty": false
+          }
+        ],
+        "hint": "API 模式下操作会发送真实 Admin mutation，并由后端权限与审计规则约束。"
+      },
+      "search": {
+        "rowsAfterNoMatch": 0,
+        "noMatchText": true
+      },
+      "selectOptions": [
+        {
+          "label": "账户状态",
+          "options": [
+            "全部状态",
+            "Active",
+            "已暂停",
+            "已删除"
+          ]
+        },
+        {
+          "label": "平台角色",
+          "options": [
+            "全部角色",
+            "User",
+            "Support",
+            "Analyst",
+            "Admin",
+            "Super admin"
+          ]
+        }
+      ],
+      "disabledControls": [
+        {
+          "label": "模拟平台角色",
+          "tag": "select"
+        },
+        {
+          "label": "导出接口将在运营 Wave 接入",
+          "tag": "button"
+        }
+      ]
+    },
+    "workspaces": {
+      "detail": {
+        "heading": "[workspace title redacted]",
+        "labels": [
+          "成员",
+          "旅行",
+          "日志",
+          "周起始日",
+          "成员",
+          "最近旅行"
+        ],
+        "buttons": [
+          {
+            "label": "关闭",
+            "disabled": false
+          }
+        ],
+        "inputs": [],
+        "valueFlags": [
+          {
+            "dash": true,
+            "empty": false
+          },
+          {
+            "dash": true,
+            "empty": false
+          },
+          {
+            "dash": true,
+            "empty": false
+          },
+          {
+            "dash": true,
+            "empty": false
+          }
+        ]
+      },
+      "suspendDialog": {
+        "heading": "暂停工作区",
+        "labels": [
+          "输入工作区名称确认"
+        ],
+        "buttons": [
+          {
+            "label": "取消",
+            "disabled": false
+          },
+          {
+            "label": "确认暂停",
+            "disabled": true
+          },
+          {
+            "label": "关闭",
+            "disabled": false
+          }
+        ],
+        "inputs": [
+          {
+            "tag": "input",
+            "type": null,
+            "placeholder": "Roamlog Platform Administrator 的旅行档案",
+            "options": null,
+            "valueIsEmpty": true,
+            "required": false
+          }
+        ],
+        "valueFlags": [],
+        "hint": "该操作会记录模拟审计事件。当前没有连接真实 API。"
+      },
+      "searchRows": 0,
+      "selectOptions": [
+        {
+          "label": "状态",
+          "options": [
+            "全部状态",
+            "Active",
+            "已暂停",
+            "已删除"
+          ]
+        },
+        {
+          "label": "套餐",
+          "options": [
+            "全部套餐",
+            "Free",
+            "Pro",
+            "Team"
+          ]
+        }
+      ],
+      "disabledControls": [
+        {
+          "label": "模拟平台角色"
+        }
+      ]
+    },
+    "content": {
+      "detail": {
+        "heading": "[content title redacted]",
+        "labels": [
+          "作者",
+          "举报",
+          "创建",
+          "更新"
+        ],
+        "buttons": [
+          {
+            "label": "关闭",
+            "disabled": false
+          }
+        ],
+        "inputs": [],
+        "valueFlags": [
+          {
+            "dash": false,
+            "empty": false
+          },
+          {
+            "dash": false,
+            "empty": false
+          },
+          {
+            "dash": false,
+            "empty": false
+          },
+          {
+            "dash": false,
+            "empty": false
+          }
+        ],
+        "hint": "内容详情来自 Admin API；删除与恢复 mutation 由后端权限与审计规则约束。"
+      },
+      "deleteDialog": {
+        "heading": "删除内容",
+        "labels": [
+          "输入内容标题确认"
+        ],
+        "buttons": [
+          {
+            "label": "取消",
+            "disabled": false
+          },
+          {
+            "label": "确认删除",
+            "disabled": true
+          },
+          {
+            "label": "关闭",
+            "disabled": false
+          }
+        ],
+        "inputs": [
+          {
+            "tag": "input",
+            "type": null,
+            "placeholder": "[已脱敏]",
+            "options": null,
+            "valueIsEmpty": true,
+            "required": false
+          }
+        ],
+        "valueFlags": [],
+        "hint": "该操作会记录模拟审计事件。当前没有连接真实 API。"
+      },
+      "selectOptions": [
+        {
+          "label": "内容类型",
+          "options": [
+            "全部",
+            "旅行",
+            "日志",
+            "评论"
+          ]
+        },
+        {
+          "label": "内容状态",
+          "options": [
+            "全部状态",
+            "已发布",
+            "待审核",
+            "已删除"
+          ]
+        },
+        {
+          "label": "可见性",
+          "options": [
+            "全部",
+            "Workspace",
+            "Private",
+            "Public link"
+          ]
+        },
+        {
+          "label": "Workspace",
+          "options": [
+            "全部 Workspace",
+            "luo hua 的旅行档案"
+          ]
+        }
+      ],
+      "disabledControls": [
+        {
+          "label": "模拟平台角色"
+        }
+      ]
+    },
+    "media": {
+      "disabledControls": [
+        {
+          "label": "模拟平台角色"
+        }
+      ]
+    },
+    "audit": {
+      "selectOptions": [],
+      "disabledControls": [
+        {
+          "label": "模拟平台角色"
+        }
+      ],
+      "dateInputs": 0
+    },
+    "flags": {
+      "switches": [],
+      "disabledControls": [
+        {
+          "label": "模拟平台角色"
+        }
+      ]
+    },
+    "emails": {
+      "rows": 3,
+      "resendControls": [],
+      "filters": [
+        {
+          "label": "投递状态",
+          "options": [
+            "全部状态",
+            "Delivered",
+            "Queued",
+            "Sent",
+            "Bounced",
+            "Complained",
+            "Failed"
+          ]
+        },
+        {
+          "label": "模板",
+          "options": [
+            "全部模板",
+            "auth.reset-password",
+            "auth.verify-email"
+          ]
+        }
+      ],
+      "disabledControls": [
+        {
+          "label": "模拟平台角色"
+        },
+        {
+          "label": "API 契约暂未提供测试邮件入口"
+        }
+      ]
+    },
+    "queues": {
+      "buttons": [
+        {
+          "label": "搜索页面、用户或工作区 K",
+          "disabled": false
+        },
+        {
+          "label": "通知，2 条未读",
+          "disabled": false
+        },
+        {
+          "label": "清空队列 media",
+          "disabled": true
+        },
+        {
+          "label": "暂停队列 media",
+          "disabled": false
+        },
+        {
+          "label": "清空队列 email",
+          "disabled": true
+        },
+        {
+          "label": "暂停队列 email",
+          "disabled": false
+        },
+        {
+          "label": "清空队列 export",
+          "disabled": true
+        },
+        {
+          "label": "暂停队列 export",
+          "disabled": false
+        },
+        {
+          "label": "清空队列 reminders",
+          "disabled": true
+        },
+        {
+          "label": "暂停队列 reminders",
+          "disabled": false
+        },
+        {
+          "label": "清空队列 maintenance",
+          "disabled": true
+        },
+        {
+          "label": "暂停队列 maintenance",
+          "disabled": false
+        }
+      ]
+    },
+    "system": {
+      "refresh": []
+    }
+  },
+  "keyboard": {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "focusSteps": [
+      {
+        "tag": "a",
+        "label": "跳至主要内容",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      {
+        "tag": "a",
+        "label": "总览",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      },
+      {
+        "tag": "a",
+        "label": "用户",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      },
+      {
+        "tag": "a",
+        "label": "工作区",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      },
+      {
+        "tag": "a",
+        "label": "审计日志",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      },
+      {
+        "tag": "a",
+        "label": "内容审核",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      },
+      {
+        "tag": "a",
+        "label": "媒体库",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      },
+      {
+        "tag": "a",
+        "label": "邮件",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      },
+      {
+        "tag": "a",
+        "label": "队列",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      },
+      {
+        "tag": "a",
+        "label": "功能开关",
+        "outline": "none",
+        "outlineWidth": "2px",
+        "boxShadow": "present"
+      }
+    ],
+    "focusVisibleCount": 9
+  },
+  "mobile": {
+    "dashboard": {
+      "width": 390,
+      "documentScrollWidth": 390,
+      "mainScrollWidth": 390,
+      "mainClientWidth": 390,
+      "tableWrapperScrollWidth": null,
+      "tableWrapperClientWidth": null,
+      "menuButton": {
+        "aria": "打开导航",
+        "text": ""
+      }
+    },
+    "users": {
+      "width": 390,
+      "documentScrollWidth": 390,
+      "mainScrollWidth": 390,
+      "mainClientWidth": 390,
+      "tableWrapperScrollWidth": 1040,
+      "tableWrapperClientWidth": 356,
+      "menuButton": {
+        "aria": "打开导航",
+        "text": ""
+      }
+    },
+    "content": {
+      "width": 390,
+      "documentScrollWidth": 390,
+      "mainScrollWidth": 390,
+      "mainClientWidth": 390,
+      "tableWrapperScrollWidth": 1040,
+      "tableWrapperClientWidth": 356,
+      "menuButton": {
+        "aria": "打开导航",
+        "text": ""
+      }
+    },
+    "queues": {
+      "width": 390,
+      "documentScrollWidth": 390,
+      "mainScrollWidth": 390,
+      "mainClientWidth": 390,
+      "tableWrapperScrollWidth": null,
+      "tableWrapperClientWidth": null,
+      "menuButton": {
+        "aria": "打开导航",
+        "text": ""
+      }
+    }
+  },
+  "authenticatedAssets": {
+    "scripts": 14,
+    "styles": 4,
+    "adminPrefixScripts": 14,
+    "sample": [
+      "/admin-assets/_next/static/chunks/31w3gvwaex_2g.css",
+      "/admin-assets/_next/static/chunks/3bdudq9mzv6-5.css",
+      "/admin-assets/_next/static/chunks/06i17j9buzcug.css",
+      "/admin-assets/_next/static/chunks/41qnsmzj57l4k.css",
+      "/admin-assets/_next/static/chunks/2envsuvzor_y5.js",
+      "/admin-assets/_next/static/chunks/0g50sroy0dokq.js",
+      "/admin-assets/_next/static/chunks/457165b3sy977.js",
+      "/admin-assets/_next/static/chunks/39t9f0rp9y_-o.js"
+    ]
+  },
+  "unauthenticated": {
+    "directRoute": {
+      "status": 200,
+      "finalUrl": "/admin/users",
+      "h1": "需要重新登录",
+      "bodyHasLogin": false
+    },
+    "loginJump": "/admin/login"
+  },
+  "logout": {
+    "loginWhileAuthenticated": {
+      "url": "/admin/login",
+      "showsLoginForm": true
+    },
+    "clicked": {
+      "href": "/admin/login",
+      "url": "/admin/login"
+    },
+    "sessionAfterClick": {
+      "url": "/admin",
+      "authenticated": false,
+      "h1": null,
+      "cookies": [
+        "__Secure-roamlog.session_token"
+      ]
+    }
+  },
+  "console": [
+    {
+      "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+      "url": "/admin"
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 500 ()",
+      "url": "/admin"
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 ()",
+      "url": "/admin/does-not-exist"
+    }
+  ]
+}
+

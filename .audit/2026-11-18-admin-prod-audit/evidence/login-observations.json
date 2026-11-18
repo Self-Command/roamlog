@@ -1,0 +1,97 @@
+{
+  "generatedAt": "2026-11-18T06:04:18.964Z",
+  "login": {
+    "initialStatus": 200,
+    "initialUrl": "/admin/login",
+    "heading": "进入平台控制台",
+    "prefilledEmail": "[redacted]",
+    "prefillMatchesCredential": false,
+    "afterPasswordUrl": "/admin/login",
+    "finalUrl": "/admin/login",
+    "finalHeading": null,
+    "pageTitle": "Roamlog Admin",
+    "storageKeys": [],
+    "cookieNames": [
+      "__Secure-roamlog.session_token"
+    ],
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "mainScroll": {
+      "clientWidth": 1220,
+      "scrollWidth": 1220,
+      "clientHeight": 342,
+      "scrollHeight": 342
+    },
+    "documentScroll": {
+      "clientWidth": 1440,
+      "scrollWidth": 1440
+    }
+  },
+  "pages": {},
+  "console": [
+    {
+      "type": "error",
+      "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked."
+    },
+    {
+      "type": "error",
+      "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 ()"
+    }
+  ],
+  "networkFailures": [
+    {
+      "method": "GET",
+      "path": "/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092",
+      "error": "csp"
+    },
+    {
+      "method": "GET",
+      "path": "/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092",
+      "error": "csp"
+    }
+  ],
+  "api": [
+    {
+      "method": "POST",
+      "path": "/v1/auth/sign-in/email",
+      "status": 200,
+      "page": "/admin/login"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/two-factor/verify-totp",
+      "status": 200,
+      "page": "/admin/login"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me",
+      "status": 200,
+      "page": "/admin"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/audit",
+      "status": 500,
+      "page": "/admin"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/metrics",
+      "status": 200,
+      "page": "/admin"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/emails",
+      "status": 200,
+      "page": "/admin"
+    }
+  ]
+}
