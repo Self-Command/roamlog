@@ -363,6 +363,10 @@ model Trip {
   endDate           DateTime          @db.Date
   coverMediaId      String?           @db.Uuid
   origin            String
+  originLat         Float?
+  originLng         Float?
+  originCountryCode String?           @db.Char(2)
+  timeZone          String?
   destinations      String[]          @default([])
   countryCodes      String[]          @default([])
   tags              String[]          @default([])
@@ -414,28 +418,31 @@ model TripParticipant {
 }
 
 model Stop {
-  id          String    @id @default(uuid(7)) @db.Uuid
-  tripId      String    @db.Uuid
-  workspaceId String    @db.Uuid
-  city        String
-  country     String
-  countryCode String
-  lat         Float?
-  lng         Float?
-  startDate   DateTime  @db.Date
-  endDate     DateTime  @db.Date
-  notes       String
-  order       Int       @default(0)
-  version     Int       @default(1)
-  createdById String    @db.Uuid
-  updatedById String    @db.Uuid
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
-  deletedAt   DateTime? @db.Timestamptz(3)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  createdBy   User      @relation("StopCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy   User      @relation("StopUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  id              String    @id @default(uuid(7)) @db.Uuid
+  tripId          String    @db.Uuid
+  workspaceId     String    @db.Uuid
+  city            String
+  country         String
+  countryCode     String
+  lat             Float?
+  lng             Float?
+  provider        String?
+  providerPlaceId String?
+  timeZone        String?
+  startDate       DateTime  @db.Date
+  endDate         DateTime  @db.Date
+  notes           String
+  order           Int       @default(0)
+  version         Int       @default(1)
+  createdById     String    @db.Uuid
+  updatedById     String    @db.Uuid
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime? @db.Timestamptz(3)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip            Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdBy       User      @relation("StopCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy       User      @relation("StopUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
 
   @@index([tripId, order])
   @@index([workspaceId, startDate])
