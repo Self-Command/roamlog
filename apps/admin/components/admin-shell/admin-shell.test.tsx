@@ -1,9 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_ADMIN_SESSION } from "../../lib/fixtures";
 import { AdminShell } from "./admin-shell";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("AdminShell", () => {
   it("renders grouped platform navigation, environment, identity, and two-factor state", () => {
@@ -49,6 +53,21 @@ describe("AdminShell", () => {
     expect(within(dialog).getByRole("link", { name: /用户/ })).toHaveAttribute(
       "href",
       "/admin/users",
+    );
+  });
+
+  it("links the session action to the configured same-domain login path", () => {
+    vi.stubEnv("NEXT_PUBLIC_ADMIN_LOGIN_PATH", "/admin/login");
+
+    render(
+      <AdminShell activePath="/admin" session={DEFAULT_ADMIN_SESSION}>
+        <p>总览内容</p>
+      </AdminShell>,
+    );
+
+    expect(screen.getByRole("link", { name: "返回登录占位" })).toHaveAttribute(
+      "href",
+      "/admin/login",
     );
   });
 });

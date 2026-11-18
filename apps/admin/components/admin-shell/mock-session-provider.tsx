@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { getAdminDataMode } from "../../lib/admin-data-mode";
 import { platformRoleOf } from "../../lib/admin-data-source";
+import { getAdminLoginPath } from "../../lib/admin-paths";
 import {
   DEFAULT_ADMIN_SESSION,
   isAdminConsoleRole,
@@ -129,7 +130,7 @@ function ApiSessionProvider({
           <button
             type="button"
             className="mt-5 rounded-control bg-ink px-3 py-2 text-xs font-medium text-black"
-            onClick={() => window.location.assign("/login")}
+            onClick={() => window.location.assign(getAdminLoginPath())}
           >
             前往登录
           </button>

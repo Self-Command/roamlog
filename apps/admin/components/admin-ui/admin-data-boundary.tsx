@@ -5,6 +5,7 @@ import { AlertTriangle, LocateFixed, RefreshCw, ShieldAlert, WifiOff } from "luc
 import { Badge, Button, EmptyState } from "@roamlog/ui";
 
 import type { AdminResource } from "../../lib/admin-data-source";
+import { getAdminLoginPath } from "../../lib/admin-paths";
 import { AdminClientOnly } from "./admin-client-only";
 
 function AdminPreparingView() {
@@ -125,7 +126,10 @@ function AdminDataContent<T>({
                   绑定验证器
                 </Button>
               ) : accessDenied ? (
-                <Button variant="outline" onClick={() => window.location.assign("/login")}>
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.assign(getAdminLoginPath())}
+                >
                   更换账户
                 </Button>
               ) : null}

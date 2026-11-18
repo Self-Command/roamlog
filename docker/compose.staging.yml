@@ -263,6 +263,8 @@ services:
       args:
         API_URL: http://api:4000
         NEXT_PUBLIC_ADMIN_DATA_MODE: api
+        NEXT_PUBLIC_ADMIN_ASSET_PREFIX: /admin-assets
+        NEXT_PUBLIC_ADMIN_LOGIN_PATH: /admin/login
     image: roamlog/staging-admin:${ROAMLOG_IMAGE_TAG:-local}
     <<: *app-hardening
     env_file:

@@ -1,5 +1,11 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
-export default function LegacyAdminLoginPage() {
-  redirect("/login");
+import { LoginPanel } from "../../../components/login/login-panel";
+
+export const metadata: Metadata = {
+  title: "登录",
+};
+
+export default function AdminLoginPage() {
+  return <LoginPanel />;
 }

@@ -12,6 +12,7 @@ import {
   type AdminAuthTransport,
 } from "../../lib/admin-auth";
 import { getAdminDataMode, type AdminDataMode } from "../../lib/admin-data-mode";
+import { getAdminLoginPath } from "../../lib/admin-paths";
 import { createQrMatrix, qrMatrixToSvgPath } from "../../lib/qr-code";
 
 interface EnrollmentData {
@@ -52,7 +53,7 @@ export function TwoFactorEnrollmentPanel({
           <Button
             className="mt-5"
             variant="outline"
-            onClick={() => window.location.assign("/login")}
+            onClick={() => window.location.assign(getAdminLoginPath())}
           >
             返回演示登录
           </Button>

@@ -5,6 +5,7 @@ import { Compass, LogOut, ShieldCheck } from "lucide-react";
 import { Avatar, Badge, Select } from "@roamlog/ui";
 
 import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES } from "../../lib/fixtures";
+import { getAdminLoginPath } from "../../lib/admin-paths";
 import { cn } from "./cn";
 import { useAdminSession } from "./mock-session-provider";
 import { ADMIN_NAV_GROUPS, isNavItemActive } from "./admin-nav";
@@ -160,7 +161,7 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
               : "角色切换仅用于本地 fixture 预览，不修改真实权限。"}
           </p>
           <a
-            href="/login"
+            href={getAdminLoginPath()}
             onClick={onNavigate}
             className="mt-2 flex h-8 items-center gap-2 rounded-control px-1 text-[11px] text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ink"
           >

@@ -1,0 +1,107 @@
+name: roamlog-staging
+
+x-server-env: &server-env
+  env_file: !override
+    - /opt/roamlog/config/.env.staging
+
+services:
+  postgres:
+    volumes: !override
+      - type: bind
+        source: /opt/roamlog/data/postgres
+        target: /var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "256mb"
+
+  redis:
+    volumes: !override
+      - type: bind
+        source: /opt/roamlog/data/redis
+        target: /data
+    security_opt:
+      - no-new-privileges:true
+
+  minio:
+    image: docker.io/chainguard/minio@sha256:7618b82bba99aadd77fcf59eb6cfd89b4b8b8e01ac796c474d57a1c1abf17e79
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes: !override
+      - type: bind
+        source: /opt/roamlog/data/minio
+        target: /data
+    ports: !override
+      - "127.0.0.1:19000:9000"
+      - "127.0.0.1:${STAGING_MINIO_CONSOLE_PORT:-19001}:9001"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000;
+          printf 'GET /minio/health/live HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3;
+          read protocol code rest <&3;
+          test "$$code" = "200"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  minio-init:
+    image: roamlog/minio-init:${ROAMLOG_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile_inline: |
+        FROM docker.io/chainguard/minio-client@sha256:b26a2a817e83c41189d6462c21b378633f807f18b44e84157fd6b6f296b5fc6d AS mc-source
+        FROM docker.io/chainguard/minio@sha256:7618b82bba99aadd77fcf59eb6cfd89b4b8b8e01ac796c474d57a1c1abf17e79
+        COPY --from=mc-source /usr/bin/mc /usr/bin/mc
+        COPY docker/minio-init/01-create-bucket.sh /init/01-create-bucket.sh
+        USER 65532:65532
+        ENTRYPOINT ["/bin/sh", "/init/01-create-bucket.sh"]
+    pull_policy: build
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      MC_CONFIG_DIR: /tmp/mc
+    entrypoint: ["/bin/sh", "/init/01-create-bucket.sh"]
+
+  migrate:
+    <<: *server-env
+    image: ghcr.io/self-command/roamlog/migrate:${ROAMLOG_IMAGE_TAG:?ROAMLOG_IMAGE_TAG is required}
+    build: !reset null
+    pull_policy: always
+
+  api:
+    <<: *server-env
+    image: ghcr.io/self-command/roamlog/api:${ROAMLOG_IMAGE_TAG:?ROAMLOG_IMAGE_TAG is required}
+    build: !reset null
+    pull_policy: always
+
+  worker:
+    <<: *server-env
+    image: ghcr.io/self-command/roamlog/worker:${ROAMLOG_IMAGE_TAG:?ROAMLOG_IMAGE_TAG is required}
+    build: !reset null
+    pull_policy: always
+
+  web:
+    <<: *server-env
+    image: ghcr.io/self-command/roamlog/web:${ROAMLOG_IMAGE_TAG:?ROAMLOG_IMAGE_TAG is required}
+    build: !reset null
+    pull_policy: always
+
+  admin:
+    <<: *server-env
+    image: ghcr.io/self-command/roamlog/admin:${ROAMLOG_IMAGE_TAG:?ROAMLOG_IMAGE_TAG is required}
+    build: !reset null
+    pull_policy: always
