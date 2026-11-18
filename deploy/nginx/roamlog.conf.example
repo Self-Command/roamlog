@@ -1,3 +1,11 @@
+# Production same-origin ingress for https://we.spacedo.org.
+#
+# Keep only this Nginx instance in front of the app ports. If Cloudflare
+# proxies the hostname, install its published ranges in
+# /etc/nginx/snippets/cloudflare-realip.conf, use CF-Connecting-IP as the real
+# IP header, and restrict origin TCP 80/443 to Cloudflare. Never add a second
+# trusted proxy between Nginx and the API.
+
 map $http_upgrade $connection_upgrade {
     default upgrade;
     ""      close;

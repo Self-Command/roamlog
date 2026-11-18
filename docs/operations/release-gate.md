@@ -73,36 +73,32 @@ Manual staging publication:
 The workflow uses `GITHUB_TOKEN` and the job-scoped `packages: write`
 permission. No long-lived registry token is stored in the repository.
 
-## Deploy published images to staging
+## Deploy published images to the server host
 
-Resolve the short SHA release tag, for example `sha-1a2b3c4`. Pull and retag the
-GHCR images to the names expected by compose:
+Resolve the release tag, for example `sha-1a2b3c4` or `v0.1.0-rc.3`. On the
+single-host server deployment, compose already expects the GHCR names, so
+pin `ROAMLOG_IMAGE_TAG` and pull with the server override:
 
 ```bash
 export RELEASE_SHA=sha-1a2b3c4
-export GHCR=ghcr.io/<lowercase-owner>/<lowercase-repo>
 export ROAMLOG_IMAGE_TAG="$RELEASE_SHA"
 
-docker pull "$GHCR/api:$RELEASE_SHA"
-docker pull "$GHCR/migrate:$RELEASE_SHA"
-docker pull "$GHCR/worker:$RELEASE_SHA"
-docker pull "$GHCR/web:$RELEASE_SHA"
-docker pull "$GHCR/admin:$RELEASE_SHA"
+docker compose \
+  --env-file /opt/roamlog/config/.env.staging \
+  -f docker/compose.staging.yml \
+  -f docker/compose.server.yml \
+  --profile app pull migrate api worker web admin
 
-docker tag "$GHCR/api:$RELEASE_SHA" "roamlog/staging-api:$RELEASE_SHA"
-docker tag "$GHCR/migrate:$RELEASE_SHA" "roamlog/staging-api-migrate:$RELEASE_SHA"
-docker tag "$GHCR/worker:$RELEASE_SHA" "roamlog/staging-worker:$RELEASE_SHA"
-docker tag "$GHCR/web:$RELEASE_SHA" "roamlog/staging-web:$RELEASE_SHA"
-docker tag "$GHCR/admin:$RELEASE_SHA" "roamlog/staging-admin:$RELEASE_SHA"
-```
-
-Compose interpolates `ROAMLOG_IMAGE_TAG`; export the same value for migration
-and application startup:
-
-```bash
-docker compose --env-file docker/.env.staging -f docker/compose.staging.yml \
+docker compose \
+  --env-file /opt/roamlog/config/.env.staging \
+  -f docker/compose.staging.yml \
+  -f docker/compose.server.yml \
   --profile app up -d --no-build
 ```
+
+Use the same two-file server compose command for migration and application
+startup. The loopback routes are `/`, `/admin/*`, `/admin-assets/*`, `/v1/*`,
+and `/v1/ws`; see [deploy/README.md](../../deploy/README.md).
 
 Required evidence before declaring deployment successful:
 
@@ -110,7 +106,8 @@ Required evidence before declaring deployment successful:
 - image digests;
 - migration job exit code `0`;
 - `/v1/health` and `/v1/ready`;
-- web/admin login page status;
+- web, `/admin/login`, and an `/admin-assets/_next/*` static asset status;
+- same-origin auth and Admin 2FA checks;
 - admin 2FA gate;
 - logs with no unresolved 5xx or email failures.
 

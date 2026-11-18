@@ -34,7 +34,7 @@ export async function ensureDefaultWorkspace(
 
   try {
     return await prisma.client.$transaction(async (transaction) => {
-      await transaction.$queryRaw`
+      await transaction.$executeRaw`
         SELECT pg_advisory_xact_lock(hashtext(${`onboarding:${actor.user.id}`}))
       `;
       const raced = await transaction.workspace.findFirst({

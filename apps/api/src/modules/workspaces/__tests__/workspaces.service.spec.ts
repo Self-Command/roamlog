@@ -243,7 +243,7 @@ describe("WorkspacesService", () => {
     const create = vi.fn().mockResolvedValue(workspaceRecord());
     const memberCreate = vi.fn().mockResolvedValue({ id: "member" });
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ pg_advisory_xact_lock: null }]),
+      $executeRaw: vi.fn().mockResolvedValue(1),
       workspace: {
         findFirst: vi.fn().mockResolvedValue(null),
         create,
@@ -260,6 +260,7 @@ describe("WorkspacesService", () => {
     expect(onboarded).toMatchObject({ ownerId: USER_OWNER_ID });
     expect(repeated).toBeNull();
     expect(create).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(memberCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ role: "owner", status: "active" }),

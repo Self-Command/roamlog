@@ -1,5 +1,11 @@
 # Backup and restore
 
+For the single-host production deployment at `https://we.spacedo.org`, use
+[production-backup-restore.md](./production-backup-restore.md). It adds the
+`docker/compose.server.yml` override, the env backup with mode `0600`, the
+configurable retention job, and the isolated-restore procedure required for a
+production drill. The commands below describe the local/staging compose stack.
+
 ## Data classes
 
 | Store       | Authoritative?            | Required protection                                                            |

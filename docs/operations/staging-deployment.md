@@ -4,6 +4,12 @@ This runbook deploys the Roamlog monorepo to a single staging host with Docker
 Compose. It is not a production deployment plan. Production should use the
 managed services and provider split recorded in the full-stack design.
 
+The live `https://we.spacedo.org` host uses the same-domain Nginx topology and
+`docker/compose.server.yml`; use
+[deploy/README.md](../../deploy/README.md) for that deployment. The Caddy example
+and separate web/admin/API hostnames in this file are for an isolated staging
+environment, not for the production same-origin host.
+
 ## Scope and safety rules
 
 - Staging only. Never point these commands at production databases, buckets,
