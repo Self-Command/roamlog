@@ -1,20 +1,33 @@
 import { expect, test } from "../support/fixtures";
 import { KYOTO_TRIP_PATH, screenshot, WORKSPACE_PATH } from "../support/helpers";
+import { MOCK_TRIP_COUNT, MOCK_TRIP_COUNT_BY_STATUS } from "../support/mock-fixtures";
+
+// Fixture-derived expectations: the library counts trips from the MSW fixtures,
+// so a fixture change must not require editing this spec.
+const WISHLIST_COUNT = MOCK_TRIP_COUNT_BY_STATUS.wishlist ?? 0;
+// "京都" only appears in one fixture trip title/summary/destinations.
+const KYOTO_MATCH_COUNT = 1;
 
 test("trip library supports text search and status filtering", async ({ page }) => {
   await page.goto(`${WORKSPACE_PATH}/trips`);
 
   await expect(page.getByRole("heading", { name: "旅行库" })).toBeVisible();
-  await expect(page.getByText("SHOWING 9 OF 9")).toBeVisible();
+  await expect(
+    page.getByText(`SHOWING ${MOCK_TRIP_COUNT} OF ${MOCK_TRIP_COUNT}`),
+  ).toBeVisible();
 
   const search = page.getByLabel("搜索旅行");
   await search.fill("京都");
-  await expect(page.getByText("SHOWING 1 OF 9")).toBeVisible();
+  await expect(
+    page.getByText(`SHOWING ${KYOTO_MATCH_COUNT} OF ${MOCK_TRIP_COUNT}`),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "京都红叶慢行" })).toBeVisible();
 
   await search.fill("");
   await page.getByRole("button", { name: /^愿望/ }).click();
-  await expect(page.getByText("SHOWING 2 OF 9")).toBeVisible();
+  await expect(
+    page.getByText(`SHOWING ${WISHLIST_COUNT} OF ${MOCK_TRIP_COUNT}`),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "阿马尔菲海岸愿望单" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "巴塔哥尼亚穿越" })).toBeVisible();
 

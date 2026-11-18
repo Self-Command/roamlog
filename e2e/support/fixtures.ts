@@ -22,15 +22,18 @@ export const test = base.extend<{ consoleGuard: void }>({
       const seenIgnored = new Set<string>();
 
       page.on("console", (message) => {
-        if (message.type() !== "warning" && message.type() !== "error") return;
+        // Read the type once so TypeScript narrows it (a repeated `message.type()`
+        // call is not narrowed and widened ConsoleIssue.type to every level).
+        const type = message.type();
+        if (type !== "warning" && type !== "error") return;
 
         const issue: ConsoleIssue = {
-          type: message.type(),
+          type,
           text: message.text(),
           location: message.location().url,
         };
 
-        if (message.type() === "warning" && isKnownDevWarning(message)) {
+        if (type === "warning" && isKnownDevWarning(message)) {
           const key = `${issue.type}:${issue.text}`;
           if (!seenIgnored.has(key)) {
             seenIgnored.add(key);
