@@ -22,6 +22,8 @@ import { mediaVariantKey } from "./jobs/media.js";
 const require = createRequire(import.meta.url);
 
 export function createWorkerDependencies(logger: WorkerLogger): WorkerDependencies {
+  // Fails the boot, not a mail job, when a trimmed image cannot resolve SMTP.
+  assertSmtpClientAvailable();
   return {
     db: createDatabase(),
     storage: createStorage(),
@@ -192,12 +194,27 @@ function mailpitUrl(): string {
 }
 
 /**
- * Mail transports this worker can actually speak. The worker image ships no
- * SMTP client on purpose: `nodemailer` is an `@roamlog/api` dependency and is
- * not resolvable from `@roamlog/worker` under pnpm, so an SMTP branch here
- * would work in dev and fail in the released image.
+ * Mail transports this worker can actually speak. SMTP is real mail since
+ * `nodemailer` is a `@roamlog/worker` dependency; the loader below still guards
+ * against image builds that prune it.
  */
 export type WorkerEmailTransport = "resend" | "smtp" | "mailpit";
+
+/** Minimal nodemailer surface, typed locally like the API's SMTP adapter. */
+interface SmtpModule {
+  createTransport(options: Record<string, unknown>): SmtpTransport;
+}
+
+interface SmtpTransport {
+  sendMail(input: {
+    from: string;
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+    headers?: Record<string, string>;
+  }): Promise<{ messageId?: string; response?: string }>;
+}
 
 interface EmailFailureDetails {
   transport: WorkerEmailTransport | "unknown";
@@ -291,6 +308,212 @@ function senderAddress(): string {
     });
   }
   return configured;
+}
+
+const SMTP_REBUILD_HINT = "rebuild the worker image so EMAIL_PROVIDER=smtp has an SMTP client";
+
+/**
+ * Resolve `nodemailer` once per process. The check is separate from the import
+ * so a pruned image produces this message instead of a bare
+ * `ERR_MODULE_NOT_FOUND` surfacing from inside a BullMQ retry.
+ */
+let smtpModulePromise: Promise<SmtpModule> | undefined;
+
+function loadSmtpModule(): Promise<SmtpModule> {
+  if (smtpModulePromise) {
+    return smtpModulePromise;
+  }
+  const loading = (async (): Promise<SmtpModule> => {
+    if (!isResolvable("nodemailer")) {
+      throw new NonRetryableEmailError(
+        `nodemailer is not resolvable from the worker runtime; ${SMTP_REBUILD_HINT}`,
+        { transport: "smtp" },
+      );
+    }
+    try {
+      // A variable specifier keeps this a runtime import: the worker must not
+      // hard-fail at module load when the image trims the package.
+      const specifier = "nodemailer";
+      return (await import(specifier)) as SmtpModule;
+    } catch {
+      // The cause is deliberately dropped: loader errors can echo image paths.
+      throw new NonRetryableEmailError(
+        `nodemailer failed to load in the worker runtime; ${SMTP_REBUILD_HINT}`,
+        { transport: "smtp" },
+      );
+    }
+  })();
+  smtpModulePromise = loading;
+  return loading;
+}
+
+function isResolvable(specifier: string): boolean {
+  try {
+    require.resolve(specifier);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Boot-time gate, called through `createWorkerDependencies`. It resolves the
+ * package path only; `nodemailer` itself is imported on the first SMTP send.
+ */
+export function assertSmtpClientAvailable(): void {
+  const configured = process.env.EMAIL_PROVIDER?.trim().toLowerCase() || "smtp";
+  if (configured !== "smtp" || isResolvable("nodemailer")) {
+    return;
+  }
+  throw new NonRetryableEmailError(
+    `nodemailer is not resolvable from the worker runtime; ${SMTP_REBUILD_HINT}`,
+    { transport: "smtp" },
+  );
+}
+
+/** Transport-level failures worth another attempt. */
+const RETRYABLE_SMTP_CODES = new Set([
+  "ECONNECTION",
+  "ETIMEDOUT",
+  "ESOCKET",
+  "EAI_AGAIN",
+  "EPIPE",
+  "ECONNRESET",
+  "EDNS",
+  "ETLS",
+]);
+
+/** Answers that repeat identically until configuration or content changes. */
+const PERMANENT_SMTP_CODES = new Set(["EAUTH", "EENVELOPE", "EMESSAGE", "ECONFIG"]);
+
+interface SmtpFailure {
+  retryable: boolean;
+  code?: string;
+  status?: number;
+}
+
+function classifySmtpFailure(error: unknown): SmtpFailure {
+  const failure = (typeof error === "object" && error !== null ? error : {}) as {
+    code?: unknown;
+    responseCode?: unknown;
+  };
+  const code =
+    typeof failure.code === "string" && failure.code.trim()
+      ? failure.code.trim().slice(0, 64)
+      : undefined;
+  const status =
+    typeof failure.responseCode === "number" && Number.isFinite(failure.responseCode)
+      ? failure.responseCode
+      : undefined;
+
+  if (code !== undefined && PERMANENT_SMTP_CODES.has(code)) {
+    return { retryable: false, code, status };
+  }
+  if (code !== undefined && RETRYABLE_SMTP_CODES.has(code)) {
+    return { retryable: true, code, status };
+  }
+  if (status !== undefined) {
+    // A 4xx reply is a relay policy answer; a 5xx reply is the relay itself.
+    return { retryable: !(status >= 400 && status < 500), code, status };
+  }
+  // Unclassified failures stay retryable: permanent only when proven permanent.
+  return { retryable: true, code };
+}
+
+/** SMTP reply code from `info.response`; only the leading digits are kept. */
+function smtpReplyCode(response: unknown): number | undefined {
+  if (typeof response !== "string") {
+    return undefined;
+  }
+  const match = /^(\d{3})\b/u.exec(response.trim());
+  const raw = match?.[1];
+  return raw === undefined ? undefined : Number(raw);
+}
+
+function smtpHost(): string {
+  const host = process.env.SMTP_HOST?.trim();
+  if (!host) {
+    throw new NonRetryableEmailError(
+      "SMTP_HOST is required to send worker email when EMAIL_PROVIDER=smtp",
+      { transport: "smtp" },
+    );
+  }
+  return host;
+}
+
+function smtpPort(): number {
+  const configured = process.env.SMTP_PORT?.trim();
+  if (!configured) {
+    return 587;
+  }
+  const port = Number.parseInt(configured, 10);
+  if (!/^\d{1,5}$/u.test(configured) || port <= 0 || port > 65_535) {
+    throw new NonRetryableEmailError(
+      "SMTP_PORT must be an integer between 1 and 65535 when EMAIL_PROVIDER=smtp",
+      { transport: "smtp" },
+    );
+  }
+  return port;
+}
+
+async function sendViaSmtp(
+  message: Parameters<EmailSender>[0],
+  logger?: WorkerLoggerLike,
+): Promise<{ providerId: string }> {
+  const host = smtpHost();
+  const port = smtpPort();
+  const user = process.env.SMTP_USER?.trim();
+  const password = process.env.SMTP_PASSWORD ?? "";
+  const from = senderAddress();
+  const smtp = await loadSmtpModule();
+
+  const transport = smtp.createTransport({
+    host,
+    port,
+    // 465 is implicit TLS; 587 and every other port negotiate STARTTLS.
+    secure: port === 465,
+    // Anonymous relays exist, so auth is only sent when a username is set.
+    ...(user ? { auth: { user, pass: password } } : {}),
+  });
+
+  let info: { messageId?: string; response?: string };
+  try {
+    info = await transport.sendMail({
+      from,
+      to: message.to,
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+      headers: { "X-Roamlog-Idempotency-Key": message.idempotencyKey },
+    });
+  } catch (error) {
+    const failure = classifySmtpFailure(error);
+    // Only the SMTP code or reply class travels onward: nodemailer responses
+    // can echo the recipient address and the email job persists error.message.
+    const reason = failure.code ?? (failure.status === undefined ? "" : `status ${failure.status}`);
+    const text = reason
+      ? `SMTP relay rejected the message (${reason})`
+      : "SMTP relay rejected the message";
+    logger?.warn(
+      { event: "email.rejected", transport: "smtp", status: failure.status },
+      "email rejected by smtp relay",
+    );
+    throw failure.retryable
+      ? new EmailDeliveryError(text, { transport: "smtp", status: failure.status })
+      : new NonRetryableEmailError(text, { transport: "smtp", status: failure.status });
+  }
+
+  const providerId = info.messageId || message.idempotencyKey;
+  logger?.info(
+    {
+      event: "email.sent",
+      transport: "smtp",
+      status: smtpReplyCode(info.response),
+      providerId,
+    },
+    "email delivered",
+  );
+  return { providerId };
 }
 
 async function sendViaMailpit(
@@ -451,12 +674,7 @@ export function createEmailSender(logger?: WorkerLoggerLike): EmailSender {
     }
 
     if (transport === "smtp") {
-      // No SMTP client in the worker image, and adding one is a dependency
-      // decision. Worker mail must use Resend unless that is approved.
-      throw new NonRetryableEmailError(
-        "EMAIL_PROVIDER=smtp is not supported by the worker image; use EMAIL_PROVIDER=resend for worker mail or send through the API",
-        { transport: "smtp" },
-      );
+      return sendViaSmtp(message, logger);
     }
 
     return sendViaResend(message, logger);

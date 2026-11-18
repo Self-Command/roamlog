@@ -48,6 +48,70 @@ function createDeps(overrides: Partial<WorkerDependencies> & { db?: any } = {}):
   };
 }
 
+function contextWithWarn(warn: ProcessorContext["logger"]["warn"]): ProcessorContext {
+  return {
+    queue: "export",
+    jobId: "export-job",
+    logger: {
+      debug: () => undefined,
+      info: () => undefined,
+      warn,
+      error: () => undefined,
+    },
+  };
+}
+
+function exportRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "x1",
+    workspaceId: "w1",
+    tripId: "t1",
+    requestedById: "u1",
+    scope: "trip",
+    format: "zip",
+    includeComments: false,
+    includeExpenses: false,
+    includeMedia: false,
+    status: "queued",
+    storageKey: null,
+    error: null,
+    expiresAt: null,
+    createdAt: NOW,
+    completedAt: null,
+    ...overrides,
+  };
+}
+
+function exportDatabase(
+  record: Record<string, unknown>,
+  auditCreate: ReturnType<typeof vi.fn> = vi.fn(async () => undefined),
+): { db: Record<string, unknown>; updateMany: ReturnType<typeof vi.fn> } {
+  const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+  return {
+    updateMany,
+    db: {
+      export: { findFirst: vi.fn().mockResolvedValue(record), updateMany },
+      trip: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "t1",
+          title: "首尔，慢一点",
+          workspaceId: "w1",
+        }),
+      },
+      journalEntry: { findMany: vi.fn().mockResolvedValue([]) },
+      comment: { findMany: vi.fn().mockResolvedValue([]) },
+      itineraryItem: { findMany: vi.fn().mockResolvedValue([]) },
+      expense: { findMany: vi.fn().mockResolvedValue([]) },
+      packingItem: { findMany: vi.fn().mockResolvedValue([]) },
+      media: { findMany: vi.fn().mockResolvedValue([]) },
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ email: "owner@roamlog.test", name: "Owner" }),
+      },
+      auditLog: { create: auditCreate },
+    },
+  };
+}
+
 describe("worker media jobs", () => {
   it("verifies magic bytes before processing", () => {
     expect(detectImageMime(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]))).toBe("image/jpeg");
@@ -238,6 +302,86 @@ describe("worker export jobs", () => {
     expect(result.status).toBe("expired");
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "expired" }) }),
+    );
+  });
+
+  it("keeps the export ready when the notification email fails", async () => {
+    const auditCreate = vi.fn(async () => undefined);
+    const emailSend = vi.fn().mockRejectedValue(
+      Object.assign(new Error("Invalid login for owner@roamlog.test"), {
+        code: "EAUTH",
+      }),
+    );
+    const warn = vi.fn();
+    const { db, updateMany } = exportDatabase(exportRecord(), auditCreate);
+    const deps = createDeps({ db, email: { send: emailSend, render: vi.fn() } });
+
+    const result = await handleExportJob(
+      { exportId: "x1", workspaceId: "w1" },
+      contextWithWarn(warn),
+      deps,
+    );
+
+    expect(result).toEqual({ status: "ready", exportId: "x1" });
+    expect(deps.storage.putObject).toHaveBeenCalledTimes(1);
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "ready" }) }),
+    );
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "export.completed",
+          targetId: "x1",
+          workspaceId: "w1",
+        }),
+      }),
+    );
+    expect(warn).toHaveBeenCalledTimes(1);
+    const logged = warn.mock.calls[0]?.[0];
+    expect(logged).toMatchObject({ exportId: "x1", errorCode: "EAUTH" });
+    expect(JSON.stringify(logged)).not.toContain("owner@roamlog.test");
+    expect(JSON.stringify(logged)).not.toContain("Invalid login");
+  });
+
+  it("names the failure class when the notification error carries no code", async () => {
+    const warn = vi.fn();
+    const { db } = exportDatabase(exportRecord());
+    const deps = createDeps({
+      db,
+      email: { send: vi.fn().mockRejectedValue(new Error("relay exploded")), render: vi.fn() },
+    });
+
+    await expect(
+      handleExportJob({ exportId: "x1", workspaceId: "w1" }, contextWithWarn(warn), deps),
+    ).resolves.toEqual({ status: "ready", exportId: "x1" });
+
+    expect(warn.mock.calls[0]?.[0]).toMatchObject({ exportId: "x1", errorCode: "Error" });
+  });
+
+  it("keeps storage failures fatal so a missing archive never reports success", async () => {
+    const { db, updateMany } = exportDatabase(exportRecord());
+    const deps = createDeps({ db });
+    vi.mocked(deps.storage.putObject).mockRejectedValue(new Error("S3 putObject failed"));
+
+    await expect(
+      handleExportJob({ exportId: "x1", workspaceId: "w1" }, contextWithWarn(vi.fn()), deps),
+    ).rejects.toThrow("S3 putObject failed");
+    expect(updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "failed" }) }),
+    );
+  });
+
+  it("keeps audit write failures fatal", async () => {
+    const auditCreate = vi.fn().mockRejectedValue(new Error("audit insert failed"));
+    const { db, updateMany } = exportDatabase(exportRecord(), auditCreate);
+    const deps = createDeps({ db });
+
+    await expect(
+      handleExportJob({ exportId: "x1", workspaceId: "w1" }, contextWithWarn(vi.fn()), deps),
+    ).rejects.toThrow("audit insert failed");
+    expect(updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "failed" }) }),
     );
   });
 });

@@ -466,6 +466,9 @@ importers:
       ioredis:
         specifier: 5.11.1
         version: 5.11.1
+      nodemailer:
+        specifier: 10.6.0
+        version: 10.6.0
       pino:
         specifier: 10.4.0
         version: 10.4.0
@@ -476,6 +479,9 @@ importers:
       '@types/node':
         specifier: 24.10.1
         version: 24.10.1
+      '@types/nodemailer':
+        specifier: 8.0.2
+        version: 8.0.2
       tsx:
         specifier: 4.23.15
         version: 4.23.15

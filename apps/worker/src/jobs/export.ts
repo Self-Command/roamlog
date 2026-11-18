@@ -305,18 +305,41 @@ async function tripBundle(
   return { trip, entries, comments, itinerary, expenses, packing, media: mediaRecords, mediaFiles };
 }
 
+const EMAIL_ERROR_CODE_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,47}$/u;
+
+/**
+ * Short, address-free code for the notification warn log. Provider messages are
+ * never used: they can echo the recipient address into the log sink.
+ */
+function emailFailureCode(error: unknown): string {
+  if (typeof error === "object" && error !== null) {
+    const { code, name } = error as { code?: unknown; name?: unknown };
+    if (typeof code === "string" && EMAIL_ERROR_CODE_PATTERN.test(code)) {
+      return code;
+    }
+    if (typeof name === "string" && EMAIL_ERROR_CODE_PATTERN.test(name)) {
+      return name;
+    }
+  }
+  return "EMAIL_NOTIFICATION_FAILED";
+}
+
 async function notifyExportReady(
   record: any,
   deps: WorkerDependencies,
   context: ProcessorContext,
   storageKey: string,
 ): Promise<void> {
-  try {
-    const user = await deps.db.user.findUnique({
-      where: { id: record.requestedById },
-      select: { email: true, name: true },
-    });
-    if (user?.email) {
+  const user = await deps.db.user.findUnique({
+    where: { id: record.requestedById },
+    select: { email: true, name: true },
+  });
+
+  // The archive is already stored and marked ready, so the notification email
+  // is best effort: a mail failure is a warning and must never roll the export
+  // job back to `failed`. Only this block is swallowed.
+  if (user?.email) {
+    try {
       await deps.email.send({
         to: user.email,
         subject: "你的 Roamlog 导出已准备好",
@@ -324,28 +347,31 @@ async function notifyExportReady(
         html: `<p>你的 Roamlog 导出已准备好。</p><p>下载链接将在 7 天后过期。</p>`,
         idempotencyKey: `export-ready-${record.id}`,
       });
+    } catch (error) {
+      context.logger.warn(
+        {
+          jobId: context.jobId,
+          exportId: record.id,
+          errorCode: emailFailureCode(error),
+        },
+        "export ready email failed",
+      );
     }
-    await deps.db.auditLog.create({
-      data: {
-        actorId: record.requestedById,
-        actorType: "user",
-        action: "export.completed",
-        targetType: "export",
-        targetId: record.id,
-        workspaceId: record.workspaceId,
-        metadata: { format: record.format, scope: record.scope },
-      },
-    });
-  } catch (error) {
-    context.logger.warn(
-      {
-        jobId: context.jobId,
-        exportId: record.id,
-        error: error instanceof Error ? error.message : String(error),
-      },
-      "export ready notification failed",
-    );
   }
+
+  // Database writes stay outside the email guard: a failed audit insert is a
+  // real failure and must keep propagating to the job.
+  await deps.db.auditLog.create({
+    data: {
+      actorId: record.requestedById,
+      actorType: "user",
+      action: "export.completed",
+      targetType: "export",
+      targetId: record.id,
+      workspaceId: record.workspaceId,
+      metadata: { format: record.format, scope: record.scope },
+    },
+  });
 }
 
 function journalMarkdown(title: string, entries: readonly any[]): string {

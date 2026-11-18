@@ -3,10 +3,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WorkerLoggerLike } from "../src/jobs/types.js";
 import {
+  assertSmtpClientAvailable,
   createEmailSender,
   EmailDeliveryError,
   NonRetryableEmailError,
 } from "../src/dependencies.js";
+
+/**
+ * The worker loads nodemailer through a runtime import so a pruned image can
+ * fail with a clear message; mocking the package specifier keeps that path real
+ * while replacing the SMTP client.
+ */
+const smtpMock = vi.hoisted(() => {
+  const sendMail = vi.fn();
+  const createTransport = vi.fn((_options: Record<string, unknown>) => ({ sendMail }));
+  return { sendMail, createTransport };
+});
+
+vi.mock("nodemailer", () => ({
+  createTransport: smtpMock.createTransport,
+}));
 
 interface LoggedCall {
   level: "debug" | "info" | "warn" | "error";
@@ -63,6 +79,9 @@ const productionResend = {
 
 beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };
+  smtpMock.sendMail.mockReset();
+  smtpMock.createTransport.mockReset();
+  smtpMock.createTransport.mockImplementation(() => ({ sendMail: smtpMock.sendMail }));
 });
 
 afterEach(() => {
@@ -252,16 +271,20 @@ describe("worker email sender: transport guardrails", () => {
     expect(requestedUrl).toBe("http://mailpit-catcher:8025/api/v1/send");
   });
 
-  it("explains that the worker image has no SMTP client", async () => {
-    configure({ APP_ENV: "production", NODE_ENV: "production", EMAIL_PROVIDER: "smtp" });
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+  it("treats a missing SMTP_HOST as a permanent configuration error", async () => {
+    configure({
+      APP_ENV: "production",
+      NODE_ENV: "production",
+      EMAIL_PROVIDER: "smtp",
+      SMTP_HOST: undefined,
+      SMTP_PORT: "587",
+    });
 
     const error = await createEmailSender()(message).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NonRetryableEmailError);
-    expect((error as Error).message).toContain("not supported by the worker image");
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect((error as Error).message).toContain("SMTP_HOST is required");
+    expect(smtpMock.createTransport).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown provider value", async () => {
@@ -272,5 +295,196 @@ describe("worker email sender: transport guardrails", () => {
 
     expect(error).toBeInstanceOf(NonRetryableEmailError);
     expect((error as Error).message).toContain("Unsupported EMAIL_PROVIDER");
+  });
+});
+
+const smtpBase = {
+  APP_ENV: "staging",
+  NODE_ENV: undefined,
+  EMAIL_PROVIDER: "smtp",
+  EMAIL_FROM: "Roamlog <no-reply@roamlog.app>",
+  SMTP_HOST: "smtp.relay.test",
+  SMTP_PORT: "587",
+  SMTP_USER: "roamlog-relay",
+  SMTP_PASSWORD: "smtp-password-do-not-log",
+} as const;
+
+function transportOptions(): Record<string, unknown> | undefined {
+  return smtpMock.createTransport.mock.calls[0]?.[0];
+}
+
+describe("worker email sender: real SMTP through nodemailer", () => {
+  it("sends over STARTTLS on 587, authenticates, and returns the message id", async () => {
+    configure(smtpBase);
+    smtpMock.sendMail.mockResolvedValue({
+      messageId: "<smtp-1@relay.test>",
+      response: "250 2.0.0 Ok: queued as 4F2A",
+    });
+    const { logger, calls } = createLoggerSpy();
+
+    const result = await createEmailSender(logger)(message);
+
+    expect(result).toEqual({ providerId: "<smtp-1@relay.test>" });
+    expect(smtpMock.createTransport).toHaveBeenCalledTimes(1);
+    expect(transportOptions()).toMatchObject({
+      host: "smtp.relay.test",
+      port: 587,
+      secure: false,
+      auth: { user: "roamlog-relay", pass: "smtp-password-do-not-log" },
+    });
+    expect(smtpMock.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: "Roamlog <no-reply@roamlog.app>",
+        to: message.to,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+        headers: { "X-Roamlog-Idempotency-Key": message.idempotencyKey },
+      }),
+    );
+    expect(calls.at(-1)?.context).toMatchObject({
+      event: "email.sent",
+      transport: "smtp",
+      status: 250,
+      providerId: "<smtp-1@relay.test>",
+    });
+  });
+
+  it("uses implicit TLS on port 465", async () => {
+    configure({ ...smtpBase, SMTP_PORT: "465" });
+    smtpMock.sendMail.mockResolvedValue({ messageId: "<smtp-465@relay.test>" });
+
+    await createEmailSender()(message);
+
+    expect(transportOptions()).toMatchObject({ port: 465, secure: true });
+  });
+
+  it("omits auth for a relay without SMTP_USER", async () => {
+    configure({ ...smtpBase, SMTP_USER: undefined });
+    smtpMock.sendMail.mockResolvedValue({ messageId: "<smtp-anon@relay.test>" });
+
+    await createEmailSender()(message);
+
+    const options = transportOptions();
+    expect(options).toMatchObject({ host: "smtp.relay.test", port: 587, secure: false });
+    expect(options).not.toHaveProperty("auth");
+  });
+
+  it("falls back to the idempotency key when nodemailer returns no message id", async () => {
+    configure(smtpBase);
+    smtpMock.sendMail.mockResolvedValue({});
+
+    await expect(createEmailSender()(message)).resolves.toEqual({
+      providerId: message.idempotencyKey,
+    });
+  });
+
+  it("treats authentication failures as permanent", async () => {
+    configure(smtpBase);
+    smtpMock.sendMail.mockRejectedValue(
+      Object.assign(new Error("Invalid login: 535 5.7.8 username and password not accepted"), {
+        code: "EAUTH",
+        responseCode: 535,
+      }),
+    );
+
+    const error = await createEmailSender()(message).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NonRetryableEmailError);
+    expect(error).toBeInstanceOf(UnrecoverableError);
+    expect((error as NonRetryableEmailError).transport).toBe("smtp");
+    expect((error as NonRetryableEmailError).status).toBe(535);
+  });
+
+  it("treats a rejected envelope as permanent", async () => {
+    configure(smtpBase);
+    smtpMock.sendMail.mockRejectedValue(
+      Object.assign(new Error("Mailbox unavailable"), { code: "EENVELOPE", responseCode: 550 }),
+    );
+
+    const error = await createEmailSender()(message).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NonRetryableEmailError);
+    expect((error as NonRetryableEmailError).status).toBe(550);
+  });
+
+  it("retries connection and timeout failures", async () => {
+    configure(smtpBase);
+
+    for (const code of ["ECONNECTION", "ETIMEDOUT", "ESOCKET", "EAI_AGAIN"]) {
+      smtpMock.sendMail.mockRejectedValue(Object.assign(new Error("socket failure"), { code }));
+      const error = await createEmailSender()(message).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(EmailDeliveryError);
+      expect(error).not.toBeInstanceOf(UnrecoverableError);
+      expect((error as EmailDeliveryError).transport).toBe("smtp");
+    }
+  });
+
+  it("retries relay 5xx replies and rejects relay 4xx replies", async () => {
+    configure(smtpBase);
+
+    smtpMock.sendMail.mockRejectedValue(
+      Object.assign(new Error("Relay busy"), { responseCode: 554 }),
+    );
+    const retryable = await createEmailSender()(message).catch((caught: unknown) => caught);
+    expect(retryable).toBeInstanceOf(EmailDeliveryError);
+    expect(retryable).not.toBeInstanceOf(UnrecoverableError);
+    expect((retryable as EmailDeliveryError).status).toBe(554);
+
+    smtpMock.sendMail.mockRejectedValue(
+      Object.assign(new Error("Policy rejection"), { responseCode: 451 }),
+    );
+    const permanent = await createEmailSender()(message).catch((caught: unknown) => caught);
+    expect(permanent).toBeInstanceOf(NonRetryableEmailError);
+    expect((permanent as NonRetryableEmailError).status).toBe(451);
+  });
+
+  it("never logs or rethrows the password, the recipient, or the relay reply", async () => {
+    configure({ ...smtpBase, SMTP_PASSWORD: "hunter2-smtp-secret" });
+    const relayReply = "535 5.7.8 hunter2-smtp-secret rejected for explorer@roamlog.test";
+    smtpMock.sendMail.mockRejectedValue(
+      Object.assign(new Error(relayReply), { code: "EAUTH", responseCode: 535 }),
+    );
+    const { logger, calls } = createLoggerSpy();
+
+    const error = await createEmailSender(logger)(message).catch((caught: unknown) => caught);
+    const logged = JSON.stringify(calls);
+
+    expect((error as Error).message).not.toContain("hunter2-smtp-secret");
+    expect((error as Error).message).not.toContain(message.to);
+    expect((error as Error).message).not.toContain(relayReply);
+    expect(logged).not.toContain("hunter2-smtp-secret");
+    expect(logged).not.toContain(message.to);
+    expect(logged).not.toContain("5.7.8");
+    expect(calls.at(-1)?.context).toMatchObject({ event: "email.rejected", transport: "smtp" });
+  });
+
+  it("never leaks the password on the success log", async () => {
+    configure({ ...smtpBase, SMTP_PASSWORD: "hunter2-smtp-secret" });
+    smtpMock.sendMail.mockResolvedValue({ messageId: "<smtp-1@relay.test>" });
+    const { logger, calls } = createLoggerSpy();
+
+    await createEmailSender(logger)(message);
+
+    const logged = JSON.stringify(calls);
+    expect(logged).not.toContain("hunter2-smtp-secret");
+    expect(logged).not.toContain(message.to);
+    expect(logged).not.toContain("smtp.relay.test");
+  });
+});
+
+describe("worker email sender: SMTP startup gate", () => {
+  it("passes when nodemailer is resolvable or SMTP is not the configured transport", () => {
+    configure(smtpBase);
+    expect(() => assertSmtpClientAvailable()).not.toThrow();
+
+    configure({ EMAIL_PROVIDER: "resend" });
+    expect(() => assertSmtpClientAvailable()).not.toThrow();
+  });
+
+  it("defaults to SMTP and therefore checks nodemailer when EMAIL_PROVIDER is unset", () => {
+    configure({ EMAIL_PROVIDER: undefined });
+    expect(() => assertSmtpClientAvailable()).not.toThrow();
   });
 });
