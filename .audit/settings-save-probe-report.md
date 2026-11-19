@@ -19,7 +19,7 @@
 
 - `apps/api/src/modules/settings/admin-settings.controller.ts`（PATCH 接入探测闸门、422 契约、逃生阀）
 - `apps/api/src/modules/settings/settings.module.ts`（**必要的 1 个 provider 注册**，见 §7 风险 8；未改既有 providers/exports）
-- `apps/api/src/modules/settings/__tests__/admin-settings.controller.spec.ts`（新增 8 个 save-probe 网关用例，原 12 个保持通过）
+- `apps/api/src/modules/settings/__tests__/admin-settings.controller.spec.ts`（新增 9 个 save-probe 网关用例，原 12 个保持通过）
 
 新增报告：`.audit/settings-save-probe-report.md`（本文件）
 
@@ -99,7 +99,7 @@ $ tsc --noEmit
 ```text
  RUN  v5.1.0 C:/Users/BY9700/Desktop/UI/roamlog/apps/api
 
- ✓ src/modules/settings/__tests__/admin-settings.controller.spec.ts (20 tests)
+ ✓ src/modules/settings/__tests__/admin-settings.controller.spec.ts (21 tests)
  ✓ src/modules/settings/__tests__/settings.service.spec.ts (24 tests)
  ✓ src/modules/settings/__tests__/settings-save-probe.service.spec.ts (17 tests)
  ✓ src/modules/settings/__tests__/limits-settings.consumer.spec.ts (11 tests)
@@ -108,8 +108,8 @@ $ tsc --noEmit
  ✓ src/modules/settings/__tests__/secret-box.spec.ts (7 tests)
 
  Test Files  7 passed (7)
-      Tests  102 passed (102)
-   Duration  9.66s
+      Tests  103 passed (103)
+   Duration  5.34s
 ```
 
 覆盖重点：
@@ -118,6 +118,7 @@ $ tsc --noEmit
 - `storage.endpoint` 改动 → 探测收到**合并后**的 endpoint，且未在请求里出现的 secret 使用库中解密值；outcome 的 JSON 不含该 secret。
 - 探测失败 → 422，`probe.target/code/checks` 正确；**`systemSetting.upsert` 未调用、`audit.record` 未调用**（关键断言）。
 - `mail.smtpHost` 改动 → 探测；失败 422 `CONNECTION_FAILED`。
+- 无关键 + 两层都没有 storage 凭证 → HTTP 422 `probe.code=MISSING_CREDENTIALS`，且 `executeStorageProbe` 未被调用（无凭证不打网络）。
 - secret 未提供但库里有 → 探测参数里的 `password` 等于解密后的库值；响应 JSON 不含明文。
 - secret 两层都没有 → 422 `MISSING_CREDENTIALS`，且未发起发送。
 - 探测实现抛异常 → 422 `PROBE_UNAVAILABLE`，异常原文不回显，且不落库/不审计。
@@ -127,17 +128,48 @@ $ tsc --noEmit
 
 ### 3.3 `pnpm --filter @roamlog/api test`（全量）
 
+**第一次全量（15:34，并行 trips 改动尚未落地）——全绿：**
+
 ```text
- ✓ src/modules/settings/__tests__/settings-save-probe.service.spec.ts (17 tests)
- ✓ src/modules/settings/__tests__/admin-settings.controller.spec.ts (20 tests)
- ✓ src/modules/settings/__tests__/settings.service.spec.ts (24 tests)
- ...
  Test Files  113 passed | 7 skipped (120)
       Tests  883 passed | 16 skipped (899)
    Duration  147.03s
 ```
 
-全量 **0 失败**，没有被并行改动污染，因此无需“污染归属”说明。7 个 skipped 为需要 `ROAMLOG_TEST_DATABASE_URL` 的集成套件（与本次改动无关，原本即 skip）。
+（其中 `settings-save-probe.service.spec.ts` 17 tests、`admin-settings.controller.spec.ts` 20 tests 全绿；该次运行后 controller spec 又补了 1 个 `MISSING_CREDENTIALS` HTTP 用例，见 3.2 的最终 103/103。）
+
+**最终全量（15:45，被并行改动污染）——仅 1 个无关套件失败：**
+
+```text
+ FAIL  test/trip-origin.e2e-spec.ts > trip origin normalization > creates a trip with a normalized origin when the optional field is omitted
+       AssertionError: expected 500 to be 201
+ FAIL  test/trip-origin.e2e-spec.ts > trip origin normalization > trims a supplied origin before storing it
+       AssertionError: expected 500 to be 201
+
+ Test Files  1 failed | 113 passed | 7 skipped (121)
+      Tests  2 failed | 893 passed | 16 skipped (911)
+   Duration  144.98s
+```
+
+污染归属证据：
+
+```text
+$ git status --short apps/api/src/modules/trips
+ M apps/api/src/modules/trips/__tests__/trips-origin-address.spec.ts
+ M apps/api/src/modules/trips/__tests__/trips-origin-location.spec.ts
+ M apps/api/src/modules/trips/content-presenters.ts
+ M apps/api/src/modules/trips/content-records.ts
+ M apps/api/src/modules/trips/trips.repository.ts
+ M apps/api/src/modules/trips/trips.service.ts
+?? apps/api/src/modules/trips/__tests__/trips-destinations.spec.ts
+```
+
+- 这些 `modules/trips/**` 改动**不在我的提交里**（本任务未触碰 trips），且第一次全量（我的代码已包含）时该套件是绿的；
+- 单独重跑 `vitest run test/trip-origin.e2e-spec.ts` 仍稳定 2 failed（500），与 settings 无关；
+- 失败输出按任务要求过滤：`... 2>&1 | grep -cE "modules/settings"` → **0**；
+- 同一最终全量中 7 个 settings 套件全部通过；随后单独重跑 `src/modules/settings` 为 **103/103 green**（见 3.2）。
+
+7 个 skipped 为需要 `ROAMLOG_TEST_DATABASE_URL` 的集成套件（与本次改动无关，原本即 skip）。
 
 ### 3.4 真实联调（PG 55444 + SMTP sink 1025 + 独立 API 4260）
 

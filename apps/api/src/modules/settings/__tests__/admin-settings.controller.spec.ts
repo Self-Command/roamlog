@@ -153,8 +153,10 @@ async function createApp(options: { user?: AuthenticatedActorUser }) {
       publicEndpoint: "http://127.0.0.1:19999",
       bucket: "roamlog-probe",
       region: "us-east-1",
-      accessKey: "test-access-key",
-      secretKey: "test-secret-key",
+      // Left empty on purpose: the storage tests receive credentials from the
+      // S3_* environment unless a test stubs them away.
+      accessKey: "",
+      secretKey: "",
       forcePathStyle: true,
       signedUrlTtlSeconds: 900,
     },
@@ -504,6 +506,31 @@ describe("admin settings save probe gate", () => {
       probe: { target: "mail", code: "CONNECTION_FAILED", checks: [] },
     });
     expect(JSON.stringify(response.body)).not.toContain(STORED_PASSWORD);
+    expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it("rejects a storage change with 422 MISSING_CREDENTIALS when no layer holds a secret", async () => {
+    const { app, prisma, audit } = await createApp({ user: superAdmin });
+    vi.stubEnv("S3_ACCESS_KEY", "");
+    vi.stubEnv("S3_SECRET_KEY", "");
+    const storageProbe = vi.spyOn(probeInternals(app), "executeStorageProbe").mockResolvedValue({
+      ok: true,
+      checks: [],
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .send({ updates: [{ key: "storage.endpoint", value: "http://127.0.0.1:19999" }] })
+      .expect(422);
+
+    expect(response.body).toMatchObject({
+      status: 422,
+      code: "SETTINGS_PROBE_FAILED",
+      probe: { target: "storage", code: "MISSING_CREDENTIALS", checks: [] },
+    });
+    // No network probe without credentials, and no write/audit.
+    expect(storageProbe).not.toHaveBeenCalled();
     expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
     expect(audit.record).not.toHaveBeenCalled();
   });
