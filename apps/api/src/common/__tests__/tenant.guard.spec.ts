@@ -75,10 +75,12 @@ describe("SessionGuard and tenant guards", () => {
     const access = {
       requireMembership: vi.fn().mockResolvedValue(membership("viewer")),
     };
+    const tripParticipantRole = { canActivate: vi.fn().mockResolvedValue(true) };
     return {
       auth,
       prisma,
       access,
+      tripParticipantRole,
       session: new SessionGuard(auth as never, prisma as never),
       verified: new VerifiedEmailGuard(),
     };
@@ -97,11 +99,16 @@ describe("SessionGuard and tenant guards", () => {
   });
 
   it("returns 404 when a valid Workspace UUID belongs to another tenant", async () => {
-    const { session, access } = setup();
+    const { session, access, tripParticipantRole } = setup();
     access.requireMembership.mockRejectedValueOnce(
       new NotFoundException({ code: "WORKSPACE_NOT_FOUND", message: "Workspace not found" }),
     );
-    const tenant = new TenantGuard(session, new VerifiedEmailGuard(), access as never);
+    const tenant = new TenantGuard(
+      session,
+      new VerifiedEmailGuard(),
+      access as never,
+      tripParticipantRole as never,
+    );
 
     await expect(
       tenant.canActivate(contextFor({ params: { workspaceId: WORKSPACE_B_ID } })),
@@ -109,9 +116,14 @@ describe("SessionGuard and tenant guards", () => {
   });
 
   it("blocks a Viewer from writing through RolesGuard", async () => {
-    const { session, access } = setup(makeUserRecord(USER_VIEWER_ID));
+    const { session, access, tripParticipantRole } = setup(makeUserRecord(USER_VIEWER_ID));
     access.requireMembership.mockResolvedValue(membership("viewer"));
-    const tenant = new TenantGuard(session, new VerifiedEmailGuard(), access as never);
+    const tenant = new TenantGuard(
+      session,
+      new VerifiedEmailGuard(),
+      access as never,
+      tripParticipantRole as never,
+    );
     const roles = new RolesGuard();
     const context = contextFor({}, { action: "workspace:update", resource: "workspace" });
 
@@ -120,9 +132,14 @@ describe("SessionGuard and tenant guards", () => {
   });
 
   it("allows an Admin to update Workspace settings but not transfer ownership", async () => {
-    const { session, access } = setup(makeUserRecord(USER_ADMIN_ID));
+    const { session, access, tripParticipantRole } = setup(makeUserRecord(USER_ADMIN_ID));
     access.requireMembership.mockResolvedValue(membership("admin"));
-    const tenant = new TenantGuard(session, new VerifiedEmailGuard(), access as never);
+    const tenant = new TenantGuard(
+      session,
+      new VerifiedEmailGuard(),
+      access as never,
+      tripParticipantRole as never,
+    );
     const roles = new RolesGuard();
 
     const updateContext = contextFor({}, { action: "workspace:update", resource: "workspace" });

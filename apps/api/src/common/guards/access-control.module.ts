@@ -10,6 +10,7 @@ import { WorkspaceAccessService } from "../services/workspace-access.service.js"
 import { RolesGuard } from "./roles.guard.js";
 import { SessionGuard } from "./session.guard.js";
 import { TenantGuard } from "./tenant.guard.js";
+import { TripParticipantRoleGuard } from "./trip-participant-role.guard.js";
 import { VerifiedEmailGuard } from "./verified-email.guard.js";
 
 @Global()
@@ -26,6 +27,7 @@ import { VerifiedEmailGuard } from "./verified-email.guard.js";
     SessionGuard,
     VerifiedEmailGuard,
     TenantGuard,
+    TripParticipantRoleGuard,
     RolesGuard,
   ],
   exports: [
@@ -36,6 +38,7 @@ import { VerifiedEmailGuard } from "./verified-email.guard.js";
     SessionGuard,
     VerifiedEmailGuard,
     TenantGuard,
+    TripParticipantRoleGuard,
     RolesGuard,
   ],
 })
