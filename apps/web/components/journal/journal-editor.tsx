@@ -19,6 +19,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  Loader2,
   Pilcrow,
   Quote,
   Redo2,
@@ -28,18 +29,18 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { JsonObject } from "@roamlog/contracts";
 import { Button, Input } from "@roamlog/ui";
 
-const IMAGE_PLACEHOLDER =
-  "data:image/svg+xml;charset=utf-8," +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><rect width="960" height="540" fill="#111113"/><path d="M0 0h960v540H0z" fill="none" stroke="#2a2a2e"/><text x="480" y="260" fill="#8b8b90" font-family="monospace" font-size="22" text-anchor="middle">IMAGE PLACEHOLDER</text><text x="480" y="292" fill="#5e5e64" font-family="monospace" font-size="13" text-anchor="middle">replace with an uploaded photo</text></svg>',
-  );
+import { COVER_ACCEPT_ATTRIBUTE, type CoverMediaClient } from "@/lib/api/media";
 
 import { JournalAiRewrite, type JournalAiRewriteProps } from "./journal-ai-rewrite";
+import {
+  journalImageUploadErrorMessage,
+  uploadJournalImage,
+} from "./journal-image-upload";
 
 export interface JournalEditorValue {
   contentJson: JsonObject;
@@ -60,6 +61,12 @@ interface JournalEditorProps {
    * sheet having to thread a ref.
    */
   aiRewrite?: Omit<JournalAiRewriteProps, "editor">;
+  /** Workspace that owns the uploaded media (presign is workspace-scoped). */
+  workspaceId?: string | null;
+  /** Optional trip association for the uploaded media row. */
+  tripId?: string | null;
+  /** Test seam; production uses the generated media client. */
+  imageUploadClient?: CoverMediaClient;
 }
 
 interface ToolbarButtonProps {
@@ -102,9 +109,23 @@ export function JournalEditor({
   ariaLabel = "日志正文",
   className,
   aiRewrite,
+  workspaceId,
+  tripId,
+  imageUploadClient,
 }: JournalEditorProps) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const imageUploadAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      imageUploadAbortRef.current?.abort();
+      imageUploadAbortRef.current = null;
+    };
+  }, []);
   const editor = useEditor({
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
@@ -119,7 +140,9 @@ export function JournalEditor({
           linkOnPaste: true,
         },
       }),
-      Image.configure({ inline: false, allowBase64: true }),
+      // Journal images are uploaded media URLs; base64 placeholders are not a
+      // valid image source anymore (the old fake-image button used one).
+      Image.configure({ inline: false, allowBase64: false }),
       Placeholder.configure({ placeholder }),
       // Ported from https://tiptap.dev/docs/editor/extensions/nodes/table (+ /table-row, /table-header, /table-cell).
       Table.configure({ resizable: false, allowTableNodeSelection: true }),
@@ -161,6 +184,48 @@ export function JournalEditor({
     }
     setLinkUrl("");
     setLinkOpen(false);
+  }
+
+  async function handleImageFile(file: File) {
+    if (!editor) return;
+    if (!workspaceId) {
+      setImageError("无法确定所属工作区，暂时不能上传图片。");
+      return;
+    }
+
+    imageUploadAbortRef.current?.abort();
+    const controller = new AbortController();
+    imageUploadAbortRef.current = controller;
+    setImageError(null);
+    setImageUploading(true);
+
+    try {
+      const media = await uploadJournalImage({
+        workspaceId,
+        tripId,
+        file,
+        signal: controller.signal,
+        client: imageUploadClient,
+      });
+      if (controller.signal.aborted || editor.isDestroyed) return;
+      const src = media.url;
+      if (!src) {
+        throw new Error("图片已上传，但服务器没有返回可访问的地址。");
+      }
+      editor
+        .chain()
+        .focus()
+        .insertContent({ type: "image", attrs: { src, alt: file.name } })
+        .run();
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setImageError(journalImageUploadErrorMessage(error));
+    } finally {
+      if (imageUploadAbortRef.current === controller) {
+        imageUploadAbortRef.current = null;
+      }
+      setImageUploading(false);
+    }
   }
 
   if (!editor) {
@@ -314,17 +379,32 @@ export function JournalEditor({
             <Link2Off aria-hidden="true" className="size-4" />
           </ToolbarButton>
           <ToolbarButton
-            label="插入图片占位"
-            onClick={() =>
-              editor
-                .chain()
-                .focus()
-                .setImage({ src: IMAGE_PLACEHOLDER, alt: "图片占位" })
-                .run()
-            }
+            label={imageUploading ? "正在上传图片" : "插入图片"}
+            disabled={imageUploading}
+            onClick={() => {
+              setImageError(null);
+              imageInputRef.current?.click();
+            }}
           >
-            <ImagePlus aria-hidden="true" className="size-4" />
+            {imageUploading ? (
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            ) : (
+              <ImagePlus aria-hidden="true" className="size-4" />
+            )}
           </ToolbarButton>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept={COVER_ACCEPT_ATTRIBUTE}
+            className="hidden"
+            aria-hidden="true"
+            tabIndex={-1}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void handleImageFile(file);
+            }}
+          />
           <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
           <ToolbarButton
             label="撤销"
@@ -348,6 +428,21 @@ export function JournalEditor({
           ) : null}
         </div>
       )}
+
+      {imageUploading || imageError ? (
+        <div className="border-b border-hairline px-3 py-2 text-xs">
+          {imageUploading ? (
+            <p role="status" className="text-muted">
+              正在上传图片…
+            </p>
+          ) : null}
+          {imageError ? (
+            <p role="alert" className="text-accent-red">
+              {imageError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {linkOpen && !readOnly ? (
         <div className="flex items-center gap-2 border-b border-hairline bg-surface-2 px-3 py-2">

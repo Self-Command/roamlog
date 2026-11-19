@@ -602,6 +602,8 @@ export function JournalEditorSheet({
                 }}
                 readOnly={isReadOnly}
                 ariaLabel="日志正文"
+                workspaceId={aiWorkspaceId}
+                tripId={activeTripId || undefined}
                 aiRewrite={{
                   workspaceId: aiWorkspaceId,
                   tripId: activeTripId || undefined,

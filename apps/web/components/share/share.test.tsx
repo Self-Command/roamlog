@@ -191,6 +191,53 @@ describe("ShareArticle", () => {
   });
 });
 
+describe("ShareArticle rich journal content", () => {
+  it("renders uploaded body images without overflow and keeps task-list checked state", () => {
+    const data = buildDemoPublicTrip({ showBudget: false });
+    const imageUrl =
+      "https://signed-media.example.test/tenant/photo.jpg?X-Amz-Expires=900&X-Amz-Signature=body-signature";
+    const contentHtml = [
+      "<p>正文</p>",
+      `<img src="${imageUrl}" alt="旅途照片" width="800" height="600">`,
+      '<ul data-type="taskList">',
+      '<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>带帐篷</p></div></li>',
+      '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>买车票</p></div></li>',
+      "</ul>",
+    ].join("");
+    const withContent = {
+      ...data,
+      entries: data.entries.map((entry, index) =>
+        index === 0 ? { ...entry, contentHtml } : entry,
+      ),
+    };
+
+    const { container } = render(<ShareArticle data={withContent} />);
+
+    const bodyImage = container.querySelector<HTMLImageElement>(
+      `.share-prose img[src="${imageUrl}"]`,
+    );
+    expect(bodyImage).not.toBeNull();
+    expect(bodyImage?.closest(".share-prose")?.className).toContain("[&_img]:max-w-full");
+
+    const checked = container.querySelector<HTMLInputElement>(
+      'li[data-checked="true"] input[type="checkbox"]',
+    );
+    expect(checked).not.toBeNull();
+    expect(checked).toBeChecked();
+    expect(checked).toBeDisabled();
+
+    const unchecked = container.querySelector<HTMLInputElement>(
+      'li[data-checked="false"] input[type="checkbox"]',
+    );
+    expect(unchecked).not.toBeNull();
+    expect(unchecked).not.toBeChecked();
+    expect(unchecked).toBeDisabled();
+
+    expect(screen.getByText("带帐篷")).toBeInTheDocument();
+    expect(screen.getByText("买车票")).toBeInTheDocument();
+  });
+});
+
 type TripCover = NonNullable<PublicTripResponse["trip"]["cover"]>;
 
 const COVER_URL =

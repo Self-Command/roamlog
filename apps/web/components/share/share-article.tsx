@@ -28,6 +28,22 @@ import { PlacesAttribution } from "@/components/map/places-attribution";
 
 import { sanitizePublicHtml } from "./html";
 
+/**
+ * Shared body typography plus the two rich-content structures the public page
+ * previously lost: journal images must never overflow the column, and Tiptap
+ * task lists need their checkbox/checked-state layout outside the editor.
+ */
+const SHARE_PROSE_CLASS = [
+  "share-prose mt-4 max-w-2xl text-[15px] leading-7 text-body",
+  "[&_img]:my-4 [&_img]:block [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-control [&_img]:border [&_img]:border-hairline",
+  "[&_ul[data-type=taskList]]:my-2 [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0",
+  "[&_li[data-type=taskItem]]:my-1 [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:items-start [&_li[data-type=taskItem]]:gap-2",
+  "[&_li[data-type=taskItem]>label]:mt-[3px] [&_li[data-type=taskItem]>label]:flex [&_li[data-type=taskItem]>label]:shrink-0 [&_li[data-type=taskItem]>label]:items-center",
+  "[&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]_p]:my-0",
+  "[&_li[data-type=taskItem]_input[type=checkbox]]:size-[15px] [&_li[data-type=taskItem]_input[type=checkbox]]:accent-accent-blue",
+  "[&_li[data-checked=true]>div]:text-stone [&_li[data-checked=true]>div]:line-through",
+].join(" ");
+
 export function ShareArticle({ data }: { data: PublicTripResponse }) {
   const { trip, stops, entries, media, budget } = data;
   // The public payload now carries the real source of every stored place, so the
@@ -208,7 +224,7 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-muted">{entry.excerpt}</p>
               ) : null}
               <div
-                className="share-prose mt-4 max-w-2xl text-[15px] leading-7 text-body"
+                className={SHARE_PROSE_CLASS}
                 dangerouslySetInnerHTML={{ __html: sanitizePublicHtml(entry.contentHtml) }}
               />
               {entry.media.length ? (

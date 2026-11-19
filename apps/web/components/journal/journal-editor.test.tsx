@@ -32,7 +32,7 @@ describe("JournalEditor", () => {
     expect(screen.getByRole("button", { name: "代码块" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "引用" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "添加链接" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "插入图片占位" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "插入图片" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "任务列表" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "插入表格" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "上方插入行" })).toBeDisabled();
