@@ -60,6 +60,17 @@ export type AdminTripPageItemsItem = {
    */
   originCountryCode: string | null;
   /**
+   * Formatted address of the selected origin place, when one was picked.
+   * @maxLength 400
+   * @nullable
+   */
+  originAddress: string | null;
+  /**
+   * Bounding box as [west, south, east, north].
+   * @nullable
+   */
+  originBbox: [number, number, number, number] | null;
+  /**
    * IANA time zone name, for example Asia/Shanghai.
    * @minLength 1
    * @maxLength 64

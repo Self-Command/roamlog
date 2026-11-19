@@ -24,5 +24,6 @@ import { PLACES_SETTINGS, resolvePlacesSettings } from "./places.settings.js";
     PlacesService,
     PlaceSearchRateLimitGuard,
   ],
+  exports: [PlacesService],
 })
 export class PlacesModule {}

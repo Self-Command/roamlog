@@ -23,6 +23,12 @@ export interface Place {
   name: string;
   /**
    * @minLength 1
+   * @maxLength 500
+   * @nullable
+   */
+  address: string | null;
+  /**
+   * @minLength 1
    * @maxLength 120
    */
   country: string;
@@ -50,5 +56,13 @@ export interface Place {
    * @pattern ^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$
    */
   timeZone: string | null;
+  /** @nullable */
+  bbox: [number, number, number, number] | null;
+  /**
+   * @minimum 0
+   * @maximum 1
+   * @nullable
+   */
+  importance: number | null;
   type: PlaceTypeProperty;
 }

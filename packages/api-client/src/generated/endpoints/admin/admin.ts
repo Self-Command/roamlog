@@ -46,6 +46,7 @@ import type {
   ExportAdminWorkspacesCsvParams,
   FeatureFlag,
   ForceLogoutResponse,
+  GetAdminPermissions200,
   ListAdminAuditParams,
   ListAdminCommentsParams,
   ListAdminEmailsParams,
@@ -63,6 +64,8 @@ import type {
   RetryJobResponse,
   RevealAdminSettingRequest,
   RevealAdminSettingResponse,
+  UpdateAdminPermissions200,
+  UpdateAdminPermissionsBody,
   UpdateAdminSettingsRequest,
   UpdateAdminSettingsResponse,
   UpdateAdminUserRequest,
@@ -114,6 +117,774 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
+export type getAdminPermissionsResponse200 = {
+  data: GetAdminPermissions200;
+  status: 200;
+};
+
+export type getAdminPermissionsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type getAdminPermissionsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type getAdminPermissionsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type getAdminPermissionsResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type getAdminPermissionsResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type getAdminPermissionsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getAdminPermissionsResponseSuccess = getAdminPermissionsResponse200 & {
+  headers: Headers;
+};
+export type getAdminPermissionsResponseError = (
+  | getAdminPermissionsResponse400
+  | getAdminPermissionsResponse401
+  | getAdminPermissionsResponse403
+  | getAdminPermissionsResponse404
+  | getAdminPermissionsResponse429
+  | getAdminPermissionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAdminPermissionsResponse =
+  getAdminPermissionsResponseSuccess | getAdminPermissionsResponseError;
+
+export const getGetAdminPermissionsUrl = () => {
+  return `/v1/admin/permissions`;
+};
+
+/**
+ * Roles and actions are derived from the code matrix merged with stored overrides; actions marked grantable=false cannot be changed through the API.
+ * @summary Read the platform permission matrix
+ */
+export const getAdminPermissions = async (
+  options?: RequestInit,
+): Promise<getAdminPermissionsResponse> => {
+  const res = await fetch(getGetAdminPermissionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAdminPermissionsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getAdminPermissionsResponse;
+};
+
+export const getGetAdminPermissionsQueryKey = () => {
+  return [`/v1/admin/permissions`] as const;
+};
+
+export const getGetAdminPermissionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminPermissions>>,
+  TError = ProblemDetails,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminPermissions>>, TError, TData>>;
+  fetch?: RequestInit;
+}) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminPermissionsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminPermissions>>> = ({ signal }) =>
+    getAdminPermissions({ signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPermissions>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetAdminPermissionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminPermissions>>
+>;
+export type GetAdminPermissionsQueryError = ProblemDetails;
+
+/**
+ * Roles and actions are derived from the code matrix merged with stored overrides; actions marked grantable=false cannot be changed through the API.
+ * @summary Read the platform permission matrix
+ */
+export function useGetAdminPermissions<
+  TData = Awaited<ReturnType<typeof getAdminPermissions>>,
+  TError = ProblemDetails,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getAdminPermissions>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminPermissions>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminPermissions>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Roles and actions are derived from the code matrix merged with stored overrides; actions marked grantable=false cannot be changed through the API.
+ * @summary Read the platform permission matrix
+ */
+export function useGetAdminPermissions<
+  TData = Awaited<ReturnType<typeof getAdminPermissions>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getAdminPermissions>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminPermissions>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminPermissions>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Roles and actions are derived from the code matrix merged with stored overrides; actions marked grantable=false cannot be changed through the API.
+ * @summary Read the platform permission matrix
+ */
+export function useGetAdminPermissions<
+  TData = Awaited<ReturnType<typeof getAdminPermissions>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getAdminPermissions>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Roles and actions are derived from the code matrix merged with stored overrides; actions marked grantable=false cannot be changed through the API.
+ * @summary Read the platform permission matrix
+ */
+export function useGetAdminPermissions<
+  TData = Awaited<ReturnType<typeof getAdminPermissions>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getAdminPermissions>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetAdminPermissionsQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type updateAdminPermissionsResponse200 = {
+  data: UpdateAdminPermissions200;
+  status: 200;
+};
+
+export type updateAdminPermissionsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateAdminPermissionsResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type updateAdminPermissionsResponseSuccess = updateAdminPermissionsResponse200 & {
+  headers: Headers;
+};
+export type updateAdminPermissionsResponseError = (
+  updateAdminPermissionsResponse403 | updateAdminPermissionsResponse422
+) & {
+  headers: Headers;
+};
+
+export type updateAdminPermissionsResponse =
+  updateAdminPermissionsResponseSuccess | updateAdminPermissionsResponseError;
+
+export const getUpdateAdminPermissionsUrl = () => {
+  return `/v1/admin/permissions`;
+};
+
+/**
+ * @summary Update grantable platform permissions
+ */
+export const updateAdminPermissions = async (
+  updateAdminPermissionsBody: UpdateAdminPermissionsBody,
+  options?: RequestInit,
+): Promise<updateAdminPermissionsResponse> => {
+  const res = await fetch(getUpdateAdminPermissionsUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateAdminPermissionsBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAdminPermissionsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateAdminPermissionsResponse;
+};
+
+export const getUpdateAdminPermissionsMutationKey = () => ["updateAdminPermissions"] as const;
+
+export const getUpdateAdminPermissionsMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminPermissions>>,
+    TError,
+    UpdateAdminPermissionsMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAdminPermissions>>,
+  TError,
+  UpdateAdminPermissionsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateAdminPermissionsMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAdminPermissions>>,
+    UpdateAdminPermissionsMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateAdminPermissions(data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAdminPermissionsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAdminPermissions>>
+>;
+export type UpdateAdminPermissionsMutationBody = UpdateAdminPermissionsBody;
+export type UpdateAdminPermissionsMutationError = ProblemDetails;
+export type UpdateAdminPermissionsMutationVariables = { data: UpdateAdminPermissionsBody };
+
+/** @summary Update grantable platform permissions */
+export const useUpdateAdminPermissions = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateAdminPermissions>>,
+      TError,
+      UpdateAdminPermissionsMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateAdminPermissions>>,
+  TError,
+  UpdateAdminPermissionsMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateAdminPermissionsMutationOptions(options), queryClient);
+};
+export type updateAdminUserResponse200 = {
+  data: AdminUserDetail;
+  status: 200;
+};
+
+export type updateAdminUserResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type updateAdminUserResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type updateAdminUserResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateAdminUserResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type updateAdminUserResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type updateAdminUserResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type updateAdminUserResponseSuccess = updateAdminUserResponse200 & {
+  headers: Headers;
+};
+export type updateAdminUserResponseError = (
+  | updateAdminUserResponse400
+  | updateAdminUserResponse401
+  | updateAdminUserResponse403
+  | updateAdminUserResponse404
+  | updateAdminUserResponse429
+  | updateAdminUserResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateAdminUserResponse = updateAdminUserResponseSuccess | updateAdminUserResponseError;
+
+export const getUpdateAdminUserUrl = (id: string) => {
+  return `/v1/admin/users/${id}`;
+};
+
+/**
+ * @summary Update user status or platform role
+ */
+export const updateAdminUser = async (
+  id: string,
+  updateAdminUserRequest: UpdateAdminUserRequest,
+  options?: RequestInit,
+): Promise<updateAdminUserResponse> => {
+  const res = await fetch(getUpdateAdminUserUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateAdminUserRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAdminUserResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateAdminUserResponse;
+};
+
+export const getUpdateAdminUserMutationKey = () => ["updateAdminUser"] as const;
+
+export const getUpdateAdminUserMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminUser>>,
+    TError,
+    UpdateAdminUserMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAdminUser>>,
+  TError,
+  UpdateAdminUserMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateAdminUserMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAdminUser>>,
+    UpdateAdminUserMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateAdminUser(id, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAdminUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAdminUser>>
+>;
+export type UpdateAdminUserMutationBody = UpdateAdminUserRequest;
+export type UpdateAdminUserMutationError = ProblemDetails;
+export type UpdateAdminUserMutationVariables = { id: string; data: UpdateAdminUserRequest };
+
+/** @summary Update user status or platform role */
+export const useUpdateAdminUser = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateAdminUser>>,
+      TError,
+      UpdateAdminUserMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateAdminUser>>,
+  TError,
+  UpdateAdminUserMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateAdminUserMutationOptions(options), queryClient);
+};
+export type getAdminUserResponse200 = {
+  data: AdminUserDetail;
+  status: 200;
+};
+
+export type getAdminUserResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type getAdminUserResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type getAdminUserResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type getAdminUserResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type getAdminUserResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type getAdminUserResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getAdminUserResponseSuccess = getAdminUserResponse200 & {
+  headers: Headers;
+};
+export type getAdminUserResponseError = (
+  | getAdminUserResponse400
+  | getAdminUserResponse401
+  | getAdminUserResponse403
+  | getAdminUserResponse404
+  | getAdminUserResponse429
+  | getAdminUserResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAdminUserResponse = getAdminUserResponseSuccess | getAdminUserResponseError;
+
+export const getGetAdminUserUrl = (id: string) => {
+  return `/v1/admin/users/${id}`;
+};
+
+/**
+ * @summary Get a platform user
+ */
+export const getAdminUser = async (
+  id: string,
+  options?: RequestInit,
+): Promise<getAdminUserResponse> => {
+  const res = await fetch(getGetAdminUserUrl(id), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAdminUserResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getAdminUserResponse;
+};
+
+export const getGetAdminUserQueryKey = (id: string) => {
+  return [`/v1/admin/users/${id}`] as const;
+};
+
+export const getGetAdminUserQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminUser>>,
+  TError = ProblemDetails,
+>(
+  id: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminUserQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminUser>>> = ({ signal }) =>
+    getAdminUser(id, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetAdminUserQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminUser>>>;
+export type GetAdminUserQueryError = ProblemDetails;
+
+/** @summary Get a platform user */
+export function useGetAdminUser<
+  TData = Awaited<ReturnType<typeof getAdminUser>>,
+  TError = ProblemDetails,
+>(
+  id: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminUser>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminUser>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get a platform user */
+export function useGetAdminUser<
+  TData = Awaited<ReturnType<typeof getAdminUser>>,
+  TError = ProblemDetails,
+>(
+  id: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminUser>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminUser>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get a platform user */
+export function useGetAdminUser<
+  TData = Awaited<ReturnType<typeof getAdminUser>>,
+  TError = ProblemDetails,
+>(
+  id: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get a platform user */
+export function useGetAdminUser<
+  TData = Awaited<ReturnType<typeof getAdminUser>>,
+  TError = ProblemDetails,
+>(
+  id: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetAdminUserQueryOptions(id, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type deleteAdminUserResponse200 = {
+  data: MessageResponse;
+  status: 200;
+};
+
+export type deleteAdminUserResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type deleteAdminUserResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type deleteAdminUserResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type deleteAdminUserResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type deleteAdminUserResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type deleteAdminUserResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type deleteAdminUserResponseSuccess = deleteAdminUserResponse200 & {
+  headers: Headers;
+};
+export type deleteAdminUserResponseError = (
+  | deleteAdminUserResponse400
+  | deleteAdminUserResponse401
+  | deleteAdminUserResponse403
+  | deleteAdminUserResponse404
+  | deleteAdminUserResponse429
+  | deleteAdminUserResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteAdminUserResponse = deleteAdminUserResponseSuccess | deleteAdminUserResponseError;
+
+export const getDeleteAdminUserUrl = (id: string) => {
+  return `/v1/admin/users/${id}`;
+};
+
+/**
+ * @summary Soft-delete a user
+ */
+export const deleteAdminUser = async (
+  id: string,
+  options?: RequestInit,
+): Promise<deleteAdminUserResponse> => {
+  const res = await fetch(getDeleteAdminUserUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAdminUserResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as deleteAdminUserResponse;
+};
+
+export const getDeleteAdminUserMutationKey = () => ["deleteAdminUser"] as const;
+
+export const getDeleteAdminUserMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAdminUser>>,
+    TError,
+    DeleteAdminUserMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAdminUser>>,
+  TError,
+  DeleteAdminUserMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteAdminUserMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAdminUser>>,
+    DeleteAdminUserMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteAdminUser(id, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAdminUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAdminUser>>
+>;
+
+export type DeleteAdminUserMutationError = ProblemDetails;
+export type DeleteAdminUserMutationVariables = { id: string };
+
+/** @summary Soft-delete a user */
+export const useDeleteAdminUser = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteAdminUser>>,
+      TError,
+      DeleteAdminUserMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAdminUser>>,
+  TError,
+  DeleteAdminUserMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteAdminUserMutationOptions(options), queryClient);
+};
 export type getAdminMetricsResponse200 = {
   data: AdminMetrics;
   status: 200;
@@ -468,465 +1239,6 @@ export function useListAdminUsers<
   return withQueryKey(query, queryOptions.queryKey);
 }
 
-export type getAdminUserResponse200 = {
-  data: AdminUserDetail;
-  status: 200;
-};
-
-export type getAdminUserResponse400 = {
-  data: ProblemDetails;
-  status: 400;
-};
-
-export type getAdminUserResponse401 = {
-  data: ProblemDetails;
-  status: 401;
-};
-
-export type getAdminUserResponse403 = {
-  data: ProblemDetails;
-  status: 403;
-};
-
-export type getAdminUserResponse404 = {
-  data: ProblemDetails;
-  status: 404;
-};
-
-export type getAdminUserResponse429 = {
-  data: ProblemDetails;
-  status: 429;
-};
-
-export type getAdminUserResponse500 = {
-  data: ProblemDetails;
-  status: 500;
-};
-
-export type getAdminUserResponseSuccess = getAdminUserResponse200 & {
-  headers: Headers;
-};
-export type getAdminUserResponseError = (
-  | getAdminUserResponse400
-  | getAdminUserResponse401
-  | getAdminUserResponse403
-  | getAdminUserResponse404
-  | getAdminUserResponse429
-  | getAdminUserResponse500
-) & {
-  headers: Headers;
-};
-
-export type getAdminUserResponse = getAdminUserResponseSuccess | getAdminUserResponseError;
-
-export const getGetAdminUserUrl = (id: string) => {
-  return `/v1/admin/users/${id}`;
-};
-
-/**
- * @summary Get a platform user
- */
-export const getAdminUser = async (
-  id: string,
-  options?: RequestInit,
-): Promise<getAdminUserResponse> => {
-  const res = await fetch(getGetAdminUserUrl(id), {
-    ...options,
-    method: "GET",
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getAdminUserResponse["data"] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as getAdminUserResponse;
-};
-
-export const getGetAdminUserQueryKey = (id: string) => {
-  return [`/v1/admin/users/${id}`] as const;
-};
-
-export const getGetAdminUserQueryOptions = <
-  TData = Awaited<ReturnType<typeof getAdminUser>>,
-  TError = ProblemDetails,
->(
-  id: string,
-  options?: {
-    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>>;
-    fetch?: RequestInit;
-  },
-) => {
-  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
-
-  const queryKey = queryOptions?.queryKey ?? getGetAdminUserQueryKey(id);
-
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminUser>>> = ({ signal }) =>
-    getAdminUser(id, { signal, ...fetchOptions });
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: id !== null && id !== undefined,
-    ...queryOptions,
-  } as UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData> & {
-    queryKey: DataTag<QueryKey, TData, TError>;
-  };
-};
-
-export type GetAdminUserQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminUser>>>;
-export type GetAdminUserQueryError = ProblemDetails;
-
-/** @summary Get a platform user */
-export function useGetAdminUser<
-  TData = Awaited<ReturnType<typeof getAdminUser>>,
-  TError = ProblemDetails,
->(
-  id: string,
-  options: {
-    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>> &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getAdminUser>>,
-          TError,
-          Awaited<ReturnType<typeof getAdminUser>>
-        >,
-        "initialData"
-      >;
-    fetch?: RequestInit;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-/** @summary Get a platform user */
-export function useGetAdminUser<
-  TData = Awaited<ReturnType<typeof getAdminUser>>,
-  TError = ProblemDetails,
->(
-  id: string,
-  options?: {
-    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>> &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getAdminUser>>,
-          TError,
-          Awaited<ReturnType<typeof getAdminUser>>
-        >,
-        "initialData"
-      >;
-    fetch?: RequestInit;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-/** @summary Get a platform user */
-export function useGetAdminUser<
-  TData = Awaited<ReturnType<typeof getAdminUser>>,
-  TError = ProblemDetails,
->(
-  id: string,
-  options?: {
-    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>>;
-    fetch?: RequestInit;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-/** @summary Get a platform user */
-export function useGetAdminUser<
-  TData = Awaited<ReturnType<typeof getAdminUser>>,
-  TError = ProblemDetails,
->(
-  id: string,
-  options?: {
-    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminUser>>, TError, TData>>;
-    fetch?: RequestInit;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-  const queryOptions = getGetAdminUserQueryOptions(id, options);
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
-    queryKey: DataTag<QueryKey, TData, TError>;
-  };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-export type updateAdminUserResponse200 = {
-  data: AdminUserDetail;
-  status: 200;
-};
-
-export type updateAdminUserResponse400 = {
-  data: ProblemDetails;
-  status: 400;
-};
-
-export type updateAdminUserResponse401 = {
-  data: ProblemDetails;
-  status: 401;
-};
-
-export type updateAdminUserResponse403 = {
-  data: ProblemDetails;
-  status: 403;
-};
-
-export type updateAdminUserResponse404 = {
-  data: ProblemDetails;
-  status: 404;
-};
-
-export type updateAdminUserResponse429 = {
-  data: ProblemDetails;
-  status: 429;
-};
-
-export type updateAdminUserResponse500 = {
-  data: ProblemDetails;
-  status: 500;
-};
-
-export type updateAdminUserResponseSuccess = updateAdminUserResponse200 & {
-  headers: Headers;
-};
-export type updateAdminUserResponseError = (
-  | updateAdminUserResponse400
-  | updateAdminUserResponse401
-  | updateAdminUserResponse403
-  | updateAdminUserResponse404
-  | updateAdminUserResponse429
-  | updateAdminUserResponse500
-) & {
-  headers: Headers;
-};
-
-export type updateAdminUserResponse = updateAdminUserResponseSuccess | updateAdminUserResponseError;
-
-export const getUpdateAdminUserUrl = (id: string) => {
-  return `/v1/admin/users/${id}`;
-};
-
-/**
- * @summary Update user status or platform role
- */
-export const updateAdminUser = async (
-  id: string,
-  updateAdminUserRequest: UpdateAdminUserRequest,
-  options?: RequestInit,
-): Promise<updateAdminUserResponse> => {
-  const res = await fetch(getUpdateAdminUserUrl(id), {
-    ...options,
-    method: "PATCH",
-    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
-    body: JSON.stringify(updateAdminUserRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateAdminUserResponse["data"] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as updateAdminUserResponse;
-};
-
-export const getUpdateAdminUserMutationKey = () => ["updateAdminUser"] as const;
-
-export const getUpdateAdminUserMutationOptions = <
-  TError = ProblemDetails,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updateAdminUser>>,
-    TError,
-    UpdateAdminUserMutationVariables,
-    TContext
-  >;
-  fetch?: RequestInit;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof updateAdminUser>>,
-  TError,
-  UpdateAdminUserMutationVariables,
-  TContext
-> => {
-  const mutationKey = getUpdateAdminUserMutationKey();
-  const { mutation: mutationOptions, fetch: fetchOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, fetch: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof updateAdminUser>>,
-    UpdateAdminUserMutationVariables
-  > = (props) => {
-    const { id, data } = props ?? {};
-
-    return updateAdminUser(id, data, fetchOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type UpdateAdminUserMutationResult = NonNullable<
-  Awaited<ReturnType<typeof updateAdminUser>>
->;
-export type UpdateAdminUserMutationBody = UpdateAdminUserRequest;
-export type UpdateAdminUserMutationError = ProblemDetails;
-export type UpdateAdminUserMutationVariables = { id: string; data: UpdateAdminUserRequest };
-
-/** @summary Update user status or platform role */
-export const useUpdateAdminUser = <TError = ProblemDetails, TContext = unknown>(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof updateAdminUser>>,
-      TError,
-      UpdateAdminUserMutationVariables,
-      TContext
-    >;
-    fetch?: RequestInit;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof updateAdminUser>>,
-  TError,
-  UpdateAdminUserMutationVariables,
-  TContext
-> => {
-  return useMutation(getUpdateAdminUserMutationOptions(options), queryClient);
-};
-export type deleteAdminUserResponse200 = {
-  data: MessageResponse;
-  status: 200;
-};
-
-export type deleteAdminUserResponse400 = {
-  data: ProblemDetails;
-  status: 400;
-};
-
-export type deleteAdminUserResponse401 = {
-  data: ProblemDetails;
-  status: 401;
-};
-
-export type deleteAdminUserResponse403 = {
-  data: ProblemDetails;
-  status: 403;
-};
-
-export type deleteAdminUserResponse404 = {
-  data: ProblemDetails;
-  status: 404;
-};
-
-export type deleteAdminUserResponse429 = {
-  data: ProblemDetails;
-  status: 429;
-};
-
-export type deleteAdminUserResponse500 = {
-  data: ProblemDetails;
-  status: 500;
-};
-
-export type deleteAdminUserResponseSuccess = deleteAdminUserResponse200 & {
-  headers: Headers;
-};
-export type deleteAdminUserResponseError = (
-  | deleteAdminUserResponse400
-  | deleteAdminUserResponse401
-  | deleteAdminUserResponse403
-  | deleteAdminUserResponse404
-  | deleteAdminUserResponse429
-  | deleteAdminUserResponse500
-) & {
-  headers: Headers;
-};
-
-export type deleteAdminUserResponse = deleteAdminUserResponseSuccess | deleteAdminUserResponseError;
-
-export const getDeleteAdminUserUrl = (id: string) => {
-  return `/v1/admin/users/${id}`;
-};
-
-/**
- * @summary Soft-delete a user
- */
-export const deleteAdminUser = async (
-  id: string,
-  options?: RequestInit,
-): Promise<deleteAdminUserResponse> => {
-  const res = await fetch(getDeleteAdminUserUrl(id), {
-    ...options,
-    method: "DELETE",
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteAdminUserResponse["data"] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as deleteAdminUserResponse;
-};
-
-export const getDeleteAdminUserMutationKey = () => ["deleteAdminUser"] as const;
-
-export const getDeleteAdminUserMutationOptions = <
-  TError = ProblemDetails,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteAdminUser>>,
-    TError,
-    DeleteAdminUserMutationVariables,
-    TContext
-  >;
-  fetch?: RequestInit;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteAdminUser>>,
-  TError,
-  DeleteAdminUserMutationVariables,
-  TContext
-> => {
-  const mutationKey = getDeleteAdminUserMutationKey();
-  const { mutation: mutationOptions, fetch: fetchOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, fetch: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteAdminUser>>,
-    DeleteAdminUserMutationVariables
-  > = (props) => {
-    const { id } = props ?? {};
-
-    return deleteAdminUser(id, fetchOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type DeleteAdminUserMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteAdminUser>>
->;
-
-export type DeleteAdminUserMutationError = ProblemDetails;
-export type DeleteAdminUserMutationVariables = { id: string };
-
-/** @summary Soft-delete a user */
-export const useDeleteAdminUser = <TError = ProblemDetails, TContext = unknown>(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof deleteAdminUser>>,
-      TError,
-      DeleteAdminUserMutationVariables,
-      TContext
-    >;
-    fetch?: RequestInit;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof deleteAdminUser>>,
-  TError,
-  DeleteAdminUserMutationVariables,
-  TContext
-> => {
-  return useMutation(getDeleteAdminUserMutationOptions(options), queryClient);
-};
 export type forceLogoutAdminUserResponse200 = {
   data: ForceLogoutResponse;
   status: 200;

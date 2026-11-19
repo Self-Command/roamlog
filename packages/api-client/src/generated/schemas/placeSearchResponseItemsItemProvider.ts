@@ -10,6 +10,7 @@ export type PlaceSearchResponseItemsItemProvider =
   (typeof PlaceSearchResponseItemsItemProvider)[keyof typeof PlaceSearchResponseItemsItemProvider];
 
 export const PlaceSearchResponseItemsItemProvider = {
+  geoapify: "geoapify",
   photon: "photon",
   local: "local",
 } as const;

@@ -2775,6 +2775,47 @@
                   "maxLength": 2,
                   "pattern": "^[A-Z]{2}$"
                 },
+                "originAddress": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 400,
+                  "description": "Formatted address of the selected origin place, when one was picked."
+                },
+                "originBbox": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "west"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "south"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "east"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "north"
+                    }
+                  ],
+                  "description": "Bounding box as [west, south, east, north]."
+                },
                 "timeZone": {
                   "type": [
                     "string",
@@ -2898,6 +2939,8 @@
                 "originLat",
                 "originLng",
                 "originCountryCode",
+                "originAddress",
+                "originBbox",
                 "timeZone",
                 "destinations",
                 "countryCodes",
@@ -5432,6 +5475,46 @@
             "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
             "description": "IANA time zone name, for example Asia/Shanghai."
           },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400
+          },
+          "bbox": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "west"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "south"
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "east"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "north"
+              }
+            ],
+            "description": "Bounding box as [west, south, east, north]."
+          },
           "startDate": {
             "type": "string",
             "format": "date",
@@ -5525,6 +5608,46 @@
             "minLength": 2,
             "maxLength": 2,
             "pattern": "^[A-Z]{2}$"
+          },
+          "originAddress": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400
+          },
+          "originBbox": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "west"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "south"
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "east"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "north"
+              }
+            ],
+            "description": "Bounding box as [west, south, east, north]."
           },
           "timeZone": {
             "type": [
@@ -9479,6 +9602,7 @@
           "provider": {
             "type": "string",
             "enum": [
+              "geoapify",
               "photon",
               "local"
             ]
@@ -9495,6 +9619,14 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 200
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 500
           },
           "country": {
             "type": "string",
@@ -9527,6 +9659,42 @@
             "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
             "description": "IANA time zone name, for example Asia/Shanghai."
           },
+          "bbox": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              }
+            ]
+          },
+          "importance": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
           "type": {
             "type": "string",
             "enum": [
@@ -9542,11 +9710,14 @@
           "provider",
           "providerPlaceId",
           "name",
+          "address",
           "country",
           "countryCode",
           "lat",
           "lng",
           "timeZone",
+          "bbox",
+          "importance",
           "type"
         ],
         "additionalProperties": false
@@ -9596,6 +9767,7 @@
                 "provider": {
                   "type": "string",
                   "enum": [
+                    "geoapify",
                     "photon",
                     "local"
                   ]
@@ -9612,6 +9784,14 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 200
+                },
+                "address": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 500
                 },
                 "country": {
                   "type": "string",
@@ -9644,6 +9824,42 @@
                   "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
                   "description": "IANA time zone name, for example Asia/Shanghai."
                 },
+                "bbox": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    }
+                  ]
+                },
+                "importance": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 1
+                },
                 "type": {
                   "type": "string",
                   "enum": [
@@ -9659,11 +9875,14 @@
                 "provider",
                 "providerPlaceId",
                 "name",
+                "address",
                 "country",
                 "countryCode",
                 "lat",
                 "lng",
                 "timeZone",
+                "bbox",
+                "importance",
                 "type"
               ],
               "additionalProperties": false
@@ -9673,6 +9892,7 @@
           "provider": {
             "type": "string",
             "enum": [
+              "geoapify",
               "photon",
               "local"
             ]
@@ -10286,6 +10506,14 @@
             "minimum": -180,
             "maximum": 180
           },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400,
+            "description": "Formatted place address. The bbox stays private."
+          },
           "startDate": {
             "type": "string",
             "format": "date",
@@ -10312,6 +10540,7 @@
           "countryCode",
           "lat",
           "lng",
+          "address",
           "startDate",
           "endDate",
           "notes",
@@ -10718,6 +10947,14 @@
                   "minimum": -180,
                   "maximum": 180
                 },
+                "address": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 400,
+                  "description": "Formatted place address. The bbox stays private."
+                },
                 "startDate": {
                   "type": "string",
                   "format": "date",
@@ -10744,6 +10981,7 @@
                 "countryCode",
                 "lat",
                 "lng",
+                "address",
                 "startDate",
                 "endDate",
                 "notes",
@@ -12731,6 +12969,47 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
               "description": "IANA time zone name, for example Asia/Shanghai."
             },
+            "address": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 400,
+              "description": "Formatted address of the selected place, when one was picked."
+            },
+            "bbox": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180,
+                  "description": "west"
+                },
+                {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90,
+                  "description": "south"
+                },
+                {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180,
+                  "description": "east"
+                },
+                {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90,
+                  "description": "north"
+                }
+              ],
+              "description": "Bounding box as [west, south, east, north]."
+            },
             "startDate": {
               "type": "string",
               "format": "date",
@@ -12794,6 +13073,8 @@
             "provider",
             "providerPlaceId",
             "timeZone",
+            "address",
+            "bbox",
             "startDate",
             "endDate",
             "notes",
@@ -13839,6 +14120,47 @@
             "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
             "description": "IANA time zone name, for example Asia/Shanghai."
           },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400,
+            "description": "Formatted address of the selected place, when one was picked."
+          },
+          "bbox": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "west"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "south"
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "east"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "north"
+              }
+            ],
+            "description": "Bounding box as [west, south, east, north]."
+          },
           "startDate": {
             "type": "string",
             "format": "date",
@@ -13902,6 +14224,8 @@
           "provider",
           "providerPlaceId",
           "timeZone",
+          "address",
+          "bbox",
           "startDate",
           "endDate",
           "notes",
@@ -13996,6 +14320,47 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
               "description": "IANA time zone name, for example Asia/Shanghai."
             },
+            "address": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 400,
+              "description": "Formatted address of the selected place, when one was picked."
+            },
+            "bbox": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180,
+                  "description": "west"
+                },
+                {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90,
+                  "description": "south"
+                },
+                {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180,
+                  "description": "east"
+                },
+                {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90,
+                  "description": "north"
+                }
+              ],
+              "description": "Bounding box as [west, south, east, north]."
+            },
             "startDate": {
               "type": "string",
               "format": "date",
@@ -14059,6 +14424,8 @@
             "provider",
             "providerPlaceId",
             "timeZone",
+            "address",
+            "bbox",
             "startDate",
             "endDate",
             "notes",
@@ -14249,6 +14616,47 @@
             "maxLength": 2,
             "pattern": "^[A-Z]{2}$"
           },
+          "originAddress": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400,
+            "description": "Formatted address of the selected origin place, when one was picked."
+          },
+          "originBbox": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "west"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "south"
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "east"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "north"
+              }
+            ],
+            "description": "Bounding box as [west, south, east, north]."
+          },
           "timeZone": {
             "type": [
               "string",
@@ -14372,6 +14780,8 @@
           "originLat",
           "originLng",
           "originCountryCode",
+          "originAddress",
+          "originBbox",
           "timeZone",
           "destinations",
           "countryCodes",
@@ -14879,6 +15289,47 @@
                   "maxLength": 2,
                   "pattern": "^[A-Z]{2}$"
                 },
+                "originAddress": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 400,
+                  "description": "Formatted address of the selected origin place, when one was picked."
+                },
+                "originBbox": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "west"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "south"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "east"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "north"
+                    }
+                  ],
+                  "description": "Bounding box as [west, south, east, north]."
+                },
                 "timeZone": {
                   "type": [
                     "string",
@@ -15002,6 +15453,8 @@
                 "originLat",
                 "originLng",
                 "originCountryCode",
+                "originAddress",
+                "originBbox",
                 "timeZone",
                 "destinations",
                 "countryCodes",
@@ -15225,6 +15678,28 @@
       "UpdateAdminUserRequest": {
         "type": "object",
         "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email"
+          },
+          "locale": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 20
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+            "description": "IANA time zone name, for example Asia/Shanghai."
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -15976,6 +16451,47 @@
             "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
             "description": "IANA time zone name, for example Asia/Shanghai."
           },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400,
+            "description": "Send null to clear the stored address; omit to keep it."
+          },
+          "bbox": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "west"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "south"
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "east"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "north"
+              }
+            ],
+            "description": "Send null to clear the stored bbox; omit to keep it."
+          },
           "startDate": {
             "type": "string",
             "format": "date",
@@ -16069,6 +16585,47 @@
             "minLength": 2,
             "maxLength": 2,
             "pattern": "^[A-Z]{2}$"
+          },
+          "originAddress": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400,
+            "description": "Send null to clear the stored address; omit to keep it."
+          },
+          "originBbox": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "west"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "south"
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "east"
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "north"
+              }
+            ],
+            "description": "Send null to clear the stored bbox; omit to keep it."
           },
           "timeZone": {
             "type": [
@@ -25602,6 +26159,519 @@
         }
       }
     },
+    "/v1/workspaces/{workspaceId}/ai/chat": {
+      "post": {
+        "operationId": "createAiChat",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Plan a trip conversationally using read-only tools",
+        "description": "Runs the model tool loop with read-only tools only and returns a run id plus the write calls it would make. Nothing is persisted.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "hints": {
+                    "type": "object",
+                    "properties": {
+                      "dates": {
+                        "type": "object",
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+                          }
+                        },
+                        "required": [
+                          "start",
+                          "end"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "budgetMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Non-negative integer amount in the currency's minor unit."
+                      },
+                      "currency": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 3,
+                        "pattern": "^[A-Z]{3}$",
+                        "description": "ISO 4217 uppercase currency code."
+                      },
+                      "styles": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        },
+                        "maxItems": 12
+                      },
+                      "destinations": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "maxItems": 10
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runId": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{32}$",
+                      "description": "Opaque plan-run identifier returned by POST .../ai/chat."
+                    },
+                    "message": {
+                      "type": "string",
+                      "maxLength": 4000
+                    },
+                    "plannedCalls": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tool": {
+                            "type": "string",
+                            "enum": [
+                              "places.search",
+                              "trips.create",
+                              "trips.get",
+                              "stops.add",
+                              "stops.list",
+                              "itinerary.addDay",
+                              "packing.add",
+                              "budget.setSummary"
+                            ]
+                          },
+                          "args": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "tool",
+                          "args"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 20
+                    },
+                    "readOnlyTrace": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tool": {
+                            "type": "string",
+                            "enum": [
+                              "places.search",
+                              "trips.create",
+                              "trips.get",
+                              "stops.add",
+                              "stops.list",
+                              "itinerary.addDay",
+                              "packing.add",
+                              "budget.setSummary"
+                            ]
+                          },
+                          "args": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "tool",
+                          "args"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 40
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "inputTokens": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "provider": {
+                      "type": "object",
+                      "properties": {
+                        "protocol": {
+                          "type": "string",
+                          "enum": [
+                            "openai-chat",
+                            "openai-responses",
+                            "anthropic-messages"
+                          ]
+                        },
+                        "model": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "protocol",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    }
+                  },
+                  "required": [
+                    "runId",
+                    "message",
+                    "plannedCalls",
+                    "readOnlyTrace",
+                    "usage",
+                    "provider",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspaceId}/ai/runs/{runId}/execute": {
+      "post": {
+        "operationId": "executeAiRun",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Execute the confirmed tool calls of an AI plan",
+        "description": "Applies the submitted subset of the planned calls in order. A failure does not roll back earlier calls; the per-call results report what happened.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$",
+              "description": "Opaque plan-run identifier returned by POST .../ai/chat."
+            },
+            "required": true,
+            "description": "Opaque plan-run identifier returned by POST .../ai/chat.",
+            "name": "runId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "calls": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "tool": {
+                          "type": "string",
+                          "enum": [
+                            "places.search",
+                            "trips.create",
+                            "trips.get",
+                            "stops.add",
+                            "stops.list",
+                            "itinerary.addDay",
+                            "packing.add",
+                            "budget.setSummary"
+                          ]
+                        },
+                        "args": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "tool",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "calls",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tool": {
+                            "type": "string",
+                            "enum": [
+                              "places.search",
+                              "trips.create",
+                              "trips.get",
+                              "stops.add",
+                              "stops.list",
+                              "itinerary.addDay",
+                              "packing.add",
+                              "budget.setSummary"
+                            ]
+                          },
+                          "ok": {
+                            "type": "boolean"
+                          },
+                          "entityId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "description": "Sortable UUIDv7 identifier."
+                          },
+                          "error": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 60
+                              },
+                              "message": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "tool",
+                          "ok"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 20
+                    },
+                    "partialFailure": {
+                      "type": "boolean"
+                    },
+                    "summary": {
+                      "type": "string",
+                      "maxLength": 1000
+                    }
+                  },
+                  "required": [
+                    "results",
+                    "partialFailure",
+                    "summary"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/trips/{tripId}/expenses": {
       "get": {
         "operationId": "listExpenses",
@@ -27904,6 +28974,755 @@
         }
       }
     },
+    "/v1/admin/permissions": {
+      "get": {
+        "operationId": "getAdminPermissions",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Read the platform permission matrix",
+        "description": "Roles and actions are derived from the code matrix merged with stored overrides; actions marked grantable=false cannot be changed through the API.",
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "support",
+                              "analyst",
+                              "admin",
+                              "super_admin"
+                            ]
+                          },
+                          "actions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "admin:metrics:read",
+                                "admin:users:read",
+                                "admin:users:suspend",
+                                "admin:users:restore",
+                                "admin:users:delete",
+                                "admin:users:force-logout",
+                                "admin:users:reset-2fa",
+                                "admin:users:change-role",
+                                "admin:workspaces:read",
+                                "admin:workspaces:suspend",
+                                "admin:workspaces:restore",
+                                "admin:workspaces:delete",
+                                "admin:content:read",
+                                "admin:content:delete",
+                                "admin:content:restore",
+                                "admin:media:read",
+                                "admin:media:delete",
+                                "admin:audit:read",
+                                "admin:audit:export",
+                                "admin:flags:read",
+                                "admin:flags:update",
+                                "admin:emails:read",
+                                "admin:emails:resend",
+                                "admin:jobs:read",
+                                "admin:jobs:retry",
+                                "admin:jobs:manage",
+                                "admin:system:read",
+                                "admin:settings:read",
+                                "admin:settings:write",
+                                "admin:users:update",
+                                "admin:permissions:read",
+                                "admin:permissions:write"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "actions"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "admin:metrics:read",
+                              "admin:users:read",
+                              "admin:users:suspend",
+                              "admin:users:restore",
+                              "admin:users:delete",
+                              "admin:users:force-logout",
+                              "admin:users:reset-2fa",
+                              "admin:users:change-role",
+                              "admin:workspaces:read",
+                              "admin:workspaces:suspend",
+                              "admin:workspaces:restore",
+                              "admin:workspaces:delete",
+                              "admin:content:read",
+                              "admin:content:delete",
+                              "admin:content:restore",
+                              "admin:media:read",
+                              "admin:media:delete",
+                              "admin:audit:read",
+                              "admin:audit:export",
+                              "admin:flags:read",
+                              "admin:flags:update",
+                              "admin:emails:read",
+                              "admin:emails:resend",
+                              "admin:jobs:read",
+                              "admin:jobs:retry",
+                              "admin:jobs:manage",
+                              "admin:system:read",
+                              "admin:settings:read",
+                              "admin:settings:write",
+                              "admin:users:update",
+                              "admin:permissions:read",
+                              "admin:permissions:write"
+                            ]
+                          },
+                          "description": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "grantable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "description",
+                          "grantable"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "roles",
+                    "actions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateAdminPermissions",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update grantable platform permissions",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "changes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "support",
+                            "analyst",
+                            "admin",
+                            "super_admin"
+                          ]
+                        },
+                        "action": {
+                          "type": "string",
+                          "enum": [
+                            "admin:metrics:read",
+                            "admin:users:read",
+                            "admin:users:suspend",
+                            "admin:users:restore",
+                            "admin:users:delete",
+                            "admin:users:force-logout",
+                            "admin:users:reset-2fa",
+                            "admin:users:change-role",
+                            "admin:workspaces:read",
+                            "admin:workspaces:suspend",
+                            "admin:workspaces:restore",
+                            "admin:workspaces:delete",
+                            "admin:content:read",
+                            "admin:content:delete",
+                            "admin:content:restore",
+                            "admin:media:read",
+                            "admin:media:delete",
+                            "admin:audit:read",
+                            "admin:audit:export",
+                            "admin:flags:read",
+                            "admin:flags:update",
+                            "admin:emails:read",
+                            "admin:emails:resend",
+                            "admin:jobs:read",
+                            "admin:jobs:retry",
+                            "admin:jobs:manage",
+                            "admin:system:read",
+                            "admin:settings:read",
+                            "admin:settings:write",
+                            "admin:users:update",
+                            "admin:permissions:read",
+                            "admin:permissions:write"
+                          ]
+                        },
+                        "granted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "role",
+                        "action",
+                        "granted"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  }
+                },
+                "required": [
+                  "changes"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "support",
+                              "analyst",
+                              "admin",
+                              "super_admin"
+                            ]
+                          },
+                          "actions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "admin:metrics:read",
+                                "admin:users:read",
+                                "admin:users:suspend",
+                                "admin:users:restore",
+                                "admin:users:delete",
+                                "admin:users:force-logout",
+                                "admin:users:reset-2fa",
+                                "admin:users:change-role",
+                                "admin:workspaces:read",
+                                "admin:workspaces:suspend",
+                                "admin:workspaces:restore",
+                                "admin:workspaces:delete",
+                                "admin:content:read",
+                                "admin:content:delete",
+                                "admin:content:restore",
+                                "admin:media:read",
+                                "admin:media:delete",
+                                "admin:audit:read",
+                                "admin:audit:export",
+                                "admin:flags:read",
+                                "admin:flags:update",
+                                "admin:emails:read",
+                                "admin:emails:resend",
+                                "admin:jobs:read",
+                                "admin:jobs:retry",
+                                "admin:jobs:manage",
+                                "admin:system:read",
+                                "admin:settings:read",
+                                "admin:settings:write",
+                                "admin:users:update",
+                                "admin:permissions:read",
+                                "admin:permissions:write"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "actions"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "admin:metrics:read",
+                              "admin:users:read",
+                              "admin:users:suspend",
+                              "admin:users:restore",
+                              "admin:users:delete",
+                              "admin:users:force-logout",
+                              "admin:users:reset-2fa",
+                              "admin:users:change-role",
+                              "admin:workspaces:read",
+                              "admin:workspaces:suspend",
+                              "admin:workspaces:restore",
+                              "admin:workspaces:delete",
+                              "admin:content:read",
+                              "admin:content:delete",
+                              "admin:content:restore",
+                              "admin:media:read",
+                              "admin:media:delete",
+                              "admin:audit:read",
+                              "admin:audit:export",
+                              "admin:flags:read",
+                              "admin:flags:update",
+                              "admin:emails:read",
+                              "admin:emails:resend",
+                              "admin:jobs:read",
+                              "admin:jobs:retry",
+                              "admin:jobs:manage",
+                              "admin:system:read",
+                              "admin:settings:read",
+                              "admin:settings:write",
+                              "admin:users:update",
+                              "admin:permissions:read",
+                              "admin:permissions:write"
+                            ]
+                          },
+                          "description": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "grantable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "description",
+                          "grantable"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "roles",
+                    "actions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{id}": {
+      "patch": {
+        "operationId": "updateAdminUser",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update user status or platform role",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAdminUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getAdminUser",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get a platform user",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAdminUser",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Soft-delete a user",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/metrics": {
       "get": {
         "operationId": "getAdminMetrics",
@@ -28070,294 +29889,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminUserPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The request is malformed or fails schema validation.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication is required.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller is not allowed to perform this action.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The requested resource was not found in an accessible Workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "The caller exceeded the rate limit.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "An unexpected server error occurred.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/admin/users/{id}": {
-      "get": {
-        "operationId": "getAdminUser",
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Get a platform user",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Sortable UUIDv7 identifier."
-            },
-            "required": true,
-            "description": "Sortable UUIDv7 identifier.",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The request is malformed or fails schema validation.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication is required.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller is not allowed to perform this action.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The requested resource was not found in an accessible Workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "The caller exceeded the rate limit.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "An unexpected server error occurred.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "operationId": "updateAdminUser",
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Update user status or platform role",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Sortable UUIDv7 identifier."
-            },
-            "required": true,
-            "description": "Sortable UUIDv7 identifier.",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateAdminUserRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The request is malformed or fails schema validation.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication is required.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller is not allowed to perform this action.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The requested resource was not found in an accessible Workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "The caller exceeded the rate limit.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "An unexpected server error occurred.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "operationId": "deleteAdminUser",
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Soft-delete a user",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Sortable UUIDv7 identifier."
-            },
-            "required": true,
-            "description": "Sortable UUIDv7 identifier.",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }

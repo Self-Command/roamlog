@@ -37,6 +37,12 @@ export interface PublicStop {
    * @nullable
    */
   lng: number | null;
+  /**
+   * Formatted place address. The bbox stays private.
+   * @maxLength 400
+   * @nullable
+   */
+  address: string | null;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
   startDate: string;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */

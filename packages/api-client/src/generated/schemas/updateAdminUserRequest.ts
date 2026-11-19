@@ -9,6 +9,25 @@ import type { UpdateAdminUserRequestPlatformRole } from "./updateAdminUserReques
 import type { UpdateAdminUserRequestStatus } from "./updateAdminUserRequestStatus";
 
 export interface UpdateAdminUserRequest {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name?: string;
+  /** @maxLength 254 */
+  email?: string;
+  /**
+   * @minLength 2
+   * @maxLength 20
+   */
+  locale?: string;
+  /**
+   * IANA time zone name, for example Asia/Shanghai.
+   * @minLength 1
+   * @maxLength 64
+   * @pattern ^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$
+   */
+  timezone?: string;
   status?: UpdateAdminUserRequestStatus;
   platformRole?: UpdateAdminUserRequestPlatformRole;
 }

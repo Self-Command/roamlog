@@ -6,6 +6,39 @@ import { registerOperation } from "./helpers";
 export function registerAdminPaths(registry: OpenAPIRegistry): void {
   registerOperation(registry, {
     method: "get",
+    path: "/v1/admin/permissions",
+    operationId: "getAdminPermissions",
+    tag: "Admin",
+    summary: "Read the platform permission matrix",
+    description:
+      "Roles and actions are derived from the code matrix merged with stored overrides; actions marked grantable=false cannot be changed through the API.",
+    response: c.AdminPermissionsResponseSchema,
+  });
+  registerOperation(registry, {
+    method: "patch",
+    path: "/v1/admin/permissions",
+    operationId: "updateAdminPermissions",
+    tag: "Admin",
+    summary: "Update grantable platform permissions",
+    body: c.UpdateAdminPermissionsRequestSchema,
+    response: c.AdminPermissionsResponseSchema,
+    errors: [403, 422],
+  });
+  registerOperation(registry, {
+    method: "patch",
+    path: "/v1/admin/users/{id}",
+    operationId: "updateAdminUser",
+    tag: "Admin",
+    summary: "Update a platform user",
+    description:
+      "Changing the email clears verification and sends a new verification message; demoting the last super admin or demoting yourself is rejected.",
+    params: c.AdminIdParamsSchema,
+    body: c.UpdateAdminUserRequestSchema,
+    response: c.AdminUserUpdateResponseSchema,
+    errors: [403, 404, 409, 422],
+  });
+  registerOperation(registry, {
+    method: "get",
     path: "/v1/admin/metrics",
     operationId: "getAdminMetrics",
     tag: "Admin",

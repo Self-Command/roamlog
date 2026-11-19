@@ -54,6 +54,17 @@ export interface UpdateStopRequest {
    * @pattern ^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$
    */
   timeZone?: string | null;
+  /**
+   * Send null to clear the stored address; omit to keep it.
+   * @maxLength 400
+   * @nullable
+   */
+  address?: string | null;
+  /**
+   * Send null to clear the stored bbox; omit to keep it.
+   * @nullable
+   */
+  bbox?: [number, number, number, number] | null;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
   startDate?: string;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */

@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { registerAdminPaths } from "./openapi/paths-admin";
+import { registerAiPaths } from "./openapi/paths-ai";
 import { registerAuthPaths } from "./openapi/paths-auth";
 import { registerContentPaths } from "./openapi/paths-content";
 import { registerHealthPaths } from "./openapi/paths-health";
@@ -37,6 +38,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
   registerContentPaths(registry);
   registerMediaPaths(registry);
   registerPlacePaths(registry);
+  registerAiPaths(registry);
   registerMoneyPaths(registry);
   registerSharingPaths(registry);
   registerAdminPaths(registry);

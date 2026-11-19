@@ -10,6 +10,7 @@ export type PlaceSearchResponseProvider =
   (typeof PlaceSearchResponseProvider)[keyof typeof PlaceSearchResponseProvider];
 
 export const PlaceSearchResponseProvider = {
+  geoapify: "geoapify",
   photon: "photon",
   local: "local",
 } as const;

@@ -52,6 +52,16 @@ export interface CreateStopRequest {
    * @pattern ^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$
    */
   timeZone?: string | null;
+  /**
+   * @maxLength 400
+   * @nullable
+   */
+  address?: string | null;
+  /**
+   * Bounding box as [west, south, east, north].
+   * @nullable
+   */
+  bbox?: [number, number, number, number] | null;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
   startDate: string;
   /** Calendar date in YYYY-MM-DD form, without a timezone. */
