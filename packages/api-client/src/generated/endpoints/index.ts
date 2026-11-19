@@ -16,6 +16,7 @@ export * from "./participants/participants";
 export * from "./places/places";
 export * from "./realtime/realtime";
 export * from "./search/search";
+export * from "./settings/settings";
 export * from "./share-links/share-links";
 export * from "./stops/stops";
 export * from "./trips/trips";

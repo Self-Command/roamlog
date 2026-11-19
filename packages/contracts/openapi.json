@@ -101,6 +101,10 @@
       "description": "Independent platform administration API."
     },
     {
+      "name": "Settings",
+      "description": "Public site settings used by the web shell."
+    },
+    {
       "name": "Health",
       "description": "Liveness and dependency readiness."
     }
@@ -1627,6 +1631,606 @@
           "exports",
           "queues",
           "generatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSettingItem": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "general",
+              "seo",
+              "theme",
+              "mail",
+              "storage",
+              "media",
+              "ai",
+              "places",
+              "limits"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "number",
+              "boolean",
+              "json",
+              "secret"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "help": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "array",
+                "items": {}
+              },
+              {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            ]
+          },
+          "isSecret": {
+            "type": "boolean"
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "envLocked": {
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "array",
+                "items": {}
+              },
+              {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            ]
+          },
+          "secret": {
+            "type": "object",
+            "properties": {
+              "hasValue": {
+                "type": "boolean"
+              },
+              "last4": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 8
+              }
+            },
+            "required": [
+              "hasValue",
+              "last4"
+            ],
+            "additionalProperties": false
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "updatedById": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "key",
+          "group",
+          "type",
+          "label",
+          "default",
+          "isSecret",
+          "isPublic",
+          "envLocked",
+          "updatedAt",
+          "updatedById"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSettingSecretState": {
+        "type": "object",
+        "properties": {
+          "hasValue": {
+            "type": "boolean"
+          },
+          "last4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 8
+          }
+        },
+        "required": [
+          "hasValue",
+          "last4"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSettingsGroup": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "enum": [
+              "general",
+              "seo",
+              "theme",
+              "mail",
+              "storage",
+              "media",
+              "ai",
+              "places",
+              "limits"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+                },
+                "group": {
+                  "type": "string",
+                  "enum": [
+                    "general",
+                    "seo",
+                    "theme",
+                    "mail",
+                    "storage",
+                    "media",
+                    "ai",
+                    "places",
+                    "limits"
+                  ]
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "string",
+                    "number",
+                    "boolean",
+                    "json",
+                    "secret"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "help": {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "default": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {}
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  ]
+                },
+                "isSecret": {
+                  "type": "boolean"
+                },
+                "isPublic": {
+                  "type": "boolean"
+                },
+                "envLocked": {
+                  "type": "boolean"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {}
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  ]
+                },
+                "secret": {
+                  "type": "object",
+                  "properties": {
+                    "hasValue": {
+                      "type": "boolean"
+                    },
+                    "last4": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 8
+                    }
+                  },
+                  "required": [
+                    "hasValue",
+                    "last4"
+                  ],
+                  "additionalProperties": false
+                },
+                "updatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "updatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "key",
+                "group",
+                "type",
+                "label",
+                "default",
+                "isSecret",
+                "isPublic",
+                "envLocked",
+                "updatedAt",
+                "updatedById"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "group",
+          "label",
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "enum": [
+                    "general",
+                    "seo",
+                    "theme",
+                    "mail",
+                    "storage",
+                    "media",
+                    "ai",
+                    "places",
+                    "limits"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+                      },
+                      "group": {
+                        "type": "string",
+                        "enum": [
+                          "general",
+                          "seo",
+                          "theme",
+                          "mail",
+                          "storage",
+                          "media",
+                          "ai",
+                          "places",
+                          "limits"
+                        ]
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "string",
+                          "number",
+                          "boolean",
+                          "json",
+                          "secret"
+                        ]
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "help": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "options": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        }
+                      },
+                      "default": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "array",
+                            "items": {}
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        ]
+                      },
+                      "isSecret": {
+                        "type": "boolean"
+                      },
+                      "isPublic": {
+                        "type": "boolean"
+                      },
+                      "envLocked": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "array",
+                            "items": {}
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        ]
+                      },
+                      "secret": {
+                        "type": "object",
+                        "properties": {
+                          "hasValue": {
+                            "type": "boolean"
+                          },
+                          "last4": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 8
+                          }
+                        },
+                        "required": [
+                          "hasValue",
+                          "last4"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "updatedAt": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date-time",
+                        "description": "ISO 8601 timestamp with an explicit UTC offset."
+                      },
+                      "updatedById": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "uuid"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "group",
+                      "type",
+                      "label",
+                      "default",
+                      "isSecret",
+                      "isPublic",
+                      "envLocked",
+                      "updatedAt",
+                      "updatedById"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "group",
+                "label",
+                "items"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "groups",
+          "generatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "AdminSettingUpdateResult": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "key",
+          "secret",
+          "updatedAt"
         ],
         "additionalProperties": false
       },
@@ -9590,6 +10194,48 @@
         ],
         "additionalProperties": false
       },
+      "PublicSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "array",
+                  "items": {}
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              ]
+            }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "settings",
+          "generatedAt"
+        ],
+        "additionalProperties": false
+      },
       "PublicShareQuery": {
         "type": "object",
         "properties": {
@@ -12224,6 +12870,46 @@
         ],
         "additionalProperties": false
       },
+      "RevealAdminSettingRequest": {
+        "type": "object",
+        "properties": {
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "confirm"
+        ],
+        "additionalProperties": false
+      },
+      "RevealAdminSettingResponse": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+          },
+          "value": {
+            "type": "string"
+          },
+          "revealedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "revealedAt"
+        ],
+        "additionalProperties": false
+      },
       "RevisionListResponse": {
         "type": "array",
         "items": {
@@ -14430,6 +15116,111 @@
           ],
           "additionalProperties": false
         }
+      },
+      "UpdateAdminSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "updates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {}
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "updates"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateAdminSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+                },
+                "secret": {
+                  "type": "boolean"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                }
+              },
+              "required": [
+                "key",
+                "secret",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "updated",
+          "version",
+          "generatedAt"
+        ],
+        "additionalProperties": false
       },
       "UpdateAdminUserRequest": {
         "type": "object",
@@ -30826,6 +31617,450 @@
           },
           "500": {
             "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/settings": {
+      "get": {
+        "operationId": "listAdminSettings",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List platform settings grouped by section",
+        "description": "Secrets are returned as `{ hasValue, last4 }`; plaintext is never part of this response. Requires super_admin.",
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateAdminSettings",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update one or more platform settings",
+        "description": "Validates every key before writing. Unknown keys and invalid values return 422 SETTINGS_INVALID with errors[] that name the key and rule but never echo the value.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAdminSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAdminSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/settings/{key}": {
+      "get": {
+        "operationId": "getAdminSetting",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get one platform setting",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSettingItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/settings/{key}/reveal": {
+      "post": {
+        "operationId": "revealAdminSetting",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Reveal one secret setting",
+        "description": "Only a super_admin with verified TOTP 2FA and an explicit `{ confirm: true }` body may reveal plaintext. Every reveal is audited.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)+$"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevealAdminSettingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevealAdminSettingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/settings": {
+      "get": {
+        "operationId": "getPublicSettings",
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get public site settings",
+        "description": "Anonymous projection containing only isPublic, non-secret values.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
             "content": {
               "application/json": {
                 "schema": {

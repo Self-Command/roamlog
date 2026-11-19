@@ -31,6 +31,8 @@ import type {
   AdminJobPage,
   AdminMediaPage,
   AdminMetrics,
+  AdminSettingItem,
+  AdminSettingsResponse,
   AdminSystem,
   AdminTripPage,
   AdminUserDetail,
@@ -59,6 +61,10 @@ import type {
   ResetTwoFactorResponse,
   ResumeAdminQueueResponse,
   RetryJobResponse,
+  RevealAdminSettingRequest,
+  RevealAdminSettingResponse,
+  UpdateAdminSettingsRequest,
+  UpdateAdminSettingsResponse,
   UpdateAdminUserRequest,
   UpdateAdminWorkspaceRequest,
   UpdateFeatureFlagRequest,
@@ -5442,3 +5448,660 @@ export function useGetAdminSystem<
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+export type listAdminSettingsResponse200 = {
+  data: AdminSettingsResponse;
+  status: 200;
+};
+
+export type listAdminSettingsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type listAdminSettingsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type listAdminSettingsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type listAdminSettingsResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type listAdminSettingsResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type listAdminSettingsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type listAdminSettingsResponseSuccess = listAdminSettingsResponse200 & {
+  headers: Headers;
+};
+export type listAdminSettingsResponseError = (
+  | listAdminSettingsResponse400
+  | listAdminSettingsResponse401
+  | listAdminSettingsResponse403
+  | listAdminSettingsResponse404
+  | listAdminSettingsResponse429
+  | listAdminSettingsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAdminSettingsResponse =
+  listAdminSettingsResponseSuccess | listAdminSettingsResponseError;
+
+export const getListAdminSettingsUrl = () => {
+  return `/v1/admin/settings`;
+};
+
+/**
+ * Secrets are returned as `{ hasValue, last4 }`; plaintext is never part of this response. Requires super_admin.
+ * @summary List platform settings grouped by section
+ */
+export const listAdminSettings = async (
+  options?: RequestInit,
+): Promise<listAdminSettingsResponse> => {
+  const res = await fetch(getListAdminSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAdminSettingsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as listAdminSettingsResponse;
+};
+
+export const getListAdminSettingsQueryKey = () => {
+  return [`/v1/admin/settings`] as const;
+};
+
+export const getListAdminSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminSettings>>,
+  TError = ProblemDetails,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminSettings>>, TError, TData>>;
+  fetch?: RequestInit;
+}) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAdminSettingsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminSettings>>> = ({ signal }) =>
+    listAdminSettings({ signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminSettings>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListAdminSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminSettings>>
+>;
+export type ListAdminSettingsQueryError = ProblemDetails;
+
+/**
+ * Secrets are returned as `{ hasValue, last4 }`; plaintext is never part of this response. Requires super_admin.
+ * @summary List platform settings grouped by section
+ */
+export function useListAdminSettings<
+  TData = Awaited<ReturnType<typeof listAdminSettings>>,
+  TError = ProblemDetails,
+>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminSettings>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminSettings>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminSettings>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Secrets are returned as `{ hasValue, last4 }`; plaintext is never part of this response. Requires super_admin.
+ * @summary List platform settings grouped by section
+ */
+export function useListAdminSettings<
+  TData = Awaited<ReturnType<typeof listAdminSettings>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminSettings>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminSettings>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminSettings>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Secrets are returned as `{ hasValue, last4 }`; plaintext is never part of this response. Requires super_admin.
+ * @summary List platform settings grouped by section
+ */
+export function useListAdminSettings<
+  TData = Awaited<ReturnType<typeof listAdminSettings>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminSettings>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Secrets are returned as `{ hasValue, last4 }`; plaintext is never part of this response. Requires super_admin.
+ * @summary List platform settings grouped by section
+ */
+export function useListAdminSettings<
+  TData = Awaited<ReturnType<typeof listAdminSettings>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminSettings>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListAdminSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type updateAdminSettingsResponse200 = {
+  data: UpdateAdminSettingsResponse;
+  status: 200;
+};
+
+export type updateAdminSettingsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type updateAdminSettingsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type updateAdminSettingsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateAdminSettingsResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type updateAdminSettingsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type updateAdminSettingsResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type updateAdminSettingsResponseSuccess = updateAdminSettingsResponse200 & {
+  headers: Headers;
+};
+export type updateAdminSettingsResponseError = (
+  | updateAdminSettingsResponse400
+  | updateAdminSettingsResponse401
+  | updateAdminSettingsResponse403
+  | updateAdminSettingsResponse422
+  | updateAdminSettingsResponse500
+  | updateAdminSettingsResponse503
+) & {
+  headers: Headers;
+};
+
+export type updateAdminSettingsResponse =
+  updateAdminSettingsResponseSuccess | updateAdminSettingsResponseError;
+
+export const getUpdateAdminSettingsUrl = () => {
+  return `/v1/admin/settings`;
+};
+
+/**
+ * Validates every key before writing. Unknown keys and invalid values return 422 SETTINGS_INVALID with errors[] that name the key and rule but never echo the value.
+ * @summary Update one or more platform settings
+ */
+export const updateAdminSettings = async (
+  updateAdminSettingsRequest: UpdateAdminSettingsRequest,
+  options?: RequestInit,
+): Promise<updateAdminSettingsResponse> => {
+  const res = await fetch(getUpdateAdminSettingsUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateAdminSettingsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAdminSettingsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateAdminSettingsResponse;
+};
+
+export const getUpdateAdminSettingsMutationKey = () => ["updateAdminSettings"] as const;
+
+export const getUpdateAdminSettingsMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminSettings>>,
+    TError,
+    UpdateAdminSettingsMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAdminSettings>>,
+  TError,
+  UpdateAdminSettingsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateAdminSettingsMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAdminSettings>>,
+    UpdateAdminSettingsMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateAdminSettings(data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAdminSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAdminSettings>>
+>;
+export type UpdateAdminSettingsMutationBody = UpdateAdminSettingsRequest;
+export type UpdateAdminSettingsMutationError = ProblemDetails;
+export type UpdateAdminSettingsMutationVariables = { data: UpdateAdminSettingsRequest };
+
+/**
+ * Validates every key before writing. Unknown keys and invalid values return 422 SETTINGS_INVALID with errors[] that name the key and rule but never echo the value.
+ * @summary Update one or more platform settings
+ */
+export const useUpdateAdminSettings = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateAdminSettings>>,
+      TError,
+      UpdateAdminSettingsMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateAdminSettings>>,
+  TError,
+  UpdateAdminSettingsMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateAdminSettingsMutationOptions(options), queryClient);
+};
+export type getAdminSettingResponse200 = {
+  data: AdminSettingItem;
+  status: 200;
+};
+
+export type getAdminSettingResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type getAdminSettingResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type getAdminSettingResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type getAdminSettingResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type getAdminSettingResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type getAdminSettingResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getAdminSettingResponseSuccess = getAdminSettingResponse200 & {
+  headers: Headers;
+};
+export type getAdminSettingResponseError = (
+  | getAdminSettingResponse400
+  | getAdminSettingResponse401
+  | getAdminSettingResponse403
+  | getAdminSettingResponse404
+  | getAdminSettingResponse429
+  | getAdminSettingResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAdminSettingResponse = getAdminSettingResponseSuccess | getAdminSettingResponseError;
+
+export const getGetAdminSettingUrl = (key: string) => {
+  return `/v1/admin/settings/${key}`;
+};
+
+/**
+ * @summary Get one platform setting
+ */
+export const getAdminSetting = async (
+  key: string,
+  options?: RequestInit,
+): Promise<getAdminSettingResponse> => {
+  const res = await fetch(getGetAdminSettingUrl(key), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAdminSettingResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getAdminSettingResponse;
+};
+
+export const getGetAdminSettingQueryKey = (key: string) => {
+  return [`/v1/admin/settings/${key}`] as const;
+};
+
+export const getGetAdminSettingQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminSetting>>,
+  TError = ProblemDetails,
+>(
+  key: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminSetting>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminSettingQueryKey(key);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminSetting>>> = ({ signal }) =>
+    getAdminSetting(key, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: key !== null && key !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getAdminSetting>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetAdminSettingQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminSetting>>>;
+export type GetAdminSettingQueryError = ProblemDetails;
+
+/** @summary Get one platform setting */
+export function useGetAdminSetting<
+  TData = Awaited<ReturnType<typeof getAdminSetting>>,
+  TError = ProblemDetails,
+>(
+  key: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminSetting>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminSetting>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminSetting>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get one platform setting */
+export function useGetAdminSetting<
+  TData = Awaited<ReturnType<typeof getAdminSetting>>,
+  TError = ProblemDetails,
+>(
+  key: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminSetting>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminSetting>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminSetting>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get one platform setting */
+export function useGetAdminSetting<
+  TData = Awaited<ReturnType<typeof getAdminSetting>>,
+  TError = ProblemDetails,
+>(
+  key: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminSetting>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get one platform setting */
+export function useGetAdminSetting<
+  TData = Awaited<ReturnType<typeof getAdminSetting>>,
+  TError = ProblemDetails,
+>(
+  key: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminSetting>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetAdminSettingQueryOptions(key, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type revealAdminSettingResponse200 = {
+  data: RevealAdminSettingResponse;
+  status: 200;
+};
+
+export type revealAdminSettingResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type revealAdminSettingResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type revealAdminSettingResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type revealAdminSettingResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type revealAdminSettingResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type revealAdminSettingResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type revealAdminSettingResponseSuccess = revealAdminSettingResponse200 & {
+  headers: Headers;
+};
+export type revealAdminSettingResponseError = (
+  | revealAdminSettingResponse400
+  | revealAdminSettingResponse401
+  | revealAdminSettingResponse403
+  | revealAdminSettingResponse404
+  | revealAdminSettingResponse422
+  | revealAdminSettingResponse500
+) & {
+  headers: Headers;
+};
+
+export type revealAdminSettingResponse =
+  revealAdminSettingResponseSuccess | revealAdminSettingResponseError;
+
+export const getRevealAdminSettingUrl = (key: string) => {
+  return `/v1/admin/settings/${key}/reveal`;
+};
+
+/**
+ * Only a super_admin with verified TOTP 2FA and an explicit `{ confirm: true }` body may reveal plaintext. Every reveal is audited.
+ * @summary Reveal one secret setting
+ */
+export const revealAdminSetting = async (
+  key: string,
+  revealAdminSettingRequest: RevealAdminSettingRequest,
+  options?: RequestInit,
+): Promise<revealAdminSettingResponse> => {
+  const res = await fetch(getRevealAdminSettingUrl(key), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(revealAdminSettingRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revealAdminSettingResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as revealAdminSettingResponse;
+};
+
+export const getRevealAdminSettingMutationKey = () => ["revealAdminSetting"] as const;
+
+export const getRevealAdminSettingMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof revealAdminSetting>>,
+    TError,
+    RevealAdminSettingMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof revealAdminSetting>>,
+  TError,
+  RevealAdminSettingMutationVariables,
+  TContext
+> => {
+  const mutationKey = getRevealAdminSettingMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof revealAdminSetting>>,
+    RevealAdminSettingMutationVariables
+  > = (props) => {
+    const { key, data } = props ?? {};
+
+    return revealAdminSetting(key, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RevealAdminSettingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof revealAdminSetting>>
+>;
+export type RevealAdminSettingMutationBody = RevealAdminSettingRequest;
+export type RevealAdminSettingMutationError = ProblemDetails;
+export type RevealAdminSettingMutationVariables = { key: string; data: RevealAdminSettingRequest };
+
+/**
+ * Only a super_admin with verified TOTP 2FA and an explicit `{ confirm: true }` body may reveal plaintext. Every reveal is audited.
+ * @summary Reveal one secret setting
+ */
+export const useRevealAdminSetting = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof revealAdminSetting>>,
+      TError,
+      RevealAdminSettingMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof revealAdminSetting>>,
+  TError,
+  RevealAdminSettingMutationVariables,
+  TContext
+> => {
+  return useMutation(getRevealAdminSettingMutationOptions(options), queryClient);
+};
