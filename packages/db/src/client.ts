@@ -1,6 +1,10 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client.js";
 
+// Re-exported so API modules can use `Prisma.DbNull`/`Prisma.JsonNull` without
+// importing the generated (gitignored) client path directly.
+export { Prisma } from "./generated/prisma/client.js";
+
 export interface CreatePrismaClientOptions {
   connectionString?: string;
   adapter?: PrismaPg;

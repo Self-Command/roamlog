@@ -799,6 +799,29 @@ model FeatureFlag {
   @@index([enabled])
 }
 
+/// Runtime platform configuration. Bootstrap values (DATABASE_URL, REDIS_URL,
+/// BETTER_AUTH_SECRET, CONFIG_ENCRYPTION_KEY...) stay in the environment; every
+/// operator-editable setting lives here and is read through SettingsService.
+/// Secrets are never stored in `value`: `secretCipher` holds
+/// `v1:<keyId>:<base64(iv|ct|tag)>` and plaintext only exists in memory.
+model SystemSetting {
+  key          String   @id @db.VarChar(120)
+  group        String   @db.VarChar(40)
+  valueType    String   @db.VarChar(16)
+  value        Json?    @db.JsonB
+  secretCipher String?
+  secretLast4  String?  @db.VarChar(8)
+  keyVersion   Int      @default(1)
+  envLocked    Boolean  @default(false)
+  isPublic     Boolean  @default(false)
+  updatedById  String?  @db.Uuid
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([group])
+  @@map("SystemSetting")
+}
+
 model EmailLog {
   id         String      @id @default(uuid(7)) @db.Uuid
   userId     String?     @db.Uuid
