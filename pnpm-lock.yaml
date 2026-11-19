@@ -393,6 +393,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: 3.34.0
         version: 3.34.0
+      blurhash:
+        specifier: ^2.0.5
+        version: 2.0.5
       lucide-react:
         specifier: 1.74.0
         version: 1.74.0(@types/react@19.3.0)(react@19.3.1)
@@ -3612,6 +3615,9 @@ packages:
 
   bintrees@1.0.2:
     resolution: {integrity: sha512-VOMgTMwjAaUG580SXn3LacVgjurrbMme7ZZNYGSSV7mmtY6QQRh0Eg3pwIcntQ77DErK1L0NxkbetjcoXzVwKw==}
+
+  blurhash@2.0.5:
+    resolution: {integrity: sha512-cRygWd7kGBQO3VEhPiTgq4Wc43ctsM+o46urrmPOiuAe+07fzlSB9OJVdpgDL0jPqXUVQ9ht7aq7kxOeJHRK+w==}
 
   body-parser@2.4.0:
     resolution: {integrity: sha512-Ifk1KcLrxaGt1occQagQNFNNOqRt1LFuehEnHHzB8Z6cRgIxRU1TBaiIsUiCdA+gy5PL7Y1IX31DNKkRmxtXjQ==}
@@ -8580,6 +8586,8 @@ snapshots:
       require-from-string: 2.0.2
 
   bintrees@1.0.2: {}
+
+  blurhash@2.0.5: {}
 
   body-parser@2.4.0:
     dependencies:

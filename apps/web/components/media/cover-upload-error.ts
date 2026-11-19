@@ -5,6 +5,7 @@ import { isSignedUrlUploadError, type SignedUrlUploadError } from "@/lib/api/med
 export type CoverUploadPhase =
   | "idle"
   | "validating"
+  | "compressing"
   | "presigning"
   | "uploading"
   | "completing"
@@ -20,6 +21,9 @@ export type CoverUploadErrorCode =
   | "COVER_TOO_LARGE"
   | "COVER_EMPTY_FILE"
   | "COVER_FILE_NAME_INVALID"
+  | "DECODE_FAILED"
+  | "ENCODE_FAILED"
+  | "TOO_LARGE_AFTER_COMPRESSION"
   | "NETWORK_ERROR"
   | "UPLOAD_CANCELLED"
   | "UPLOAD_TOO_LARGE"
@@ -68,6 +72,27 @@ export function coverValidationError(
   message: string,
 ): CoverUploadError {
   return { code, message, retryable: false, resumeAt: "validating" };
+}
+
+/**
+ * Compression failures leave the selected source file intact, so retrying from
+ * `compressing` re-runs the Worker/fallback instead of restarting the upload.
+ */
+export function compressionFailure(
+  code: Extract<
+    CoverUploadErrorCode,
+    "DECODE_FAILED" | "ENCODE_FAILED" | "TOO_LARGE_AFTER_COMPRESSION"
+  >,
+  message: string,
+  detail?: string,
+): CoverUploadError {
+  return {
+    code,
+    message,
+    ...(detail ? { detail } : {}),
+    retryable: true,
+    resumeAt: "compressing",
+  };
 }
 
 export function signatureExpiredError(): CoverUploadError {

@@ -9,11 +9,14 @@ import {
   type CoverMediaClient,
   type PutObjectRequest,
 } from "@/lib/api/media";
+import { ImageCompressionError } from "@/lib/image/compress-image";
 import {
   COVER_MEDIA_ID,
   COVER_TRIP_ID,
   COVER_WORKSPACE_ID,
+  createFakeImageCompressor,
   createFakeMediaClient,
+  makeCompressionResult,
   makeCoverTrip,
   makeMedia,
   makeMediaRead,
@@ -28,6 +31,7 @@ import {
 } from "./use-cover-upload";
 
 beforeAll(() => {
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     writable: true,
@@ -65,6 +69,7 @@ function setup(
     client,
     pollIntervalMs: 1,
     processTimeoutMs: 500,
+    compressor: vi.fn(createFakeImageCompressor()),
     onTransition: (transition) => transitions.push(transition),
     ...options,
   };
@@ -74,7 +79,7 @@ function setup(
 }
 
 describe("useCoverUpload state machine", () => {
-  it("runs validating → presigning → uploading → completing → processing → applying → ready", async () => {
+  it("runs validating → compressing → presigning → uploading → completing → processing → applying → ready", async () => {
     const onCoverChange = vi.fn();
     const { result, calls, transitions, invalidateSpy } = setup({ onCoverChange });
 
@@ -84,6 +89,7 @@ describe("useCoverUpload state machine", () => {
 
     expect(transitions.map((transition) => transition.phase)).toEqual([
       "validating",
+      "compressing",
       "presigning",
       "uploading",
       "completing",
@@ -94,17 +100,18 @@ describe("useCoverUpload state machine", () => {
     expect(calls.presign).toEqual([
       {
         tripId: COVER_TRIP_ID,
-        fileName: "cover.jpg",
-        mimeType: "image/jpeg",
-        size: 2_048,
+        fileName: "cover.webp",
+        mimeType: "image/webp",
+        size: 1_536,
       },
     ]);
     expect(calls.put).toHaveLength(1);
     expect(calls.put[0]?.url).toBe(
       "https://storage.example.test/presigned-put?X-Amz-Signature=stub",
     );
-    expect(calls.put[0]?.headers).toEqual({ "Content-Type": "image/jpeg" });
-    expect(calls.complete).toEqual([{ mediaId: COVER_MEDIA_ID, input: { size: 2_048 } }]);
+    expect(calls.put[0]?.headers).toEqual({ "Content-Type": "image/webp" });
+    expect(calls.put[0]?.file.type).toBe("image/webp");
+    expect(calls.complete).toEqual([{ mediaId: COVER_MEDIA_ID, input: { size: 1_536 } }]);
     expect(calls.fetch).toEqual([COVER_MEDIA_ID]);
     expect(calls.setCover).toEqual([{ tripId: COVER_TRIP_ID, mediaId: COVER_MEDIA_ID }]);
     expect(result.current.updatedTrip?.coverMediaId).toBe(COVER_MEDIA_ID);
@@ -136,7 +143,7 @@ describe("useCoverUpload state machine", () => {
       result.current.selectFile(makeImage("cover.jpg", "image/jpeg", 10_000)),
     );
 
-    await waitFor(() => expect(result.current.progress).toBe(50));
+    await waitFor(() => expect(result.current.progress).toBe(55));
     expect(result.current.phase).toBe("uploading");
     expect(result.current.canRetry).toBe(false);
 
@@ -146,7 +153,7 @@ describe("useCoverUpload state machine", () => {
     await waitFor(() => expect(result.current.phase).toBe("ready"));
   });
 
-  it("retries a failed PUT from the upload step without re-presigning or re-selecting", async () => {
+  it("retries a failed PUT from the upload step without re-compressing or re-presigning", async () => {
     let attempts = 0;
     const putObject = vi.fn(async (request: PutObjectRequest) => {
       attempts += 1;
@@ -155,7 +162,8 @@ describe("useCoverUpload state machine", () => {
       }
       request.onProgress?.(request.file.size, request.file.size);
     });
-    const { result, calls } = setup({}, { putObject });
+    const compressor = vi.fn(createFakeImageCompressor());
+    const { result, calls } = setup({ compressor }, { putObject });
 
     act(() => result.current.selectFile(makeImage()));
     await waitFor(() => expect(result.current.phase).toBe("error"));
@@ -174,6 +182,7 @@ describe("useCoverUpload state machine", () => {
 
     expect(calls.presign).toHaveLength(1);
     expect(putObject).toHaveBeenCalledTimes(2);
+    expect(compressor).toHaveBeenCalledTimes(1);
     expect(calls.complete).toHaveLength(1);
     expect(calls.setCover).toHaveLength(1);
   });
@@ -396,7 +405,7 @@ describe("useCoverUpload state machine", () => {
     expect(result.current.file?.name).toBe(name);
   });
 
-  it("keeps the local preview in compose mode and revokes it on reset", async () => {
+  it("keeps the source preview in compose mode and revokes it on reset", async () => {
     const revokeSpy = vi.spyOn(URL, "revokeObjectURL");
     const { result } = setup({ tripId: null, tripVersion: null });
 
@@ -410,5 +419,86 @@ describe("useCoverUpload state machine", () => {
     expect(result.current.file).toBeNull();
     expect(revokeSpy).toHaveBeenCalledWith("blob:cover-preview");
     revokeSpy.mockRestore();
+  });
+
+  it("retries a compression failure from compressing and uploads only once", async () => {
+    let attempts = 0;
+    const compressor = vi.fn(async (file: File) => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new ImageCompressionError(
+          "ENCODE_FAILED",
+          "浏览器无法编码 WebP，图片压缩失败，请重试。",
+        );
+      }
+      return makeCompressionResult({ originalBytes: file.size });
+    });
+    const { result, calls } = setup({ compressor });
+
+    act(() => result.current.selectFile(makeImage()));
+    await waitFor(() => expect(result.current.phase).toBe("error"));
+
+    expect(result.current.error).toMatchObject({
+      code: "ENCODE_FAILED",
+      resumeAt: "compressing",
+      retryable: true,
+      message: "浏览器无法编码 WebP，图片压缩失败，请重试。",
+    });
+    expect(calls.presign).toHaveLength(0);
+
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    expect(compressor).toHaveBeenCalledTimes(2);
+    expect(calls.presign).toHaveLength(1);
+    expect(calls.put).toHaveLength(1);
+  });
+
+  it("surfaces a readable HEIC decode failure instead of uploading silently", async () => {
+    const compressor = vi.fn(async () => {
+      throw new ImageCompressionError(
+        "DECODE_FAILED",
+        "该格式浏览器无法解码（HEIC/HEIF）。请先转换为 JPEG 或 PNG 后重试。",
+      );
+    });
+    const { result, calls } = setup({ compressor });
+
+    act(() => result.current.selectFile(makeImage("IMG_0001.HEIC", "image/heic")));
+    await waitFor(() => expect(result.current.phase).toBe("error"));
+
+    expect(result.current.error).toMatchObject({
+      code: "DECODE_FAILED",
+      resumeAt: "compressing",
+      retryable: true,
+    });
+    expect(result.current.error?.message).toContain("该格式浏览器无法解码");
+    expect(calls.presign).toHaveLength(0);
+    expect(calls.put).toHaveLength(0);
+  });
+
+  it("cancels an in-flight compression and never starts the upload", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const compressor = vi.fn(
+      (_file: File, options: { signal?: AbortSignal } = {}) =>
+        new Promise<ReturnType<typeof makeCompressionResult>>((_resolve, reject) => {
+          capturedSignal = options.signal;
+          options.signal?.addEventListener(
+            "abort",
+            () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+            { once: true },
+          );
+        }),
+    );
+    const { result, calls } = setup({ compressor });
+
+    act(() => result.current.selectFile(makeImage()));
+    await waitFor(() => expect(result.current.phase).toBe("compressing"));
+
+    act(() => result.current.reset());
+
+    expect(result.current.phase).toBe("idle");
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(calls.presign).toHaveLength(0);
+    expect(calls.put).toHaveLength(0);
   });
 });

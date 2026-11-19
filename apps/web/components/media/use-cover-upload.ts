@@ -5,9 +5,16 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { COVER_MAX_BYTES, createCoverMediaClient, type CoverMediaClient } from "@/lib/api/media";
+import {
+  isImageCompressionError,
+  toWebpFileName,
+  type CompressionResult,
+} from "@/lib/image/compress-image";
+import { useImageCompression, type ImageCompressor } from "@/lib/image/use-image-compression";
 import { queryKeys } from "@/lib/query";
 
 import {
+  compressionFailure,
   mapCoverFailure,
   processingFailure,
   signatureExpiredError,
@@ -25,6 +32,7 @@ const MAX_COVER_POLL_INTERVAL_MS = 4_000;
 
 const BUSY_PHASES: ReadonlySet<CoverUploadPhase> = new Set([
   "validating",
+  "compressing",
   "presigning",
   "uploading",
   "completing",
@@ -34,12 +42,34 @@ const BUSY_PHASES: ReadonlySet<CoverUploadPhase> = new Set([
 
 const STEP_INDEX: Readonly<Record<string, number>> = {
   validating: 0,
-  presigning: 1,
-  uploading: 2,
-  completing: 3,
-  processing: 4,
-  applying: 5,
+  compressing: 1,
+  presigning: 2,
+  uploading: 3,
+  completing: 4,
+  processing: 5,
+  applying: 6,
 };
+
+/** Compression owns the first 20% of the combined progress bar. */
+const COMPRESS_PROGRESS_END = 20;
+/** Upload owns 20–90%, leaving the last 10% for server finalization. */
+const UPLOAD_PROGRESS_START = 20;
+const UPLOAD_PROGRESS_END = 90;
+const COMPLETING_PROGRESS = 92;
+const PROCESSING_PROGRESS = 96;
+const APPLYING_PROGRESS = 98;
+
+const KEEP_ORIGINAL_STORAGE_KEY = "roamlog.media.keepOriginal";
+
+function resolveKeepOriginal(explicit: boolean | undefined): boolean {
+  if (typeof explicit === "boolean") return explicit;
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(KEEP_ORIGINAL_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 export interface CoverTransition {
   phase: CoverUploadPhase;
@@ -63,6 +93,13 @@ export interface UseCoverUploadOptions {
   maxBytes?: number;
   pollIntervalMs?: number;
   processTimeoutMs?: number;
+  /** Test/embedding seam; production uses the singleton Worker pipeline. */
+  compressor?: ImageCompressor;
+  /**
+   * D2 will upload the untouched source as well. D1 only records this preference
+   * so the switch can ship without changing the number of uploads.
+   */
+  keepOriginal?: boolean;
 }
 
 export interface CoverUploadState {
@@ -92,6 +129,12 @@ interface UploadAttempt {
   mimeType: string | null;
   mediaId: string | null;
   upload: MediaPresignResponse | null;
+  /** Populated after compression (or points at the source when skipped). */
+  uploadBlob: Blob | null;
+  uploadMimeType: string | null;
+  uploadFileName: string | null;
+  compression: CompressionResult | null;
+  keepOriginal: boolean;
   applyAfterReady: boolean;
   tripVersion: number | null;
 }
@@ -113,6 +156,13 @@ class UploadAborted extends Error {
     super("Cover upload aborted.");
     this.name = "UploadAborted";
   }
+}
+
+function isAbortLike(error: unknown): boolean {
+  return (
+    error instanceof UploadAborted ||
+    (error instanceof Error && error.name === "AbortError")
+  );
 }
 
 class ProcessingFailure extends Error {
@@ -208,7 +258,10 @@ function invalidateCoverQueries(
 /**
  * Drives a real cover upload through the server pipeline:
  *
- * `idle → validating → presigning → uploading → completing → processing → applying → ready`
+ * `idle → validating → compressing → presigning → uploading → completing → processing → applying → ready`
+ *
+ * Compression runs in the singleton Worker and produces the WebP that is
+ * presigned and uploaded. Small sources skip re-encoding and upload untouched.
  *
  * Every network URL comes from the presign response; progress comes from the PUT
  * itself; `processing` is polled through the media read endpoint. Failures keep
@@ -222,6 +275,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
     () => providedClient ?? createCoverMediaClient(),
     [providedClient],
   );
+  const { compress: workerCompress } = useImageCompression();
 
   const [state, setState] = useState<CoverUploadState>(INITIAL_STATE);
   const stateRef = useRef<CoverUploadState>(INITIAL_STATE);
@@ -269,13 +323,29 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
     });
   }, []);
 
-  const reportProgress = useCallback((loaded: number, total: number) => {
-    const ratio = total > 0 ? loaded / total : 0;
-    const percent = Math.min(99, Math.max(0, Math.round(ratio * 100)));
-    if (lastProgressRef.current === percent) return;
-    lastProgressRef.current = percent;
-    setState((current) => ({ ...current, progress: percent }));
+  const reportProgress = useCallback((percent: number) => {
+    const clamped = Math.min(99, Math.max(0, Math.round(percent)));
+    if (lastProgressRef.current === clamped) return;
+    lastProgressRef.current = clamped;
+    setState((current) => ({ ...current, progress: clamped }));
   }, []);
+
+  const reportCompressionProgress = useCallback(
+    (percent: number) => {
+      reportProgress((Math.min(100, Math.max(0, percent)) / 100) * COMPRESS_PROGRESS_END);
+    },
+    [reportProgress],
+  );
+
+  const reportUploadProgress = useCallback(
+    (loaded: number, total: number) => {
+      const ratio = total > 0 ? loaded / total : 0;
+      reportProgress(
+        UPLOAD_PROGRESS_START + Math.min(1, Math.max(0, ratio)) * (UPLOAD_PROGRESS_END - UPLOAD_PROGRESS_START),
+      );
+    },
+    [reportProgress],
+  );
 
   const revokePreview = useCallback(() => {
     const preview = previewRef.current;
@@ -318,17 +388,18 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
   const presignUpload = useCallback(
     async (attempt: UploadAttempt): Promise<MediaPresignResponse> => {
       const config = optionsRef.current;
-      const file = attempt.file;
-      if (!file) throw new Error("Missing file for presign.");
+      const sourceFile = attempt.file;
+      const uploadBlob = attempt.uploadBlob;
+      if (!sourceFile || !uploadBlob) throw new Error("Missing file for presign.");
 
       enter("presigning");
       setState((current) => ({ ...current, error: null, progress: null }));
 
       const presigned = await client.presign(config.workspaceId, {
         ...(config.tripId ? { tripId: config.tripId } : {}),
-        fileName: file.name,
-        mimeType: attempt.mimeType ?? "",
-        size: file.size,
+        fileName: attempt.uploadFileName ?? sourceFile.name,
+        mimeType: attempt.uploadMimeType ?? attempt.mimeType ?? "",
+        size: uploadBlob.size,
       });
 
       attempt.upload = presigned;
@@ -345,6 +416,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
       if (!attempt || attempt.operation !== "upload" || !attempt.file) return;
       const config = optionsRef.current;
       const file = attempt.file;
+      const compressor = config.compressor ?? workerCompress;
       const startAt = stepIndex(from);
 
       const runId = ++runIdRef.current;
@@ -369,6 +441,39 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
           if (!alive()) return;
         }
 
+        if (startAt <= stepIndex("compressing")) {
+          enter("compressing");
+          setState((current) => ({ ...current, error: null, progress: 0 }));
+          lastProgressRef.current = 0;
+
+          const compression = await compressor(file, {
+            signal,
+            onProgress: (progress) => {
+              if (alive()) reportCompressionProgress(progress.percent);
+            },
+          });
+          if (!alive()) return;
+
+          attempt.compression = compression;
+          attempt.uploadBlob = compression.full;
+          attempt.uploadMimeType = compression.skipped ? attempt.mimeType : "image/webp";
+          attempt.uploadFileName = compression.skipped ? file.name : toWebpFileName(file.name);
+          // The source/original preference is recorded for D2; D1 deliberately
+          // uploads exactly one object (the compressed derivative, or the source
+          // when it was already small enough).
+          console.info("[cover-upload] image compression", {
+            fileName: file.name,
+            originalBytes: compression.originalBytes,
+            compressedBytes: compression.compressedBytes,
+            quality: compression.quality,
+            iterations: compression.iterations,
+            skipped: compression.skipped,
+            elapsedMs: compression.elapsedMs,
+            keepOriginal: attempt.keepOriginal,
+          });
+          if (!alive()) return;
+        }
+
         if (startAt <= stepIndex("presigning")) {
           await presignUpload(attempt);
           if (!alive()) return;
@@ -387,15 +492,18 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
             }
             enter("uploading");
           }
+          const uploadBlob = attempt.uploadBlob;
+          if (!uploadBlob) throw new Error("Missing compressed file before upload.");
           lastProgressRef.current = null;
-          setState((current) => ({ ...current, progress: 0 }));
+          setState((current) => ({ ...current, progress: UPLOAD_PROGRESS_START }));
+          reportProgress(UPLOAD_PROGRESS_START);
           await client.putObject({
             url: upload.uploadUrl,
             headers: upload.headers,
-            file,
+            file: uploadBlob,
             signal,
             onProgress: (loaded, total) => {
-              if (alive()) reportProgress(loaded, total);
+              if (alive()) reportUploadProgress(loaded, total);
             },
           });
           if (!alive()) return;
@@ -403,8 +511,11 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
 
         if (startAt <= stepIndex("completing")) {
           enter("completing");
+          reportProgress(COMPLETING_PROGRESS);
           if (!attempt.mediaId) throw new Error("Missing media id before complete.");
-          const completed = await client.complete(attempt.mediaId, { size: file.size });
+          const completed = await client.complete(attempt.mediaId, {
+            size: attempt.uploadBlob?.size ?? file.size,
+          });
           if (!alive()) return;
           if (completed.status === "failed") {
             throw new ProcessingFailure("PROCESSING_FAILED", completed.error ?? undefined);
@@ -413,6 +524,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
 
         if (startAt <= stepIndex("processing")) {
           enter("processing");
+          reportProgress(PROCESSING_PROGRESS);
           if (!attempt.mediaId) throw new Error("Missing media id before polling.");
           const media = await pollForReady({
             client,
@@ -435,6 +547,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
 
         if (startAt <= stepIndex("applying")) {
           enter("applying");
+          reportProgress(APPLYING_PROGRESS);
           const mediaId = attempt.mediaId;
           const targetTripId = config.tripId;
           if (!mediaId || !targetTripId) throw new Error("Missing trip id before set cover.");
@@ -447,7 +560,11 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
           finish(updated, null, "upload");
         }
       } catch (error) {
-        if (!alive() || error instanceof UploadAborted) return;
+        if (!alive() || isAbortLike(error)) return;
+        if (isImageCompressionError(error)) {
+          fail(compressionFailure(error.code, error.message, error.detail));
+          return;
+        }
         if (error instanceof ProcessingFailure) {
           fail(processingFailure(error.code, error.detail));
           return;
@@ -455,7 +572,18 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
         fail(mapCoverFailure(error, phaseRef.current));
       }
     },
-    [client, enter, fail, finish, presignUpload, queryClient, reportProgress],
+    [
+      client,
+      enter,
+      fail,
+      finish,
+      presignUpload,
+      queryClient,
+      reportCompressionProgress,
+      reportProgress,
+      reportUploadProgress,
+      workerCompress,
+    ],
   );
 
   const runClear = useCallback(
@@ -504,7 +632,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
         optionsRef.current.onCoverChange?.(updated);
         finish(updated, null, "clear");
       } catch (error) {
-        if (!alive() || error instanceof UploadAborted) return;
+        if (!alive() || isAbortLike(error)) return;
         fail(mapCoverFailure(error, "applying"));
       }
     },
@@ -531,6 +659,11 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
         mimeType: null,
         mediaId: null,
         upload: null,
+        uploadBlob: null,
+        uploadMimeType: null,
+        uploadFileName: null,
+        compression: null,
+        keepOriginal: resolveKeepOriginal(config.keepOriginal),
         applyAfterReady: Boolean(config.tripId),
         tripVersion: config.tripVersion ?? null,
       };
@@ -592,6 +725,11 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
       mimeType: null,
       mediaId: null,
       upload: null,
+      uploadBlob: null,
+      uploadMimeType: null,
+      uploadFileName: null,
+      compression: null,
+      keepOriginal: resolveKeepOriginal(config.keepOriginal),
       applyAfterReady: false,
       tripVersion: version,
     };

@@ -10,6 +10,7 @@ import {
   COVER_MAX_BYTES,
   type CoverMediaClient,
 } from "@/lib/api/media";
+import type { ImageCompressor } from "@/lib/image/use-image-compression";
 
 import {
   type CoverTransition,
@@ -48,11 +49,16 @@ export interface CoverUploaderProps {
   maxBytes?: number;
   pollIntervalMs?: number;
   processTimeoutMs?: number;
+  /** Test/embedding seam; production uses the Worker compression pipeline. */
+  compressor?: ImageCompressor;
+  /** D2 will retain the untouched source; D1 records the preference only. */
+  keepOriginal?: boolean;
 }
 
 const STATUS_LABEL: Record<CoverUploadPhase, string> = {
   idle: "",
   validating: "正在检查图片",
+  compressing: "正在压缩图片",
   presigning: "正在准备上传",
   uploading: "",
   completing: "正在确认上传",
@@ -86,6 +92,8 @@ function describeLiveText(input: {
       return input.hasCover ? "已设置封面，可以替换或移除。" : "尚未设置封面。";
     case "validating":
       return "正在检查图片格式和大小…";
+    case "compressing":
+      return "正在压缩图片…";
     case "presigning":
       return "正在准备上传链接…";
     case "uploading":
@@ -125,6 +133,8 @@ export function CoverUploader({
   maxBytes = COVER_MAX_BYTES,
   pollIntervalMs,
   processTimeoutMs,
+  compressor,
+  keepOriginal,
 }: CoverUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -142,6 +152,8 @@ export function CoverUploader({
     maxBytes,
     pollIntervalMs,
     processTimeoutMs,
+    compressor,
+    keepOriginal,
     onCoverChange: (updated) => {
       onChange?.({
         kind: updated.coverMediaId ? "uploaded" : "removed",
@@ -240,11 +252,13 @@ export function CoverUploader({
       : "未设置";
 
   const uploadLabel =
-    upload.phase === "uploading"
-      ? `正在上传 ${upload.progress ?? 0}%`
-      : upload.phase === "applying" && upload.lastOperation === "clear"
-        ? "正在移除封面"
-        : (STATUS_LABEL[upload.phase] ?? "");
+    upload.phase === "compressing"
+      ? `正在压缩图片 ${upload.progress ?? 0}%`
+      : upload.phase === "uploading"
+        ? `正在上传 ${upload.progress ?? 0}%`
+        : upload.phase === "applying" && upload.lastOperation === "clear"
+          ? "正在移除封面"
+          : (STATUS_LABEL[upload.phase] ?? "");
 
   return (
     <section
@@ -312,7 +326,7 @@ export function CoverUploader({
               已选择 {upload.file?.name ?? "图片"}，浏览器无法预览此格式
             </p>
             <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-              仍会按原图上传并处理
+              上传时会尝试转换为 WebP
             </p>
           </div>
         ) : isProcessingCover ? (
@@ -361,10 +375,10 @@ export function CoverUploader({
 
         {upload.isBusy ? (
           <div className="absolute inset-x-0 bottom-0 z-10 space-y-2 bg-gradient-to-t from-black/90 via-black/55 to-transparent p-3">
-            {upload.phase === "uploading" ? (
+            {upload.phase === "uploading" || upload.phase === "compressing" ? (
               <Progress
                 value={upload.progress ?? 0}
-                aria-label="上传进度"
+                aria-label={upload.phase === "compressing" ? "图片压缩进度" : "上传进度"}
                 aria-valuetext={`${upload.progress ?? 0}%`}
                 indicatorClassName="motion-reduce:transition-none!"
               />

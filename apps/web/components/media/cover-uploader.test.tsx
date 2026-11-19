@@ -3,11 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { SignedUrlUploadError, type CoverMediaClient, type PutObjectRequest } from "@/lib/api/media";
+import { ImageCompressionError } from "@/lib/image/compress-image";
 import {
   COVER_MEDIA_ID,
   COVER_TRIP_ID,
   COVER_WORKSPACE_ID,
+  createFakeImageCompressor,
   createFakeMediaClient,
+  makeCompressionResult,
   makeCoverTrip,
   makeTripCover,
 } from "@/test/cover-upload-doubles";
@@ -16,6 +19,7 @@ import { renderWithQuery } from "@/test/query-harness";
 import { type CoverChange, CoverUploader, type CoverUploaderProps } from "./cover-uploader";
 
 beforeAll(() => {
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     writable: true,
@@ -44,6 +48,7 @@ function renderUploader(
       workspaceId={COVER_WORKSPACE_ID}
       pollIntervalMs={1}
       processTimeoutMs={500}
+      compressor={createFakeImageCompressor()}
       {...props}
     />,
   );
@@ -227,7 +232,7 @@ describe("CoverUploader", () => {
     await waitFor(() =>
       expect(screen.getByRole("progressbar", { name: "上传进度" })).toHaveAttribute(
         "aria-valuenow",
-        "50",
+        "55",
       ),
     );
     expect(screen.getByRole("status")).toHaveTextContent("正在上传 50%");
@@ -250,7 +255,70 @@ describe("CoverUploader", () => {
     fireEvent.error(preview);
 
     expect(await screen.findByText(/浏览器无法预览此格式/)).toBeInTheDocument();
-    expect(screen.getByText(/仍会按原图上传并处理/)).toBeInTheDocument();
+    expect(screen.getByText(/上传时会尝试转换为 WebP/)).toBeInTheDocument();
+  });
+
+  it("announces compression in the live region before upload", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const compressor = vi.fn(
+      async (file: File, options: { onProgress?: (progress: {
+        percent: number;
+        stage: "encoding";
+        iteration: number;
+        quality: number;
+      }) => void } = {}) => {
+        options.onProgress?.({
+          percent: 50,
+          stage: "encoding",
+          iteration: 1,
+          quality: 0.82,
+        });
+        await gate;
+        return makeCompressionResult({ originalBytes: file.size });
+      },
+    );
+    const { client, calls } = createFakeMediaClient();
+    renderUploader({ client, trip: makeCoverTrip(), compressor });
+
+    fireEvent.drop(screen.getByRole("group", { name: "旅行封面" }), {
+      dataTransfer: { files: [makeImage()], types: ["Files"] },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("正在压缩图片…"),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("progressbar", { name: "图片压缩进度" })).toHaveAttribute(
+        "aria-valuenow",
+        "10",
+      ),
+    );
+
+    release();
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("封面已更新。"));
+    expect(calls.presign).toHaveLength(1);
+  });
+
+  it("shows a readable HEIC decode failure and offers a retry", async () => {
+    const compressor = vi.fn(async () => {
+      throw new ImageCompressionError(
+        "DECODE_FAILED",
+        "该格式浏览器无法解码（HEIC/HEIF）。请先转换为 JPEG 或 PNG 后重试。",
+      );
+    });
+    const { client, calls } = createFakeMediaClient();
+    renderUploader({ client, trip: makeCoverTrip(), compressor });
+
+    fireEvent.drop(screen.getByRole("group", { name: "旅行封面" }), {
+      dataTransfer: { files: [makeImage("IMG_0001.HEIC", "image/heic")], types: ["Files"] },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("该格式浏览器无法解码");
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+    expect(calls.presign).toHaveLength(0);
   });
 
   it("renders the photo preset with its own label and accessible names", () => {

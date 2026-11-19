@@ -8,8 +8,51 @@ import type {
 } from "@roamlog/contracts";
 
 import type { CoverMediaClient, PutObjectRequest } from "@/lib/api/media";
+import type { CompressionResult } from "@/lib/image/compress-image";
+import type { CompressImageOptions, ImageCompressor } from "@/lib/image/use-image-compression";
 
 import { makeTrip } from "./fake-data";
+
+export const FAKE_COMPRESSED_BYTES = 1_536;
+export const FAKE_THUMB_BYTES = 256;
+
+export function makeCompressionResult(
+  overrides: Partial<CompressionResult> = {},
+): CompressionResult {
+  return {
+    full: new Blob([new Uint8Array(FAKE_COMPRESSED_BYTES)], { type: "image/webp" }),
+    thumb: new Blob([new Uint8Array(FAKE_THUMB_BYTES)], { type: "image/webp" }),
+    width: 2000,
+    height: 1333,
+    blurhash: "LEHV6nWB2yk8",
+    quality: 0.82,
+    iterations: 1,
+    skipped: false,
+    originalBytes: 2_048,
+    compressedBytes: FAKE_COMPRESSED_BYTES,
+    elapsedMs: 42,
+    ...overrides,
+  };
+}
+
+/** Deterministic compression double: no canvas, no Worker, explicit progress. */
+export function createFakeImageCompressor(): ImageCompressor {
+  return async (file: File, options: CompressImageOptions = {}) => {
+    options.onProgress?.({
+      percent: 12,
+      stage: "encoding",
+      iteration: 1,
+      quality: 0.82,
+    });
+    options.onProgress?.({
+      percent: 88,
+      stage: "blurhash",
+      iteration: 1,
+      quality: 0.82,
+    });
+    return makeCompressionResult({ originalBytes: file.size });
+  };
+}
 
 export const COVER_WORKSPACE_ID = "0198f000-0000-7000-8000-0000000000c1";
 export const COVER_TRIP_ID = "0198f000-0000-7000-8000-0000000000a1";
