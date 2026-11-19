@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { Job } from "bullmq";
 import { defineProcessor, type JobProcessor, type ProcessorContext } from "../processor.js";
 import type { ImageProcessingResult, WorkerDependencies } from "./types.js";
+import { objectBucket } from "./storage-bucket.js";
 
 export interface MediaJobData {
   mediaId: string;
@@ -351,8 +352,25 @@ async function cleanupMedia(
       }
     }
   }
+  // Every object this job removes was uploaded under the row's bucket. After a
+  // bucket switch the current bucket is the wrong one; `undefined` only means
+  // the row itself is gone or predates `Media.bucket`, and then the storage
+  // layer falls back to the current bucket.
+  const bucket = objectBucket(media?.bucket);
+  if (!bucket) {
+    context.logger.warn(
+      {
+        jobId: context.jobId,
+        mediaId: data.mediaId,
+        event: "media.bucket_missing",
+        fallback: "current",
+        keys: keys.size,
+      },
+      "media row has no bucket; deleting with the current bucket",
+    );
+  }
   for (const key of keys) {
-    await deps.storage.deleteObject(key);
+    await deps.storage.deleteObject(key, bucket);
   }
   context.logger.info({ jobId: context.jobId, mediaId: data.mediaId, keys: keys.size }, "media cleaned");
   return { status: "cleaned", mediaId: data.mediaId };

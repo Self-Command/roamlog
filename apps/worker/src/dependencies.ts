@@ -18,18 +18,31 @@ import type {
 } from "./jobs/types.js";
 import { encodeBlurhash } from "./jobs/blurhash.js";
 import { mediaVariantKey } from "./jobs/media.js";
+import {
+  createMailSettingsReader,
+  MailSettingsError,
+  type MailRuntime,
+  type MailRuntimeResend,
+  type MailRuntimeSmtp,
+  type MailRuntimeUnconfigured,
+  type MailSettingsSource,
+} from "./settings-reader.js";
 
 const require = createRequire(import.meta.url);
 
 export function createWorkerDependencies(logger: WorkerLogger): WorkerDependencies {
   // Fails the boot, not a mail job, when a trimmed image cannot resolve SMTP.
   assertSmtpClientAvailable();
+  const db = createDatabase();
   return {
-    db: createDatabase(),
+    db,
     storage: createStorage(),
     images: createImageProcessor(),
     email: {
-      send: createEmailSender(logger),
+      // The reader is bound to the worker's own Prisma client; each send
+      // resolves `mail.*` again (30s read-through cache at most), so Admin
+      // changes reach the worker without a restart.
+      send: createEmailSender(logger, createMailSettingsReader({ db, logger })),
       render: createEmailRenderer(),
     },
     now: () => new Date(),
@@ -60,24 +73,46 @@ function createDatabase(): WorkerDependencies["db"] {
   }
 }
 
-export function createStorage(): WorkerStorage {
-  const bucket = process.env.S3_BUCKET?.trim();
+/** The slice of an S3 client the worker uses; injectable for bucket tests. */
+export interface StorageCommandClient {
+  send(
+    command:
+      | import("@aws-sdk/client-s3").GetObjectCommand
+      | import("@aws-sdk/client-s3").PutObjectCommand
+      | import("@aws-sdk/client-s3").DeleteObjectCommand,
+  ): Promise<unknown>;
+}
+
+export interface CreateStorageOptions {
+  /** Current bucket; defaults to `S3_BUCKET`. */
+  bucket?: string;
+  /** Test seam; production builds its own `S3Client` from `S3_*`. */
+  client?: StorageCommandClient;
+}
+
+export function createStorage(options: CreateStorageOptions = {}): WorkerStorage {
+  const bucket = options.bucket ?? process.env.S3_BUCKET?.trim();
   if (!bucket) {
     throw new Error("S3_BUCKET is required by the worker");
   }
-  const client = new S3Client({
-    endpoint: process.env.S3_ENDPOINT,
-    region: process.env.S3_REGION ?? "us-east-1",
-    forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "true") !== "false",
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY ?? "",
-      secretAccessKey: process.env.S3_SECRET_KEY ?? "",
-    },
-  });
+  const client: StorageCommandClient =
+    options.client ??
+    (new S3Client({
+      endpoint: process.env.S3_ENDPOINT,
+      region: process.env.S3_REGION ?? "us-east-1",
+      forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "true") !== "false",
+      credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY ?? "",
+        secretAccessKey: process.env.S3_SECRET_KEY ?? "",
+      },
+    }) as unknown as StorageCommandClient);
 
   return {
     async getObject(key) {
-      const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const result = (await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))) as {
+        Body?: { transformToByteArray(): Promise<Uint8Array> };
+        ContentType?: string;
+      };
       const bytes = (await result.Body?.transformToByteArray()) ?? new Uint8Array();
       return {
         bytes,
@@ -94,8 +129,15 @@ export function createStorage(): WorkerStorage {
         }),
       );
     },
-    async deleteObject(key) {
-      await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    async deleteObject(key, objectBucket) {
+      // The row's own bucket wins: after a bucket switch the old object must be
+      // deleted from the bucket it actually lives in, not the current one.
+      await client.send(
+        new DeleteObjectCommand({
+          Bucket: objectBucket?.trim() || bucket,
+          Key: key,
+        }),
+      );
     },
   };
 }
@@ -196,7 +238,9 @@ function mailpitUrl(): string {
 /**
  * Mail transports this worker can actually speak. SMTP is real mail since
  * `nodemailer` is a `@roamlog/worker` dependency; the loader below still guards
- * against image builds that prune it.
+ * against image builds that prune it. `mailpit` remains worker-only and
+ * environment-only: it is a local QA catcher, not a `mail.provider` value the
+ * Admin console owns.
  */
 export type WorkerEmailTransport = "resend" | "smtp" | "mailpit";
 
@@ -241,7 +285,7 @@ export class EmailDeliveryError extends Error {
 
 /**
  * A permanent delivery failure (bad credentials, unverified domain, wrong
- * transport for this deployment). Rethrown as BullMQ `UnrecoverableError` so
+ * transport, incomplete settings). Rethrown as BullMQ `UnrecoverableError` so
  * the job fails once instead of burning every retry.
  */
 export class NonRetryableEmailError extends UnrecoverableError {
@@ -274,6 +318,14 @@ function isProductionDeployment(): boolean {
   return process.env.NODE_ENV?.trim().toLowerCase() === "production";
 }
 
+/**
+ * Mailpit stays a worker-only staging transport selected by the environment;
+ * it is not a `mail.*` provider value, so it must not gate the DB path.
+ */
+function isMailpitTransport(): boolean {
+  return process.env.EMAIL_PROVIDER?.trim().toLowerCase() === "mailpit";
+}
+
 function resolveTransport(): WorkerEmailTransport {
   const configured = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
   if (!configured) {
@@ -289,8 +341,7 @@ function resolveTransport(): WorkerEmailTransport {
 }
 
 /** Sender address, with a production refusal for local-only domains. */
-function senderAddress(): string {
-  const configured = process.env.EMAIL_FROM?.trim() || "Roamlog <hello@roamlog.app>";
+function assertSenderAddress(configured: string): string {
   if (!isProductionDeployment()) {
     return configured;
   }
@@ -308,6 +359,11 @@ function senderAddress(): string {
     });
   }
   return configured;
+}
+
+/** Environment-only sender default, kept for callers without a settings reader. */
+function senderAddress(): string {
+  return process.env.EMAIL_FROM?.trim() || "Roamlog <hello@roamlog.app>";
 }
 
 const SMTP_REBUILD_HINT = "rebuild the worker image so EMAIL_PROVIDER=smtp has an SMTP client";
@@ -456,24 +512,72 @@ function smtpPort(): number {
   return port;
 }
 
-async function sendViaSmtp(
-  message: Parameters<EmailSender>[0],
-  logger?: WorkerLoggerLike,
-): Promise<{ providerId: string }> {
-  const host = smtpHost();
-  const port = smtpPort();
+/**
+ * Environment-only runtime, used by tests and scripts that call
+ * `createEmailSender()` without a database. The real worker always passes a
+ * `MailSettingsSource`, so this path is not the production behaviour.
+ */
+function resolveEnvironmentRuntime(): MailRuntime {
+  const transport = resolveTransport();
+  const from = senderAddress();
+  if (transport === "resend") {
+    const apiKey = process.env.RESEND_API_KEY?.trim();
+    if (!apiKey) {
+      throw new NonRetryableEmailError(
+        "RESEND_API_KEY is required to send worker email when EMAIL_PROVIDER=resend",
+        { transport: "resend" },
+      );
+    }
+    return { configured: true, provider: "resend", apiKey, from, source: "env" };
+  }
   const user = process.env.SMTP_USER?.trim();
   const password = process.env.SMTP_PASSWORD ?? "";
-  const from = senderAddress();
+  const host = smtpHost();
+  const port = smtpPort();
+  return {
+    configured: true,
+    provider: "smtp",
+    host,
+    port,
+    ...(user ? { user, password } : {}),
+    secure: port === 465,
+    from,
+    source: "env",
+  };
+}
+
+async function resolveMailRuntime(settings: MailSettingsSource): Promise<MailRuntime> {
+  try {
+    return await settings.resolve();
+  } catch (error) {
+    if (error instanceof MailSettingsError) {
+      // A stored secret that cannot be decrypted is permanent: retrying cannot
+      // fix a missing/rotated CONFIG_ENCRYPTION_KEY.
+      throw new NonRetryableEmailError(error.message, { transport: "unknown" });
+    }
+    throw error;
+  }
+}
+
+function missingSettingsMessage(runtime: MailRuntimeUnconfigured): string {
+  return `Worker mail is not configured (missing: ${runtime.missing.join(", ")})`;
+}
+
+async function sendViaSmtp(
+  message: Parameters<EmailSender>[0],
+  runtime: MailRuntimeSmtp,
+  logger?: WorkerLoggerLike,
+): Promise<{ providerId: string }> {
+  const from = assertSenderAddress(runtime.from);
   const smtp = await loadSmtpModule();
 
   const transport = smtp.createTransport({
-    host,
-    port,
+    host: runtime.host,
+    port: runtime.port,
     // 465 is implicit TLS; 587 and every other port negotiate STARTTLS.
-    secure: port === 465,
+    secure: runtime.secure,
     // Anonymous relays exist, so auth is only sent when a username is set.
-    ...(user ? { auth: { user, pass: password } } : {}),
+    ...(runtime.user ? { auth: { user: runtime.user, pass: runtime.password ?? "" } } : {}),
   });
 
   let info: { messageId?: string; response?: string };
@@ -584,23 +688,17 @@ async function sendViaMailpit(
 
 async function sendViaResend(
   message: Parameters<EmailSender>[0],
+  runtime: MailRuntimeResend,
   logger?: WorkerLoggerLike,
 ): Promise<{ providerId: string }> {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  if (!apiKey) {
-    throw new NonRetryableEmailError(
-      "RESEND_API_KEY is required to send worker email when EMAIL_PROVIDER=resend",
-      { transport: "resend" },
-    );
-  }
-  const from = senderAddress();
+  const from = assertSenderAddress(runtime.from);
 
   let response: Response;
   try {
     response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${runtime.apiKey}`,
         "Content-Type": "application/json",
         "Idempotency-Key": message.idempotencyKey,
       },
@@ -665,19 +763,34 @@ async function sendViaResend(
   return { providerId };
 }
 
-export function createEmailSender(logger?: WorkerLoggerLike): EmailSender {
+export function createEmailSender(
+  logger?: WorkerLoggerLike,
+  settings?: MailSettingsSource,
+): EmailSender {
   return async (message) => {
-    const transport = resolveTransport();
-
-    if (transport === "mailpit") {
+    // Mailpit stays a worker-only local QA transport: it is not a `mail.*`
+    // provider value and is intentionally selected from the environment.
+    if (isMailpitTransport()) {
       return sendViaMailpit(message, logger);
     }
 
-    if (transport === "smtp") {
-      return sendViaSmtp(message, logger);
+    const runtime = settings
+      ? await resolveMailRuntime(settings)
+      : resolveEnvironmentRuntime();
+
+    if (!runtime.configured) {
+      logger?.warn(
+        { event: "mail.not_configured", transport: runtime.provider, missing: runtime.missing },
+        "mail not configured",
+      );
+      throw new NonRetryableEmailError(missingSettingsMessage(runtime), {
+        transport: runtime.provider,
+      });
     }
 
-    return sendViaResend(message, logger);
+    return runtime.provider === "smtp"
+      ? sendViaSmtp(message, runtime, logger)
+      : sendViaResend(message, runtime, logger);
   };
 }
 

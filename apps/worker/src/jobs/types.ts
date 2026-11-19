@@ -16,7 +16,12 @@ export interface WorkerObject {
 export interface WorkerStorage {
   getObject(key: string): Promise<WorkerObject>;
   putObject(key: string, body: Uint8Array, contentType: string): Promise<void>;
-  deleteObject(key: string): Promise<void>;
+  /**
+   * Deletes one object. `bucket` is the bucket recorded on the row that owns
+   * the object (`Media.bucket` / `Export.bucket`); omitting it falls back to
+   * the worker's configured current bucket for rows that predate the column.
+   */
+  deleteObject(key: string, bucket?: string): Promise<void>;
 }
 
 export interface ProcessedVariant {
