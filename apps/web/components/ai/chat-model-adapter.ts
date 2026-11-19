@@ -69,6 +69,34 @@ export type ExecuteToolResult =
 
 export type PlanToolResult = ConfirmedPlanResult | ExecuteToolResult;
 
+/**
+ * Three-state outcome, derived from the per-call results only.
+ *
+ * The wire contract keeps a single boolean (`partialFailure`, now true whenever
+ * any call failed), so "everything failed" and "some failed" arrive with the same
+ * flag. The UI has to tell them apart — a plan where nothing was written must
+ * never read as "已执行".
+ */
+export type ExecutionOutcome = "ok" | "partial" | "all-failed";
+
+export function executionOutcome(response: AiRunExecuteResponse): ExecutionOutcome {
+  if (response.results.length === 0) return "ok";
+  const failed = response.results.filter((result) => !result.ok).length;
+  if (failed === 0) return "ok";
+  return failed === response.results.length ? "all-failed" : "partial";
+}
+
+const EXECUTION_OUTCOME_TEXT: Record<ExecutionOutcome, string> = {
+  ok: "已执行，下面是每一步的结果。",
+  partial: "部分操作没有写入成功，下面是每一步的结果。",
+  "all-failed": "没有写入任何数据，下面是每一步的结果。",
+};
+
+/** Assistant bubble copy that always matches the badge on the result card. */
+export function executionOutcomeText(outcome: ExecutionOutcome): string {
+  return EXECUTION_OUTCOME_TEXT[outcome];
+}
+
 type Content = NonNullable<ChatModelRunResult["content"]>;
 
 function textPart(text: string): Content[number] {
@@ -182,11 +210,7 @@ export function createAiChatModelAdapter({
             });
             yield {
               content: [
-                textPart(
-                  response.partialFailure
-                    ? "部分操作没有写入成功，下面是每一步的结果。"
-                    : "已执行，下面是每一步的结果。",
-                ),
+                textPart(executionOutcomeText(executionOutcome(response))),
                 toolPart(
                   EXECUTE_TOOL_NAME,
                   `${confirmed.runId}-result`,

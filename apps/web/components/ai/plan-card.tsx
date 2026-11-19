@@ -20,6 +20,7 @@ import {
 import {
   EXECUTE_TOOL_NAME,
   PLAN_TOOL_NAME,
+  executionOutcome,
   type ConfirmedPlanResult,
   type ExecuteToolResult,
   type PlanToolArgs,
@@ -306,6 +307,7 @@ export function ExecutionResultCard({
   }
 
   const { response } = result;
+  const outcome = executionOutcome(response);
 
   return (
     <section
@@ -319,12 +321,20 @@ export function ExecutionResultCard({
           </h3>
           <p className="type-meta">{response.results.length} 项</p>
         </div>
-        {response.partialFailure ? (
+        {outcome === "ok" ? (
+          <Badge tone="neutral">全部完成</Badge>
+        ) : outcome === "partial" ? (
           <Badge tone="yellow">部分失败</Badge>
         ) : (
-          <Badge tone="neutral">全部完成</Badge>
+          <Badge tone="red">全部失败</Badge>
         )}
       </header>
+
+      {outcome === "all-failed" ? (
+        <p className="border-b border-hairline bg-accent-red/5 px-4 py-2 text-xs leading-5 text-accent-red">
+          没有写入任何数据，可以回到计划卡重新选择后再执行。
+        </p>
+      ) : null}
 
       <ul className="divide-y divide-hairline">
         {response.results.map((item, index) => {
