@@ -1,4 +1,5 @@
 import type { Job } from "bullmq";
+import { tripVisibilityWhere } from "@roamlog/db";
 import { defineProcessor, type JobProcessor, type ProcessorContext } from "../processor.js";
 import type { WorkerDependencies } from "./types.js";
 
@@ -27,16 +28,56 @@ export async function handleReminderJob(
     },
   });
   let sent = 0;
+  let skipped = 0;
   for (const trip of trips) {
     const members = await deps.db.workspaceMember.findMany({
       where: { workspaceId: trip.workspaceId, status: "active" },
-      include: { user: { select: { id: true, email: true, name: true, status: true } } },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            status: true,
+            platformRole: true,
+          },
+        },
+      },
     });
+
+    // A reminder is a read of the trip: the notification row and the email both
+    // carry the title, the origin and the destinations. Enumerating the
+    // workspace's active members therefore has to pass each of them through the
+    // same `tripVisibilityWhere` predicate the API's list surfaces use. Before
+    // this, a `private` trip's reminder went to every active member, and the
+    // notification list (which is per-user and has no trip gate) made it
+    // readable. The predicate also keeps the legitimate non-members: a joined
+    // participant outside the workspace still receives their reminder.
+    const recipients: Array<{ id: string; email: string }> = [];
     for (const membership of members) {
       const user = membership.user;
       if (!user?.email || user.status !== "active") {
         continue;
       }
+      const visible = await deps.db.trip.findFirst({
+        where: {
+          id: trip.id,
+          ...tripVisibilityWhere({
+            userId: user.id,
+            workspaceId: trip.workspaceId,
+            platformRole: user.platformRole ?? "user",
+          }),
+        },
+        select: { id: true },
+      });
+      if (!visible) {
+        skipped += 1;
+        continue;
+      }
+      recipients.push(user);
+    }
+
+    for (const user of recipients) {
       const existing = await deps.db.notification.findFirst({
         where: {
           userId: user.id,
@@ -94,7 +135,10 @@ export async function handleReminderJob(
       }
     }
   }
-  context.logger.info({ jobId: context.jobId, days, trips: trips.length, sent }, "reminders sent");
+  context.logger.info(
+    { jobId: context.jobId, days, trips: trips.length, sent, skipped },
+    "reminders sent",
+  );
   return { sent };
 }
 
