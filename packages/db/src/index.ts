@@ -35,3 +35,4 @@ export {
   type DefaultSettingKey,
   type SettingDefaultValue,
 } from "./settings-defaults.js";
+export * from "./trip-access.js";
