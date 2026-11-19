@@ -22,6 +22,7 @@ import { PlacesRateLimiter } from "../places-rate-limiter.service.js";
 import { PlacesController } from "../places.controller.js";
 import { PlacesService } from "../places.service.js";
 import { PLACES_SETTINGS, staticPlacesSettingsSource } from "../places.settings.js";
+import { LIMITS_SETTINGS } from "../../settings/limits-settings.consumer.js";
 import {
   asLogger,
   fakeRedis,
@@ -45,11 +46,15 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
   const logger = makeLogger();
   const redis = options.redis ?? fakeRedis();
   const settings = testSettings();
+  // Mutable so a test can change `limits.searchPerMinute` between requests and
+  // prove the guard re-reads it instead of using a startup snapshot.
+  const limits = { searchPerMinute: 30, uploadPerMinute: 20 };
 
   const builder = Test.createTestingModule({
     controllers: [PlacesController],
     providers: [
       { provide: PLACES_SETTINGS, useValue: staticPlacesSettingsSource(settings) },
+      { provide: LIMITS_SETTINGS, useValue: { resolve: async () => ({ ...limits }) } },
       { provide: PinoLoggerService, useValue: asLogger(logger) },
       { provide: RedisService, useValue: redis },
       { provide: AuthService, useValue: { resolveSession: vi.fn().mockResolvedValue(null) } },
@@ -86,7 +91,7 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
   );
   await app.init();
   apps.push(app);
-  return { app, logger, redis };
+  return { app, logger, redis, limits };
 }
 
 afterEach(async () => {
@@ -207,6 +212,44 @@ describe("GET /v1/places/search", () => {
     expect(response.body).toMatchObject({ status: 429, code: "RATE_LIMITED" });
     expect(response.headers["retry-after"]).toBe("42");
     expect(response.headers["ratelimit-remaining"]).toBe("0");
+  });
+
+  it("takes the search allowance from limits.searchPerMinute on every request", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(photonPayload())));
+    const { app, limits } = await createApp({ authenticated: true });
+    limits.searchPerMinute = 2;
+
+    await request(app.getHttpServer()).get("/v1/places/search?q=paris").expect(200);
+    await request(app.getHttpServer()).get("/v1/places/search?q=paris").expect(200);
+    const rejected = await request(app.getHttpServer())
+      .get("/v1/places/search?q=paris")
+      .expect(429);
+
+    expect(rejected.body).toMatchObject({ status: 429, code: "RATE_LIMITED" });
+    expect(rejected.headers["retry-after"]).toBe("60");
+    expect(rejected.headers["ratelimit-limit"]).toBe("2");
+    expect(rejected.headers["ratelimit-remaining"]).toBe("0");
+
+    // Raising the allowance in the settings must apply to the very next
+    // request: the guard resolves the limit per request instead of caching it.
+    limits.searchPerMinute = 30;
+    const allowed = await request(app.getHttpServer())
+      .get("/v1/places/search?q=paris")
+      .expect(200);
+    expect(allowed.headers["ratelimit-limit"]).toBe("30");
+  });
+
+  it("still fails open on Redis errors when limits.searchPerMinute is low", async () => {
+    const redis = fakeRedis();
+    redis.incrementFixedWindow.mockRejectedValue(new Error("redis unavailable"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(photonPayload())));
+    const { app, limits } = await createApp({ authenticated: true, redis });
+    limits.searchPerMinute = 2;
+
+    const response = await request(app.getHttpServer())
+      .get("/v1/places/search?q=paris")
+      .expect(200);
+    expect(response.headers["ratelimit-limit"]).toBe("2");
   });
 
   it("fails open when the Redis rate-limit counter is unavailable", async () => {

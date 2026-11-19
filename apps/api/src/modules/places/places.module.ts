@@ -1,6 +1,10 @@
 import { Module } from "@nestjs/common";
 
 import { AccessControlModule } from "../../common/guards/access-control.module.js";
+import {
+  LIMITS_SETTINGS,
+  LimitsSettingsResolver,
+} from "../settings/limits-settings.consumer.js";
 import { SettingsModule } from "../settings/settings.module.js";
 import { GeoapifyClient } from "./geoapify.client.js";
 import { PhotonClient } from "./photon.client.js";
@@ -24,6 +28,9 @@ import { PLACES_SETTINGS, PlacesSettingsResolver } from "./places.settings.js";
   providers: [
     PlacesSettingsResolver,
     { provide: PLACES_SETTINGS, useExisting: PlacesSettingsResolver },
+    // `limits.searchPerMinute` is resolved per request by the rate limiter.
+    LimitsSettingsResolver,
+    { provide: LIMITS_SETTINGS, useExisting: LimitsSettingsResolver },
     GeoapifyClient,
     PhotonClient,
     PlacesCacheService,
