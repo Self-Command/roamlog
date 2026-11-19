@@ -86,3 +86,54 @@
 ## 迁移台账（共享库已应用 13 条）
 
 0009 media_motion · 0010 trip_destinations · 0011 export_bucket · 0012 visibility_and_participants · 0013 stop_provider_tencent
+
+---
+
+## 第三批：P0 与结构化缺陷（2026-11-19 晚）
+
+### 两条 P0（都是"错数据比空数据更危险"，且都不是单测能发现的）
+
+| # | 缺陷 | 证据 | 处置 |
+|---|---|---|---|
+| P0-1 | **Photon 返回同路错门牌号**：`北京市朝阳区建国路87号` → `建国路75号数字艺术园区` | 实测 | 中国分支禁用 Photon 兜底（`d792332`） |
+| P0-2 | **腾讯把海外汉字地名解析成中国地点**：`东京` → 黑龙江宁安；`巴黎` → 上海；`纽约` → 江苏南通 | 实测 6 例 | 路由收紧为「country=CN 或 汉字+中国地址标记」（`6b2a3a1`） |
+| P0-3 | **Photon 也把汉字地名解析成中国村镇**（Geoapify 不可用时） | 实测 | 含汉字查询不走 Photon 兜底（`f917680`） |
+
+**关键证据（证明单源方案必然错）**：
+
+| 查询 | 全球源 Geoapify | 中国源腾讯 |
+|---|---|---|
+| 建国路87号 | **吉林 42.527,125.726** ❌ | 北京 39.908,116.473 ✅ |
+| 东京 | 日本 35.677,139.764 ✅ | **黑龙江宁安** ❌ |
+
+→ 同一个查询两个源各错一半，**按地址特征分流是唯一可行解**。
+
+### 反复出现的模式（值得写进规范）
+
+1. **"声称本地绿"可能是缓存假绿**：turbo 缓存藏过 5 个 api 错误；`tsconfig.tsbuildinfo` 增量缓存造成过一次 typecheck 假绿。
+2. **本地与生产配置不一致会导致误判**：`.env.local` 缺 `GEOAPIFY_API_KEY` 时全球路由退化到 Photon，使一个正常行为看起来像缺陷。
+3. **并行开发中的瞬时构建失败 ≠ 真缺陷**：`next build` 报的错可能属于**正在跑的其他 Agent**；必须用当时的实际输出定位，不能照抄别人的归因。已发生 1 次（AI_CHAT_PORT 报 setup.ts/chart-container.tsx，实为 PHOTO_MAP 的在途文件）。
+4. **共享文件被多 Agent 触碰要查提交内容**：`apps/web/test/setup.ts` 被 RICHTEXT 与 AI_CHAT_PORT 同时改；已核实 `d9b92a1` 只含 jsdom stub，未卷入他人改动。
+5. **`next build` 会杀掉 :3000 的 dev server**（覆写 `.next`）。跑 build 前先确认，跑完重启。
+6. **本机 `pnpm --filter @roamlog/web build` 返回 126**，须用 `cd apps/web && node ./node_modules/next/dist/bin/next build`。
+
+### 共享文件写入者纪律（新增第 5 条）
+
+5. **`packages/contracts` 与 `packages/db/prisma` 同一时间只允许一个写入者**；依赖安装由协调者一次性完成，任务包一律冻结 `package.json`。
+
+### 待办（第三批）
+
+| 项 | 状态 |
+|---|---|
+| `EXIF_WIRING` | 照片网格接线 + 行程设置里的精确位置开关 + 修 `read-photo-exif.ts` lint |
+| `PHOTO_MAP` | 照片 GPS 上地图（在途） |
+| `AI_E2E_VERIFY` | 配 magpie 供应商，跑真模型端到端，验数据库副作用 |
+| `VIS_ADVERSARIAL` | 穷举仍绕过统一可见性规则的读路径（已发现 6 处，怀疑还有） |
+| `VIS_P2/P3` | 阻塞于 EXIF_WIRING 占用的 trips 模块与 contracts |
+| `AI_WRITING` | 方案 A 已定；阻塞于 contracts |
+| AI 会话服务端持久化 | 当前仅 localStorage |
+| 海外地名别名加权 | Geoapify 已正确；仅无 key 退化路径需关注 |
+
+### 迁移台账（共享库已应用 14 条）
+
+0012 visibility_and_participants · 0013 stop_provider_tencent · **0014 media_exif**（Media.exif/lat/lng + Trip.showExactPhotoLocation + 2 索引 + CHECK lat/lng 成对）
