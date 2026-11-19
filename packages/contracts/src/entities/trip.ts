@@ -220,6 +220,20 @@ export const TripSchema = z
     budgetCurrency: CurrencyCodeSchema.nullable(),
     visibility: TripVisibilitySchema,
     favorite: z.boolean(),
+    /**
+     * Owner switch for the public share page (0014): when `true` the share
+     * presenter emits each photo's exact WGS-84 `lat`/`lng`.
+     *
+     * The product decision is that a shared trip shows exact photo locations, so
+     * the default is `true`. Optional in the schema so the media/admin presenters
+     * and pre-0014 fixtures keep parsing; the trips presenter is the surface that
+     * has to emit it, and wiring the toggle into the trip editor is a follow-up
+     * (the trips module is outside this change).
+     */
+    showExactPhotoLocation: z
+      .boolean()
+      .optional()
+      .describe("Owner switch: expose exact photo GPS on the public share page."),
     version: z.number().int().min(1),
     createdById: UuidV7Schema,
     updatedById: UuidV7Schema,

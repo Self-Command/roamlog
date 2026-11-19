@@ -1,7 +1,9 @@
 import {
+  MediaExifSchema,
   MediaReadSchema,
   MediaSchema,
   type Media,
+  type MediaExif,
   type MediaMotion,
   type MediaRead,
 } from "@roamlog/contracts";
@@ -45,6 +47,46 @@ export function liveMotion(record: MediaRecord): MediaMotionRecord | null {
 }
 
 /**
+ * Sanitizes the stored EXIF blob on the way out, one field at a time.
+ *
+ * The column is JSONB written by a browser bundle, so the read path cannot trust
+ * its shape: an unknown key, a tag value from a future schema version, or a
+ * hand-edited row must not be able to fail a media read.
+ *
+ * Whole-object validation would be all-or-nothing — one camera writing
+ * `FNumber: 999` would blank the GPS and the timestamp with it — so each curated
+ * field is checked against its own rule and an unacceptable value becomes
+ * `undefined` (dropped) instead. Keys outside the curated set are dropped too,
+ * so nothing unvetted is echoed back. `null` when there is no snapshot at all.
+ */
+export function presentMediaExif(value: unknown): MediaExif | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const source = value as Record<string, unknown>;
+  const shape = (MediaExifSchema as unknown as { shape: Record<string, FieldSchema> }).shape;
+  const output: Record<string, unknown> = {};
+  for (const key of Object.keys(shape)) {
+    if (!(key in source)) {
+      continue;
+    }
+    const parsed = shape[key]?.safeParse(source[key]);
+    // An explicit `null` is "the file did not carry this", which is the same
+    // information as an absent key here, so neither is echoed back: a snapshot
+    // that only ever held nulls degrades to `null` rather than to `{}`.
+    if (parsed?.success && parsed.data !== null && parsed.data !== undefined) {
+      output[key] = parsed.data;
+    }
+  }
+  return Object.keys(output).length > 0 ? (output as MediaExif) : null;
+}
+
+/** Structural view of a single Zod field; avoids importing zod here. */
+interface FieldSchema {
+  safeParse(value: unknown): { success: true; data: unknown } | { success: false };
+}
+
+/**
  * Projects a media row into the `Media` contract.
  *
  * Fields are listed explicitly instead of spreading the database row: the row
@@ -85,6 +127,12 @@ export function presentMedia(
     caption: record.caption,
     date: record.date ? presentDate(record.date) : null,
     location: record.location,
+    // `exif` is stored as JSONB and read back untyped, so it is re-validated by
+    // the contract on the way out: a row written by another schema version, or
+    // hand-edited, degrades to `null` instead of failing the whole read.
+    exif: presentMediaExif(record.exif),
+    lat: record.lat ?? null,
+    lng: record.lng ?? null,
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
     deletedAt: nullableIso(record.deletedAt),

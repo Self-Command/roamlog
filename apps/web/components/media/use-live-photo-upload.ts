@@ -29,6 +29,12 @@ import {
   type CompressionResult,
 } from "@/lib/image/compress-image";
 import { compressImage } from "@/lib/image/use-image-compression";
+import {
+  readPhotoExif,
+  readPhotoExifSafely,
+  type PhotoExifRead,
+  type PhotoExifReader,
+} from "@/lib/image/read-photo-exif";
 import { pairLivePhotos, type LivePhotoPair } from "@/lib/image/live-photo-pair";
 import {
   LIVE_PHOTO_MOTION_MAX_BYTES,
@@ -133,6 +139,12 @@ export interface UseLivePhotoUploadOptions {
   probeDuration?: (file: File) => Promise<number | null>;
   /** Test seam; defaults to the D1 Worker compression pipeline. */
   compress?: (file: File) => Promise<CompressionResult>;
+  /**
+   * Test seam for the pre-compression EXIF read of the still. The paired movie
+   * is not re-encoded (D2) but is also not read here: the still is the content
+   * unit the gallery shows, and its metadata is what the source file carries.
+   */
+  exifReader?: PhotoExifReader;
   maxMotionBytes?: number;
 }
 
@@ -283,6 +295,14 @@ async function uploadStill(
         targetBytes: IMAGE_TARGET_BYTES,
         quality: IMAGE_QUALITY_STEPS[0],
       }));
+  // Same rule as the cover uploader: the still's EXIF has to be read from the
+  // source file *before* the canvas re-encode, and it travels with the existing
+  // completion callback rather than adding a request of its own. Reading first
+  // (not in parallel with the encode) also keeps the metadata available when the
+  // compression is slow, and lowers the peak memory of a large HEIC.
+  const exifReader = options.exifReader ?? readPhotoExif;
+  const photoExif = await readPhotoExifSafely(exifReader, pair.still);
+
   const compressed = await compress(pair.still);
   const uploadBlob = compressed.full;
   const mimeType = compressed.skipped ? stillMimeType(pair.still) : "image/webp";
@@ -306,7 +326,27 @@ async function uploadStill(
     ...(compressed.width > 0 ? { width: compressed.width } : {}),
     ...(compressed.height > 0 ? { height: compressed.height } : {}),
     ...(compressed.blurhash ? { blurhash: compressed.blurhash } : {}),
+    ...completionExif(photoExif),
   });
+}
+
+/**
+ * Maps the pre-compression EXIF read onto the `complete` request body.
+ *
+ * `lat`/`lng` are emitted as a pair or not at all: the contract rejects a
+ * half-position, and the database CHECK would surface one as a 500.
+ */
+function completionExif(read: PhotoExifRead | null): {
+  exif?: PhotoExifRead["exif"];
+  lat?: number;
+  lng?: number;
+} {
+  if (!read) {
+    return {};
+  }
+  return read.lat !== null && read.lng !== null
+    ? { exif: read.exif, lat: read.lat, lng: read.lng }
+    : { exif: read.exif };
 }
 
 async function validateMotion(

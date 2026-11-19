@@ -10,6 +10,8 @@ import {
   type PutObjectRequest,
 } from "@/lib/api/media";
 import { ImageCompressionError } from "@/lib/image/compress-image";
+import type { ImageCompressor } from "@/lib/image/use-image-compression";
+import type { PhotoExifRead, PhotoExifReader } from "@/lib/image/read-photo-exif";
 import {
   COVER_MEDIA_ID,
   COVER_TRIP_ID,
@@ -521,7 +523,10 @@ describe("useCoverUpload state machine", () => {
     const { result, calls } = setup({ compressor });
 
     act(() => result.current.selectFile(makeImage()));
-    await waitFor(() => expect(result.current.phase).toBe("compressing"));
+    // The phase flips to "compressing" before the compressor is entered, because
+    // the pre-compression EXIF read (0014) now runs first and is asynchronous.
+    // Wait for the compressor itself, which is what this test is about.
+    await waitFor(() => expect(capturedSignal).toBeDefined());
 
     act(() => result.current.reset());
 
@@ -611,5 +616,100 @@ describe("media compression policy consumption", () => {
         targetBytes: 900_000,
       }),
     );
+  });
+});
+/**
+ * 0014: the photo's EXIF is read off the **source** `File` before the compressor
+ * redraws it (a canvas re-encode drops the source metadata and the original is
+ * never uploaded), and it rides along with the `complete` callback the uploader
+ * already posts — no extra request, no extra upload.
+ */
+describe("pre-compression EXIF (0014)", () => {
+  const SNAPSHOT = {
+    exif: {
+      Make: "Apple",
+      Model: "iPhone 15 Pro",
+      FNumber: 1.8,
+      ExposureTime: "1/250",
+      ISO: 200,
+      latitude: 31.2304,
+      longitude: 121.4737,
+    },
+    lat: 31.2304,
+    lng: 121.4737,
+  };
+
+  it("reads the source file before compressing and submits it with `complete`", async () => {
+    const order: string[] = [];
+    const exifReader: PhotoExifReader = vi.fn(async (file: File) => {
+      order.push(`exif:${file.name}`);
+      return SNAPSHOT as PhotoExifRead;
+    });
+    const compressor: ImageCompressor = vi.fn(async (file: File) => {
+      order.push(`compress:${file.name}`);
+      return makeCompressionResult();
+    });
+    const { result, calls } = setup({ exifReader, compressor });
+
+    act(() => result.current.selectFile(makeImage("IMG_0001.HEIC", "image/heic")));
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    // Same file handle, read first: EXIF must survive even though the uploaded
+    // object is the re-encoded WebP.
+    expect(order).toEqual(["exif:IMG_0001.HEIC", "compress:IMG_0001.HEIC"]);
+    expect(calls.presign).toHaveLength(1);
+    expect(calls.put).toHaveLength(1);
+    expect(calls.complete).toEqual([
+      {
+        mediaId: COVER_MEDIA_ID,
+        input: { size: 1_536, exif: SNAPSHOT.exif, lat: 31.2304, lng: 121.4737 },
+      },
+    ]);
+  });
+
+  it("sends `exif` without coordinates when the photo has none", async () => {
+    const exifReader: PhotoExifReader = vi.fn(async () => ({
+      exif: { Make: "Canon", Model: "EOS R6" },
+      lat: null,
+      lng: null,
+    }));
+    const { result, calls } = setup({ exifReader });
+
+    act(() => result.current.selectFile(makeImage()));
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    // The pair is all-or-nothing: a half-position would be a contract error and
+    // a database CHECK violation.
+    expect(calls.complete[0]?.input).toEqual({
+      size: 1_536,
+      exif: { Make: "Canon", Model: "EOS R6" },
+    });
+    expect(calls.complete[0]?.input).not.toHaveProperty("lat");
+    expect(calls.complete[0]?.input).not.toHaveProperty("lng");
+  });
+
+  it("keeps the request byte-for-byte as before when nothing is readable", async () => {
+    const exifReader: PhotoExifReader = vi.fn(async () => null);
+    const { result, calls } = setup({ exifReader });
+
+    act(() => result.current.selectFile(makeImage()));
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    expect(calls.complete[0]?.input).toEqual({ size: 1_536 });
+    expect(calls.complete[0]?.input).not.toHaveProperty("exif");
+  });
+
+  it("never lets a failing reader block the upload", async () => {
+    const exifReader: PhotoExifReader = vi.fn(async () => {
+      throw new Error("corrupt metadata");
+    });
+    const { result, calls } = setup({ exifReader });
+
+    act(() => result.current.selectFile(makeImage()));
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.mediaId).toBe(COVER_MEDIA_ID);
+    expect(calls.complete).toEqual([{ mediaId: COVER_MEDIA_ID, input: { size: 1_536 } }]);
   });
 });

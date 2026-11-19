@@ -214,7 +214,14 @@ export class ShareLinksService {
     const trip = bundle.trip;
     const startDate = dateOnly(trip.startDate);
     const endDate = dateOnly(trip.endDate);
-    const media = await this.publicMediaList(bundle.media);
+    // The Owner switch is enforced *here*, on the server: when it is off the
+    // coordinates never enter the payload, so there is nothing for the public
+    // page (or anyone reading the response) to un-hide. The column defaults to
+    // `true`, matching the product decision that a shared trip shows exact photo
+    // locations; a row that predates 0014 reads as `undefined` and therefore
+    // keeps the `true` behaviour.
+    const showExactPhotoLocation = trip.showExactPhotoLocation !== false;
+    const media = await this.publicMediaList(bundle.media, showExactPhotoLocation);
     const mediaById = new Map(media.map((item) => [item.id, item]));
     const cover = await this.resolveCover(trip, bundle);
     return PublicTripResponseSchema.parse({
@@ -283,6 +290,7 @@ export class ShareLinksService {
    */
   private async publicMediaList(
     records: ReadonlyArray<Record<string, unknown>>,
+    showExactPhotoLocation: boolean,
   ): Promise<PublicMedia[]> {
     const sources: MediaUrlSource[] = [];
     const rowsById = new Map<string, Record<string, unknown>>();
@@ -319,6 +327,11 @@ export class ShareLinksService {
         continue;
       }
       const motion = liveMotionView(row.motion, urls.motionUrl);
+      // Only the coordinates travel, and only when the Owner switch allows it.
+      // The rest of the EXIF snapshot is deliberately left out of the public
+      // payload: it carries device serial numbers and software versions that the
+      // public page has no use for. `exif` itself is never spread in.
+      const position = showExactPhotoLocation ? exactPosition(row) : {};
       views.push({
         id: source.id,
         url: urls.url,
@@ -330,6 +343,7 @@ export class ShareLinksService {
         caption: stringOrNull(row.caption),
         date: row.date ? dateOnly(row.date) : null,
         location: stringOrNull(row.location),
+        ...position,
         livePhoto: motion !== null,
         motion,
       });
@@ -599,4 +613,29 @@ function rowBucket(value: unknown): string | null {
 
 function numberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The photo's WGS-84 position as public payload keys, or `{}` when the row has
+ * no usable one.
+ *
+ * All-or-nothing on purpose: {@link PublicMediaSchema} accepts `lat`/`lng` only
+ * as a pair, and `Media.lat`/`lng` are written together behind a database CHECK,
+ * so a half-position would mean the row was tampered with — dropping it is
+ * better than publishing an ambiguous point. Range is re-checked here because
+ * the row is untyped JSON; the contract would otherwise reject the whole
+ * response over one bad photo.
+ */
+function exactPosition(
+  row: Record<string, unknown>,
+): { lat: number; lng: number } | Record<string, never> {
+  const lat = numberOrNull(row.lat);
+  const lng = numberOrNull(row.lng);
+  if (lat === null || lng === null) {
+    return {};
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return {};
+  }
+  return { lat, lng };
 }

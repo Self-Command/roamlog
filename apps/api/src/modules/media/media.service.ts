@@ -18,6 +18,7 @@ import {
   TripMediaListQuerySchema,
   UpdateMediaRequestSchema,
   type Media,
+  type MediaExif,
   type MediaMotionPresignResponse,
   type MediaPage,
   type MediaPresignResponse,
@@ -196,6 +197,13 @@ export class MediaService {
       ...(completion.width !== undefined ? { width: completion.width } : {}),
       ...(completion.height !== undefined ? { height: completion.height } : {}),
       ...(completion.blurhash !== undefined ? { blurhash: completion.blurhash } : {}),
+      // EXIF and the denormalized GPS pair arrive with this same callback: the
+      // uploader read them from the source file before compressing it, and the
+      // compressed derivative plus a discarded original leave no other chance.
+      // Absent means "nothing readable" and simply leaves the columns `NULL`.
+      ...(completion.exif !== undefined ? { exif: completion.exif } : {}),
+      ...(completion.lat !== undefined ? { lat: completion.lat } : {}),
+      ...(completion.lng !== undefined ? { lng: completion.lng } : {}),
       variants: {
         original: {
           key: media.key,
@@ -756,6 +764,9 @@ function parseOptionalCompletion(rawInput: unknown): {
   width?: number;
   height?: number;
   blurhash?: string;
+  exif?: MediaExif;
+  lat?: number;
+  lng?: number;
 } {
   if (rawInput === undefined || rawInput === null) {
     return {};

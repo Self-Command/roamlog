@@ -97,6 +97,20 @@ export const PublicMediaSchema = z
     date: DateOnlySchema.nullable(),
     location: z.string().max(200).nullable(),
     /**
+     * Exact WGS-84 position of the photo. Off by default here, on the contract
+     * level: the share presenter only emits these two keys when
+     * `Trip.showExactPhotoLocation` is `true`, and omits them entirely
+     * otherwise. Absence — not `null`, and never a client-side hide — is the
+     * enforcement point, so a payload fetched from a share link that has the
+     * switch off does not carry the coordinates at all.
+     *
+     * Only the coordinates travel: the rest of the EXIF snapshot (device serial
+     * numbers, software versions) stays private, because the public page has no
+     * use for it.
+     */
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+    /**
      * A shared Live Photo must stay playable on the public page: the motion URL
      * is signed exactly like the still's, and the storage key never appears.
      */

@@ -15,6 +15,12 @@ import {
   type CompressionResult,
 } from "@/lib/image/compress-image";
 import { useImageCompression, type ImageCompressor } from "@/lib/image/use-image-compression";
+import {
+  readPhotoExif,
+  readPhotoExifSafely,
+  type PhotoExifRead,
+  type PhotoExifReader,
+} from "@/lib/image/read-photo-exif";
 import { queryKeys } from "@/lib/query";
 
 import {
@@ -107,6 +113,12 @@ export interface UseCoverUploadOptions {
   /** Test/embedding seam; production uses the singleton Worker pipeline. */
   compressor?: ImageCompressor;
   /**
+   * Test/embedding seam for the EXIF read that runs before compression.
+   * Production lazily imports `exifr`; omitting it must never change whether an
+   * upload succeeds.
+   */
+  exifReader?: PhotoExifReader;
+  /**
    * D2 will upload the untouched source as well. D1 only records this preference
    * so the switch can ship without changing the number of uploads.
    */
@@ -145,6 +157,12 @@ interface UploadAttempt {
   uploadMimeType: string | null;
   uploadFileName: string | null;
   compression: CompressionResult | null;
+  /**
+   * Curated EXIF read off the *source* file before compression (0014), submitted
+   * with the `complete` callback. `null` when nothing was readable — the upload
+   * proceeds either way.
+   */
+  photoExif: PhotoExifRead | null;
   keepOriginal: boolean;
   applyAfterReady: boolean;
   tripVersion: number | null;
@@ -209,8 +227,30 @@ function revokeObjectUrl(url: string): void {
   }
 }
 
-function wait(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+/**
+ * Maps the pre-compression EXIF read onto the `complete` request body.
+ *
+ * The metadata rides along with the callback the uploader already posts, so
+ * keeping the camera data costs no extra request and no extra upload. When
+ * nothing was readable the request is exactly what it was before 0014.
+ *
+ * `lat`/`lng` are emitted as a pair or not at all: the contract rejects a
+ * half-position and the database CHECK would turn one into a 500.
+ */
+function completionExif(read: PhotoExifRead | null): {
+  exif?: PhotoExifRead["exif"];
+  lat?: number;
+  lng?: number;
+} {
+  if (!read) {
+    return {};
+  }
+  return read.lat !== null && read.lng !== null
+    ? { exif: read.exif, lat: read.lat, lng: read.lng }
+    : { exif: read.exif };
+}
+
+function wait(ms: number, signal: AbortSignal): Promise<void> {  return new Promise<void>((resolve, reject) => {
     if (signal.aborted) {
       reject(new UploadAborted());
       return;
@@ -463,6 +503,15 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
           setState((current) => ({ ...current, error: null, progress: 0 }));
           lastProgressRef.current = 0;
 
+          // Read EXIF off the raw `File` *before* the compressor draws it to a
+          // canvas: the re-encoded WebP carries none of the source metadata and
+          // the original never leaves the browser, so this is the only chance to
+          // keep the camera data. `readPhotoExif` never throws and never blocks
+          // for long — a failure simply uploads the photo without metadata.
+          const exifReader = config.exifReader ?? readPhotoExif;
+          attempt.photoExif = await readPhotoExifSafely(exifReader, file);
+          if (!alive()) return;
+
           const compression = await compressor(file, {
             signal,
             maxEdge: mediaPolicy.maxEdge,
@@ -535,6 +584,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
           if (!attempt.mediaId) throw new Error("Missing media id before complete.");
           const completed = await client.complete(attempt.mediaId, {
             size: attempt.uploadBlob?.size ?? file.size,
+            ...completionExif(attempt.photoExif),
           });
           if (!alive()) return;
           if (completed.status === "failed") {
@@ -684,6 +734,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
         uploadMimeType: null,
         uploadFileName: null,
         compression: null,
+        photoExif: null,
         keepOriginal: resolveKeepOriginal(config.keepOriginal),
         applyAfterReady: Boolean(config.tripId),
         tripVersion: config.tripVersion ?? null,
@@ -750,6 +801,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
       uploadMimeType: null,
       uploadFileName: null,
       compression: null,
+      photoExif: null,
       keepOriginal: resolveKeepOriginal(config.keepOriginal),
       applyAfterReady: false,
       tripVersion: version,

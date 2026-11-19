@@ -418,3 +418,106 @@ describe("ShareLinksService public place provider", () => {
     );
   });
 });
+
+/**
+ * 0014: exact photo GPS on the public page.
+ *
+ * The product decision is that a shared trip shows where its photos were taken,
+ * so the Owner switch (`Trip.showExactPhotoLocation`) defaults to `true`. It is
+ * enforced **in the presenter**: when it is off the two keys never enter the
+ * payload, so there is nothing for the public page — or anything else reading
+ * the response — to un-hide. The rest of the EXIF snapshot never travels at all,
+ * because it carries device serial numbers and software versions the public page
+ * has no use for.
+ */
+describe("public photo location switch (0014)", () => {
+  const LAT = 37.5665;
+  const LNG = 126.978;
+  const EXIF_SNAPSHOT = {
+    Make: "Apple",
+    Model: "iPhone 15 Pro",
+    FNumber: 1.8,
+    BodySerialNumber: "F2LX00000000",
+    Software: "17.4.1",
+    latitude: LAT,
+    longitude: LNG,
+  };
+
+  function photoBundle(trip: Record<string, unknown>): PublicTripBundle {
+    // `bundleWith` hardcodes `tripRow()`, so the switch has to be overridden.
+    // The row travels in both arms (gallery and entry) exactly like the
+    // repository loads it, so the entry copy is checked too.
+    const row = mediaRow({ lat: LAT, lng: LNG, exif: EXIF_SNAPSHOT });
+    return { ...bundleWith([row], [row]), trip };
+  }
+
+  it("emits lat/lng when the switch is on", async () => {
+    const { service } = buildService(photoBundle(tripRow({ showExactPhotoLocation: true })));
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.media).toHaveLength(1);
+    expect(payload.media[0]?.lat).toBeCloseTo(LAT, 6);
+    expect(payload.media[0]?.lng).toBeCloseTo(LNG, 6);
+  });
+
+  it("treats a trip that predates the column as 'show' (the documented default)", async () => {
+    const trip = tripRow();
+    delete trip.showExactPhotoLocation;
+    const { service } = buildService(photoBundle(trip));
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.media[0]?.lat).toBeCloseTo(LAT, 6);
+  });
+
+  it("omits the keys entirely when the switch is off — absence, not a UI hide", async () => {
+    const { service } = buildService(photoBundle(tripRow({ showExactPhotoLocation: false })));
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.media[0]).not.toBeNull();
+    // `not.toHaveProperty` rather than `toBeNull`: a `null` would still be a
+    // coordinate-shaped payload, and the point is that the coordinates were
+    // cropped on the server before serialization.
+    expect(payload.media[0]).not.toHaveProperty("lat");
+    expect(payload.media[0]).not.toHaveProperty("lng");
+    expect(Object.keys(payload.media[0] ?? {})).not.toContain("lat");
+    expect(Object.keys(payload.media[0] ?? {})).not.toContain("lng");
+    // The whole response, too — not just the gallery copy.
+    expect(JSON.stringify(payload)).not.toContain(String(LAT));
+    expect(payload.entries[0]?.media[0]).not.toHaveProperty("lat");
+  });
+
+  it("never exposes the EXIF snapshot itself, switch on or off", async () => {
+    for (const show of [true, false]) {
+      const { service } = buildService(photoBundle(tripRow({ showExactPhotoLocation: show })));
+      const payload = await service.readPublic(SHARE_TOKEN, {});
+      const serialized = JSON.stringify(payload);
+
+      expect(payload.media[0]).not.toHaveProperty("exif");
+      // Device identity must not leak through a public share link.
+      expect(serialized).not.toContain("F2LX00000000");
+      expect(serialized).not.toContain("17.4.1");
+      expect(serialized).not.toContain("BodySerialNumber");
+      expect(serialized).not.toContain("iPhone 15 Pro");
+    }
+  });
+
+  it("drops a half-written position instead of publishing an ambiguous point", async () => {
+    // The column pair is written together behind a database CHECK, so a row with
+    // only one half means it was tampered with; the public read must not fail.
+    const { service } = buildService(
+      bundleWith([mediaRow({ lat: LAT, lng: null })], []),
+    );
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.media[0]).not.toHaveProperty("lat");
+    expect(payload.media[0]).not.toHaveProperty("lng");
+  });
+
+  it("hides the position of a photo that has none, even with the switch on", async () => {
+    const { service } = buildService(bundleWith([mediaRow({ lat: null, lng: null })], []));
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.media[0]).not.toHaveProperty("lat");
+    expect(payload.media[0]).not.toHaveProperty("lng");
+  });
+});

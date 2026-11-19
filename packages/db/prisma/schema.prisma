@@ -398,6 +398,12 @@ model Trip {
   budgetAmountMinor Int?
   budgetCurrency    String?
   visibility        TripVisibility    @default(workspace)
+  /// Owner switch for the public share page. `true` (the default) matches the
+  /// product decision that a shared trip shows exact photo locations, so a share
+  /// created without touching it keeps today's behaviour. Enforced in the share
+  /// *presenter*: when `false` the public payload omits `lat`/`lng` entirely,
+  /// rather than shipping them for the page to hide.
+  showExactPhotoLocation Boolean       @default(true)
   favorite          Boolean           @default(false)
   version           Int               @default(1)
   createdById       String            @db.Uuid
@@ -724,6 +730,17 @@ model Media {
   caption         String?
   date            DateTime?    @db.Date
   location        String?
+  /// Structured photo EXIF read from the source `File` *before* the browser
+  /// compresses it: a canvas re-encode drops the source EXIF, so there is no
+  /// second chance once the derivative is the only object in storage. Keys keep
+  /// the `exifr` tag names (`Make`, `FNumber`, `DateTimeOriginal`, …). `null`
+  /// means "nothing readable" — the uploader never invents a value, and history
+  /// is not backfilled because the original file is gone.
+  exif            Json?         @db.JsonB
+  /// Denormalized GPS pair (WGS-84), lifted out of `exif` so map queries never
+  /// have to parse the JSON blob. `null` when the photo carries no GPS.
+  lat            Float?
+  lng            Float?
   createdAt       DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
   deletedAt       DateTime?    @db.Timestamptz(3)
@@ -743,6 +760,10 @@ model Media {
   @@index([workspaceId, status, createdAt])
   @@index([tripId, createdAt])
   @@index([uploaderId])
+  /// Map queries filter on the photo position, so the denormalized pair needs its
+  /// own index; a null pair never matches a coordinate filter.
+  @@index([workspaceId, lat, lng])
+  @@index([tripId, lat, lng])
 }
 
 /// The paired motion asset of an iOS Live Photo (or an Android Motion Photo).

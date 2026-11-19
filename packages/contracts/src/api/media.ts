@@ -4,6 +4,7 @@ import { DateOnlySchema, IsoTimestampSchema, UuidV7Schema } from "../common/ids"
 import { createSortSchema, CursorPageSchema, CursorQuerySchema } from "../common/pagination";
 import { MediaStatusSchema } from "../entities/enums";
 import {
+  MediaExifSchema,
   MediaMotionMimeTypeSchema,
   MediaSchema,
 } from "../entities/media";
@@ -51,6 +52,25 @@ export const MediaPresignResponseSchema = z
   .strict();
 export type MediaPresignResponse = z.infer<typeof MediaPresignResponseSchema>;
 
+/**
+ * Completion callback for the still.
+ *
+ * `exif`/`lat`/`lng` ride along with the *existing* callback on purpose: the
+ * uploader already posts here once, so metadata costs no extra request and no
+ * extra upload. They are read in the browser from the source `File` **before**
+ * `compress()` — the canvas re-encode that produces the uploaded WebP drops the
+ * source EXIF, and the original is never uploaded, so this is the only
+ * opportunity to keep the camera data (see `MediaExifSchema`).
+ *
+ * All three are genuinely `.optional()` on the request side: absence means
+ * "nothing readable", which is a normal outcome (a screenshot, a stripped
+ * export, a corrupt file) and must not fail an upload. They are never
+ * `.nullable()` here — sending an explicit `null` is a client bug, and this
+ * repository has already been burned by blurring optional with nullable.
+ * `exif` is a metadata blob, not a security boundary: the reader strips what it
+ * cannot normalize, and the pair rule below keeps a half-written position out
+ * of the database.
+ */
 export const CompleteMediaRequestSchema = z
   .object({
     size: z
@@ -62,8 +82,33 @@ export const CompleteMediaRequestSchema = z
     width: z.number().int().positive().max(20_000).optional(),
     height: z.number().int().positive().max(20_000).optional(),
     blurhash: z.string().max(200).optional(),
+    exif: MediaExifSchema.optional(),
+    lat: z
+      .number()
+      .min(-90)
+      .max(90)
+      .optional()
+      .describe("WGS-84 latitude lifted from the EXIF GPS pair."),
+    lng: z
+      .number()
+      .min(-180)
+      .max(180)
+      .optional()
+      .describe("WGS-84 longitude lifted from the EXIF GPS pair."),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    // `Media.lat`/`Media.lng` are written together and the database CHECK
+    // rejects a half-position. Reject it here as a 400 instead of letting it
+    // reach PostgreSQL as SQLSTATE 23514 and surface as a 500.
+    if ((value.lat === undefined) !== (value.lng === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "`lat` and `lng` must be provided together.",
+        path: [value.lat === undefined ? "lat" : "lng"],
+      });
+    }
+  });
 export type CompleteMediaRequest = z.infer<typeof CompleteMediaRequestSchema>;
 
 /**

@@ -112,6 +112,8 @@ export function makeTrip(overrides: Partial<Trip> = {}): Trip {
     budgetCurrency: "CNY",
     visibility: "workspace",
     favorite: false,
+    // 0014: the Owner switch for exact photo GPS on the public share page.
+    showExactPhotoLocation: true,
     version: 1,
     createdById,
     updatedById: overrides.updatedById ?? createdById,
@@ -302,6 +304,11 @@ export function makeMedia(overrides: Partial<Media> = {}): Media {
     caption: null,
     date: null,
     location: null,
+    // 0014: no readable metadata by default; the upload path is what fills
+    // these, and a factory should not invent camera data a test did not ask for.
+    exif: null,
+    lat: null,
+    lng: null,
     createdAt: fixedNow,
     updatedAt: fixedNow,
     deletedAt: null,

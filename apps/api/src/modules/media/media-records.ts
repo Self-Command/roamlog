@@ -37,6 +37,15 @@ export interface MediaRecord {
   caption: string | null;
   date: Date | null;
   location: string | null;
+  /**
+   * Curated EXIF snapshot (0014), written once by `complete` from what the
+   * browser read off the source file before compressing it. `null` for media
+   * whose metadata could not be read — never a placeholder object.
+   */
+  exif: unknown;
+  /** WGS-84 pair denormalized out of `exif` for map queries; both or neither. */
+  lat: number | null;
+  lng: number | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
