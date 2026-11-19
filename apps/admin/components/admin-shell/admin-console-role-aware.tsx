@@ -1,7 +1,7 @@
 "use client";
 
-import type { AdminConsoleRole } from "../../lib/fixtures";
-import { useAdminSession } from "./mock-session-provider";
+import type { AdminConsoleRole } from "../../lib/admin-types";
+import { useAdminSession } from "./admin-session-provider";
 
 export function AdminConsoleRoleAware({
   children,

@@ -15,8 +15,7 @@ import {
   SheetTitle,
 } from "@roamlog/ui";
 
-import type { AdminConsoleRole } from "../../lib/fixtures";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
+import type { AdminConsoleRole } from "../../lib/admin-types";
 import { AdminMutationError } from "../../lib/admin-api-error";
 import {
   UNKNOWN_THROUGHPUT,
@@ -25,13 +24,10 @@ import {
   type AdminMutationPort,
 } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
-import { recordMockAuditEvent } from "../../lib/mock-audit";
 import {
-  MOCK_ADMIN_FAILED_JOBS,
-  MOCK_ADMIN_QUEUES,
   type AdminFailedJob,
   type AdminQueueSummary,
-} from "../../lib/ops-fixtures";
+} from "../../lib/admin-ops-types";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "../dashboard/admin-metric-card";
 import { DestructiveActionDialog } from "../admin-ui/destructive-action-dialog";
@@ -44,17 +40,15 @@ type QueueAction =
 
 interface QueuesViewProps {
   role: AdminConsoleRole;
-  queues?: readonly AdminQueueSummary[];
-  failedJobs?: readonly AdminFailedJob[];
-  mode?: AdminDataMode;
+  queues: readonly AdminQueueSummary[];
+  failedJobs: readonly AdminFailedJob[];
   mutations?: AdminMutationPort;
 }
 
 export function QueuesView({
   role,
-  queues = MOCK_ADMIN_QUEUES,
-  failedJobs = MOCK_ADMIN_FAILED_JOBS,
-  mode = "fixture",
+  queues,
+  failedJobs,
   mutations,
 }: QueuesViewProps) {
   const [queueRecords, setQueueRecords] = useState<readonly AdminQueueSummary[]>(queues);
@@ -131,7 +125,7 @@ export function QueuesView({
     }
     if (pendingAction.kind === "retry") {
       const job = pendingAction.job;
-      if (mode === "api" && mutations) {
+      if (mutations) {
         try {
           await mutations.retryJob(job.queue, job.id);
         } catch (error) {
@@ -150,19 +144,10 @@ export function QueuesView({
           queue.name === job.queue ? { ...queue, failed: Math.max(0, queue.failed - 1) } : queue,
         ),
       );
-      if (mode === "fixture") {
-        recordMockAuditEvent({
-          action: "admin.jobs.retry",
-          targetType: "job",
-          targetId: job.id,
-          targetName: job.name,
-          metadata: { mock: true, queue: job.queue, attempts: job.attempts },
-        });
-      }
       setStatusMessage(`已重新入队：${job.id}`);
     } else if (pendingAction.kind === "clear") {
       const queue = pendingAction.queue;
-      if (mode === "api" && mutations) {
+      if (mutations) {
         try {
           await mutations.clearQueue(queue.name);
         } catch (error) {
@@ -179,19 +164,10 @@ export function QueuesView({
       setQueueRecords((current) =>
         current.map((item) => (item.name === queue.name ? { ...item, failed: 0 } : item)),
       );
-      if (mode === "fixture") {
-        recordMockAuditEvent({
-          action: "admin.jobs.clear",
-          targetType: "queue",
-          targetId: queue.name,
-          targetName: queue.label,
-          metadata: { mock: true, queue: queue.name, previousFailed: queue.failed },
-        });
-      }
       setStatusMessage(`已清空失败任务：${queue.name}`);
     } else {
       const { queue, kind } = pendingAction;
-      if (mode === "api" && mutations) {
+      if (mutations) {
         try {
           if (kind === "pause") {
             await mutations.pauseQueue(queue.name);
@@ -213,15 +189,6 @@ export function QueuesView({
           item.name === queue.name ? { ...item, paused: kind === "pause" } : item,
         ),
       );
-      if (mode === "fixture") {
-        recordMockAuditEvent({
-          action: kind === "pause" ? "admin.jobs.pause" : "admin.jobs.resume",
-          targetType: "queue",
-          targetId: queue.name,
-          targetName: queue.label,
-          metadata: { mock: true, queue: queue.name },
-        });
-      }
       setStatusMessage(`${kind === "pause" ? "已暂停" : "已恢复"}队列：${queue.name}`);
     }
     setPendingAction(null);
@@ -284,7 +251,7 @@ export function QueuesView({
         />
       </section>
 
-      {mode === "api" ? <QueueWorkerPanel /> : null}
+      {<QueueWorkerPanel />}
 
       {!canManageQueue ? (
         <div
@@ -292,11 +259,7 @@ export function QueuesView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          {mode === "api"
-            ? "API 模式：队列生命周期操作仅 super_admin 可执行；失败任务读取与重试按角色权限开放。"
-            : !canRetry
-              ? "Support / Analyst 可读取队列指标与失败原因；重试、暂停与清空操作保持可见但禁用。"
-              : "Admin 可重试失败任务；暂停、恢复与清空队列属于 super_admin 专属操作。"}
+          失败任务读取与重试按角色权限开放；暂停、恢复与清空队列仅 super_admin 可执行。
         </div>
       ) : null}
 
@@ -401,7 +364,7 @@ export function QueuesView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">失败任务</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              failed / dead-letter review · {mode}
+              failed / dead-letter review
             </p>
           </div>
           <Badge tone={jobRecords.length > 0 ? "red" : "green"}>{jobRecords.length} jobs</Badge>
@@ -411,7 +374,7 @@ export function QueuesView({
           <EmptyState
             icon={AlertTriangle}
             title="没有失败任务"
-            description={`当前 ${mode} 数据中没有待处理失败任务。`}
+            description="当前数据中没有待处理失败任务。"
             className="m-4"
           />
         ) : (

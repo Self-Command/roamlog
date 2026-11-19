@@ -1,11 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AuditLog } from "@roamlog/contracts";
 
-import { MOCK_ADMIN_USERS, MOCK_AUDIT_LOGS } from "../../lib/fixtures";
-import { recordMockAuditEvent } from "../../lib/mock-audit";
+import { sampleAuditLogs } from "../../test/admin-sample-data";
 import { AuditView } from "./audit-view";
 
 const API_ACTOR_ALPHA = "0199a0c1-1100-7000-8000-0000000000aa";
@@ -80,7 +79,7 @@ function actorOptionValues(): string[] {
 
 describe("AuditView", () => {
   it("renders the append-only timeline and governance actions", () => {
-    render(<AuditView role="analyst" entries={MOCK_AUDIT_LOGS} />);
+    render(<AuditView role="analyst" entries={sampleAuditLogs} />);
 
     expect(screen.getByRole("heading", { name: "审计日志" })).toBeInTheDocument();
     expect(screen.getByText("admin.user.suspend")).toBeInTheDocument();
@@ -90,24 +89,10 @@ describe("AuditView", () => {
   });
 
   it("does not expose audit export to support", () => {
-    render(<AuditView role="support" entries={MOCK_AUDIT_LOGS} />);
+    render(<AuditView role="support" entries={sampleAuditLogs} />);
 
     expect(screen.getByRole("button", { name: "导出 CSV" })).toBeDisabled();
     expect(screen.getByText("仅 Analyst 及以上角色可导出审计 CSV。")).toBeInTheDocument();
-  });
-
-  it("surfaces locally recorded mock actions for cross-route verification", async () => {
-    recordMockAuditEvent({
-      action: "mock.local.verification",
-      targetType: "user",
-      targetId: "mock-target",
-      targetName: "林知夏",
-    });
-
-    render(<AuditView role="admin" entries={MOCK_AUDIT_LOGS} />);
-
-    expect(screen.getByText("最近本地模拟操作")).toBeInTheDocument();
-    expect(await screen.findByText("mock.local.verification")).toBeInTheDocument();
   });
 
   it("exports the current filters through the Admin API in API mode", async () => {
@@ -120,7 +105,7 @@ describe("AuditView", () => {
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
 
-    render(<AuditView role="analyst" entries={MOCK_AUDIT_LOGS} mode="api" exportCsv={exportCsv} />);
+    render(<AuditView role="analyst" entries={sampleAuditLogs} exportCsv={exportCsv} />);
 
     await user.click(screen.getByRole("button", { name: "导出 CSV" }));
 
@@ -131,7 +116,7 @@ describe("AuditView", () => {
   });
 
   it("derives the actor filter from loaded API audit entries, not fixture users", () => {
-    render(<AuditView role="analyst" entries={API_AUDIT_ENTRIES} mode="api" />);
+    render(<AuditView role="analyst" entries={API_AUDIT_ENTRIES} />);
 
     expect(actorOptionLabels()).toEqual([
       "全部操作者",
@@ -145,36 +130,25 @@ describe("AuditView", () => {
   });
 
   it("offers only the generic actor options when API mode has no loaded entries", () => {
-    render(<AuditView role="analyst" entries={[]} mode="api" />);
+    render(<AuditView role="analyst" entries={[]} />);
 
     expect(actorOptionLabels()).toEqual(["全部操作者", "System worker"]);
     expect(actorOptionValues()).toEqual(["all", "system"]);
     expect(screen.queryByText("林知夏")).not.toBeInTheDocument();
   });
 
-  it("keeps fixture admin users in the actor filter in fixture mode", () => {
-    render(<AuditView role="analyst" entries={MOCK_AUDIT_LOGS} />);
-
-    const select = screen.getByLabelText<HTMLSelectElement>("Actor");
-    expect(actorOptionLabels()).toEqual([
-      "全部操作者",
-      "System worker",
-      ...MOCK_ADMIN_USERS.map((user) => user.name),
-    ]);
-    expect(within(select).getByRole("option", { name: "林知夏" })).toBeInTheDocument();
-  });
 
   it("keeps a selected API actor filter visible after the loaded page changes", async () => {
     const user = userEvent.setup();
     const { rerender } = render(
-      <AuditView role="analyst" entries={API_AUDIT_ENTRIES} mode="api" />,
+      <AuditView role="analyst" entries={API_AUDIT_ENTRIES} />,
     );
 
     const select = screen.getByLabelText<HTMLSelectElement>("Actor");
     await user.selectOptions(select, API_ACTOR_ALPHA);
     expect(select.value).toBe(API_ACTOR_ALPHA);
 
-    rerender(<AuditView role="analyst" entries={[]} mode="api" />);
+    rerender(<AuditView role="analyst" entries={[]} />);
 
     expect(actorOptionValues()).toEqual(["all", "system", API_ACTOR_ALPHA]);
     expect(actorOptionLabels()).toEqual(["全部操作者", "System worker", "actor 000000aa"]);

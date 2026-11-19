@@ -1,15 +1,16 @@
 # Roamlog Admin
 
-Independent platform operations console for Roamlog. This Wave 0 shell runs on
-`http://localhost:3001` and uses local fixture data only.
+Independent platform operations console for Roamlog. It runs on
+`http://localhost:3001` and reads every view from the real Admin API through the
+same-origin `/v1` proxy.
 
 ## Routes
 
-- `/login` — mock credentials + 2FA placeholder; no session is created.
+- `/login` — Better Auth credentials + TOTP challenge.
 - `/admin` — platform metrics, trend, queue and email health.
 - `/admin/users` — user table, filters, bulk selection, detail sheet and guarded actions.
 - `/admin/workspaces` — Workspace table, filters, detail sheet and guarded actions.
-- `/admin/audit` — append-only timeline, filters and fixture CSV export.
+- `/admin/audit` — append-only timeline, filters and server-side CSV export.
 - `/admin/login` — same login panel, usable when Admin is mounted under `/admin/*`.
 
 ## Same-domain deployment
@@ -30,22 +31,21 @@ so the existing Admin route paths stay unchanged.
 
 ## Data boundary
 
-Shared `@roamlog/api-mocks` now exists, but its current fixture set only covers
-initial Web identity, Workspace and trip data; it does not yet expose Admin
-metrics, users, Workspaces or audit fixtures. All views consume the single
-`AdminDataSource` interface in `lib/admin-data-source.ts`; it currently resolves
-to `lib/fixtures.ts`. Replace that implementation with an MSW-backed source when
-Admin fixtures/handlers land. Pages and tables must not import fixtures directly.
+There is exactly one data path: `/v1/admin/*` through the same-origin proxy.
+`lib/admin-data-source.ts` exposes typed React Query resources and the single
+`AdminMutationPort`; pages render the resource, they never fabricate rows. A
+failed request renders a user-facing retry state with the error code collapsed
+into a details panel.
 
-Destructive operations update local state and write a local mock audit event.
-They never call a real API. Mock audit events are visible on `/admin/audit` and
-are stored under `roamlog.admin.mockAudit.v1`.
+There is no offline or preview data mode: if the API is down the console shows
+the failure instead of inventing numbers. Every destructive action goes through
+the API, is authorised by the backend, and is written to the audit log there.
 
 ## Platform permissions
 
 The shell uses `canPlatform()` from `@roamlog/contracts` rather than duplicating
-the permission matrix. The sidebar exposes a clearly labelled role preview so
-support, analyst, admin and super admin states can be inspected locally.
+the permission matrix. The sidebar shows the platform role returned by `/v1/me`
+and offers no way to change it locally.
 
 - `support` can read users/Workspaces and suspend, restore or force logout.
 - `analyst` is read-only and can export audit CSV.
@@ -63,6 +63,5 @@ pnpm --filter @roamlog/admin build
 pnpm --filter @roamlog/admin dev
 ```
 
-The current task intentionally did not run `pnpm install`, so Web/Admin Next.js
-dependencies are not linked yet. See `W0_ADMIN_REPORT.md` at the repository root
-for the verification evidence and remaining risks.
+The Admin console has no fallback data source; run the API (or point the proxy at
+it) before opening a page.

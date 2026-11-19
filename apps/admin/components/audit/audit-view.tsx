@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Download, FileSearch, ShieldCheck } from "lucide-react";
 
 import type { ExportAdminAuditCsvParams } from "@roamlog/api-client";
@@ -9,19 +9,14 @@ import type { AuditLog } from "@roamlog/contracts";
 import { Badge, Button, EmptyState, Input, Select } from "@roamlog/ui";
 
 import { AdminMutationError } from "../../lib/admin-api-error";
-import { getAdminDataSource } from "../../lib/admin-data-source";
-import { MOCK_ADMIN_USERS, type AdminConsoleRole } from "../../lib/fixtures";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
+import type { AdminConsoleRole } from "../../lib/admin-types";
 import { formatDateTime } from "../../lib/format";
-import { readMockAuditEvents } from "../../lib/mock-audit-reader";
-import type { MockAuditEvent } from "../../lib/mock-audit";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 
 interface AuditViewProps {
   role: AdminConsoleRole;
-  entries?: readonly AuditLog[];
-  mode?: AdminDataMode;
+  entries: readonly AuditLog[];
   exportCsv?: (params: ExportAdminAuditCsvParams) => Promise<string>;
 }
 
@@ -36,16 +31,9 @@ interface AuditActorOption {
   label: string;
 }
 
-function actorName(
-  actorId: string | null,
-  actorType: AuditLog["actorType"],
-  mode: AdminDataMode,
-): string {
+function actorName(actorId: string | null, actorType: AuditLog["actorType"]): string {
   if (actorType === "system") {
     return "System worker";
-  }
-  if (mode === "fixture") {
-    return MOCK_ADMIN_USERS.find((user) => user.id === actorId)?.name ?? "未知管理员";
   }
   return actorId ? `actor ${actorId.slice(-8)}` : "未知操作者";
 }
@@ -68,18 +56,18 @@ const AUDIT_CSV_COLUMNS = [
   "metadata",
 ] as const;
 
-function downloadCsv(csv: string, mode: AdminDataMode): void {
+function downloadCsv(csv: string): void {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `roamlog-admin-audit-${mode}.csv`;
+  link.download = "roamlog-admin-audit.csv";
   link.click();
   URL.revokeObjectURL(url);
 }
 
-export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditViewProps) {
-  const sourceEntries = entries ?? getAdminDataSource().listAuditLogs();
+export function AuditView({ role, entries, exportCsv }: AuditViewProps) {
+  const sourceEntries = entries;
   const [query, setQuery] = useState("");
   const [actorType, setActorType] = useState<"all" | AuditLog["actorType"]>("all");
   const [actorFilter, setActorFilter] = useState("all");
@@ -89,32 +77,23 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
   const [toDate, setToDate] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [isExporting, setIsExporting] = useState(false);
-  const [mockEvents, setMockEvents] = useState<MockAuditEvent[]>([]);
-
-  useEffect(() => {
-    setMockEvents(readMockAuditEvents().reverse());
-  }, []);
-
   const canExport = canPlatform(role, "admin:audit:export");
   const targetTypeOptions = useMemo(
     () => [...new Set(sourceEntries.map((entry) => entry.targetType))].sort(),
     [sourceEntries],
   );
   const actorOptions = useMemo<readonly AuditActorOption[]>(() => {
-    if (mode === "fixture") {
-      return MOCK_ADMIN_USERS.map((user) => ({ value: user.id, label: user.name }));
-    }
 
-    // API mode: the audit log carries real actor ids but no display names, so the
-    // filter offers exactly the actors present on the loaded page. Labels come
-    // from actorName(), matching the `actor <id8>` text used by the timeline.
+    // The audit log carries real actor ids but no display names, so the filter
+    // offers exactly the actors present on the loaded page. Labels come from
+    // actorName(), matching the `actor <id8>` text used by the timeline.
     const labelsByActorId = new Map<string, string>();
     for (const entry of sourceEntries) {
       if (entry.actorType === "system" || !entry.actorId) {
         continue;
       }
       if (!labelsByActorId.has(entry.actorId)) {
-        labelsByActorId.set(entry.actorId, actorName(entry.actorId, entry.actorType, mode));
+        labelsByActorId.set(entry.actorId, actorName(entry.actorId, entry.actorType));
       }
     }
 
@@ -129,14 +108,14 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
     ) {
       // Keep an active filter selectable after the loaded page no longer contains
       // that actor, so the control never falls back to a blank selection.
-      options.push({ value: actorFilter, label: actorName(actorFilter, "admin", mode) });
+      options.push({ value: actorFilter, label: actorName(actorFilter, "admin") });
     }
 
     return options.sort(
       (left, right) =>
         left.label.localeCompare(right.label, "zh-CN") || left.value.localeCompare(right.value),
     );
-  }, [actorFilter, mode, sourceEntries]);
+  }, [actorFilter, sourceEntries]);
   const filteredEntries = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
     const normalizedIp = ipQuery.trim().toLocaleLowerCase("zh-CN");
@@ -146,8 +125,7 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
         `${entry.action} ${entry.targetType} ${entry.actorId ?? ""} ${actorName(
           entry.actorId,
           entry.actorType,
-          mode,
-        )}`
+)}`
           .toLocaleLowerCase("zh-CN")
           .includes(normalizedQuery);
       const matchesActor = actorType === "all" || entry.actorType === actorType;
@@ -177,8 +155,7 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
     ipQuery,
     query,
     sourceEntries,
-    mode,
-    targetTypeFilter,
+targetTypeFilter,
     toDate,
   ]);
 
@@ -187,7 +164,7 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
       return;
     }
 
-    if (mode === "api" && exportCsv) {
+    if (exportCsv) {
       setIsExporting(true);
       try {
         const params: ExportAdminAuditCsvParams = {
@@ -205,7 +182,7 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
           sort: "createdAt:desc",
         };
         const csv = await exportCsv(params);
-        downloadCsv(csv, "api");
+        downloadCsv(csv);
         setStatusMessage(`已从 Admin API 导出审计 CSV。`);
       } catch (error) {
         setStatusMessage(
@@ -226,8 +203,8 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
         ),
       ).join(","),
     );
-    downloadCsv(`\uFEFF${[AUDIT_CSV_COLUMNS.join(","), ...rows].join("\r\n")}\r\n`, mode);
-    setStatusMessage(`已导出 ${filteredEntries.length} 条 ${mode} 审计事件。`);
+    downloadCsv(`\uFEFF${[AUDIT_CSV_COLUMNS.join(","), ...rows].join("\r\n")}\r\n`);
+    setStatusMessage(`已导出 ${filteredEntries.length} 条审计事件。`);
   }
 
   return (
@@ -236,10 +213,7 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
         eyebrow="TRUST & SAFETY / AUDIT"
         title="审计日志"
         description={
-          mode === "api"
-            ? "只追加的管理后台操作记录，读取真实 Admin API。"
-            : "只追加的管理后台操作记录。当前页面读取本地 fixture；真实日志接入 API 后保持同一展示与筛选结构。"
-        }
+          "只追加的管理后台操作记录，读取真实 Admin API。"}
         readOnly={role === "analyst"}
         actions={
           <div className="flex flex-col items-end gap-1">
@@ -249,10 +223,7 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
               disabled={!canExport || isExporting}
               title={
                 canExport
-                  ? mode === "api"
-                    ? "从 Admin API 导出当前筛选结果为 CSV"
-                    : "导出当前 fixture 筛选结果为 CSV"
-                  : "仅 Analyst 及以上角色可导出"
+                  ? "从 Admin API 导出当前筛选结果为 CSV": "仅 Analyst 及以上角色可导出"
               }
               onClick={exportAuditCsv}
             >
@@ -367,7 +338,6 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
                 immutable / newest first
               </p>
             </div>
-            <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
           </div>
 
           {filteredEntries.length === 0 ? (
@@ -400,7 +370,7 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
                       </div>
                       <p className="mt-1.5 text-[11px] text-muted">
                         <span className="text-body">
-                          {actorName(entry.actorId, entry.actorType, mode)}
+                          {actorName(entry.actorId, entry.actorType)}
                         </span>{" "}
                         对 {entry.targetType} / {entry.targetId.slice(-8)} 执行了操作
                       </p>
@@ -426,30 +396,7 @@ export function AuditView({ role, entries, mode = "fixture", exportCsv }: AuditV
         </section>
 
         <aside className="space-y-4">
-          {mode === "fixture" ? (
-            <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-              <p className="type-eyebrow">LOCAL SESSION</p>
-              <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">
-                最近本地模拟操作
-              </h2>
-              {mockEvents.length === 0 ? (
-                <p className="mt-2 text-[11px] leading-5 text-muted">
-                  在用户或工作区页面执行带确认的操作后，事件会显示在这里。
-                </p>
-              ) : (
-                <ol className="mt-3 divide-y divide-hairline border-y border-hairline">
-                  {mockEvents.slice(0, 5).map((event) => (
-                    <li key={event.id} className="py-2.5">
-                      <p className="font-mono text-[9px] text-body">{event.action}</p>
-                      <p className="mt-1 truncate text-[10px] text-muted">
-                        {event.targetName} · {formatDateTime(event.createdAt)}
-                      </p>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
-          ) : null}
+          {null}
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
             <p className="type-eyebrow">Immutability</p>
             <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">只追加审计</h2>

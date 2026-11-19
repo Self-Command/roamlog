@@ -16,8 +16,7 @@ export default function AdminAuditPage() {
             <AuditView
               role={role}
               entries={entries}
-              mode={resource.mode}
-              exportCsv={resource.mode === "api" ? mutations.exportAuditCsv : undefined}
+              exportCsv={mutations.exportAuditCsv}
             />
           )}
         </AdminDataBoundary>

@@ -1,3 +1,7 @@
+import { readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,7 +10,7 @@ import {
   getAdminLoginPathWithReturnTo,
   getAdminPostLoginPath,
 } from "../../lib/admin-paths";
-import { DEFAULT_ADMIN_SESSION } from "../../lib/fixtures";
+import { ADMIN_NAV_GROUPS } from "./admin-nav";
 import { AdminShell } from "./admin-shell";
 
 const { useGetMeMock, redirectToAdminLoginMock } = vi.hoisted(() => ({
@@ -60,8 +64,15 @@ function unauthenticatedSession() {
   };
 }
 
+const SUPPORT_SESSION = {
+  name: "林知夏",
+  email: "lin.zhixia@roamlog.test",
+  platformRole: "support",
+};
+
 beforeEach(() => {
   useGetMeMock.mockReset();
+  useGetMeMock.mockReturnValue(authenticatedSession(SUPPORT_SESSION));
   redirectToAdminLoginMock.mockReset();
 });
 
@@ -72,9 +83,16 @@ afterEach(() => {
 });
 
 describe("AdminShell", () => {
+  it("does not link to the unfinished moderation page", () => {
+    const hrefs = ADMIN_NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href));
+    expect(hrefs).not.toContain(["/admin", "content"].join("/"));
+    const routes = readdirSync(join(dirname(fileURLToPath(import.meta.url)), "../../app/admin"));
+    expect(routes).not.toContain("content");
+  });
+
   it("renders navigation and identity without fabricated environment, 2FA or notification badges", () => {
     render(
-      <AdminShell activePath="/admin/users" session={DEFAULT_ADMIN_SESSION}>
+      <AdminShell activePath="/admin/users">
         <h1>用户列表</h1>
       </AdminShell>,
     );
@@ -107,7 +125,7 @@ describe("AdminShell", () => {
     expect(screen.queryByRole("button", { name: /通知/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/条未读/)).not.toBeInTheDocument();
 
-    expect(screen.getAllByText(DEFAULT_ADMIN_SESSION.name)).not.toHaveLength(0);
+    expect(screen.getAllByText(SUPPORT_SESSION.name)).not.toHaveLength(0);
     expect(screen.getAllByText("support").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "用户列表" })).toBeInTheDocument();
   });
@@ -116,7 +134,7 @@ describe("AdminShell", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_ENV", "staging");
 
     render(
-      <AdminShell activePath="/admin" session={DEFAULT_ADMIN_SESSION}>
+      <AdminShell activePath="/admin">
         <p>总览内容</p>
       </AdminShell>,
     );
@@ -126,7 +144,6 @@ describe("AdminShell", () => {
   });
 
   it("renders the real API session without 2FA or notification affordances", () => {
-    vi.stubEnv("NEXT_PUBLIC_ADMIN_DATA_MODE", "api");
     useGetMeMock.mockReturnValue(authenticatedSession());
 
     render(
@@ -137,7 +154,8 @@ describe("AdminShell", () => {
 
     expect(screen.getAllByText("Ops Admin")).not.toHaveLength(0);
     expect(screen.getAllByText("ops@roamlog.test")).not.toHaveLength(0);
-    expect(screen.getByRole("combobox", { name: "模拟平台角色" })).toBeDisabled();
+    expect(screen.queryByRole("combobox", { name: /平台角色/ })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Admin").length).toBeGreaterThan(0);
     const header = screen.getByRole("banner");
     const sidebar = screen.getByRole("complementary", { name: "管理后台侧栏" });
     expect(within(header).queryByText(/2FA/i)).not.toBeInTheDocument();
@@ -148,7 +166,6 @@ describe("AdminShell", () => {
   });
 
   it("redirects an unauthenticated API session to login with the current path as returnTo", async () => {
-    vi.stubEnv("NEXT_PUBLIC_ADMIN_DATA_MODE", "api");
     useGetMeMock.mockReturnValue(unauthenticatedSession());
     window.history.replaceState({}, "", "/admin/users?status=active");
 
@@ -175,7 +192,6 @@ describe("AdminShell", () => {
 
   it("calls the real sign-out endpoint and leaves the console on success", async () => {
     const user = userEvent.setup();
-    vi.stubEnv("NEXT_PUBLIC_ADMIN_DATA_MODE", "api");
     useGetMeMock.mockReturnValue(authenticatedSession());
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true }), {
@@ -204,7 +220,6 @@ describe("AdminShell", () => {
 
   it("shows the sign-out error and keeps the session when the API rejects it", async () => {
     const user = userEvent.setup();
-    vi.stubEnv("NEXT_PUBLIC_ADMIN_DATA_MODE", "api");
     useGetMeMock.mockReturnValue(authenticatedSession());
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ message: "boom" }), {
@@ -233,7 +248,7 @@ describe("AdminShell", () => {
   it("opens global search with the keyboard shortcut and keeps navigation results actionable", async () => {
     const user = userEvent.setup();
     render(
-      <AdminShell activePath="/admin" session={DEFAULT_ADMIN_SESSION}>
+      <AdminShell activePath="/admin">
         <p>总览内容</p>
       </AdminShell>,
     );
@@ -241,7 +256,7 @@ describe("AdminShell", () => {
     await user.keyboard("{Control>}k{/Control}");
 
     const dialog = await screen.findByRole("dialog", { name: "全局搜索" });
-    expect(within(dialog).getByPlaceholderText("搜索页面、用户或工作区…")).toBeInTheDocument();
+    expect(within(dialog).getByPlaceholderText("搜索后台页面…")).toBeInTheDocument();
     expect(within(dialog).getByRole("link", { name: /用户/ })).toHaveAttribute(
       "href",
       "/admin/users",

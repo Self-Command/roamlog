@@ -70,22 +70,8 @@ import {
   AdminMutationError,
   type AdminApiFailure,
 } from "./admin-api-error";
-import { getAdminDataMode, type AdminDataMode } from "./admin-data-mode";
+import { type AdminDashboardData } from "./admin-types";
 import {
-  MOCK_AUDIT_LOGS,
-  MOCK_ADMIN_DASHBOARD,
-  MOCK_ADMIN_USERS,
-  MOCK_ADMIN_WORKSPACES,
-  type AdminDashboardData,
-} from "./fixtures";
-import {
-  MOCK_ADMIN_CONTENT,
-  MOCK_ADMIN_EMAILS,
-  MOCK_ADMIN_FAILED_JOBS,
-  MOCK_ADMIN_FLAGS,
-  MOCK_ADMIN_MEDIA,
-  MOCK_ADMIN_QUEUES,
-  MOCK_ADMIN_SYSTEM,
   type AdminContentItem,
   type AdminEmailRecord,
   type AdminFailedJob,
@@ -93,51 +79,9 @@ import {
   type AdminMediaItem,
   type AdminQueueSummary,
   type AdminSystemSnapshot,
-} from "./ops-fixtures";
-
-export interface AdminDataSource {
-  readonly mode: "fixture" | "msw";
-  getDashboard(): AdminDashboardData;
-  listUsers(): readonly AdminUserDetail[];
-  listWorkspaces(): readonly AdminWorkspaceDetail[];
-  listAuditLogs(): readonly AuditLog[];
-  listContent(): readonly AdminContentItem[];
-  listMedia(): readonly AdminMediaItem[];
-  listEmails(): readonly AdminEmailRecord[];
-  listQueues(): readonly AdminQueueSummary[];
-  listFailedJobs(): readonly AdminFailedJob[];
-  listFlags(): readonly AdminFlagRecord[];
-  getSystem(): AdminSystemSnapshot;
-}
-
-export const fixtureAdminDataSource: AdminDataSource = {
-  mode: "fixture",
-  getDashboard: () => MOCK_ADMIN_DASHBOARD,
-  listUsers: () => MOCK_ADMIN_USERS,
-  listWorkspaces: () => MOCK_ADMIN_WORKSPACES,
-  listAuditLogs: () => MOCK_AUDIT_LOGS,
-  listContent: () => MOCK_ADMIN_CONTENT,
-  listMedia: () => MOCK_ADMIN_MEDIA,
-  listEmails: () => MOCK_ADMIN_EMAILS,
-  listQueues: () => MOCK_ADMIN_QUEUES,
-  listFailedJobs: () => MOCK_ADMIN_FAILED_JOBS,
-  listFlags: () => MOCK_ADMIN_FLAGS,
-  getSystem: () => MOCK_ADMIN_SYSTEM,
-};
-
-let activeAdminDataSource: AdminDataSource = fixtureAdminDataSource;
-
-/** Fixture source retained for the default 3001 preview and component tests. */
-export function getAdminDataSource(): AdminDataSource {
-  return activeAdminDataSource;
-}
-
-export function configureAdminDataSource(source: AdminDataSource): void {
-  activeAdminDataSource = source;
-}
+} from "./admin-ops-types";
 
 export interface AdminResource<T> {
-  mode: AdminDataMode;
   data: T | null;
   isLoading: boolean;
   error: AdminApiFailure | null;
@@ -158,17 +102,6 @@ type ApiQuery<T> = {
   isFetching?: boolean;
   refetch: () => unknown;
 };
-
-function fixtureResource<T>(data: T): AdminResource<T> {
-  return {
-    mode: "fixture",
-    data,
-    isLoading: false,
-    error: null,
-    degraded: [],
-    refetch: () => undefined,
-  };
-}
 
 function networkFailure(error: unknown): AdminApiFailure {
   return {
@@ -213,7 +146,6 @@ function degradedFromQueries(queries: readonly ApiQuery<unknown>[]): string[] {
 }
 
 function combineResources<T>(
-  mode: AdminDataMode,
   queries: readonly ApiQuery<unknown>[],
   map: () => T,
 ): AdminResource<T> {
@@ -222,7 +154,6 @@ function combineResources<T>(
   const isLoading = queries.some((query) => query.isLoading);
 
   return {
-    mode,
     data: !error && isReady ? map() : null,
     isLoading,
     error,
@@ -243,7 +174,6 @@ interface AdminQueryLike<T> {
 }
 
 function queryResource<T>(
-  mode: AdminDataMode,
   query: AdminQueryLike<T>,
   fallback: T | null = null,
 ): AdminResource<T> {
@@ -254,7 +184,6 @@ function queryResource<T>(
     : null;
 
   return {
-    mode,
     data: error ? null : (query.data ?? fallback),
     isLoading: query.isLoading,
     error,
@@ -390,7 +319,6 @@ export function useAdminUsersPage(
   params: AdminUserListParams,
   enabled = true,
 ): AdminResource<AdminUserPage> {
-  const mode = getAdminDataMode();
   const query = useQuery({
     queryKey: ["admin", "users", "page", params],
     queryFn: () =>
@@ -405,17 +333,16 @@ export function useAdminUsersPage(
         }),
         AdminUserPageSchema,
       ),
-    enabled: mode === "api" && enabled,
+    enabled,
   });
 
-  return queryResource<AdminUserPage>(mode, query);
+  return queryResource<AdminUserPage>(query);
 }
 
 export function useAdminUserDetail(
   userId: string | null,
   enabled = true,
 ): AdminResource<AdminUserDetail> {
-  const mode = getAdminDataMode();
   const query = useQuery({
     queryKey: ["admin", "users", "detail", userId],
     queryFn: () =>
@@ -423,17 +350,16 @@ export function useAdminUserDetail(
         adminUrl(`/v1/admin/users/${encodeURIComponent(userId ?? "")}`),
         AdminUserDetailSchema,
       ),
-    enabled: mode === "api" && enabled && Boolean(userId),
+    enabled: enabled && Boolean(userId),
   });
 
-  return queryResource<AdminUserDetail>(mode, query);
+  return queryResource<AdminUserDetail>(query);
 }
 
 export function useAdminWorkspacesPage(
   params: AdminWorkspaceListParams,
   enabled = true,
 ): AdminResource<AdminWorkspacePage> {
-  const mode = getAdminDataMode();
   const query = useQuery({
     queryKey: ["admin", "workspaces", "page", params],
     queryFn: () =>
@@ -448,17 +374,16 @@ export function useAdminWorkspacesPage(
         }),
         AdminWorkspacePageSchema,
       ),
-    enabled: mode === "api" && enabled,
+    enabled,
   });
 
-  return queryResource<AdminWorkspacePage>(mode, query);
+  return queryResource<AdminWorkspacePage>(query);
 }
 
 export function useAdminWorkspaceDetail(
   workspaceId: string | null,
   enabled = true,
 ): AdminResource<AdminWorkspaceDetail> {
-  const mode = getAdminDataMode();
   const query = useQuery({
     queryKey: ["admin", "workspaces", "detail", workspaceId],
     queryFn: () =>
@@ -466,17 +391,16 @@ export function useAdminWorkspaceDetail(
         adminUrl(`/v1/admin/workspaces/${encodeURIComponent(workspaceId ?? "")}`),
         AdminWorkspaceDetailSchema,
       ),
-    enabled: mode === "api" && enabled && Boolean(workspaceId),
+    enabled: enabled && Boolean(workspaceId),
   });
 
-  return queryResource<AdminWorkspaceDetail>(mode, query);
+  return queryResource<AdminWorkspaceDetail>(query);
 }
 
 export function useAdminWorkspaceTrips(
   workspaceId: string | null,
   enabled = true,
 ): AdminResource<AdminTripPage> {
-  const mode = getAdminDataMode();
   const query = useQuery({
     queryKey: ["admin", "workspaces", "trips", workspaceId],
     queryFn: () =>
@@ -488,10 +412,10 @@ export function useAdminWorkspaceTrips(
         }),
         AdminTripPageSchema,
       ),
-    enabled: mode === "api" && enabled && Boolean(workspaceId),
+    enabled: enabled && Boolean(workspaceId),
   });
 
-  return queryResource<AdminTripPage>(mode, query);
+  return queryResource<AdminTripPage>(query);
 }
 
 function csvCell(value: unknown): string {
@@ -505,7 +429,7 @@ function csvCell(value: unknown): string {
   return `"${safe.replaceAll('"', '""')}"`;
 }
 
-/** Preview-mode CSV generation; API mode downloads the server-generated export. */
+/** CSV generation for on-demand downloads; the API also serves a server-generated export. */
 export function buildAdminCsv(
   columns: readonly string[],
   rows: readonly Record<string, unknown>[],
@@ -565,12 +489,6 @@ export interface AdminDashboardResourceData extends AdminDashboardData {
   sources: AdminDashboardSources;
 }
 
-const READY_DASHBOARD_SOURCES: AdminDashboardSources = {
-  metrics: { status: "ready", error: null, refetch: () => undefined },
-  emails: { status: "ready", error: null, refetch: () => undefined },
-  audit: { status: "ready", error: null, refetch: () => undefined },
-};
-
 const AUTH_FAILURE_CODES = new Set([
   "ADMIN_ACCESS_DENIED",
   "ADMIN_ACTION_FORBIDDEN",
@@ -616,7 +534,6 @@ function dashboardSourceState(query: ApiQuery<unknown>): AdminDashboardSourceSta
 }
 
 function combineDashboardResources(
-  mode: AdminDataMode,
   queries: {
     metrics: ApiQuery<unknown>;
     emails: ApiQuery<unknown>;
@@ -637,7 +554,6 @@ function combineDashboardResources(
   const fatalError = authFailure ?? (allFailed ? (failures[0] ?? null) : null);
 
   return {
-    mode,
     data: fatalError ? null : { ...map(), sources },
     isLoading: Object.values(queries).every((query) => query.isLoading),
     error: fatalError,
@@ -839,11 +755,6 @@ const QUEUE_LABELS: Record<string, string> = {
   export: "数据导出",
   reminders: "行程提醒",
   maintenance: "维护任务",
-  // Fixture-only names kept so the local demo console still reads in Chinese.
-  "media-processing": "媒体处理",
-  "email-delivery": "邮件发送",
-  "archive-export": "档案导出",
-  "trip-reminders": "行程提醒",
 };
 
 /** `NaN` marks "not wired": Redis could not produce a completion window. */
@@ -940,8 +851,8 @@ export interface AdminSystemQueueRow {
 }
 
 /**
- * Extra operational detail that the Admin console needs but that the fixture
- * snapshot type does not carry. Both fields are optional so a fixture snapshot
+ * Extra operational detail that the Admin console needs but that the base
+ * snapshot type does not carry. Both fields are optional so an older snapshot
  * stays assignable; the system view reads them defensively.
  */
 export interface AdminSystemSnapshotDetail extends AdminSystemSnapshot {
@@ -1071,16 +982,12 @@ export function mapAdminDashboard(input: {
 }
 
 export function useAdminDashboardResource(): AdminResource<AdminDashboardResourceData> {
-  const mode = getAdminDataMode();
-  const metrics = useGetAdminMetrics({ query: { enabled: mode === "api" } });
-  const audit = useListAdminAudit({ limit: 6 }, { query: { enabled: mode === "api" } });
-  const emails = useListAdminEmails({ limit: 100 }, { query: { enabled: mode === "api" } });
+  const metrics = useGetAdminMetrics();
+  const audit = useListAdminAudit({ limit: 6 });
+  const emails = useListAdminEmails({ limit: 100 });
 
-  if (mode === "fixture") {
-    return fixtureResource({ ...MOCK_ADMIN_DASHBOARD, sources: READY_DASHBOARD_SOURCES });
-  }
 
-  return combineDashboardResources(mode, { metrics, audit, emails }, () =>
+  return combineDashboardResources({ metrics, audit, emails }, () =>
     mapAdminDashboard({
       metrics: dataOf(metrics, EMPTY_ADMIN_METRICS),
       audit: itemsOf<AuditLog>(audit),
@@ -1090,43 +997,29 @@ export function useAdminDashboardResource(): AdminResource<AdminDashboardResourc
 }
 
 export function useAdminUsersResource(): AdminResource<readonly AdminUserListItem[]> {
-  const mode = getAdminDataMode();
   // The page shell only needs a small, permission-checked request to gate the
   // view. UsersView owns the searchable, cursor-paginated query below.
   const query = useListAdminUsers(
     { limit: 1, sort: "createdAt:desc" },
-    { query: { enabled: mode === "api" } },
   );
-  if (mode === "fixture") {
-    return fixtureResource(MOCK_ADMIN_USERS);
-  }
-  return combineResources(mode, [query], () => itemsOf<AdminUserListItem>(query));
+  return combineResources([query], () => itemsOf<AdminUserListItem>(query));
 }
 
 export function useAdminWorkspacesResource(): AdminResource<readonly AdminWorkspaceListItem[]> {
-  const mode = getAdminDataMode();
   // See useAdminUsersResource: the view owns the real paginated query.
   const query = useListAdminWorkspaces(
     { limit: 1, sort: "createdAt:desc" },
-    { query: { enabled: mode === "api" } },
   );
-  if (mode === "fixture") {
-    return fixtureResource(MOCK_ADMIN_WORKSPACES);
-  }
-  return combineResources(mode, [query], () => itemsOf<AdminWorkspaceListItem>(query));
+  return combineResources([query], () => itemsOf<AdminWorkspaceListItem>(query));
 }
 
 export function useAdminContentResource(): AdminResource<readonly AdminContentItem[]> {
-  const mode = getAdminDataMode();
-  const trips = useListAdminTrips({ limit: 100 }, { query: { enabled: mode === "api" } });
-  const entries = useListAdminEntries({ limit: 100 }, { query: { enabled: mode === "api" } });
-  const comments = useListAdminComments({ limit: 100 }, { query: { enabled: mode === "api" } });
-  const users = useListAdminUsers({ limit: 100 }, { query: { enabled: mode === "api" } });
-  const workspaces = useListAdminWorkspaces({ limit: 100 }, { query: { enabled: mode === "api" } });
-  if (mode === "fixture") {
-    return fixtureResource(MOCK_ADMIN_CONTENT);
-  }
-  return combineResources(mode, [trips, entries, comments, users, workspaces], () =>
+  const trips = useListAdminTrips({ limit: 100 });
+  const entries = useListAdminEntries({ limit: 100 });
+  const comments = useListAdminComments({ limit: 100 });
+  const users = useListAdminUsers({ limit: 100 });
+  const workspaces = useListAdminWorkspaces({ limit: 100 });
+  return combineResources([trips, entries, comments, users, workspaces], () =>
     mapAdminContent({
       trips: itemsOf(trips),
       entries: itemsOf(entries),
@@ -1138,66 +1031,45 @@ export function useAdminContentResource(): AdminResource<readonly AdminContentIt
 }
 
 export function useAdminMediaResource(): AdminResource<readonly AdminMediaItem[]> {
-  const mode = getAdminDataMode();
-  const media = useListAdminMedia({ limit: 100 }, { query: { enabled: mode === "api" } });
-  const workspaces = useListAdminWorkspaces({ limit: 100 }, { query: { enabled: mode === "api" } });
-  if (mode === "fixture") {
-    return fixtureResource(MOCK_ADMIN_MEDIA);
-  }
-  return combineResources(mode, [media, workspaces], () =>
+  const media = useListAdminMedia({ limit: 100 });
+  const workspaces = useListAdminWorkspaces({ limit: 100 });
+  return combineResources([media, workspaces], () =>
     mapAdminMedia(itemsOf(media), itemsOf(workspaces)),
   );
 }
 
 export function useAdminAuditResource(): AdminResource<readonly AuditLog[]> {
-  const mode = getAdminDataMode();
-  const query = useListAdminAudit({ limit: 100 }, { query: { enabled: mode === "api" } });
-  if (mode === "fixture") {
-    return fixtureResource(MOCK_AUDIT_LOGS);
-  }
-  return combineResources(mode, [query], () => itemsOf<AuditLog>(query));
+  const query = useListAdminAudit({ limit: 100 });
+  return combineResources([query], () => itemsOf<AuditLog>(query));
 }
 
 export function useAdminFlagsResource(): AdminResource<{
   flags: readonly AdminFlagRecord[];
   workspaces: readonly AdminWorkspaceDetail[];
 }> {
-  const mode = getAdminDataMode();
-  const flags = useListAdminFlags({ query: { enabled: mode === "api" } });
-  const workspaces = useListAdminWorkspaces({ limit: 100 }, { query: { enabled: mode === "api" } });
-  const users = useListAdminUsers({ limit: 100 }, { query: { enabled: mode === "api" } });
-  if (mode === "fixture") {
-    return fixtureResource({ flags: MOCK_ADMIN_FLAGS, workspaces: MOCK_ADMIN_WORKSPACES });
-  }
-  return combineResources(mode, [flags, workspaces, users], () => ({
+  const flags = useListAdminFlags();
+  const workspaces = useListAdminWorkspaces({ limit: 100 });
+  const users = useListAdminUsers({ limit: 100 });
+  return combineResources([flags, workspaces, users], () => ({
     flags: mapAdminFlags(dataOf<readonly AdminFlagListResponseItem[]>(flags, []), itemsOf(users)),
     workspaces: mapAdminWorkspaces(itemsOf(workspaces), itemsOf(users)),
   }));
 }
 
 export function useAdminEmailsResource(): AdminResource<readonly AdminEmailRecord[]> {
-  const mode = getAdminDataMode();
-  const query = useListAdminEmails({ limit: 100 }, { query: { enabled: mode === "api" } });
-  if (mode === "fixture") {
-    return fixtureResource(MOCK_ADMIN_EMAILS);
-  }
-  return combineResources(mode, [query], () => mapAdminEmails(itemsOf(query)));
+  const query = useListAdminEmails({ limit: 100 });
+  return combineResources([query], () => mapAdminEmails(itemsOf(query)));
 }
 
 export function useAdminQueuesResource(): AdminResource<{
   queues: readonly AdminQueueSummary[];
   failedJobs: readonly AdminFailedJob[];
 }> {
-  const mode = getAdminDataMode();
-  const metrics = useGetAdminMetrics({ query: { enabled: mode === "api" } });
+  const metrics = useGetAdminMetrics();
   const jobs = useListAdminJobs(
     { status: "failed", limit: 100 },
-    { query: { enabled: mode === "api" } },
   );
-  if (mode === "fixture") {
-    return fixtureResource({ queues: MOCK_ADMIN_QUEUES, failedJobs: MOCK_ADMIN_FAILED_JOBS });
-  }
-  return combineResources(mode, [metrics, jobs], () => ({
+  return combineResources([metrics, jobs], () => ({
     queues: mapAdminQueues(
       dataOf<{ queues: readonly AdminQueueMetricsRow[] }>(metrics, { queues: [] }).queues,
     ),
@@ -1206,12 +1078,8 @@ export function useAdminQueuesResource(): AdminResource<{
 }
 
 export function useAdminSystemResource(): AdminResource<AdminSystemSnapshotDetail> {
-  const mode = getAdminDataMode();
-  const query = useGetAdminSystem({ query: { enabled: mode === "api" } });
-  if (mode === "fixture") {
-    return fixtureResource(MOCK_ADMIN_SYSTEM);
-  }
-  return combineResources(mode, [query], () =>
+  const query = useGetAdminSystem();
+  return combineResources([query], () =>
     mapAdminSystem(dataOf<AdminSystem>(query, {} as AdminSystem)),
   );
 }
@@ -1220,16 +1088,8 @@ export function useAdminSystemResource(): AdminResource<AdminSystemSnapshotDetai
 export function useAdminEmailCountsResource(): AdminResource<{
   counts: Record<EmailStatus, number> | null;
 }> {
-  const mode = getAdminDataMode();
-  const metrics = useGetAdminMetrics({ query: { enabled: mode === "api" } });
-  if (mode === "fixture") {
-    const counts = { ...EMPTY_EMAIL_COUNTS };
-    for (const email of MOCK_ADMIN_EMAILS) {
-      counts[email.status] += 1;
-    }
-    return fixtureResource({ counts });
-  }
-  return combineResources(mode, [metrics], () => {
+  const metrics = useGetAdminMetrics();
+  return combineResources([metrics], () => {
     const data = dataOf<AdminMetrics>(metrics, EMPTY_ADMIN_METRICS);
     // Older API payloads carry no per-status email aggregation; report that as
     // "not wired" instead of rendering a zero that looks like a real count.

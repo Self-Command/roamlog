@@ -22,7 +22,7 @@ describe("TwoFactorEnrollmentPanel", () => {
       verifyTotp: vi.fn().mockResolvedValue({ status: 200, data: { status: true } }),
     };
 
-    render(<TwoFactorEnrollmentPanel mode="api" transport={transport} onComplete={onComplete} />);
+    render(<TwoFactorEnrollmentPanel transport={transport} onComplete={onComplete} />);
 
     await user.type(screen.getByLabelText(/当前密码/), "correct-password");
     await user.click(screen.getByRole("button", { name: "生成 TOTP 密钥" }));
@@ -39,10 +39,4 @@ describe("TwoFactorEnrollmentPanel", () => {
     expect(onComplete).toHaveBeenCalledOnce();
   });
 
-  it("keeps fixture mode as an explicit demo without network enrollment", () => {
-    render(<TwoFactorEnrollmentPanel mode="fixture" />);
-
-    expect(screen.getByRole("heading", { name: "演示模式不注册真实 TOTP" })).toBeInTheDocument();
-    expect(screen.queryByLabelText(/当前密码/)).not.toBeInTheDocument();
-  });
 });

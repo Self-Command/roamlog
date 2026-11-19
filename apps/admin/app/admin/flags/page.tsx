@@ -17,8 +17,7 @@ export default function AdminFlagsPage() {
               role={role}
               flags={flags}
               workspaces={workspaces}
-              mode={resource.mode}
-              mutations={resource.mode === "api" ? mutations : undefined}
+              mutations={mutations}
             />
           )}
         </AdminDataBoundary>

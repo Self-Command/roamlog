@@ -1,12 +1,12 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MOCK_ADMIN_MEDIA } from "../../lib/ops-fixtures";
+import { sampleMedia } from "../../test/admin-sample-data";
 import { MediaView } from "./media-view";
 
 describe("MediaView", () => {
   it("shows storage usage and orphan detection while keeping delete disabled for analysts", () => {
-    render(<MediaView role="analyst" media={MOCK_ADMIN_MEDIA} />);
+    render(<MediaView role="analyst" media={sampleMedia} />);
 
     expect(screen.getByRole("heading", { name: "媒体库" })).toBeInTheDocument();
     const orphanCard = screen.getByText("孤儿对象").closest("article");

@@ -12,8 +12,6 @@ import {
   Input,
 } from "@roamlog/ui";
 
-import { getAdminDataSource } from "../../lib/admin-data-source";
-import { getAdminDataMode } from "../../lib/admin-data-mode";
 import { ADMIN_NAV_GROUPS } from "./admin-nav";
 
 interface AdminCommandPaletteProps {
@@ -31,8 +29,6 @@ interface SearchResult {
 
 export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteProps) {
   const [query, setQuery] = useState("");
-  const dataSource = getAdminDataSource();
-  const dataMode = getAdminDataMode();
 
   const results = useMemo<SearchResult[]>(() => {
     const pages = ADMIN_NAV_GROUPS.flatMap((group) => group.items)
@@ -45,30 +41,8 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
         type: "page" as const,
       }));
 
-    const users =
-      dataMode === "fixture"
-        ? dataSource.listUsers().map((user) => ({
-            id: `user-${user.id}`,
-            label: user.name,
-            detail: `${user.email} · ${user.platformRole}`,
-            href: `/admin/users?user=${user.id}`,
-            type: "user" as const,
-          }))
-        : [];
-
-    const workspaces =
-      dataMode === "fixture"
-        ? dataSource.listWorkspaces().map((workspace) => ({
-            id: `workspace-${workspace.id}`,
-            label: workspace.name,
-            detail: `${workspace.slug} · ${workspace.memberCount} 位成员`,
-            href: `/admin/workspaces?workspace=${workspace.id}`,
-            type: "workspace" as const,
-          }))
-        : [];
-
-    return [...pages, ...users, ...workspaces];
-  }, [dataMode, dataSource]);
+    return pages;
+  }, []);
 
   const filtered = results.filter((result) => {
     const needle = query.trim().toLocaleLowerCase("zh-CN");
@@ -92,9 +66,7 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
         <DialogHeader className="border-b border-hairline px-5 py-4">
           <DialogTitle className="text-xl">全局搜索</DialogTitle>
           <DialogDescription>
-            {dataMode === "api"
-              ? "搜索后台页面；用户与 Workspace 实体搜索由对应列表页的 API 筛选完成。"
-              : "搜索后台页面、用户和工作区。当前结果来自本地 fixture。"}
+            输入关键词跳转到后台页面；用户与 Workspace 实体搜索请使用对应列表页的筛选。
           </DialogDescription>
         </DialogHeader>
         <div className="border-b border-hairline px-5 py-4">
@@ -106,7 +78,7 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
             <Input
               autoFocus
               aria-label="全局搜索查询"
-              placeholder="搜索页面、用户或工作区…"
+              placeholder="搜索后台页面…"
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
               className="pl-9"
@@ -150,7 +122,7 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
         </div>
         <div className="flex items-center justify-between border-t border-hairline px-5 py-3">
           <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-            Fixture search boundary
+            页面搜索
           </span>
           <span className="font-mono text-[9px] text-stone">ESC 关闭</span>
         </div>

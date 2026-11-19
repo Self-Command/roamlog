@@ -33,22 +33,16 @@ import {
 
 import {
   adminWorkspacesExportUrl,
-  buildAdminCsv,
   downloadAdminCsv,
-  downloadCsvText,
-  getAdminDataSource,
   useAdminWorkspaceDetail,
   useAdminWorkspaceTrips,
   useAdminWorkspacesPage,
   type AdminMutationPort,
   type AdminWorkspaceListParams,
 } from "../../lib/admin-data-source";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
 import { AdminMutationError } from "../../lib/admin-api-error";
-import type { AdminConsoleRole } from "../../lib/fixtures";
+import type { AdminConsoleRole } from "../../lib/admin-types";
 import { formatBytes, formatDateTime } from "../../lib/format";
-import { recordMockAuditEvent } from "../../lib/mock-audit";
-import { getWorkspaceContext } from "../../lib/ops-fixtures";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { BulkSelectionBar } from "../admin-ui/bulk-selection-bar";
@@ -77,8 +71,6 @@ type BulkWorkspaceAction = Extract<
 
 interface WorkspacesViewProps {
   role: AdminConsoleRole;
-  workspaces?: readonly AdminWorkspaceListItem[];
-  mode?: AdminDataMode;
   mutations?: AdminMutationPort;
   exportCsv?: (params: AdminWorkspaceListParams) => Promise<void>;
 }
@@ -105,24 +97,6 @@ const DEFAULT_FILTERS: StoredWorkspaceFilters = {
   sort: "createdAt:desc",
 };
 const PLAN_LABELS: Record<WorkspacePlan, string> = { free: "Free", pro: "Pro", team: "Team" };
-const WORKSPACE_CSV_COLUMNS = [
-  "id",
-  "name",
-  "slug",
-  "ownerId",
-  "plan",
-  "status",
-  "defaultCurrency",
-  "timezone",
-  "memberCount",
-  "tripCount",
-  "entryCount",
-  "mediaBytes",
-  "createdAt",
-  "updatedAt",
-  "deletedAt",
-] as const;
-
 function isBulkWorkspaceAction(action: WorkspaceAction): action is BulkWorkspaceAction {
   return (
     action.kind === "bulk-suspend" ||
@@ -131,8 +105,8 @@ function isBulkWorkspaceAction(action: WorkspaceAction): action is BulkWorkspace
   );
 }
 
-function readStoredFilters(mode: AdminDataMode): StoredWorkspaceFilters {
-  if (mode !== "api" || typeof window === "undefined") {
+function readStoredFilters(): StoredWorkspaceFilters {
+  if (typeof window === "undefined") {
     return DEFAULT_FILTERS;
   }
   try {
@@ -226,14 +200,10 @@ const actionCopy: Record<
 
 export function WorkspacesView({
   role,
-  workspaces,
-  mode = "fixture",
   mutations,
   exportCsv,
 }: WorkspacesViewProps) {
-  const sourceWorkspaces = workspaces ?? getAdminDataSource().listWorkspaces();
-  const [records, setRecords] = useState<readonly AdminWorkspaceListItem[]>(sourceWorkspaces);
-  const [storedFilters] = useState<StoredWorkspaceFilters>(() => readStoredFilters(mode));
+  const [storedFilters] = useState<StoredWorkspaceFilters>(() => readStoredFilters());
   const [query, setQuery] = useState(storedFilters.query);
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>(storedFilters.status);
   const [planFilter, setPlanFilter] = useState<"all" | WorkspacePlan>(storedFilters.plan);
@@ -254,8 +224,6 @@ export function WorkspacesView({
   const canDelete = canPlatform(role, "admin:workspaces:delete");
   const canManageContract = canDelete;
   const canExport = canDelete;
-  const isApi = mode === "api";
-
   const debouncedQuery = useDebouncedValue(query, 250);
   const apiParams = useMemo<AdminWorkspaceListParams>(
     () => ({
@@ -268,14 +236,11 @@ export function WorkspacesView({
     }),
     [cursorStack, debouncedQuery, pageIndex, planFilter, sortFilter, statusFilter],
   );
-  const api = useAdminWorkspacesPage(apiParams, isApi);
-  const detail = useAdminWorkspaceDetail(detailWorkspace?.id ?? null, isApi && detailWorkspace !== null);
-  const trips = useAdminWorkspaceTrips(detailWorkspace?.id ?? null, isApi && detailWorkspace !== null);
+  const api = useAdminWorkspacesPage(apiParams);
+  const detail = useAdminWorkspaceDetail(detailWorkspace?.id ?? null, detailWorkspace !== null);
+  const trips = useAdminWorkspaceTrips(detailWorkspace?.id ?? null, detailWorkspace !== null);
 
   useEffect(() => {
-    if (!isApi) {
-      return;
-    }
     try {
       window.sessionStorage.setItem(
         FILTER_STORAGE_KEY,
@@ -289,35 +254,14 @@ export function WorkspacesView({
     } catch {
       // Session storage can be unavailable in hardened browser contexts.
     }
-  }, [isApi, planFilter, query, sortFilter, statusFilter]);
+  }, [planFilter, query, sortFilter, statusFilter]);
 
-  const filteredWorkspaces = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
-    return records.filter((workspace) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        `${workspace.name} ${workspace.slug}`
-          .toLocaleLowerCase("zh-CN")
-          .includes(normalizedQuery);
-      const matchesStatus = statusFilter === "all" || workspace.status === statusFilter;
-      const matchesPlan = planFilter === "all" || workspace.plan === planFilter;
-      return matchesQuery && matchesStatus && matchesPlan;
-    });
-  }, [planFilter, query, records, statusFilter]);
-
-  const visibleWorkspaces: readonly AdminWorkspaceListItem[] = isApi
-    ? (api.data?.items ?? [])
-    : filteredWorkspaces;
+  const visibleWorkspaces: readonly AdminWorkspaceListItem[] = api.data?.items ?? [];
   const allVisibleSelected =
     visibleWorkspaces.length > 0 &&
     visibleWorkspaces.every((workspace) => selectedIds.has(workspace.id));
   const bulkWorkspaces = visibleWorkspaces.filter((workspace) => selectedIds.has(workspace.id));
-  const detailData: AdminWorkspaceDetail | null = isApi
-    ? (detail.data ?? null)
-    : ((detailWorkspace as AdminWorkspaceDetail | null) ?? null);
-  const workspaceContext = !isApi && detailWorkspace
-    ? getWorkspaceContext(detailWorkspace.id)
-    : null;
+  const detailData: AdminWorkspaceDetail | null = detail.data ?? null;
 
   function resetPagination() {
     setCursorStack([undefined]);
@@ -401,7 +345,7 @@ export function WorkspacesView({
     const action = pendingAction;
     const copy = actionCopy[action.kind];
 
-    if (isApi && mutations) {
+    if (mutations) {
       try {
         if (isBulkWorkspaceAction(action)) {
           await Promise.all(
@@ -441,73 +385,12 @@ export function WorkspacesView({
       return;
     }
 
-    if (isBulkWorkspaceAction(action)) {
-      const ids = new Set(action.workspaces.map((workspace) => workspace.id));
-      setRecords((current) =>
-        current.map((workspace) =>
-          ids.has(workspace.id)
-            ? {
-                ...workspace,
-                status: (action.kind === "bulk-restore"
-                  ? "active"
-                  : action.kind === "bulk-delete"
-                    ? "deleted"
-                    : "suspended") as AccountStatus,
-              }
-            : workspace,
-        ),
-      );
-      setSelectedIds(new Set());
-    } else if (action.kind === "suspend" || action.kind === "restore") {
-      const nextStatus: AccountStatus = action.kind === "suspend" ? "suspended" : "active";
-      setRecords((current) =>
-        current.map((workspace) =>
-          workspace.id === action.workspace.id ? { ...workspace, status: nextStatus } : workspace,
-        ),
-      );
-    } else if (action.kind === "delete") {
-      setRecords((current) =>
-        current.map((workspace) =>
-          workspace.id === action.workspace.id ? { ...workspace, status: "deleted" } : workspace,
-        ),
-      );
-    } else if (action.kind === "change-plan") {
-      setRecords((current) =>
-        current.map((workspace) =>
-          workspace.id === action.workspace.id ? { ...workspace, plan: action.plan } : workspace,
-        ),
-      );
-    } else if (action.kind === "transfer-owner") {
-      setRecords((current) =>
-        current.map((workspace) =>
-          workspace.id === action.workspace.id
-            ? {
-                ...workspace,
-                ownerId: action.ownerId,
-                owner: workspace.owner
-                  ? { ...workspace.owner, id: action.ownerId, name: action.ownerName }
-                  : workspace.owner,
-              }
-            : workspace,
-        ),
-      );
-    }
-
-    recordMockAuditEvent({
-      action: copy.action,
-      targetType: "workspace",
-      targetId: isBulkWorkspaceAction(action)
-        ? `batch-${action.workspaces.length}`
-        : action.workspace.id,
-      targetName: actionTarget(action),
-      metadata: { previousRole: role, mock: true },
-    });
-    setStatusMessage(`模拟审计事件已记录：${copy.action}`);
+    setStatusMessage("未连接 Admin API，操作未提交。");
     setPendingAction(null);
   }
 
   async function handleExport() {
-    if (isExporting || (isApi && !canExport)) {
+    if (isExporting || !canExport) {
       return;
     }
     setIsExporting(true);
@@ -515,31 +398,13 @@ export function WorkspacesView({
     try {
       if (exportCsv) {
         await exportCsv(apiParams);
-      } else if (isApi) {
+      } else {
         await downloadAdminCsv(
           adminWorkspacesExportUrl(apiParams),
           "roamlog-admin-workspaces.csv",
         );
-      } else {
-        downloadCsvText(
-          buildAdminCsv(
-            WORKSPACE_CSV_COLUMNS,
-            filteredWorkspaces.map((workspace) => ({
-              ...workspace,
-              memberCount: workspace.memberCount,
-              tripCount: workspace.tripCount,
-              entryCount: workspace.entryCount,
-              mediaBytes: workspace.mediaBytes,
-            })),
-          ),
-          "roamlog-admin-workspaces-preview.csv",
-        );
       }
-      setStatusMessage(
-        isApi
-          ? "Workspace CSV 已按当前筛选导出。"
-          : "预览 Workspace CSV 已导出（fixture 数据，不代表生产）。",
-      );
+      setStatusMessage("Workspace CSV 已按当前筛选导出。");
     } catch (error) {
       setStatusMessage(
         mutationFailureMessage(error, "导出失败，请检查 Admin API 与会话后重试。"),
@@ -550,7 +415,7 @@ export function WorkspacesView({
   }
 
   const copy = pendingAction ? actionCopy[pendingAction.kind] : null;
-  const detailLoading = isApi && detail.isLoading && !detail.data;
+  const detailLoading = detail.isLoading && !detail.data;
   const countValue = (value: number | undefined): string | number =>
     detailLoading ? "…" : value === undefined ? "未接入" : value;
 
@@ -562,35 +427,32 @@ export function WorkspacesView({
     role: WorkspaceRole;
     status: "active" | "suspended";
   }> | undefined =
-    isApi
-      ? apiMembers === undefined
-        ? undefined
-        : apiMembers.map((member) => ({
-            userId: member.userId,
-            name: member.name,
-            email: member.email,
-            role: member.role,
-            status: member.status,
-          }))
-      : (workspaceContext?.members ?? []);
+    apiMembers === undefined
+      ? undefined
+      : apiMembers.map((member) => ({
+          userId: member.userId,
+          name: member.name,
+          email: member.email,
+          role: member.role,
+          status: member.status,
+        }));
 
   const recentTrips: ReadonlyArray<{
     id: string;
     title: string;
     status: string;
     updatedAt: string;
-  }> | undefined = isApi
-    ? trips.data === undefined || trips.data === null
+  }> | undefined =
+    trips.data === undefined || trips.data === null
       ? undefined
       : trips.data.items.map((trip) => ({
           id: trip.id,
           title: trip.title,
           status: trip.status,
           updatedAt: trip.updatedAt,
-        }))
-    : (workspaceContext?.recentTrips ?? []);
+        }));
 
-  const invitations = isApi ? detail.data?.invitations : undefined;
+  const invitations = detail.data?.invitations;
   const ownerName = detailData?.owner.name ?? detailWorkspace?.owner?.name;
   const ownerEmail = detailData?.owner.email ?? detailWorkspace?.owner?.email;
 
@@ -626,15 +488,13 @@ export function WorkspacesView({
             <Button
               variant="ghost"
               size="sm"
-              disabled={isExporting || (isApi && !canExport)}
+              disabled={isExporting || !canExport}
               title={
                 isExporting
                   ? "正在生成 CSV"
-                  : isApi && !canExport
+                  : !canExport
                     ? "仅 admin 及以上可导出 Workspace CSV（后端动作 admin:workspaces:delete）"
-                    : isApi
-                      ? "按当前搜索与筛选导出全部匹配工作区（服务端 CSV）"
-                      : "导出当前 fixture 预览数据"
+                    : "按当前搜索与筛选导出全部匹配工作区（服务端 CSV）"
               }
               onClick={() => void handleExport()}
             >
@@ -642,17 +502,12 @@ export function WorkspacesView({
               {isExporting ? "导出中…" : "导出 CSV"}
             </Button>
             <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
-              <p className="type-eyebrow">{isApi ? "本页活跃成员" : "活跃成员总量"}</p>
+              <p className="type-eyebrow">本页活跃成员</p>
               <p className="mt-1 font-mono text-[11px] text-body">
-                {isApi
-                  ? visibleWorkspaces.reduce(
-                      (total, workspace) => total + (workspace.memberCount ?? 0),
-                      0,
-                    )
-                  : records.reduce(
-                      (total, workspace) => total + (workspace.memberCount ?? 0),
-                      0,
-                    )}
+                {visibleWorkspaces.reduce(
+                  (total, workspace) => total + (workspace.memberCount ?? 0),
+                  0,
+                )}
               </p>
             </div>
           </div>
@@ -711,9 +566,7 @@ export function WorkspacesView({
           </Select>
         </label>
         <span className="flex h-9 items-center border-l border-hairline pl-3 font-mono text-[10px] text-muted max-md:hidden">
-          {isApi
-            ? `${visibleWorkspaces.length} 条 / 第 ${pageIndex + 1} 页`
-            : `${filteredWorkspaces.length} / ${records.length}`}
+          {`${visibleWorkspaces.length} 条 / 第 ${pageIndex + 1} 页`}
         </span>
       </AdminFilterBar>
 
@@ -773,25 +626,26 @@ export function WorkspacesView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">Workspace 列表</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              tenants / {isApi ? `server page ${pageIndex + 1}` : "fixture page 1"}
+              tenants / server page {pageIndex + 1}
             </p>
           </div>
-          <Badge tone={isApi ? "green" : "neutral"}>{mode}</Badge>
         </div>
 
-        {isApi && api.error ? (
+        {api.error ? (
           <div role="alert" className="m-4 rounded-control border border-accent-red/25 p-4">
-            <p className="type-eyebrow text-accent-red">ADMIN API ERROR</p>
-            <p className="mt-1 text-[12px] text-body">{api.error.detail}</p>
-            <div className="mt-2 flex items-center gap-2 font-mono text-[9px] text-muted">
-              <Badge tone="red">{api.error.code}</Badge>
-              <span>HTTP {api.error.status || "network"}</span>
-            </div>
+            <p className="type-eyebrow text-accent-red">加载失败</p>
+            <p className="mt-1 text-[12px] text-body">加载失败，请稍后重试</p>
+            <details className="mt-2 font-mono text-[9px] text-muted">
+              <summary className="cursor-pointer select-none">错误详情</summary>
+              <p className="mt-1 break-all">
+                {api.error.code} · HTTP {api.error.status || "network"} · {api.error.detail}
+              </p>
+            </details>
             <Button variant="ghost" size="sm" className="mt-3" onClick={() => api.refetch()}>
               重试
             </Button>
           </div>
-        ) : isApi && api.isLoading && !api.data ? (
+        ) : api.isLoading && !api.data ? (
           <p role="status" className="m-4 text-[12px] text-muted">
             正在读取 Workspace 列表…
           </p>
@@ -999,8 +853,7 @@ export function WorkspacesView({
           </div>
         )}
 
-        {isApi ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-2.5">
             <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
               第 {pageIndex + 1} 页 · 本页 {visibleWorkspaces.length} 条
               {api.data?.hasMore ? " · 还有更多" : " · 已到最后一页"}
@@ -1027,8 +880,7 @@ export function WorkspacesView({
                 <ChevronRight aria-hidden="true" />
               </Button>
             </div>
-          </div>
-        ) : null}
+        </div>
       </section>
 
       <div role="status" aria-live="polite" className="min-h-4 font-mono text-[10px] text-muted">
@@ -1043,7 +895,7 @@ export function WorkspacesView({
           {detailWorkspace ? (
             <>
               <SheetHeader>
-                <p className="type-eyebrow">WORKSPACE DETAIL / {mode.toUpperCase()}</p>
+                <p className="type-eyebrow">WORKSPACE DETAIL</p>
                 <SheetTitle>{detailWorkspace.name}</SheetTitle>
                 <SheetDescription>{detailWorkspace.slug}</SheetDescription>
               </SheetHeader>
@@ -1053,7 +905,7 @@ export function WorkspacesView({
                 <Badge tone="neutral">{detailWorkspace.defaultCurrency}</Badge>
               </div>
 
-              {isApi && detail.error ? (
+              {detail.error ? (
                 <div role="alert" className="mt-4 rounded-control border border-accent-red/25 p-3">
                   <p className="type-eyebrow text-accent-red">DETAIL ERROR</p>
                   <p className="mt-1 text-[11px] leading-5 text-body">{detail.error.detail}</p>
@@ -1096,18 +948,16 @@ export function WorkspacesView({
                   <p
                     className="mt-1.5 font-serif text-xl text-ink"
                     title={
-                      (detailData?.mediaBytes ?? workspaceContext?.storageBytes) === undefined
+                      detailData?.mediaBytes === undefined
                         ? "需要 GET /v1/admin/workspaces/:id 返回 mediaBytes"
                         : undefined
                     }
                   >
-                    {isApi
-                      ? detailData?.mediaBytes === undefined
-                        ? detailLoading
-                          ? "…"
-                          : "未接入"
-                        : formatBytes(detailData.mediaBytes)
-                      : formatBytes(workspaceContext?.storageBytes ?? 0)}
+                    {detailData?.mediaBytes === undefined
+                      ? detailLoading
+                        ? "…"
+                        : "未接入"
+                      : formatBytes(detailData.mediaBytes)}
                   </p>
                 </div>
                 <div className="bg-surface-1 p-3">
@@ -1168,20 +1018,14 @@ export function WorkspacesView({
                     邀请状态
                   </h3>
                   <span className="font-mono text-[9px] text-muted">
-                    {isApi
-                      ? invitations === undefined
-                        ? detailLoading
-                          ? "读取中"
-                          : "未接入"
-                        : `${invitations.length} records`
-                      : "fixture 未提供"}
+                    {invitations === undefined
+                      ? detailLoading
+                        ? "读取中"
+                        : "未接入"
+                      : `${invitations.length} records`}
                   </span>
                 </div>
-                {!isApi ? (
-                  <p className="mt-2 text-[11px] text-muted">
-                    fixture 预览不提供邀请记录；API 模式由详情接口返回。
-                  </p>
-                ) : invitations === undefined ? (
+                {invitations === undefined ? (
                   <p className="mt-2 text-[11px] leading-5 text-muted">
                     {detailLoading
                       ? "正在读取邀请记录…"
@@ -1232,16 +1076,14 @@ export function WorkspacesView({
                     最近旅行
                   </h3>
                   <span className="font-mono text-[9px] text-muted">
-                    {isApi
-                      ? recentTrips === undefined
-                        ? trips.isLoading
-                          ? "读取中"
-                          : "未接入"
-                        : `${recentTrips.length} records`
-                      : `${recentTrips?.length ?? 0} records`}
+                    {recentTrips === undefined
+                      ? trips.isLoading
+                        ? "读取中"
+                        : "未接入"
+                      : `${recentTrips.length} records`}
                   </span>
                 </div>
-                {isApi && trips.error ? (
+                {trips.error ? (
                   <p role="alert" className="mt-2 text-[11px] text-accent-red">
                     最近旅行读取失败：{trips.error.code} · {trips.error.detail}
                   </p>
@@ -1323,9 +1165,7 @@ export function WorkspacesView({
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  {isApi
-                    ? "套餐与所有权通过 PATCH /v1/admin/workspaces/:id 实际提交，后端校验成员资格并在同一事务内写入审计。"
-                    : "fixture 模式只更新本地预览；不会发送真实 PATCH 请求。"}
+                  套餐与所有权通过 PATCH /v1/admin/workspaces/:id 实际提交，后端校验成员资格并在同一事务内写入审计。
                 </p>
               </div>
             </>

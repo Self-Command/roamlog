@@ -7,8 +7,7 @@ import { canPlatform } from "@roamlog/contracts";
 import type { EmailStatus } from "@roamlog/contracts";
 import { Badge, Button, EmptyState, Input, Select } from "@roamlog/ui";
 
-import type { AdminConsoleRole } from "../../lib/fixtures";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
+import type { AdminConsoleRole } from "../../lib/admin-types";
 import { AdminMutationError } from "../../lib/admin-api-error";
 import {
   maskEmail,
@@ -16,16 +15,14 @@ import {
   type AdminMutationPort,
 } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
-import { recordMockAuditEvent } from "../../lib/mock-audit";
-import { MOCK_ADMIN_EMAILS, type AdminEmailRecord } from "../../lib/ops-fixtures";
+import type { AdminEmailRecord } from "../../lib/admin-ops-types";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "../dashboard/admin-metric-card";
 
 interface EmailsViewProps {
   role: AdminConsoleRole;
-  emails?: readonly AdminEmailRecord[];
-  mode?: AdminDataMode;
+  emails: readonly AdminEmailRecord[];
   mutations?: AdminMutationPort;
 }
 
@@ -92,8 +89,7 @@ const metricTones: Record<EmailStatus, "neutral" | "blue" | "green" | "red" | "o
 
 export function EmailsView({
   role,
-  emails = MOCK_ADMIN_EMAILS,
-  mode = "fixture",
+  emails,
   mutations,
 }: EmailsViewProps) {
   const [records, setRecords] = useState<readonly AdminEmailRecord[]>(emails);
@@ -139,22 +135,11 @@ export function EmailsView({
     [records],
   );
 
-  const fixtureCounts = useMemo(() => {
-    const counts = Object.fromEntries(METRIC_ORDER.map((key) => [key, 0])) as Record<
-      EmailStatus,
-      number
-    >;
-    for (const email of records) {
-      counts[email.status] += 1;
-    }
-    return counts;
-  }, [records]);
-
   async function resendEmail(record: AdminEmailRecord) {
     if (!canResend || !RESENDABLE_STATUSES.has(record.status)) {
       return;
     }
-    if (mode === "api" && mutations) {
+    if (mutations) {
       try {
         await mutations.resendEmail(record.id);
       } catch (error) {
@@ -174,15 +159,6 @@ export function EmailsView({
           : email,
       ),
     );
-    if (mode === "fixture") {
-      recordMockAuditEvent({
-        action: "admin.email.resend",
-        targetType: "email_log",
-        targetId: record.id,
-        targetName: maskEmail(record.to),
-        metadata: { mock: true, template: record.template, previousStatus: record.status },
-      });
-    }
     setStatusMessage(`已重新加入队列：${maskEmail(record.to)}`);
   }
 
@@ -195,7 +171,7 @@ export function EmailsView({
         readOnly={readOnly}
       />
 
-      {mode === "api" ? <ApiEmailCounts /> : <FixtureEmailCounts counts={fixtureCounts} />}
+      {<ApiEmailCounts />}
 
       <AdminFilterBar>
         <label className="min-w-0 flex-1">
@@ -276,10 +252,10 @@ export function EmailsView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">投递日志</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              resend / {mode} delivery state
+              resend delivery state
             </p>
           </div>
-          <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
+          
         </div>
 
         {filteredEmails.length === 0 ? (
@@ -449,6 +425,3 @@ function ApiEmailCounts() {
   return metricCards(counts, "admin/metrics · 数据库聚合");
 }
 
-function FixtureEmailCounts({ counts }: { counts: Record<EmailStatus, number> }) {
-  return metricCards(counts, "fixture delivery events");
-}

@@ -22,22 +22,19 @@ import {
   Textarea,
 } from "@roamlog/ui";
 
-import { MOCK_ADMIN_WORKSPACES, type AdminConsoleRole } from "../../lib/fixtures";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
+import type { AdminConsoleRole } from "../../lib/admin-types";
 import { AdminMutationError } from "../../lib/admin-api-error";
 import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
-import { recordMockAuditEvent } from "../../lib/mock-audit";
-import { MOCK_ADMIN_FLAGS, type AdminFlagRecord } from "../../lib/ops-fixtures";
+import type { AdminFlagRecord } from "../../lib/admin-ops-types";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { DestructiveActionDialog } from "../admin-ui/destructive-action-dialog";
 import { cn } from "../admin-shell/cn";
 
 interface FlagsViewProps {
   role: AdminConsoleRole;
-  flags?: readonly AdminFlagRecord[];
-  workspaces?: readonly AdminWorkspaceDetail[];
-  mode?: AdminDataMode;
+  flags: readonly AdminFlagRecord[];
+  workspaces: readonly AdminWorkspaceDetail[];
   mutations?: AdminMutationPort;
 }
 
@@ -112,9 +109,8 @@ function validateCreateDraft(draft: CreateFlagDraft, existing: readonly AdminFla
 
 export function FlagsView({
   role,
-  flags = MOCK_ADMIN_FLAGS,
-  workspaces = MOCK_ADMIN_WORKSPACES,
-  mode = "fixture",
+  flags,
+  workspaces,
   mutations,
 }: FlagsViewProps) {
   const [records, setRecords] = useState<readonly AdminFlagRecord[]>(flags);
@@ -214,7 +210,7 @@ export function FlagsView({
     if (!canUpdate || !draft) {
       return;
     }
-    if (mode === "api" && mutations) {
+    if (mutations) {
       try {
         await mutations.updateFlag(flag.key, {
           description: flag.description,
@@ -240,27 +236,12 @@ export function FlagsView({
               enabled: draft.enabled,
               rolloutPercentage: draft.rolloutPercentage,
               workspaceAllowlist: [...draft.workspaceAllowlist],
-              updatedByName: mode === "api" ? "当前管理员" : "当前模拟管理员",
+              updatedByName: "当前管理员",
               updatedAt: now,
             }
           : item,
       ),
     );
-    if (mode === "fixture") {
-      recordMockAuditEvent({
-        action: "admin.flags.update",
-        targetType: "feature_flag",
-        targetId: flag.key,
-        targetName: flag.label,
-        metadata: {
-          mock: true,
-          key: flag.key,
-          enabled: draft.enabled,
-          rolloutPercentage: draft.rolloutPercentage,
-          allowlistCount: draft.workspaceAllowlist.length,
-        },
-      });
-    }
     setStatusMessage(
       `已保存 ${flag.key}：${draft.enabled ? "开启" : "关闭"} / ${draft.rolloutPercentage}%`,
     );
@@ -283,7 +264,7 @@ export function FlagsView({
       return;
     }
 
-    if (mode === "api" && mutations) {
+    if (mutations) {
       try {
         await mutations.createFlag({
           key,
@@ -310,28 +291,14 @@ export function FlagsView({
       enabled: createDraft.enabled,
       rolloutPercentage: createDraft.rolloutPercentage,
       workspaceAllowlist: [...createDraft.workspaceAllowlist],
-      updatedByName: mode === "api" ? "当前管理员" : "当前模拟管理员",
+      updatedByName: "当前管理员",
       updatedAt: now,
     };
     setRecords((current) => [...current, record].sort((left, right) => left.key.localeCompare(right.key)));
     setDrafts((current) => ({ ...current, [key]: toDraft(record) }));
-    if (mode === "fixture") {
-      recordMockAuditEvent({
-        action: "admin.flags.create",
-        targetType: "feature_flag",
-        targetId: key,
-        targetName: key,
-        metadata: {
-          mock: true,
-          key,
-          enabled: record.enabled,
-          rolloutPercentage: record.rolloutPercentage,
-        },
-      });
-    }
     setCreateOpen(false);
     setCreateDraft(EMPTY_CREATE_DRAFT);
-    setStatusMessage(`已创建 ${key}${mode === "api" ? "（后端已写入并审计）" : ""}`);
+    setStatusMessage(`已创建 ${key}${"（后端已写入并审计）"}`);
   }
 
   async function deleteFlag() {
@@ -339,7 +306,7 @@ export function FlagsView({
       return;
     }
     const target = deleteTarget;
-    if (mode === "api" && mutations) {
+    if (mutations) {
       try {
         await mutations.deleteFlag(target.key);
       } catch (error) {
@@ -358,15 +325,6 @@ export function FlagsView({
       delete next[target.key];
       return next;
     });
-    if (mode === "fixture") {
-      recordMockAuditEvent({
-        action: "admin.flags.delete",
-        targetType: "feature_flag",
-        targetId: target.key,
-        targetName: target.label,
-        metadata: { mock: true, key: target.key },
-      });
-    }
     setDeleteTarget(null);
     setStatusMessage(`已删除 ${target.key}`);
   }
@@ -628,9 +586,7 @@ export function FlagsView({
           <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
             全局关闭时任何白名单都不生效；开启后，白名单 Workspace 始终命中，其余 Workspace
             按百分比参与灰度。
-            {mode === "api"
-              ? "本页的创建、保存与删除都会调用真实 Admin flag mutation，并在后端写入审计。"
-              : "当前 fixture 页面只演示交互。"}
+            {"本页的创建、保存与删除都会调用真实 Admin flag mutation，并在后端写入审计。"}
           </p>
         </div>
       </section>

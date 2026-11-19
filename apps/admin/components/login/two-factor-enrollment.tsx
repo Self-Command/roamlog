@@ -11,8 +11,6 @@ import {
   generatedAdminAuthTransport,
   type AdminAuthTransport,
 } from "../../lib/admin-auth";
-import { getAdminDataMode, type AdminDataMode } from "../../lib/admin-data-mode";
-import { getAdminLoginPath } from "../../lib/admin-paths";
 import { createQrMatrix, qrMatrixToSvgPath } from "../../lib/qr-code";
 
 interface EnrollmentData {
@@ -21,15 +19,12 @@ interface EnrollmentData {
 }
 
 export function TwoFactorEnrollmentPanel({
-  mode,
   transport,
   onComplete,
 }: {
-  mode?: AdminDataMode;
   transport?: AdminAuthTransport;
   onComplete?: () => void;
 }) {
-  const activeMode = mode ?? getAdminDataMode();
   const auth = transport ?? generatedAdminAuthTransport;
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -37,30 +32,6 @@ export function TwoFactorEnrollmentPanel({
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  if (activeMode === "fixture") {
-    return (
-      <main className="mx-auto max-w-2xl py-6">
-        <div className="rounded-card border border-hairline-strong bg-surface-1 p-6">
-          <p className="type-eyebrow">FIXTURE / 2FA ENROLLMENT</p>
-          <h1 className="mt-2 font-serif text-3xl tracking-[-0.03em] text-ink">
-            演示模式不注册真实 TOTP
-          </h1>
-          <p className="mt-3 text-[13px] leading-6 text-muted">
-            fixture 模式只演示登录与 2FA 提示。设置 NEXT_PUBLIC_ADMIN_DATA_MODE=api 后，此页面会调用
-            Better Auth 的 two-factor/enable 与 verify-totp。
-          </p>
-          <Button
-            className="mt-5"
-            variant="outline"
-            onClick={() => window.location.assign(getAdminLoginPath())}
-          >
-            返回演示登录
-          </Button>
-        </div>
-      </main>
-    );
-  }
 
   async function startEnrollment() {
     if (!password.trim()) {

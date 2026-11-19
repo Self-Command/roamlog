@@ -5,11 +5,8 @@ import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminMutationPort } from "../../lib/admin-data-source";
-import {
-  MOCK_ADMIN_FAILED_JOBS,
-  MOCK_ADMIN_QUEUES,
-  type AdminQueueSummary,
-} from "../../lib/ops-fixtures";
+import type { AdminQueueSummary } from "../../lib/admin-ops-types";
+import { sampleFailedJobs, sampleQueues } from "../../test/admin-sample-data";
 import { QueuesView } from "./queues-view";
 
 function renderWithClient(ui: ReactElement) {
@@ -26,11 +23,11 @@ afterEach(() => {
 describe("QueuesView", () => {
   it("requires an explicit target confirmation before retrying a failed job", async () => {
     const user = userEvent.setup();
-    render(
+    renderWithClient(
       <QueuesView
         role="super_admin"
-        queues={MOCK_ADMIN_QUEUES}
-        failedJobs={MOCK_ADMIN_FAILED_JOBS}
+        queues={sampleQueues}
+        failedJobs={sampleFailedJobs}
       />,
     );
 
@@ -48,8 +45,8 @@ describe("QueuesView", () => {
   });
 
   it("blocks queue retry and pause controls for analysts", () => {
-    render(
-      <QueuesView role="analyst" queues={MOCK_ADMIN_QUEUES} failedJobs={MOCK_ADMIN_FAILED_JOBS} />,
+    renderWithClient(
+      <QueuesView role="analyst" queues={sampleQueues} failedJobs={sampleFailedJobs} />,
     );
 
     const failedRow = screen.getByRole("row", { name: /job-export-7781/ });
@@ -59,8 +56,8 @@ describe("QueuesView", () => {
   });
 
   it("allows admin to retry failed jobs but not manage queue lifecycle", () => {
-    render(
-      <QueuesView role="admin" queues={MOCK_ADMIN_QUEUES} failedJobs={MOCK_ADMIN_FAILED_JOBS} />,
+    renderWithClient(
+      <QueuesView role="admin" queues={sampleQueues} failedJobs={sampleFailedJobs} />,
     );
 
     const failedRow = screen.getByRole("row", { name: /job-export-7781/ });
@@ -68,13 +65,13 @@ describe("QueuesView", () => {
     expect(screen.getByRole("button", { name: "暂停队列 media-processing" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "清空队列 media-processing" })).toBeDisabled();
     expect(
-      screen.getByText("Admin 可重试失败任务；暂停、恢复与清空队列属于 super_admin 专属操作。"),
+      screen.getByText(/暂停、恢复与清空队列仅 super_admin 可执行/),
     ).toBeInTheDocument();
   });
 
   it("keeps retry and queue management disabled for support", () => {
-    render(
-      <QueuesView role="support" queues={MOCK_ADMIN_QUEUES} failedJobs={MOCK_ADMIN_FAILED_JOBS} />,
+    renderWithClient(
+      <QueuesView role="support" queues={sampleQueues} failedJobs={sampleFailedJobs} />,
     );
 
     const failedRow = screen.getByRole("row", { name: /job-export-7781/ });
@@ -85,11 +82,11 @@ describe("QueuesView", () => {
 
   it("allows super_admin to pause and clear a queue with confirmation", async () => {
     const user = userEvent.setup();
-    render(
+    renderWithClient(
       <QueuesView
         role="super_admin"
-        queues={MOCK_ADMIN_QUEUES}
-        failedJobs={MOCK_ADMIN_FAILED_JOBS}
+        queues={sampleQueues}
+        failedJobs={sampleFailedJobs}
       />,
     );
 
@@ -152,9 +149,9 @@ describe("QueuesView", () => {
     renderWithClient(
       <QueuesView
         role="super_admin"
-        queues={MOCK_ADMIN_QUEUES}
-        failedJobs={MOCK_ADMIN_FAILED_JOBS}
-        mode="api"
+        queues={sampleQueues}
+        failedJobs={sampleFailedJobs}
+       
         mutations={mutations}
       />,
     );
@@ -179,11 +176,11 @@ describe("QueuesView", () => {
   });
 
   it("renders the measured throughput total and the discovered queue count", () => {
-    render(
+    renderWithClient(
       <QueuesView
         role="super_admin"
-        queues={MOCK_ADMIN_QUEUES}
-        failedJobs={MOCK_ADMIN_FAILED_JOBS}
+        queues={sampleQueues}
+        failedJobs={sampleFailedJobs}
       />,
     );
 
@@ -194,16 +191,16 @@ describe("QueuesView", () => {
 
   it("shows 未接入 instead of 0.0 when the throughput window is unavailable", () => {
     const queues: AdminQueueSummary[] = [
-      { ...MOCK_ADMIN_QUEUES[0]!, throughputPerMinute: Number.NaN },
+      { ...sampleQueues[0]!, throughputPerMinute: Number.NaN },
     ];
-    render(<QueuesView role="super_admin" queues={queues} failedJobs={[]} />);
+    renderWithClient(<QueuesView role="super_admin" queues={queues} failedJobs={[]} />);
 
     expect(screen.getAllByText("未接入").length).toBeGreaterThan(0);
     expect(screen.queryByText(/0\.0 jobs\/min/)).not.toBeInTheDocument();
   });
 
   it("renders an empty state when Redis discovers no queues", () => {
-    render(<QueuesView role="super_admin" queues={[]} failedJobs={[]} />);
+    renderWithClient(<QueuesView role="super_admin" queues={[]} failedJobs={[]} />);
 
     expect(screen.getByText("未发现队列")).toBeInTheDocument();
     expect(screen.getByText("Redis 中未发现已注册队列")).toBeInTheDocument();

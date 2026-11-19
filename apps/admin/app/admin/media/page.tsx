@@ -16,8 +16,7 @@ export default function AdminMediaPage() {
             <MediaView
               role={role}
               media={media}
-              mode={resource.mode}
-              mutations={resource.mode === "api" ? mutations : undefined}
+              mutations={mutations}
             />
           )}
         </AdminDataBoundary>

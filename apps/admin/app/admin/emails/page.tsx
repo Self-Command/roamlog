@@ -16,8 +16,7 @@ export default function AdminEmailsPage() {
             <EmailsView
               role={role}
               emails={emails}
-              mode={resource.mode}
-              mutations={resource.mode === "api" ? mutations : undefined}
+              mutations={mutations}
             />
           )}
         </AdminDataBoundary>

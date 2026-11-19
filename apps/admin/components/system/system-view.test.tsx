@@ -2,12 +2,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { AdminSystemSnapshotDetail } from "../../lib/admin-data-source";
-import { MOCK_ADMIN_SYSTEM } from "../../lib/ops-fixtures";
+import { sampleSystem } from "../../test/admin-sample-data";
 import { SystemView } from "./system-view";
 
 describe("SystemView", () => {
   it("renders the injected versions, migrations, checks, and fixture worker state", () => {
-    render(<SystemView role="support" snapshot={MOCK_ADMIN_SYSTEM} />);
+    render(<SystemView role="support" snapshot={sampleSystem} />);
 
     expect(screen.getByText("1.0.0-rc.1")).toBeInTheDocument();
     expect(screen.getByText("24.4.1")).toBeInTheDocument();
@@ -20,7 +20,7 @@ describe("SystemView", () => {
   });
 
   it("drops the previously hardcoded queue/Redis panel", () => {
-    render(<SystemView role="support" snapshot={MOCK_ADMIN_SYSTEM} />);
+    render(<SystemView role="support" snapshot={sampleSystem} />);
 
     expect(screen.queryByText("Up · 2 ms")).not.toBeInTheDocument();
     expect(screen.queryByText("4 queues")).not.toBeInTheDocument();
@@ -30,7 +30,7 @@ describe("SystemView", () => {
 
   it("renders not-wired states instead of DOWN when the worker cannot be observed", () => {
     const snapshot: AdminSystemSnapshotDetail = {
-      ...MOCK_ADMIN_SYSTEM,
+      ...sampleSystem,
       apiVersion: "unconfigured",
       workerVersion: "unconfigured",
       buildTime: "",
@@ -47,7 +47,7 @@ describe("SystemView", () => {
       queues: [],
     };
 
-    render(<SystemView role="admin" snapshot={snapshot} mode="api" />);
+    render(<SystemView role="admin" snapshot={snapshot} />);
 
     expect(screen.queryByText("Down")).not.toBeInTheDocument();
     expect(screen.getAllByText("未接入").length).toBeGreaterThan(1);
@@ -59,7 +59,7 @@ describe("SystemView", () => {
 
   it("shows the observed consumer signal and its derivation in API mode", () => {
     const snapshot: AdminSystemSnapshotDetail = {
-      ...MOCK_ADMIN_SYSTEM,
+      ...sampleSystem,
       apiVersion: "1.0.0",
       buildTime: "2026-11-17T08:31:00.000Z",
       workerStatus: "up",
@@ -77,7 +77,7 @@ describe("SystemView", () => {
       ],
     };
 
-    render(<SystemView role="admin" snapshot={snapshot} mode="api" />);
+    render(<SystemView role="admin" snapshot={snapshot} />);
 
     expect(screen.getByText("Healthy")).toBeInTheDocument();
     expect(screen.getAllByText(/阻塞消费者/).length).toBeGreaterThan(0);

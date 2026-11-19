@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AdminDashboardSourceState } from "../../lib/admin-data-source";
-import { MOCK_ADMIN_DASHBOARD } from "../../lib/fixtures";
+import { sampleDashboard } from "../../test/admin-sample-data";
 import { DashboardView } from "./dashboard-view";
 
 function readySource(): AdminDashboardSourceState {
@@ -25,7 +25,7 @@ function failedSource(code: string, refetch = vi.fn()): AdminDashboardSourceStat
 
 describe("DashboardView", () => {
   it("shows dense metrics, an accessible trend, and queue/email health", () => {
-    render(<DashboardView data={MOCK_ADMIN_DASHBOARD} role="support" />);
+    render(<DashboardView data={sampleDashboard} role="support" />);
 
     expect(screen.getByRole("heading", { name: "平台总览" })).toBeInTheDocument();
     const metrics = screen.getByRole("region", { name: "核心指标" });
@@ -43,7 +43,7 @@ describe("DashboardView", () => {
     render(
       <DashboardView
         data={{
-          ...MOCK_ADMIN_DASHBOARD,
+          ...sampleDashboard,
           sources: {
             metrics: readySource(),
             audit: readySource(),
@@ -68,7 +68,7 @@ describe("DashboardView", () => {
     render(
       <DashboardView
         data={{
-          ...MOCK_ADMIN_DASHBOARD,
+          ...sampleDashboard,
           sources: {
             metrics: readySource(),
             audit: failedSource("AUDIT_UNAVAILABLE"),
@@ -89,7 +89,7 @@ describe("DashboardView", () => {
     render(
       <DashboardView
         data={{
-          ...MOCK_ADMIN_DASHBOARD,
+          ...sampleDashboard,
           sources: {
             metrics: failedSource("METRICS_UNAVAILABLE"),
             audit: readySource(),
@@ -107,7 +107,7 @@ describe("DashboardView", () => {
     const recentAudit = screen.getByRole("region", { name: "最近审计事件" });
     expect(within(recentAudit).queryByRole("alert")).not.toBeInTheDocument();
     expect(
-      within(recentAudit).getByText(MOCK_ADMIN_DASHBOARD.recentAudit[0]?.action ?? "missing"),
+      within(recentAudit).getByText(sampleDashboard.recentAudit[0]?.action ?? "missing"),
     ).toBeInTheDocument();
   });
 });

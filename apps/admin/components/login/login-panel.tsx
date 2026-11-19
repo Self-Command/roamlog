@@ -11,11 +11,9 @@ import {
   type AdminAuthTransport,
 } from "../../lib/admin-auth";
 import { getAdminPostLoginPath } from "../../lib/admin-paths";
-import { getAdminDataMode, type AdminDataMode } from "../../lib/admin-data-mode";
 
 interface LoginPanelProps {
   onAuthenticated?: () => void;
-  mode?: AdminDataMode;
   transport?: AdminAuthTransport;
 }
 
@@ -29,11 +27,10 @@ function resolvePostLoginPath(): string {
   return getAdminPostLoginPath(returnTo);
 }
 
-export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps) {
-  const activeMode = mode ?? getAdminDataMode();
+export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
   const auth = transport ?? generatedAdminAuthTransport;
   // Explicit opt-in only: `NEXT_PUBLIC_ADMIN_DEMO=1` prefills a labelled demo
-  // address. Production builds never prefill the old fixture admin account.
+  // address. Production builds never prefill any stored account.
   const demoEnabled = process.env.NEXT_PUBLIC_ADMIN_DEMO === "1";
   const [step, setStep] = useState<"credentials" | "two-factor">("credentials");
   const [email, setEmail] = useState(() => (demoEnabled ? ADMIN_DEMO_EMAIL : ""));
@@ -69,9 +66,7 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
             </div>
             <div className="flex items-center gap-2">
               {demoEnabled ? <Badge tone="orange">DEMO PREFILL</Badge> : null}
-              <Badge tone={activeMode === "api" ? "green" : "neutral"}>
-                {activeMode === "api" ? "LIVE API AUTH" : "LOGIN PLACEHOLDER"}
-              </Badge>
+              <Badge tone="green">SECURE AUTH</Badge>
             </div>
           </header>
 
@@ -84,9 +79,7 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
               <p className="mt-4 max-w-sm text-[13px] leading-6 text-muted">
                 {step === "credentials"
                   ? "访问用户、Workspace、审计和运营工具。所有后台操作均按平台角色与审计规则约束。"
-                  : activeMode === "api"
-                    ? "输入验证器应用中的 6 位 TOTP 验证码完成 Better Auth challenge。"
-                    : "输入 6 位 TOTP 验证码完成验证。当前为本地交互占位，不校验真实凭据。"}
+                  : "输入验证器应用中的 6 位 TOTP 验证码完成 Better Auth challenge。"}
               </p>
 
               <Separator className="my-7" />
@@ -101,10 +94,6 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
                       return;
                     }
                     setMessage("");
-                    if (activeMode === "fixture") {
-                      setStep("two-factor");
-                      return;
-                    }
                     setIsSubmitting(true);
                     try {
                       const response = await auth.signIn({
@@ -153,18 +142,14 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
                     id="admin-password"
                     label="密码"
                     required
-                    hint={
-                      activeMode === "api"
-                        ? "通过同源 /v1/auth 代理登录，session cookie 为 httpOnly。"
-                        : "占位表单不会创建 session，也不会发送网络请求。"
-                    }
+                    hint="通过同源 /v1/auth 代理登录，session cookie 为 httpOnly。"
                   >
                     <Input
                       autoComplete="current-password"
                       type="password"
                       value={password}
                       onChange={(event) => setPassword(event.currentTarget.value)}
-                      placeholder={activeMode === "api" ? "输入账户密码" : "输入任意本地占位密码"}
+                      placeholder="输入账户密码"
                     />
                   </FormField>
 
@@ -183,14 +168,12 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
                     <KeyRound aria-hidden="true" />
                     {isSubmitting ? "正在验证…" : "继续验证"}
                   </Button>
-                  {activeMode === "api" ? (
-                    <a
+                  <a
                       href="/admin/2fa/enroll"
                       className="block rounded-control text-center text-[11px] text-muted underline-offset-4 outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-ink"
                     >
-                      已登录但尚未绑定验证器？完成 2FA 注册
-                    </a>
-                  ) : null}
+                    已登录但尚未绑定验证器？完成 2FA 注册
+                  </a>
                 </form>
               ) : (
                 <form
@@ -202,10 +185,6 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
                       return;
                     }
                     setMessage("");
-                    if (activeMode === "fixture") {
-                      completeAuthentication();
-                      return;
-                    }
                     setIsSubmitting(true);
                     try {
                       const response = await auth.verifyTotp(code);
@@ -233,11 +212,7 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
                     id="admin-totp"
                     label="6 位验证码"
                     required
-                    hint={
-                      activeMode === "api"
-                        ? "输入验证器中的动态验证码。"
-                        : "本地占位：输入任意 6 位数字即可进入后台。"
-                    }
+                    hint="输入验证器中的动态验证码。"
                   >
                     <Input
                       autoComplete="one-time-code"
@@ -288,9 +263,7 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-4">
             <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-              {activeMode === "api"
-                ? "Better Auth / same-origin /v1 proxy"
-                : "Better Auth placeholder / no real session"}
+              Better Auth / same-origin /v1 proxy
             </p>
             <p className="font-mono text-[9px] text-stone">ADMIN :3001</p>
           </footer>
@@ -330,17 +303,11 @@ export function LoginPanel({ onAuthenticated, mode, transport }: LoginPanelProps
             <div className="mt-3 space-y-2 font-mono text-[9px] text-muted">
               <div className="flex justify-between gap-3">
                 <span>API</span>
-                <span className={activeMode === "api" ? "text-accent-green" : "text-accent-yellow"}>
-                  {activeMode === "api" ? "SAME-ORIGIN PROXY" : "NOT CONNECTED"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span>Data mode</span>
-                <span className="text-ink">{activeMode.toUpperCase()}</span>
+                <span className="text-accent-green">SAME-ORIGIN PROXY</span>
               </div>
               <div className="flex justify-between gap-3">
                 <span>Audit writes</span>
-                <span className="text-ink">{activeMode === "api" ? "BACKEND" : "MOCK ONLY"}</span>
+                <span className="text-ink">BACKEND</span>
               </div>
             </div>
           </div>

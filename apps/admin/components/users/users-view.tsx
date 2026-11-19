@@ -27,21 +27,16 @@ import {
 
 import {
   adminUsersExportUrl,
-  buildAdminCsv,
   downloadAdminCsv,
-  downloadCsvText,
-  getAdminDataSource,
   useAdminUserDetail,
   useAdminUsersPage,
   type AdminMutationPort,
   type AdminUserListParams,
 } from "../../lib/admin-data-source";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
 import { AdminMutationError } from "../../lib/admin-api-error";
-import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES, type AdminConsoleRole } from "../../lib/fixtures";
+import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES, type AdminConsoleRole } from "../../lib/admin-types";
 import { formatDateTime } from "../../lib/format";
-import { recordMockAuditEvent } from "../../lib/mock-audit";
-import { getUserContext } from "../../lib/ops-fixtures";
+
 import { cn } from "../admin-shell/cn";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
@@ -67,8 +62,6 @@ type BulkUserAction = Extract<
 
 interface UsersViewProps {
   role: AdminConsoleRole;
-  users?: readonly AdminUserListItem[];
-  mode?: AdminDataMode;
   mutations?: AdminMutationPort;
   exportCsv?: (params: AdminUserListParams) => Promise<void>;
 }
@@ -95,24 +88,6 @@ const DEFAULT_FILTERS: StoredUserFilters = {
   role: "all",
   sort: "createdAt:desc",
 };
-const USER_CSV_COLUMNS = [
-  "id",
-  "email",
-  "emailVerified",
-  "name",
-  "platformRole",
-  "status",
-  "createdAt",
-  "lastActiveAt",
-  "deletedAt",
-  "workspaceCount",
-  "tripCount",
-  "entryCount",
-  "commentCount",
-  "mediaCount",
-  "activeSessionCount",
-] as const;
-
 function isBulkUserAction(action: UserAction): action is BulkUserAction {
   return (
     action.kind === "bulk-suspend" ||
@@ -121,8 +96,8 @@ function isBulkUserAction(action: UserAction): action is BulkUserAction {
   );
 }
 
-function readStoredFilters(mode: AdminDataMode): StoredUserFilters {
-  if (mode !== "api" || typeof window === "undefined") {
+function readStoredFilters(): StoredUserFilters {
+  if (typeof window === "undefined") {
     return DEFAULT_FILTERS;
   }
   try {
@@ -223,10 +198,8 @@ const userActionCopy: Record<
   },
 };
 
-export function UsersView({ role, users, mode = "fixture", mutations, exportCsv }: UsersViewProps) {
-  const sourceUsers = users ?? getAdminDataSource().listUsers();
-  const [records, setRecords] = useState<readonly AdminUserListItem[]>(sourceUsers);
-  const [storedFilters] = useState<StoredUserFilters>(() => readStoredFilters(mode));
+export function UsersView({ role, mutations, exportCsv }: UsersViewProps) {
+  const [storedFilters] = useState<StoredUserFilters>(() => readStoredFilters());
   const [query, setQuery] = useState(storedFilters.query);
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>(storedFilters.status);
   const [roleFilter, setRoleFilter] = useState<"all" | PlatformRole>(storedFilters.role);
@@ -248,8 +221,6 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
   const canForceLogout = canPlatform(role, "admin:users:force-logout");
   const canResetTwoFactor = canPlatform(role, "admin:users:reset-2fa");
   const canExport = canPlatform(role, "admin:users:delete");
-  const isApi = mode === "api";
-
   const debouncedQuery = useDebouncedValue(query, 250);
   const apiParams = useMemo<AdminUserListParams>(
     () => ({
@@ -262,13 +233,10 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
     }),
     [cursorStack, debouncedQuery, pageIndex, roleFilter, sortFilter, statusFilter],
   );
-  const api = useAdminUsersPage(apiParams, isApi);
-  const detail = useAdminUserDetail(detailUser?.id ?? null, isApi && detailUser !== null);
+  const api = useAdminUsersPage(apiParams);
+  const detail = useAdminUserDetail(detailUser?.id ?? null, detailUser !== null);
 
   useEffect(() => {
-    if (!isApi) {
-      return;
-    }
     try {
       window.sessionStorage.setItem(
         FILTER_STORAGE_KEY,
@@ -282,29 +250,13 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
     } catch {
       // Session storage can be unavailable in hardened browser contexts.
     }
-  }, [isApi, query, roleFilter, sortFilter, statusFilter]);
+  }, [query, roleFilter, sortFilter, statusFilter]);
 
-  const filteredUsers = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
-    return records.filter((user) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        `${user.name} ${user.email}`.toLocaleLowerCase("zh-CN").includes(normalizedQuery);
-      const matchesStatus = statusFilter === "all" || user.status === statusFilter;
-      const matchesRole = roleFilter === "all" || user.platformRole === roleFilter;
-      return matchesQuery && matchesStatus && matchesRole;
-    });
-  }, [query, records, roleFilter, statusFilter]);
-
-  const visibleUsers: readonly AdminUserListItem[] = isApi
-    ? (api.data?.items ?? [])
-    : filteredUsers;
+  const visibleUsers: readonly AdminUserListItem[] = api.data?.items ?? [];
   const allVisibleSelected =
     visibleUsers.length > 0 && visibleUsers.every((user) => selectedIds.has(user.id));
   const bulkUsers = visibleUsers.filter((user) => selectedIds.has(user.id));
-  const detailData: AdminUserDetail | null = isApi
-    ? (detail.data ?? null)
-    : ((detailUser as AdminUserDetail | null) ?? null);
+  const detailData: AdminUserDetail | null = detail.data ?? null;
 
   function resetPagination() {
     setCursorStack([undefined]);
@@ -391,7 +343,7 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
     const action = pendingAction;
     const copy = userActionCopy[action.kind];
 
-    if (isApi && mutations) {
+    if (mutations) {
       try {
         if (isBulkUserAction(action)) {
           await Promise.all(
@@ -431,63 +383,12 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
       return;
     }
 
-    if (isBulkUserAction(action)) {
-      const ids = new Set(action.users.map((user) => user.id));
-      setRecords((current) =>
-        current.map((user) =>
-          ids.has(user.id)
-            ? {
-                ...user,
-                status:
-                  action.kind === "bulk-restore"
-                    ? "active"
-                    : action.kind === "bulk-delete"
-                      ? "deleted"
-                      : "suspended",
-              }
-            : user,
-        ),
-      );
-      setSelectedIds(new Set());
-    } else if (action.kind === "suspend" || action.kind === "restore") {
-      const nextStatus: AccountStatus = action.kind === "suspend" ? "suspended" : "active";
-      setRecords((current) =>
-        current.map((user) =>
-          user.id === action.user.id ? { ...user, status: nextStatus } : user,
-        ),
-      );
-    } else if (action.kind === "delete") {
-      setRecords((current) =>
-        current.map((user) =>
-          user.id === action.user.id ? { ...user, status: "deleted" } : user,
-        ),
-      );
-    } else if (action.kind === "change-role") {
-      setRecords((current) =>
-        current.map((user) =>
-          user.id === action.user.id ? { ...user, platformRole: nextRole } : user,
-        ),
-      );
-    }
-
-    recordMockAuditEvent({
-      action: copy.action,
-      targetType: "user",
-      targetId: isBulkUserAction(action) ? `batch-${action.users.length}` : action.user.id,
-      targetName: actionTargetName(action),
-      metadata: {
-        previousRole: role,
-        mock: true,
-        ...(action.kind === "change-role" ? { nextRole } : {}),
-      },
-    });
-
-    setStatusMessage(`模拟审计事件已记录：${copy.action}`);
+    setStatusMessage("未连接 Admin API，操作未提交。");
     setPendingAction(null);
   }
 
   async function handleExport() {
-    if (isExporting || (isApi && !canExport)) {
+    if (isExporting || !canExport) {
       return;
     }
     setIsExporting(true);
@@ -495,32 +396,13 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
     try {
       if (exportCsv) {
         await exportCsv(apiParams);
-      } else if (isApi) {
+      } else {
         await downloadAdminCsv(
           adminUsersExportUrl(apiParams),
           "roamlog-admin-users.csv",
         );
-      } else {
-        downloadCsvText(
-          buildAdminCsv(
-            USER_CSV_COLUMNS,
-            filteredUsers.map((user) => ({
-              ...user,
-              workspaceCount: (user as Partial<AdminUserDetail>).workspaceCount,
-              tripCount: (user as Partial<AdminUserDetail>).tripCount,
-              entryCount: (user as Partial<AdminUserDetail>).entryCount,
-              commentCount: (user as Partial<AdminUserDetail>).commentCount,
-              mediaCount: (user as Partial<AdminUserDetail>).mediaCount,
-            })),
-          ),
-          "roamlog-admin-users-preview.csv",
-        );
       }
-      setStatusMessage(
-        isApi
-          ? "用户 CSV 已按当前筛选导出。"
-          : "预览用户 CSV 已导出（fixture 数据，不代表生产）。",
-      );
+      setStatusMessage("用户 CSV 已按当前筛选导出。");
     } catch (error) {
       setStatusMessage(
         mutationFailureMessage(error, "导出失败，请检查 Admin API 与会话后重试。"),
@@ -531,7 +413,6 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
   }
 
   const copy = pendingAction ? userActionCopy[pendingAction.kind] : null;
-  const userContext = !isApi && detailUser ? getUserContext(detailUser.id) : null;
 
   const memberships: ReadonlyArray<{
     workspaceId: string;
@@ -539,8 +420,8 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
     role: WorkspaceRole;
     status?: "active" | "suspended";
     joinedAt: string;
-  }> | undefined = isApi
-    ? detail.data?.workspaces === undefined
+  }> | undefined =
+    detail.data?.workspaces === undefined
       ? undefined
       : detail.data.workspaces.map((membership) => ({
           workspaceId: membership.workspaceId,
@@ -548,8 +429,7 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
           role: membership.role,
           status: membership.status,
           joinedAt: membership.joinedAt,
-        }))
-    : (userContext?.memberships ?? []);
+        }));
 
   const sessions: ReadonlyArray<{
     id: string;
@@ -557,18 +437,17 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
     ip: string;
     lastSeenAt: string;
     current?: boolean;
-  }> | undefined = isApi
-    ? detail.data?.sessions === undefined
+  }> | undefined =
+    detail.data?.sessions === undefined
       ? undefined
       : detail.data.sessions.map((session) => ({
           id: session.id,
           device: session.userAgent ?? "未记录客户端",
           ip: session.ipAddress ?? "未记录 IP",
           lastSeenAt: session.createdAt,
-        }))
-    : (userContext?.sessions ?? []);
+        }));
 
-  const detailLoading = isApi && detail.isLoading && !detail.data;
+  const detailLoading = detail.isLoading && !detail.data;
   const countValue = (value: number | undefined): string | number =>
     value === undefined ? "未接入" : value;
 
@@ -583,15 +462,13 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
           <Button
             variant="ghost"
             size="sm"
-            disabled={isExporting || (isApi && !canExport)}
+            disabled={isExporting || !canExport}
             title={
               isExporting
                 ? "正在生成 CSV"
-                : isApi && !canExport
+                : !canExport
                   ? "仅 admin 及以上可导出用户 CSV（后端动作 admin:users:delete）"
-                  : isApi
-                    ? "按当前搜索与筛选导出全部匹配用户（服务端 CSV）"
-                    : "导出当前 fixture 预览数据"
+                  : "按当前搜索与筛选导出全部匹配用户（服务端 CSV）"
             }
             onClick={() => void handleExport()}
           >
@@ -655,9 +532,7 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
           </Select>
         </label>
         <div className="flex h-9 items-center border-l border-hairline pl-3 font-mono text-[10px] text-muted max-md:hidden">
-          {isApi
-            ? `${visibleUsers.length} 条 / 第 ${pageIndex + 1} 页`
-            : `${filteredUsers.length} / ${records.length}`}
+          {`${visibleUsers.length} 条 / 第 ${pageIndex + 1} 页`}
         </div>
       </AdminFilterBar>
 
@@ -713,25 +588,26 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
           <div>
             <h2 className="text-[13px] font-medium text-ink">平台账户</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              users / {isApi ? `server page ${pageIndex + 1}` : "fixture page 1"}
+              users / server page {pageIndex + 1}
             </p>
           </div>
-          <Badge tone={isApi ? "green" : "neutral"}>{mode}</Badge>
         </div>
 
-        {isApi && api.error ? (
+        {api.error ? (
           <div role="alert" className="m-4 rounded-control border border-accent-red/25 p-4">
-            <p className="type-eyebrow text-accent-red">ADMIN API ERROR</p>
-            <p className="mt-1 text-[12px] text-body">{api.error.detail}</p>
-            <div className="mt-2 flex items-center gap-2 font-mono text-[9px] text-muted">
-              <Badge tone="red">{api.error.code}</Badge>
-              <span>HTTP {api.error.status || "network"}</span>
-            </div>
+            <p className="type-eyebrow text-accent-red">加载失败</p>
+            <p className="mt-1 text-[12px] text-body">加载失败，请稍后重试</p>
+            <details className="mt-2 font-mono text-[9px] text-muted">
+              <summary className="cursor-pointer select-none">错误详情</summary>
+              <p className="mt-1 break-all">
+                {api.error.code} · HTTP {api.error.status || "network"} · {api.error.detail}
+              </p>
+            </details>
             <Button variant="ghost" size="sm" className="mt-3" onClick={() => api.refetch()}>
               重试
             </Button>
           </div>
-        ) : isApi && api.isLoading && !api.data ? (
+        ) : api.isLoading && !api.data ? (
           <p role="status" className="m-4 text-[12px] text-muted">
             正在读取用户列表…
           </p>
@@ -915,8 +791,7 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
           </div>
         )}
 
-        {isApi ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-2.5">
             <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
               第 {pageIndex + 1} 页 · 本页 {visibleUsers.length} 条
               {api.data?.hasMore ? " · 还有更多" : " · 已到最后一页"}
@@ -943,8 +818,7 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
                 <ChevronRight aria-hidden="true" />
               </Button>
             </div>
-          </div>
-        ) : null}
+        </div>
       </section>
 
       <div role="status" aria-live="polite" className="min-h-4 font-mono text-[10px] text-muted">
@@ -956,7 +830,7 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
           {detailUser ? (
             <>
               <SheetHeader>
-                <p className="type-eyebrow">USER DETAIL / {mode.toUpperCase()}</p>
+                <p className="type-eyebrow">USER DETAIL</p>
                 <SheetTitle>{detailUser.name}</SheetTitle>
                 <SheetDescription>{detailUser.email}</SheetDescription>
               </SheetHeader>
@@ -1001,7 +875,7 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
                 ))}
               </dl>
 
-              {isApi && detail.error ? (
+              {detail.error ? (
                 <div role="alert" className="mt-4 rounded-control border border-accent-red/25 p-3">
                   <p className="type-eyebrow text-accent-red">DETAIL ERROR</p>
                   <p className="mt-1 text-[11px] leading-5 text-body">{detail.error.detail}</p>
@@ -1036,12 +910,6 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
                 ))}
               </dl>
 
-              {!isApi ? (
-                <p className="mt-2 text-[10px] leading-5 text-muted">
-                  fixture 预览不提供评论 / 媒体 / 2FA 计数；API 模式由详情接口返回。
-                </p>
-              ) : null}
-
               <div className="mt-6 space-y-5">
                 <section aria-labelledby="user-sessions-heading">
                   <div className="flex items-center justify-between gap-3">
@@ -1068,7 +936,6 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
                         <li key={item.id} className="py-2.5">
                           <div className="flex items-center justify-between gap-3">
                             <span className="truncate text-[11px] text-body">{item.device}</span>
-                            {!isApi && item.current ? <Badge tone="green">Current</Badge> : null}
                           </div>
                           <p className="mt-1 font-mono text-[9px] text-muted">
                             {item.ip} · {formatDateTime(item.lastSeenAt)}
@@ -1155,9 +1022,7 @@ export function UsersView({ role, users, mode = "fixture", mutations, exportCsv 
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  {isApi
-                    ? "API 模式下操作会发送真实 Admin mutation，并由后端权限与审计规则约束；成功后列表与详情会自动刷新。"
-                    : "Sheet 与确认对话框均只操作本地 fixture；不会发送真实暂停、删除或认证请求。"}
+                  操作会发送真实 Admin mutation，并由后端权限与审计规则约束；成功后列表与详情会自动刷新。
                 </p>
               </div>
             </>

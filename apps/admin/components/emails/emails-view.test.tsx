@@ -5,7 +5,7 @@ import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminMutationPort } from "../../lib/admin-data-source";
-import { MOCK_ADMIN_EMAILS } from "../../lib/ops-fixtures";
+import { sampleEmails } from "../../test/admin-sample-data";
 import { EmailsView } from "./emails-view";
 
 function renderWithClient(ui: ReactElement) {
@@ -22,7 +22,7 @@ afterEach(() => {
 describe("EmailsView", () => {
   it("allows support to resend a bounced email into the queue", async () => {
     const user = userEvent.setup();
-    render(<EmailsView role="support" emails={MOCK_ADMIN_EMAILS} />);
+    renderWithClient(<EmailsView role="support" emails={sampleEmails} />);
 
     const bouncedRow = screen.getByRole("row", { name: "邮件 j***@example.invalid" });
     await user.click(
@@ -34,7 +34,7 @@ describe("EmailsView", () => {
   });
 
   it("keeps resend disabled for analysts", () => {
-    render(<EmailsView role="analyst" emails={MOCK_ADMIN_EMAILS} />);
+    renderWithClient(<EmailsView role="analyst" emails={sampleEmails} />);
 
     const row = screen.getByRole("row", { name: "邮件 j***@example.invalid" });
     expect(
@@ -44,7 +44,7 @@ describe("EmailsView", () => {
   });
 
   it("disables resend for sent, delivered, and complained emails with a stated reason", () => {
-    render(<EmailsView role="support" emails={MOCK_ADMIN_EMAILS} />);
+    renderWithClient(<EmailsView role="support" emails={sampleEmails} />);
 
     const sentRow = screen
       .getAllByRole("row", { name: "邮件 m***@example.invalid" })
@@ -57,14 +57,14 @@ describe("EmailsView", () => {
   });
 
   it("never renders a full recipient address", () => {
-    render(<EmailsView role="support" emails={MOCK_ADMIN_EMAILS} />);
+    renderWithClient(<EmailsView role="support" emails={sampleEmails} />);
 
     expect(screen.queryByText(/jiang\.yu@example\.invalid/)).not.toBeInTheDocument();
     expect(screen.getAllByText("j***@example.invalid").length).toBeGreaterThan(0);
   });
 
   it("surfaces the most recent delivery error with a masked recipient", () => {
-    render(<EmailsView role="support" emails={MOCK_ADMIN_EMAILS} />);
+    renderWithClient(<EmailsView role="support" emails={sampleEmails} />);
 
     const summary = screen.getByRole("note", { name: "最近错误原因" });
     expect(within(summary).getByText(/550 mailbox unavailable/)).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe("EmailsView", () => {
     const mutations = {
       resendEmail: vi.fn().mockResolvedValue(undefined),
     } as unknown as AdminMutationPort;
-    const email = MOCK_ADMIN_EMAILS[1]!;
+    const email = sampleEmails[1]!;
     // The API-mode metric cards read real totals from /v1/admin/metrics.
     vi.stubGlobal(
       "fetch",
@@ -90,7 +90,7 @@ describe("EmailsView", () => {
       ),
     );
     renderWithClient(
-      <EmailsView role="support" emails={MOCK_ADMIN_EMAILS} mode="api" mutations={mutations} />,
+      <EmailsView role="support" emails={sampleEmails} mutations={mutations} />,
     );
 
     const row = screen.getByRole("row", { name: "邮件 j***@example.invalid" });
@@ -103,7 +103,7 @@ describe("EmailsView", () => {
   });
 
   it("no longer offers a test email action without an API endpoint", () => {
-    render(<EmailsView role="super_admin" emails={MOCK_ADMIN_EMAILS} />);
+    renderWithClient(<EmailsView role="super_admin" emails={sampleEmails} />);
 
     expect(screen.queryByRole("button", { name: /测试邮件/ })).not.toBeInTheDocument();
     expect(screen.getByText("测试邮件入口未接入")).toBeInTheDocument();

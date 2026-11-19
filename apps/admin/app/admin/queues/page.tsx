@@ -17,8 +17,7 @@ export default function AdminQueuesPage() {
               role={role}
               queues={queues}
               failedJobs={failedJobs}
-              mode={resource.mode}
-              mutations={resource.mode === "api" ? mutations : undefined}
+              mutations={mutations}
             />
           )}
         </AdminDataBoundary>

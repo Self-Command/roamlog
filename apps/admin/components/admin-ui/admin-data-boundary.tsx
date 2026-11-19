@@ -2,7 +2,7 @@
 
 import { AlertTriangle, LocateFixed, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 
-import { Badge, Button, EmptyState } from "@roamlog/ui";
+import { Button, EmptyState } from "@roamlog/ui";
 
 import type { AdminResource } from "../../lib/admin-data-source";
 import { getAdminLoginPath } from "../../lib/admin-paths";
@@ -27,14 +27,12 @@ function AdminPreparingView() {
   );
 }
 
-function AdminDataLoading({ mode }: { mode: "fixture" | "api" }) {
+function AdminDataLoading() {
   return (
     <div role="status" aria-live="polite" className="space-y-4">
       <div className="flex items-center justify-between rounded-card border border-hairline-strong bg-surface-1 px-4 py-3">
         <div>
-          <p className="type-eyebrow">
-            {mode === "api" ? "LIVE API / LOADING" : "FIXTURE / LOADING"}
-          </p>
+          <p className="type-eyebrow">LOADING</p>
           <p className="mt-1 text-[12px] text-muted">正在读取后台数据。</p>
         </div>
         <RefreshCw aria-hidden="true" className="size-4 animate-spin text-muted" />
@@ -72,8 +70,8 @@ function AdminDataContent<T>({
   resource: AdminResource<T>;
   children: (data: T) => React.ReactNode;
 }) {
-  if (resource.mode === "api" && resource.isLoading && !resource.data && !resource.error) {
-    return <AdminDataLoading mode={resource.mode} />;
+  if (resource.isLoading && !resource.data && !resource.error) {
+    return <AdminDataLoading />;
   }
 
   if (resource.error) {
@@ -98,24 +96,27 @@ function AdminDataContent<T>({
                 ? "2FA ENROLLMENT REQUIRED"
                 : accessDenied
                   ? "PLATFORM ACCESS DENIED"
-                  : "ADMIN API ERROR"}
+                  : "加载失败"}
             </p>
             <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">
               {twoFactorRequired
                 ? "先绑定 TOTP 验证器"
                 : accessDenied
                   ? "当前账户没有后台权限"
-                  : resource.error.title}
+                  : "加载失败，请稍后重试"}
             </h2>
             <p className="mt-2 text-[12px] leading-6 text-muted">
               {twoFactorRequired
                 ? "后端要求平台管理员完成 TOTP 注册与验证。完成前，Admin API 会持续返回 ADMIN_2FA_REQUIRED。"
-                : resource.error.detail}
+                : "后台数据暂时无法读取，请稍后重试；多次失败请联系平台管理员。"}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[9px] text-stone">
-              <Badge tone="red">{resource.error.code}</Badge>
-              <span>HTTP {resource.error.status || "network"}</span>
-            </div>
+            <details className="mt-3 font-mono text-[9px] text-stone">
+              <summary className="cursor-pointer select-none">错误详情</summary>
+              <p className="mt-1 break-all">
+                {resource.error.code} · HTTP {resource.error.status || "network"} ·{" "}
+                {resource.error.detail}
+              </p>
+            </details>
             <div className="mt-5 flex flex-wrap gap-2">
               {twoFactorRequired ? (
                 <Button
@@ -157,7 +158,7 @@ function AdminDataContent<T>({
 
   return (
     <div className="space-y-4">
-      {resource.mode === "api" && resource.degraded.length > 0 ? (
+      {resource.degraded.length > 0 ? (
         <div
           role="status"
           className="flex flex-wrap items-center gap-2 rounded-control border border-accent-yellow/25 bg-accent-yellow/5 px-3 py-2 text-[11px] text-accent-yellow"

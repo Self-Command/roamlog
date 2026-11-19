@@ -1,15 +1,22 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { AdminMutationError, assertAdminResponse, toAdminApiFailure } from "./admin-api-error";
-import { resolveAdminDataMode } from "./admin-data-mode";
 import { mapAdminUsers, platformRoleOf } from "./admin-data-source";
 
+const here = dirname(fileURLToPath(import.meta.url));
+
 describe("admin data mode and API adapter", () => {
-  it("defaults to fixture and only enables API mode with an explicit api value", () => {
-    expect(resolveAdminDataMode(undefined)).toBe("fixture");
-    expect(resolveAdminDataMode("")).toBe("fixture");
-    expect(resolveAdminDataMode("preview")).toBe("fixture");
-    expect(resolveAdminDataMode("api")).toBe("api");
+  it("has no fixture mode switch", () => {
+    const source = readFileSync(join(here, "admin-data-source.ts"), "utf8");
+    expect(source).not.toMatch(/fixture/i);
+  });
+
+  it("has no data-mode module left to import", () => {
+    expect(() => readFileSync(join(here, "admin-data-mode.ts"), "utf8")).toThrow();
   });
 
   it("surfaces ADMIN_2FA_REQUIRED with degraded headers from a 403 response", () => {

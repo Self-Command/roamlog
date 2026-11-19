@@ -11,7 +11,7 @@ export default function AdminOverviewPage() {
     <AdminConsoleRoleAware>
       {(role) => (
         <AdminDataBoundary resource={resource}>
-          {(data) => <DashboardView role={role} data={data} mode={resource.mode} />}
+          {(data) => <DashboardView role={role} data={data} />}
         </AdminDataBoundary>
       )}
     </AdminConsoleRoleAware>

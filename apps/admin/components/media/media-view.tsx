@@ -7,13 +7,11 @@ import { canPlatform } from "@roamlog/contracts";
 import type { MediaStatus } from "@roamlog/contracts";
 import { Badge, Button, EmptyState, Input, Select, Switch } from "@roamlog/ui";
 
-import type { AdminConsoleRole } from "../../lib/fixtures";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
+import type { AdminConsoleRole } from "../../lib/admin-types";
 import { AdminMutationError } from "../../lib/admin-api-error";
 import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { formatBytes, formatDateTime } from "../../lib/format";
-import { recordMockAuditEvent } from "../../lib/mock-audit";
-import { MOCK_ADMIN_MEDIA, type AdminMediaItem } from "../../lib/ops-fixtures";
+import type { AdminMediaItem } from "../../lib/admin-ops-types";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "../dashboard/admin-metric-card";
@@ -21,8 +19,7 @@ import { DestructiveActionDialog } from "../admin-ui/destructive-action-dialog";
 
 interface MediaViewProps {
   role: AdminConsoleRole;
-  media?: readonly AdminMediaItem[];
-  mode?: AdminDataMode;
+  media: readonly AdminMediaItem[];
   mutations?: AdminMutationPort;
 }
 
@@ -49,8 +46,7 @@ const previewGradients = [
 
 export function MediaView({
   role,
-  media = MOCK_ADMIN_MEDIA,
-  mode = "fixture",
+  media,
   mutations,
 }: MediaViewProps) {
   const [records, setRecords] = useState<readonly AdminMediaItem[]>(media);
@@ -89,7 +85,7 @@ export function MediaView({
       return;
     }
     const target = pendingDelete;
-    if (mode === "api" && mutations) {
+    if (mutations) {
       try {
         await mutations.deleteMedia(target.id);
       } catch (error) {
@@ -103,15 +99,6 @@ export function MediaView({
       }
     }
     setRecords((current) => current.filter((item) => item.id !== target.id));
-    if (mode === "fixture") {
-      recordMockAuditEvent({
-        action: "admin.media.delete",
-        targetType: "media",
-        targetId: target.id,
-        targetName: target.fileName,
-        metadata: { mock: true, sizeBytes: target.sizeBytes, orphan: target.usage === "orphan" },
-      });
-    }
     setStatusMessage(`已删除媒体：${target.fileName}`);
     setPendingDelete(null);
   }
@@ -122,10 +109,7 @@ export function MediaView({
         eyebrow="CONTENT & ASSETS / MEDIA"
         title="媒体库"
         description={
-          mode === "api"
-            ? "检查存储用量、处理状态与孤儿对象。用量与删除由真实 Admin API 提供。"
-            : "检查存储用量、处理状态与孤儿对象，清理未关联媒体。所有预览、用量与删除均为本地 fixture 演示。"
-        }
+          "检查存储用量、处理状态与孤儿对象。用量与删除由真实 Admin API 提供。"}
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -139,7 +123,7 @@ export function MediaView({
         <AdminMetricCard
           label="对象总量"
           value={String(records.length)}
-          detail={`${formatBytes(totalBytes)} ${mode === "api" ? "API 用量" : "fixture 用量"}`}
+          detail={`${formatBytes(totalBytes)} ${"API 用量"}`}
           tone="blue"
           icon={HardDrive}
         />

@@ -8,7 +8,7 @@ import type { AdminUserDetail } from "@roamlog/contracts";
 
 import { AdminMutationError } from "../../lib/admin-api-error";
 import type { AdminMutationPort } from "../../lib/admin-data-source";
-import { MOCK_ADMIN_USERS } from "../../lib/fixtures";
+import { sampleUsers } from "../../test/admin-sample-data";
 import { UsersView } from "./users-view";
 
 function renderWithClient(ui: ReactElement) {
@@ -28,10 +28,10 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-const fixture = MOCK_ADMIN_USERS[0]!;
+const fixture = sampleUsers[0]!;
 
 function listUser(index = 0) {
-  const user = MOCK_ADMIN_USERS[index] ?? fixture;
+  const user = sampleUsers[index] ?? fixture;
   return {
     id: user.id,
     email: user.email,
@@ -82,27 +82,35 @@ function detailUser(): AdminUserDetail {
   };
 }
 
-function setMode(mode: "api" | "fixture") {
-  process.env.NEXT_PUBLIC_ADMIN_DATA_MODE = mode;
+function stubUserPages(rows = sampleUsers.map((_, index) => listUser(index))) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/admin/users/")) {
+        return jsonResponse(detailUser());
+      }
+      return jsonResponse({ items: rows, nextCursor: null, hasMore: false });
+    }),
+  );
 }
 
 beforeEach(() => {
-  setMode("fixture");
   window.sessionStorage.clear();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  delete process.env.NEXT_PUBLIC_ADMIN_DATA_MODE;
 });
 
 describe("UsersView", () => {
   it("requires typing the target name before a destructive action can be confirmed", async () => {
     const user = userEvent.setup();
-    renderWithClient(<UsersView role="support" users={MOCK_ADMIN_USERS} />);
+    stubUserPages();
+    renderWithClient(<UsersView role="support" />);
 
-    const firstRow = screen.getByRole("row", { name: /林知夏/ });
+    const firstRow = await screen.findByRole("row", { name: /林知夏/ });
     expect(within(firstRow).getByRole("button", { name: "修改平台角色" })).toBeDisabled();
     await user.click(within(firstRow).getByRole("button", { name: "暂停账户" }));
 
@@ -115,14 +123,15 @@ describe("UsersView", () => {
     await user.click(confirm);
 
     expect(screen.queryByRole("dialog", { name: "暂停账户" })).not.toBeInTheDocument();
-    expect(within(firstRow).getByText("已暂停")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("模拟审计事件已记录");
+    // Without a mutation port the console refuses the write instead of faking it.
+    expect(screen.getByRole("status")).toHaveTextContent("未连接 Admin API");
   });
 
-  it("keeps every destructive user action visible but disabled for analysts", () => {
-    renderWithClient(<UsersView role="analyst" users={MOCK_ADMIN_USERS} />);
+  it("keeps every destructive user action visible but disabled for analysts", async () => {
+    stubUserPages();
+    renderWithClient(<UsersView role="analyst" />);
 
-    const firstRow = screen.getByRole("row", { name: /林知夏/ });
+    const firstRow = await screen.findByRole("row", { name: /林知夏/ });
     expect(within(firstRow).getByRole("button", { name: "暂停账户" })).toBeDisabled();
     expect(within(firstRow).getByRole("button", { name: "修改平台角色" })).toBeDisabled();
     expect(within(firstRow).getByRole("button", { name: "删除用户" })).toBeDisabled();
@@ -131,9 +140,10 @@ describe("UsersView", () => {
 
   it("allows support to suspend but not change platform roles", async () => {
     const user = userEvent.setup();
-    renderWithClient(<UsersView role="support" users={MOCK_ADMIN_USERS} />);
+    stubUserPages();
+    renderWithClient(<UsersView role="support" />);
 
-    const firstRow = screen.getByRole("row", { name: /林知夏/ });
+    const firstRow = await screen.findByRole("row", { name: /林知夏/ });
     const suspend = within(firstRow).getByRole("button", { name: "暂停账户" });
     expect(suspend).toBeEnabled();
     expect(within(firstRow).getByRole("button", { name: "修改平台角色" })).toBeDisabled();
@@ -143,7 +153,6 @@ describe("UsersView", () => {
   });
 
   it("paginates with server cursors and sends the search term to the API", async () => {
-    setMode("api");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("cursor=next-1")) {
@@ -154,7 +163,7 @@ describe("UsersView", () => {
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
-    renderWithClient(<UsersView role="admin" mode="api" users={[]} />);
+    renderWithClient(<UsersView role="admin" />);
 
     await screen.findByRole("row", { name: /林知夏/ });
     await screen.findByRole("row", { name: /陈墨/ });
@@ -179,14 +188,13 @@ describe("UsersView", () => {
   });
 
   it("restores server filters from session storage after a remount", async () => {
-    setMode("api");
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       jsonResponse({ items: [listUser(0)], nextCursor: null, hasMore: false }),
     );
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
-    const first = renderWithClient(<UsersView role="admin" mode="api" users={[]} />);
+    const first = renderWithClient(<UsersView role="admin" />);
     await screen.findByRole("row", { name: /林知夏/ });
     await user.type(screen.getByLabelText("搜索用户"), "lin");
     await waitFor(
@@ -200,7 +208,7 @@ describe("UsersView", () => {
 
     first.unmount();
     fetchMock.mockClear();
-    renderWithClient(<UsersView role="admin" mode="api" users={[]} />);
+    renderWithClient(<UsersView role="admin" />);
 
     await waitFor(
       () => {
@@ -214,7 +222,6 @@ describe("UsersView", () => {
   });
 
   it("loads detail counters, memberships, sessions and 2FA from GET /admin/users/:id", async () => {
-    setMode("api");
     const detail = detailUser();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -226,7 +233,7 @@ describe("UsersView", () => {
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
-    renderWithClient(<UsersView role="admin" mode="api" users={[]} />);
+    renderWithClient(<UsersView role="admin" />);
     const firstRow = await screen.findByRole("row", { name: /林知夏/ });
     await user.click(within(firstRow).getByRole("button", { name: "详情" }));
 
@@ -244,7 +251,6 @@ describe("UsersView", () => {
   });
 
   it("shows the API error on a failed mutation and closes the dialog", async () => {
-    setMode("api");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => jsonResponse({ items: [listUser(0)], nextCursor: null, hasMore: false })),
@@ -263,7 +269,7 @@ describe("UsersView", () => {
     const user = userEvent.setup();
 
     renderWithClient(
-      <UsersView role="admin" mode="api" users={[]} mutations={mutations} />,
+      <UsersView role="admin" mutations={mutations} />,
     );
     const firstRow = await screen.findByRole("row", { name: /林知夏/ });
     await user.click(within(firstRow).getByRole("button", { name: "暂停账户" }));
@@ -279,7 +285,6 @@ describe("UsersView", () => {
   });
 
   it("exports with the active server filters and never renders the old disabled placeholder", async () => {
-    setMode("api");
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       jsonResponse({ items: [listUser(0)], nextCursor: null, hasMore: false }),
     );
@@ -288,7 +293,7 @@ describe("UsersView", () => {
     const user = userEvent.setup();
 
     renderWithClient(
-      <UsersView role="admin" mode="api" users={[]} exportCsv={exportCsv} />,
+      <UsersView role="admin" exportCsv={exportCsv} />,
     );
     await screen.findByRole("row", { name: /林知夏/ });
 
@@ -316,7 +321,6 @@ describe("UsersView", () => {
   });
 
   it("renders the API error state instead of an empty dead table", async () => {
-    setMode("api");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -333,9 +337,10 @@ describe("UsersView", () => {
       ),
     );
 
-    renderWithClient(<UsersView role="admin" mode="api" users={[]} />);
+    renderWithClient(<UsersView role="admin" />);
 
-    expect(await screen.findByText("ADMIN_ACTION_FORBIDDEN")).toBeInTheDocument();
+    expect(await screen.findByText("加载失败，请稍后重试")).toBeInTheDocument();
+    expect(screen.getByText(/ADMIN_ACTION_FORBIDDEN/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });

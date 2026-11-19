@@ -12,12 +12,10 @@ export default function AdminWorkspacesPage() {
     <AdminConsoleRoleAware>
       {(role) => (
         <AdminDataBoundary resource={resource}>
-          {(workspaces) => (
+          {() => (
             <WorkspacesView
               role={role}
-              workspaces={workspaces}
-              mode={resource.mode}
-              mutations={resource.mode === "api" ? mutations : undefined}
+              mutations={mutations}
             />
           )}
         </AdminDataBoundary>

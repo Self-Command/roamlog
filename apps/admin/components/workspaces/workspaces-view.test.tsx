@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminWorkspaceDetail, AdminWorkspaceListItem } from "@roamlog/contracts";
 
 import type { AdminMutationPort } from "../../lib/admin-data-source";
-import { MOCK_ADMIN_USERS, MOCK_ADMIN_WORKSPACES } from "../../lib/fixtures";
+import { sampleUsers } from "../../test/admin-sample-data";
 import { WorkspacesView } from "./workspaces-view";
 
 function renderWithClient(ui: ReactElement) {
@@ -27,11 +27,11 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-const owner = MOCK_ADMIN_USERS[1]!;
-const editor = MOCK_ADMIN_USERS[5]!;
+const owner = sampleUsers[1]!;
+const editor = sampleUsers[5]!;
 const workspaceId = "0199a0c2-1200-7000-8000-000000000001";
 
-function listWorkspace(): AdminWorkspaceListItem {
+function listWorkspace(_index = 0): AdminWorkspaceListItem {
   return {
     id: workspaceId,
     name: "Roamlog Crew",
@@ -102,27 +102,35 @@ function detailWorkspace(): AdminWorkspaceDetail {
   };
 }
 
-function setMode(mode: "api" | "fixture") {
-  process.env.NEXT_PUBLIC_ADMIN_DATA_MODE = mode;
+function stubWorkspacePages(rows = [listWorkspace()]) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/admin/workspaces/")) {
+        return jsonResponse(detailWorkspace());
+      }
+      return jsonResponse({ items: rows, nextCursor: null, hasMore: false });
+    }),
+  );
 }
 
 beforeEach(() => {
-  setMode("fixture");
   window.sessionStorage.clear();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  delete process.env.NEXT_PUBLIC_ADMIN_DATA_MODE;
 });
 
 describe("WorkspacesView", () => {
   it("requires the workspace name before suspension can be confirmed", async () => {
     const user = userEvent.setup();
-    renderWithClient(<WorkspacesView role="support" workspaces={MOCK_ADMIN_WORKSPACES} />);
+    stubWorkspacePages();
+    renderWithClient(<WorkspacesView role="support" />);
 
-    const firstRow = screen.getByRole("row", { name: /Roamlog Crew/ });
+    const firstRow = await screen.findByRole("row", { name: /Roamlog Crew/ });
     expect(within(firstRow).getByRole("button", { name: "删除工作区" })).toBeDisabled();
     await user.click(within(firstRow).getByRole("button", { name: "暂停工作区" }));
 
@@ -133,27 +141,27 @@ describe("WorkspacesView", () => {
     await user.type(within(dialog).getByLabelText("输入工作区名称确认"), "Roamlog Crew");
     await user.click(confirm);
 
-    expect(within(firstRow).getByText("已暂停")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("模拟审计事件已记录");
+    // Without a mutation port the console refuses the write instead of faking it.
+    expect(screen.getByRole("status")).toHaveTextContent("未连接 Admin API");
   });
 
-  it("keeps workspace destructive actions disabled for analysts", () => {
-    renderWithClient(<WorkspacesView role="analyst" workspaces={MOCK_ADMIN_WORKSPACES} />);
+  it("keeps workspace destructive actions disabled for analysts", async () => {
+    stubWorkspacePages();
+    renderWithClient(<WorkspacesView role="analyst" />);
 
-    const firstRow = screen.getByRole("row", { name: /Roamlog Crew/ });
+    const firstRow = await screen.findByRole("row", { name: /Roamlog Crew/ });
     expect(within(firstRow).getByRole("button", { name: "暂停工作区" })).toBeDisabled();
     expect(within(firstRow).getByRole("button", { name: "删除工作区" })).toBeDisabled();
     expect(screen.getByText("只读分析模式")).toBeInTheDocument();
   });
 
   it("renders real list metrics and owner data from the server response", async () => {
-    setMode("api");
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       jsonResponse({ items: [listWorkspace()], nextCursor: null, hasMore: false }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    renderWithClient(<WorkspacesView role="admin" mode="api" workspaces={[]} />);
+    renderWithClient(<WorkspacesView role="admin" />);
 
     const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
     expect(within(row).getByText(owner.name)).toBeInTheDocument();
@@ -166,7 +174,6 @@ describe("WorkspacesView", () => {
   });
 
   it("loads members, invitation status and storage from the workspace detail endpoint", async () => {
-    setMode("api");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/v1/admin/workspaces/")) {
@@ -180,7 +187,7 @@ describe("WorkspacesView", () => {
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
-    renderWithClient(<WorkspacesView role="admin" mode="api" workspaces={[]} />);
+    renderWithClient(<WorkspacesView role="admin" />);
     const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
     await user.click(within(row).getByRole("button", { name: "工作区详情" }));
 
@@ -195,7 +202,6 @@ describe("WorkspacesView", () => {
   });
 
   it("submits a real plan change with confirmation", async () => {
-    setMode("api");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/v1/admin/workspaces/")) {
@@ -212,7 +218,7 @@ describe("WorkspacesView", () => {
     const user = userEvent.setup();
 
     renderWithClient(
-      <WorkspacesView role="admin" mode="api" workspaces={[]} mutations={mutations} />,
+      <WorkspacesView role="admin" mutations={mutations} />,
     );
     const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
     await user.click(within(row).getByRole("button", { name: "工作区详情" }));
@@ -230,7 +236,6 @@ describe("WorkspacesView", () => {
   });
 
   it("transfers ownership to an active member through PATCH", async () => {
-    setMode("api");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/v1/admin/workspaces/")) {
@@ -247,7 +252,7 @@ describe("WorkspacesView", () => {
     const user = userEvent.setup();
 
     renderWithClient(
-      <WorkspacesView role="admin" mode="api" workspaces={[]} mutations={mutations} />,
+      <WorkspacesView role="admin" mutations={mutations} />,
     );
     const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
     await user.click(within(row).getByRole("button", { name: "工作区详情" }));
@@ -265,7 +270,6 @@ describe("WorkspacesView", () => {
   });
 
   it("exports with active filters and has no disabled export placeholder", async () => {
-    setMode("api");
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       jsonResponse({ items: [listWorkspace()], nextCursor: null, hasMore: false }),
     );
@@ -274,7 +278,7 @@ describe("WorkspacesView", () => {
     const user = userEvent.setup();
 
     renderWithClient(
-      <WorkspacesView role="admin" mode="api" workspaces={[]} exportCsv={exportCsv} />,
+      <WorkspacesView role="admin" exportCsv={exportCsv} />,
     );
     await screen.findByRole("row", { name: /Roamlog Crew/ });
 
@@ -301,7 +305,6 @@ describe("WorkspacesView", () => {
   });
 
   it("renders the API error state instead of an empty table", async () => {
-    setMode("api");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -318,9 +321,10 @@ describe("WorkspacesView", () => {
       ),
     );
 
-    renderWithClient(<WorkspacesView role="admin" mode="api" workspaces={[]} />);
+    renderWithClient(<WorkspacesView role="admin" />);
 
-    expect(await screen.findByText("ADMIN_ACTION_FORBIDDEN")).toBeInTheDocument();
+    expect(await screen.findByText("加载失败，请稍后重试")).toBeInTheDocument();
+    expect(screen.getByText(/ADMIN_ACTION_FORBIDDEN/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });

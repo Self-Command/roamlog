@@ -4,20 +4,17 @@ import { useEffect, useState } from "react";
 
 import { Sheet, SheetContent } from "@roamlog/ui";
 
-import type { AdminSession } from "../../lib/fixtures";
 import { AdminCommandPalette } from "./admin-command-palette";
 import { AdminSidebar } from "./admin-sidebar";
 import { AdminTopbar } from "./admin-topbar";
-import { MockSessionProvider } from "./mock-session-provider";
-import { AdminModeBanner } from "../admin-ui/admin-mode-banner";
+import { AdminSessionProvider } from "./admin-session-provider";
 
 interface AdminShellProps {
   activePath: string;
   children: React.ReactNode;
-  session?: AdminSession;
 }
 
-function AdminShellFrame({ activePath, children }: Omit<AdminShellProps, "session">) {
+function AdminShellFrame({ activePath, children }: AdminShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -61,7 +58,6 @@ function AdminShellFrame({ activePath, children }: Omit<AdminShellProps, "sessio
           id="admin-main-content"
           className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
         >
-          <AdminModeBanner />
           {children}
         </main>
       </div>
@@ -77,10 +73,10 @@ function AdminShellFrame({ activePath, children }: Omit<AdminShellProps, "sessio
   );
 }
 
-export function AdminShell({ activePath, children, session }: AdminShellProps) {
+export function AdminShell({ activePath, children }: AdminShellProps) {
   return (
-    <MockSessionProvider initialSession={session}>
+    <AdminSessionProvider>
       <AdminShellFrame activePath={activePath}>{children}</AdminShellFrame>
-    </MockSessionProvider>
+    </AdminSessionProvider>
   );
 }

@@ -12,12 +12,10 @@ export default function AdminUsersPage() {
     <AdminConsoleRoleAware>
       {(role) => (
         <AdminDataBoundary resource={resource}>
-          {(users) => (
+          {() => (
             <UsersView
               role={role}
-              users={users}
-              mode={resource.mode}
-              mutations={resource.mode === "api" ? mutations : undefined}
+              mutations={mutations}
             />
           )}
         </AdminDataBoundary>

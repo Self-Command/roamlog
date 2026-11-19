@@ -3,90 +3,27 @@
 import { useGetMe } from "@roamlog/api-client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { getAdminDataMode } from "../../lib/admin-data-mode";
 import { platformRoleOf } from "../../lib/admin-data-source";
 import { getAdminLoginPath, getAdminLoginPathWithReturnTo } from "../../lib/admin-paths";
-import {
-  DEFAULT_ADMIN_SESSION,
-  isAdminConsoleRole,
-  type AdminConsoleRole,
-  type AdminSession,
-} from "../../lib/fixtures";
+import type { AdminConsoleRole, AdminSession } from "../../lib/admin-types";
 import { redirectToAdminLogin } from "./admin-navigation";
 import { signOutAdminSession } from "./admin-session-client";
 
-const ROLE_STORAGE_KEY = "roamlog.admin.role-preview.v1";
-
-interface MockSessionContextValue {
+interface AdminSessionContextValue {
   session: AdminSession;
   setRole: (role: AdminConsoleRole) => void;
   isRoleLocked: boolean;
   signOut: () => Promise<void>;
 }
 
-const MockSessionContext = createContext<MockSessionContextValue | null>(null);
+const AdminSessionContext = createContext<AdminSessionContextValue | null>(null);
 
-export function MockSessionProvider({
-  initialSession = DEFAULT_ADMIN_SESSION,
-  children,
-}: {
-  initialSession?: AdminSession;
-  children: React.ReactNode;
-}) {
-  if (getAdminDataMode() === "api") {
-    return <ApiSessionProvider initialSession={initialSession}>{children}</ApiSessionProvider>;
-  }
-  return (
-    <FixtureSessionProvider initialSession={initialSession}>{children}</FixtureSessionProvider>
-  );
-}
-
-function FixtureSessionProvider({
-  initialSession,
-  children,
-}: {
-  initialSession: AdminSession;
-  children: React.ReactNode;
-}) {
-  const [session, setSession] = useState(initialSession);
-
-  useEffect(() => {
-    const storedRole = window.localStorage.getItem(ROLE_STORAGE_KEY);
-    if (storedRole && isAdminConsoleRole(storedRole)) {
-      setSession((current) => ({ ...current, role: storedRole }));
-    }
-  }, []);
-
-  const signOut = useCallback(async () => {
-    // Fixture mode has no server session: drop the local preview role and leave.
-    window.localStorage.removeItem(ROLE_STORAGE_KEY);
-    setSession(initialSession);
-    redirectToAdminLogin();
-  }, [initialSession]);
-
-  const value = useMemo<MockSessionContextValue>(
-    () => ({
-      session,
-      isRoleLocked: false,
-      setRole: (role) => {
-        setSession((current) => ({ ...current, role }));
-        window.localStorage.setItem(ROLE_STORAGE_KEY, role);
-      },
-      signOut,
-    }),
-    [session, signOut],
-  );
-
-  return <MockSessionContext.Provider value={value}>{children}</MockSessionContext.Provider>;
-}
-
-function ApiSessionProvider({
-  initialSession,
-  children,
-}: {
-  initialSession: AdminSession;
-  children: React.ReactNode;
-}) {
+/**
+ * The console has exactly one identity source: `/v1/me`. The platform role,
+ * name, email and id are never pre-filled from a local template, and there is
+ * no local role preview that could disagree with the backend.
+ */
+export function AdminSessionProvider({ children }: { children: React.ReactNode }) {
   const me = useGetMe({ query: { retry: false } });
   const user = me.data?.status === 200 ? me.data.data : null;
   const role = user ? platformRoleOf(user.platformRole) : null;
@@ -94,23 +31,21 @@ function ApiSessionProvider({
   const [returnTo, setReturnTo] = useState<string | null>(null);
 
   /**
-   * `AdminSession` still carries `twoFactorEnabled` / `environment` fields from
-   * the fixture type, but neither has a real source here: `/v1/me` returns
-   * `UserSchema` without a 2FA flag, and there is no Admin 2FA-status endpoint.
-   * Both fields are therefore never rendered or overwritten with guessed values.
+   * `AdminSession` deliberately carries no 2FA or environment fields: `/v1/me`
+   * returns `UserSchema` without a 2FA flag, and the deployment environment is
+   * resolved from explicit configuration instead of a session claim.
    */
   const session = useMemo<AdminSession | null>(
     () =>
       user && role && role !== "user"
         ? {
-            ...initialSession,
             id: user.id,
             name: user.name,
             email: user.email,
             role,
           }
         : null,
-    [initialSession, role, user],
+    [role, user],
   );
 
   const signOut = useCallback(async () => {
@@ -134,7 +69,7 @@ function ApiSessionProvider({
     redirectToAdminLogin(current);
   }, [unauthenticated]);
 
-  const value = useMemo<MockSessionContextValue | null>(
+  const value = useMemo<AdminSessionContextValue | null>(
     () =>
       session
         ? {
@@ -240,13 +175,13 @@ function ApiSessionProvider({
     );
   }
 
-  return <MockSessionContext.Provider value={value}>{children}</MockSessionContext.Provider>;
+  return <AdminSessionContext.Provider value={value}>{children}</AdminSessionContext.Provider>;
 }
 
-export function useAdminSession(): MockSessionContextValue {
-  const value = useContext(MockSessionContext);
+export function useAdminSession(): AdminSessionContextValue {
+  const value = useContext(AdminSessionContext);
   if (!value) {
-    throw new Error("useAdminSession must be used inside MockSessionProvider.");
+    throw new Error("useAdminSession must be used inside AdminSessionProvider.");
   }
   return value;
 }

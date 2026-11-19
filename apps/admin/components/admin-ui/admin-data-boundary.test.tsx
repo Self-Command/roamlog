@@ -10,7 +10,6 @@ import { AdminDataBoundary } from "./admin-data-boundary";
 describe("AdminDataBoundary", () => {
   it("does not serialize Radix hidden inputs during server rendering", () => {
     const resource: AdminResource<string> = {
-      mode: "fixture",
       data: "ready",
       isLoading: false,
       error: null,
@@ -30,7 +29,6 @@ describe("AdminDataBoundary", () => {
 
   it("renders the 2FA enrollment gate for ADMIN_2FA_REQUIRED", () => {
     const resource: AdminResource<string> = {
-      mode: "api",
       data: null,
       isLoading: false,
       error: {
@@ -47,7 +45,7 @@ describe("AdminDataBoundary", () => {
     render(<AdminDataBoundary resource={resource}>{() => <p>secret data</p>}</AdminDataBoundary>);
 
     expect(screen.getByRole("alert")).toHaveTextContent("2FA ENROLLMENT REQUIRED");
-    expect(screen.getByText("ADMIN_2FA_REQUIRED")).toBeInTheDocument();
+    expect(screen.getAllByText(/ADMIN_2FA_REQUIRED/).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "绑定验证器" })).toBeInTheDocument();
     expect(screen.queryByText("secret data")).not.toBeInTheDocument();
   });

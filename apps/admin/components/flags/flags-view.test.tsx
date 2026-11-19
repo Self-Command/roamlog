@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminMutationPort } from "../../lib/admin-data-source";
-import { MOCK_ADMIN_WORKSPACES } from "../../lib/fixtures";
-import { MOCK_ADMIN_FLAGS } from "../../lib/ops-fixtures";
+import { sampleWorkspaces } from "../../test/admin-sample-data";
+import { sampleFlags } from "../../test/admin-sample-data";
 import { FlagsView } from "./flags-view";
 
 afterEach(() => {
@@ -15,7 +15,7 @@ describe("FlagsView", () => {
   it("saves a rollout percentage change and emits a mock audit event", async () => {
     const user = userEvent.setup();
     render(
-      <FlagsView role="super_admin" flags={MOCK_ADMIN_FLAGS} workspaces={MOCK_ADMIN_WORKSPACES} />,
+      <FlagsView role="super_admin" flags={sampleFlags} workspaces={sampleWorkspaces} />,
     );
 
     const flagRow = screen.getByRole("article", { name: /share-password-v1/ });
@@ -31,7 +31,7 @@ describe("FlagsView", () => {
 
   it("keeps flag configuration read-only for analysts", () => {
     render(
-      <FlagsView role="analyst" flags={MOCK_ADMIN_FLAGS} workspaces={MOCK_ADMIN_WORKSPACES} />,
+      <FlagsView role="analyst" flags={sampleFlags} workspaces={sampleWorkspaces} />,
     );
 
     const flagRow = screen.getByRole("article", { name: /share-password-v1/ });
@@ -43,7 +43,7 @@ describe("FlagsView", () => {
   });
 
   it("shows an empty state with a create call to action", () => {
-    render(<FlagsView role="super_admin" flags={[]} workspaces={MOCK_ADMIN_WORKSPACES} />);
+    render(<FlagsView role="super_admin" flags={[]} workspaces={sampleWorkspaces} />);
 
     expect(screen.getByText("还没有功能开关")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新建功能开关" })).toBeEnabled();
@@ -51,7 +51,7 @@ describe("FlagsView", () => {
 
   it("creates a flag with key, description, rollout, and allowlist", async () => {
     const user = userEvent.setup();
-    render(<FlagsView role="super_admin" flags={[]} workspaces={MOCK_ADMIN_WORKSPACES} />);
+    render(<FlagsView role="super_admin" flags={[]} workspaces={sampleWorkspaces} />);
 
     await user.click(screen.getByRole("button", { name: "新建功能开关" }));
     const dialog = screen.getByRole("dialog", { name: "新建功能开关" });
@@ -69,7 +69,7 @@ describe("FlagsView", () => {
   it("rejects duplicate keys and invalid rollout values before any request", async () => {
     const user = userEvent.setup();
     render(
-      <FlagsView role="super_admin" flags={MOCK_ADMIN_FLAGS} workspaces={MOCK_ADMIN_WORKSPACES} />,
+      <FlagsView role="super_admin" flags={sampleFlags} workspaces={sampleWorkspaces} />,
     );
 
     await user.click(screen.getByRole("button", { name: "新建功能开关" }));
@@ -96,8 +96,8 @@ describe("FlagsView", () => {
       <FlagsView
         role="super_admin"
         flags={[]}
-        workspaces={MOCK_ADMIN_WORKSPACES}
-        mode="api"
+        workspaces={sampleWorkspaces}
+       
         mutations={mutations}
       />,
     );
@@ -120,7 +120,7 @@ describe("FlagsView", () => {
   it("deletes a flag after typing its key", async () => {
     const user = userEvent.setup();
     render(
-      <FlagsView role="super_admin" flags={MOCK_ADMIN_FLAGS} workspaces={MOCK_ADMIN_WORKSPACES} />,
+      <FlagsView role="super_admin" flags={sampleFlags} workspaces={sampleWorkspaces} />,
     );
 
     await user.click(screen.getByRole("button", { name: "删除开关 map-style-dark-v2" }));
@@ -137,7 +137,7 @@ describe("FlagsView", () => {
   it("warns about unsaved edits and blocks in-app navigation", async () => {
     const user = userEvent.setup();
     render(
-      <FlagsView role="super_admin" flags={MOCK_ADMIN_FLAGS} workspaces={MOCK_ADMIN_WORKSPACES} />,
+      <FlagsView role="super_admin" flags={sampleFlags} workspaces={sampleWorkspaces} />,
     );
 
     const flagRow = screen.getByRole("article", { name: /share-password-v1/ });

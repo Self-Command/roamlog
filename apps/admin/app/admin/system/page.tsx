@@ -11,7 +11,7 @@ export default function AdminSystemPage() {
     <AdminConsoleRoleAware>
       {(role) => (
         <AdminDataBoundary resource={resource}>
-          {(snapshot) => <SystemView role={role} snapshot={snapshot} mode={resource.mode} />}
+          {(snapshot) => <SystemView role={role} snapshot={snapshot} />}
         </AdminDataBoundary>
       )}
     </AdminConsoleRoleAware>

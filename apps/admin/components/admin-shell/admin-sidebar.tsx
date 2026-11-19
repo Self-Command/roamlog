@@ -3,13 +3,13 @@
 import { Compass, LogOut } from "lucide-react";
 import { useState } from "react";
 
-import { Avatar, Badge, Select } from "@roamlog/ui";
+import { Avatar, Badge } from "@roamlog/ui";
 
-import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES } from "../../lib/fixtures";
+import { ADMIN_ROLE_LABELS } from "../../lib/admin-types";
 import { adminSignOutErrorMessage } from "./admin-session-client";
 import { cn } from "./cn";
 import { resolveAdminEnvironment } from "./admin-environment";
-import { useAdminSession } from "./mock-session-provider";
+import { useAdminSession } from "./admin-session-provider";
 import { ADMIN_NAV_GROUPS, isNavItemActive } from "./admin-nav";
 
 interface AdminSidebarProps {
@@ -19,7 +19,7 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebarProps) {
-  const { session, setRole, isRoleLocked, signOut } = useAdminSession();
+  const { session, signOut } = useAdminSession();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const environment = resolveAdminEnvironment();
@@ -142,38 +142,14 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <Badge tone="neutral">{session.role}</Badge>
           </div>
-          <label className="mt-3 block">
-            <span className="type-eyebrow">
-              {isRoleLocked ? "平台角色（后端）" : "模拟平台角色"}
-            </span>
-            <Select
-              aria-label="模拟平台角色"
-              className="mt-1.5 h-8 text-[11px]"
-              value={session.role}
-              disabled={isRoleLocked}
-              onChange={(event) => {
-                const nextRole = event.currentTarget.value;
-                if (
-                  nextRole === "support" ||
-                  nextRole === "analyst" ||
-                  nextRole === "admin" ||
-                  nextRole === "super_admin"
-                ) {
-                  setRole(nextRole);
-                }
-              }}
-            >
-              {ADMIN_CONSOLE_ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {ADMIN_ROLE_LABELS[role]}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <div className="mt-3">
+            <span className="type-eyebrow">平台角色</span>
+            <p className="mt-1.5 font-mono text-[11px] text-body">
+              {ADMIN_ROLE_LABELS[session.role]}
+            </p>
+          </div>
           <p className="mt-2 text-[9px] leading-4 text-stone">
-            {isRoleLocked
-              ? "API 模式下平台角色由 /v1/me 与后端 guard 决定。"
-              : "角色切换仅用于本地 fixture 预览，不修改真实权限。"}
+            平台角色由 /v1/me 与后端 guard 决定。
           </p>
           <button
             type="button"
@@ -182,7 +158,7 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
             className="mt-2 flex h-8 w-full items-center gap-2 rounded-control px-1 text-left text-[11px] text-muted outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ink disabled:opacity-60"
           >
             <LogOut aria-hidden="true" className="size-3.5" />
-            {isSigningOut ? "正在退出…" : isRoleLocked ? "退出登录" : "退出本地预览"}
+            {isSigningOut ? "正在退出…" : "退出登录"}
           </button>
           {signOutError ? (
             <p role="alert" className="mt-1.5 text-[10px] leading-4 text-accent-red">

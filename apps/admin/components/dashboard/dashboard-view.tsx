@@ -14,9 +14,8 @@ import type {
   AdminDashboardSourceState,
   AdminDashboardSources,
 } from "../../lib/admin-data-source";
-import type { AdminConsoleRole } from "../../lib/fixtures";
-import type { AdminDashboardData } from "../../lib/fixtures";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
+import type { AdminConsoleRole } from "../../lib/admin-types";
+import type { AdminDashboardData } from "../../lib/admin-types";
 import { formatBytes, formatCount, formatDateTime } from "../../lib/format";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "./admin-metric-card";
@@ -31,7 +30,6 @@ const READY_SOURCE: AdminDashboardSourceState = {
 interface DashboardViewProps {
   role: AdminConsoleRole;
   data: AdminDashboardData & { sources?: AdminDashboardSources };
-  mode?: AdminDataMode;
 }
 
 function DashboardSourceNotice({
@@ -75,7 +73,7 @@ function DashboardSourceNotice({
   );
 }
 
-export function DashboardView({ role, data, mode = "fixture" }: DashboardViewProps) {
+export function DashboardView({ role, data }: DashboardViewProps) {
   const metricsSource = data.sources?.metrics ?? READY_SOURCE;
   const emailsSource = data.sources?.emails ?? READY_SOURCE;
   const auditSource = data.sources?.audit ?? READY_SOURCE;
@@ -98,10 +96,7 @@ export function DashboardView({ role, data, mode = "fixture" }: DashboardViewPro
         eyebrow="PLATFORM / OVERVIEW"
         title="平台总览"
         description={
-          mode === "api"
-            ? "运营指标、后台队列与邮件健康。数字来自真实 Admin API；仅有当前快照时趋势显示单点。"
-            : "运营指标、后台队列与邮件健康。数字来自本地 fixture，用于验证后台布局与数据密度。"
-        }
+          "运营指标、后台队列与邮件健康。数字来自真实 Admin API；仅有当前快照时趋势显示单点。"}
         readOnly={role === "analyst"}
         actions={
           <div className="text-right">
@@ -186,10 +181,10 @@ export function DashboardView({ role, data, mode = "fixture" }: DashboardViewPro
                 用户与工作区趋势
               </h2>
             </div>
-            <Badge tone={mode === "api" ? "green" : "neutral"}>{mode}</Badge>
+            
           </div>
           {metricsReady ? (
-            <TrendChart data={data.trend} mode={mode} />
+            <TrendChart data={data.trend} />
           ) : (
             <DashboardSourceNotice state={metricsSource} subject="趋势数据" />
           )}

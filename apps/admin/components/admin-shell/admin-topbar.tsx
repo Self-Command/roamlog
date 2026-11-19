@@ -7,7 +7,7 @@ import { Avatar, Badge, IconButton } from "@roamlog/ui";
 import { cn } from "./cn";
 import { getBreadcrumbs } from "./admin-nav";
 import { resolveAdminEnvironment } from "./admin-environment";
-import { useAdminSession } from "./mock-session-provider";
+import { useAdminSession } from "./admin-session-provider";
 
 interface AdminTopbarProps {
   activePath: string;

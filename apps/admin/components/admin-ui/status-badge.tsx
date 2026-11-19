@@ -1,7 +1,7 @@
 import type { AccountStatus, PlatformRole } from "@roamlog/contracts";
 import { Badge, type BadgeProps } from "@roamlog/ui";
 
-import { ADMIN_ROLE_LABELS, type AdminConsoleRole } from "../../lib/fixtures";
+import { ADMIN_ROLE_LABELS, type AdminConsoleRole } from "../../lib/admin-types";
 
 const accountLabels: Record<AccountStatus, string> = {
   active: "Active",

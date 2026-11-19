@@ -4,22 +4,19 @@ import { Activity, Clock3, GitCommitHorizontal, Layers, ServerCog } from "lucide
 
 import { Badge } from "@roamlog/ui";
 
-import type { AdminConsoleRole } from "../../lib/fixtures";
-import type { AdminDataMode } from "../../lib/admin-data-mode";
+import type { AdminConsoleRole } from "../../lib/admin-types";
 import type { AdminSystemSnapshotDetail } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import {
-  MOCK_ADMIN_SYSTEM,
   formatUptime,
   type AdminSystemSnapshot,
-} from "../../lib/ops-fixtures";
+} from "../../lib/admin-ops-types";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "../dashboard/admin-metric-card";
 
 interface SystemViewProps {
   role: AdminConsoleRole;
-  snapshot?: AdminSystemSnapshot;
-  mode?: AdminDataMode;
+  snapshot: AdminSystemSnapshot;
 }
 
 const checkTones = {
@@ -61,8 +58,7 @@ function notWired(value: string | null | undefined): boolean {
 
 export function SystemView({
   role,
-  snapshot = MOCK_ADMIN_SYSTEM,
-  mode = "fixture",
+  snapshot,
 }: SystemViewProps) {
   const readOnly = role === "analyst";
   const detail = snapshot as AdminSystemSnapshotDetail;
@@ -74,8 +70,7 @@ export function SystemView({
   // blocked-consumer count nor recent job activity is available the console
   // says "not wired" instead of claiming DOWN.
   const signal = workerSignal?.signal ?? "unavailable";
-  const workerObservable =
-    mode === "fixture" || (signal !== "unavailable" && workerSignal !== null);
+  const workerObservable = signal !== "unavailable" && workerSignal !== null;
   const workerDerivation = workerSignal ? signalSources[workerSignal.signal] : "未接入";
 
   return (
@@ -83,11 +78,7 @@ export function SystemView({
       <AdminPageHeader
         eyebrow="PLATFORM / SYSTEM"
         title="系统健康"
-        description={
-          mode === "api"
-            ? "只展示 /v1/admin/system 实际返回的检查项；无法观测的项目标记为「未接入」。"
-            : "检查 API、Worker、数据库、Redis、对象存储与迁移版本。当前读数为本地 fixture 快照。"
-        }
+        description="只展示 /v1/admin/system 实际返回的检查项；无法观测的项目标记为「未接入」。"
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -131,7 +122,7 @@ export function SystemView({
           detail={
             notWired(snapshot.buildTime)
               ? "需要 ROAMLOG_BUILD_TIME（不再用容器启动时间替代）"
-              : `${mode} build metadata`
+              : "build metadata"
           }
           tone="orange"
           icon={Activity}
@@ -144,7 +135,7 @@ export function SystemView({
             <div>
               <h2 className="text-[13px] font-medium text-ink">依赖健康检查</h2>
               <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                readiness / {mode} probes
+                readiness probes
               </p>
             </div>
             <Badge tone={upChecks === snapshot.checks.length ? "green" : "yellow"}>
@@ -234,14 +225,12 @@ export function SystemView({
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted">已发现队列</span>
                 <span className="font-mono text-[10px] text-body">
-                  {mode === "api" ? `${queues.length} 个` : `${queues.length || "—"}`}
+                  {`${queues.length} 个`}
                 </span>
               </div>
               {queues.length === 0 ? (
                 <p className="text-[10px] leading-4 text-muted">
-                  {mode === "api"
-                    ? "Redis 中没有可识别的 BullMQ 队列键：当前没有已注册队列，或 Redis 不可达。"
-                    : "fixture 快照不包含队列注册信息。"}
+                  {"Redis 中没有可识别的 BullMQ 队列键：当前没有已注册队列，或 Redis 不可达。"}
                 </p>
               ) : (
                 <ul className="space-y-1.5">
@@ -270,15 +259,13 @@ export function SystemView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">数据库迁移</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              prisma migrate status · {mode}
+              prisma migrate status
             </p>
           </div>
           <Badge tone={snapshot.migrations.length > 0 ? "green" : "yellow"}>
             {snapshot.migrations.length > 0
               ? "Latest applied"
-              : mode === "api"
-                ? "未接入"
-                : "No metadata"}
+              : "未接入"}
           </Badge>
         </div>
         <div className="overflow-x-auto">
