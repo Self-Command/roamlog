@@ -18,6 +18,7 @@
 - `packages/contracts/src/api/index.ts`（末尾 `export * from "./reports"`）
 - `packages/contracts/src/__tests__/reports.test.ts`（新建）
 - `packages/contracts/src/entities/{trip,journal,comment,media}.ts` — 每模型加两个 optional 字段（Root 已授权；**需串行 contracts:generate**）
+  注：`media.ts` 的本次改动被 D2 的并发提交 `ddf3a8b` 一并带入，内容一致、工作树干净。
 
 ### API
 - `apps/api/src/modules/reports/**`（新建：controllers / services / target snapshot / e2e harness / 3 个 spec）
@@ -103,20 +104,18 @@ $ ROAMLOG_TEST_DATABASE_URL=...schema=b4 pnpm --filter @roamlog/db test
 ### 3.2 API
 ```
 $ pnpm --filter @roamlog/api exec vitest run src/modules/reports src/modules/admin
-→ Test Files 15 passed (15) / Tests 136 passed (136)
+→ Test Files 16 passed (16) / Tests 140 passed (140)
   （其中 reports 20：create 6 / admin 10 / presenter-resilience 4）
 $ pnpm --filter @roamlog/api typecheck
-→ 我的文件 0 error；仅剩 storage/media 两个其它 Agent 在改的文件报错
-  （storage-admin.controller.spec.ts、storage-probe.service.spec.ts、media.presenter.ts）
+→ exit 0（并行 Agent 的 storage/media 报错在其收尾后也已消失，全仓 API 类型检查通过）
 ```
 
 ### 3.3 Contracts
 ```
 $ pnpm --filter @roamlog/contracts test
-→ 10 files / 84 tests：83 passed，1 failed
-  失败为 places Agent 的 `entities.test.ts` PublicStop fixture 缺 `provider`
-  （其改了 share-links.ts 未同步 fixture），非 B4 文件，已上报 Root 路由。
-  我的 reports.test.ts 6 passed；entities/openapi 等其余全过。
+→ Test Files 11 passed (11) / Tests 90 passed (90)
+  期间曾有 places Agent 的 PublicStop fixture 缺 provider（其收尾后已修复并全绿）；
+  我的 reports.test.ts 6 passed。
 ```
 
 ### 3.4 Admin
