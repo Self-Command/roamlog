@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { CountryCodeSchema, DateOnlySchema, UuidV7Schema } from "../common/ids";
+import { CountryCodeSchema, DateOnlySchema, EmailSchema, UuidV7Schema } from "../common/ids";
 import { AmountMinorSchema, CurrencyCodeSchema } from "../common/money";
 import { createSortSchema, CursorPageSchema, CursorQuerySchema } from "../common/pagination";
 import { ActivitySchema } from "../entities/activity";
@@ -14,7 +14,12 @@ import {
   TripSchema,
   TripTagListSchema,
 } from "../entities/trip";
-import { TripStatusSchema, TripVisibilitySchema } from "../entities/enums";
+import {
+  ParticipantRoleSchema,
+  ParticipantStatusSchema,
+  TripStatusSchema,
+  TripVisibilitySchema,
+} from "../entities/enums";
 import { MessageResponseSchema } from "./common";
 
 export const TripListQuerySchema = CursorQuerySchema.extend({
@@ -224,6 +229,89 @@ export type TripParticipantListResponse = z.infer<typeof TripParticipantListResp
 
 export const AddTripParticipantRequestSchema = z.object({ userId: UuidV7Schema }).strict();
 export type AddTripParticipantRequest = z.infer<typeof AddTripParticipantRequestSchema>;
+
+/**
+ * Upper bound on one `custom` audience replacement. A trip shared with more
+ * than 50 workspaces *and* 50 people at once is outside the product's intent
+ * (and would make the P3 chip list unusable), so the request is rejected
+ * instead of silently truncated.
+ */
+export const TRIP_ACCESS_GRANT_LIMIT = 50;
+
+const uniqueUuidList = (label: string) =>
+  z
+    .array(UuidV7Schema)
+    .max(TRIP_ACCESS_GRANT_LIMIT)
+    .refine((items) => new Set(items).size === items.length, {
+      message: `${label} entries must be unique.`,
+    });
+
+/**
+ * Whole-set replacement for a `custom` trip's audience: the payload is the
+ * complete list, so clearing every grant means sending two empty arrays.
+ *
+ * Both arrays are **required** on purpose — absence and "empty" would otherwise
+ * be indistinguishable, and a caller that forgot `workspaces` would silently
+ * delete every workspace grant. This is the one request in the participant/
+ * visibility family where a missing field is an error, not a default.
+ */
+export const SetTripAccessGrantsRequestSchema = z
+  .object({
+    workspaces: uniqueUuidList("workspaces"),
+    users: uniqueUuidList("users"),
+  })
+  .strict();
+export type SetTripAccessGrantsRequest = z.infer<typeof SetTripAccessGrantsRequestSchema>;
+
+/**
+ * Invite a participant by id or by email — exactly one, never both.
+ *
+ * `userId` and `email` are `.optional()` (not `.nullable()`) because "not
+ * supplied" and "supplied as null" must differ here: the superRefine counts the
+ * provided identifiers, and a `null` would count. `role` is optional and the
+ * server defaults it to `viewer`.
+ */
+export const CreateParticipantRequestSchema = z
+  .object({
+    userId: UuidV7Schema.optional(),
+    email: EmailSchema.optional(),
+    role: ParticipantRoleSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const identifiers = [value.userId, value.email].filter((item) => item !== undefined);
+    if (identifiers.length !== 1) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Exactly one of userId or email is required.",
+        path: identifiers.length === 0 ? ["userId"] : ["userId", "email"],
+      });
+    }
+  });
+export type CreateParticipantRequest = z.infer<typeof CreateParticipantRequestSchema>;
+
+/**
+ * Change a participant's role or invitation state. Both fields are truly
+ * `.optional()`: an existing caller that only sends `role` must keep working,
+ * and a payload that changes nothing is rejected rather than treated as a
+ * silent no-op.
+ */
+export const UpdateParticipantRequestSchema = z
+  .object({
+    role: ParticipantRoleSchema.optional(),
+    status: ParticipantStatusSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.role === undefined && value.status === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "At least one of role or status is required.",
+        path: ["role"],
+      });
+    }
+  });
+export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSchema>;
 
 export const TripActivityQuerySchema = CursorQuerySchema.extend({
   actorId: UuidV7Schema.optional(),

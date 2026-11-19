@@ -5,6 +5,8 @@ import {
 } from "@nestjs/common";
 import { GeoBboxSchema, PlaceProviderSchema, UuidV7Schema, type GeoBbox, type WorkspaceRole } from "@roamlog/contracts";
 
+import { resolveTripAccess } from "./trip-access.js";
+
 export const UNSPECIFIED_TRIP_ORIGIN = "未填写";
 
 export function canonicalTripOrigin(value: unknown): string {
@@ -251,16 +253,87 @@ export function assertUuid(value: string, field: string): void {
   }
 }
 
+/**
+ * Access data a caller may have already loaded for a trip.
+ *
+ * Every field is optional: call sites that only select the trip's visibility
+ * columns keep working, and a call without `grants` simply cannot match a
+ * `custom` grant (fail closed — the trip stays invisible rather than leaking).
+ * Nothing here queries the database; see `trip-access.ts` for the rule itself.
+ */
+export interface TripAccessContext {
+  platformRole?: string;
+  /** The actor's own participant row; `null` means "has none". */
+  participation?: { status: string } | null;
+  grants?: ReadonlyArray<{ workspaceId: string | null; userId: string | null }>;
+}
+
+/**
+ * The trip fields the visibility decision needs, plus the relations when the
+ * caller loaded them. `participants` / `accessGrants` are read only for the
+ * requesting actor, so an unfiltered include is not a leak (the decision still
+ * keys on `membership.userId`).
+ */
+export interface TripVisibilityRecord {
+  /** Unused by the decision; kept so callers can pass a full Prisma row. */
+  id?: string;
+  workspaceId: string;
+  visibility: string;
+  createdById: string;
+  participants?: ReadonlyArray<{ userId: string; status?: string | null }> | null;
+  accessGrants?: ReadonlyArray<{ workspaceId: string | null; userId: string | null }> | null;
+}
+
+/**
+ * Asserts that the actor may read the trip, throwing the same 404 every content
+ * module already produced.
+ *
+ * This used to be its own rule (`private` + not creator + workspace
+ * owner/admin). It now delegates to `resolveTripAccess`, so the function, the
+ * media `where` filter and the trip list agree by construction:
+ *
+ *   - `custom` is readable only by the creator, a matching grant, a participant
+ *     or a super admin;
+ *   - `private` is readable by the creator and invited/joined participants — a
+ *     workspace `owner`/`admin` no longer bypasses it;
+ *   - `workspace` and `public_link` stay readable by every workspace member,
+ *     preserving the list/detail agreement those tiers already had.
+ *
+ * The function is synchronous and side-effect free by design: the grants and
+ * participant row are injected by the caller (`TripsService` loads both for the
+ * single-trip read paths) so a request never turns into a per-trip query.
+ */
 export function assertTripVisible(
-  membership: { role: WorkspaceRole; userId: string },
-  trip: { visibility: string; createdById: string },
+  membership: { role: WorkspaceRole; userId: string; workspaceId?: string },
+  trip: TripVisibilityRecord,
+  context: TripAccessContext = {},
 ): void {
-  if (
-    trip.visibility === "private" &&
-    trip.createdById !== membership.userId &&
-    membership.role !== "owner" &&
-    membership.role !== "admin"
-  ) {
+  const participation =
+    context.participation !== undefined
+      ? context.participation
+      : (trip.participants?.find((participant) => participant.userId === membership.userId) ?? null);
+  const grants = context.grants ?? trip.accessGrants ?? [];
+
+  const allowed = resolveTripAccess({
+    actor: {
+      userId: membership.userId,
+      // Callers resolve the membership before loading the trip, and every trip
+      // read is workspace-scoped, so an omitted workspaceId can only mean "the
+      // trip's workspace" — the actor's own.
+      workspaceId: membership.workspaceId ?? trip.workspaceId,
+      platformRole: context.platformRole ?? "user",
+    },
+    trip: {
+      id: trip.id ?? "",
+      workspaceId: trip.workspaceId,
+      createdById: trip.createdById,
+      visibility: trip.visibility,
+    },
+    participation: participation === null ? null : { status: participation.status ?? "joined" },
+    grants,
+  });
+
+  if (!allowed) {
     throw new NotFoundException({
       code: "TRIP_NOT_FOUND",
       message: "The requested trip was not found.",

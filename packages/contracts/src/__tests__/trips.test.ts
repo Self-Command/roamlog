@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AddTripParticipantRequestSchema,
+  CreateParticipantRequestSchema,
   CreateTripRequestSchema,
   PlaceSearchProviderSchema,
+  SetTripAccessGrantsRequestSchema,
+  TRIP_ACCESS_GRANT_LIMIT,
   TripDestinationInputListSchema,
   TripDestinationInputSchema,
   TripDestinationProviderSchema,
+  UpdateParticipantRequestSchema,
   UpdateTripRequestSchema,
 } from "../index";
 
@@ -110,5 +115,108 @@ describe("trip destination request contracts", () => {
 
   it("shares the provider value set with the place search", () => {
     expect(TripDestinationProviderSchema.options).toEqual(PlaceSearchProviderSchema.options);
+  });
+});
+
+describe("trip access grant and participant request contracts (0012)", () => {
+  const WORKSPACE_ID = "0192f4c5-6a7b-7c8d-b123-456789abcdef";
+  const USER_ID = "0192f4c5-6a7b-7c8d-9e0f-123456789abc";
+  const OTHER_ID = "0192f4c5-6a7b-7c8d-9e0f-123456789abd";
+
+  it("requires both arrays when replacing a custom audience", () => {
+    // Whole-set replacement: `users` missing must not silently mean "delete
+    // every user grant", so both arrays are required even when empty.
+    const cleared = SetTripAccessGrantsRequestSchema.parse({ workspaces: [], users: [] });
+    expect(cleared).toEqual({ workspaces: [], users: [] });
+
+    expect(SetTripAccessGrantsRequestSchema.safeParse({ workspaces: [] }).success).toBe(false);
+    expect(SetTripAccessGrantsRequestSchema.safeParse({ users: [] }).success).toBe(false);
+    expect(
+      SetTripAccessGrantsRequestSchema.safeParse({
+        workspaces: [WORKSPACE_ID],
+        users: [USER_ID],
+        unknown: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects duplicate and malformed grant targets", () => {
+    expect(
+      SetTripAccessGrantsRequestSchema.safeParse({
+        workspaces: [WORKSPACE_ID, WORKSPACE_ID],
+        users: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      SetTripAccessGrantsRequestSchema.safeParse({
+        workspaces: [],
+        users: ["not-a-uuid"],
+      }).success,
+    ).toBe(false);
+    const tooMany = Array.from({ length: TRIP_ACCESS_GRANT_LIMIT + 1 }, (_, index) =>
+      `0192f4c5-6a7b-7c8d-9e0f-${String(index).padStart(12, "0")}`,
+    );
+    expect(
+      SetTripAccessGrantsRequestSchema.safeParse({ workspaces: tooMany, users: [] }).success,
+    ).toBe(false);
+  });
+
+  it("invites by exactly one of userId or email", () => {
+    const byId = CreateParticipantRequestSchema.parse({ userId: USER_ID });
+    expect(byId.userId).toBe(USER_ID);
+    expect(byId.email).toBeUndefined();
+    expect(byId.role).toBeUndefined();
+
+    const byEmail = CreateParticipantRequestSchema.parse({
+      email: "traveler@example.com",
+      role: "editor",
+    });
+    expect(byEmail.email).toBe("traveler@example.com");
+    expect(byEmail.role).toBe("editor");
+
+    expect(CreateParticipantRequestSchema.safeParse({}).success).toBe(false);
+    expect(
+      CreateParticipantRequestSchema.safeParse({ userId: USER_ID, email: "a@example.com" }).success,
+    ).toBe(false);
+    expect(CreateParticipantRequestSchema.safeParse({ userId: null }).success).toBe(false);
+    expect(CreateParticipantRequestSchema.safeParse({ email: "not-an-email" }).success).toBe(false);
+    expect(
+      CreateParticipantRequestSchema.safeParse({ userId: USER_ID, role: "owner" }).success,
+    ).toBe(false);
+  });
+
+  it("keeps both participant update fields truly optional", () => {
+    // `.optional()` and not `.nullable()`: an existing caller that sends only
+    // one field must keep parsing, and an absent field must stay absent.
+    const roleOnly = UpdateParticipantRequestSchema.parse({ role: "editor" });
+    expect(roleOnly).toEqual({ role: "editor" });
+    expect(roleOnly).not.toHaveProperty("status");
+
+    const statusOnly = UpdateParticipantRequestSchema.parse({ status: "declined" });
+    expect(statusOnly).toEqual({ status: "declined" });
+
+    expect(UpdateParticipantRequestSchema.safeParse({}).success).toBe(false);
+    expect(UpdateParticipantRequestSchema.safeParse({ role: null }).success).toBe(false);
+    expect(UpdateParticipantRequestSchema.safeParse({ status: "maybe" }).success).toBe(false);
+    expect(UpdateParticipantRequestSchema.parse({ role: "viewer", status: "joined" })).toEqual({
+      role: "viewer",
+      status: "joined",
+    });
+  });
+
+  it("keeps the pre-0012 add-participant request working", () => {
+    expect(AddTripParticipantRequestSchema.parse({ userId: OTHER_ID })).toEqual({
+      userId: OTHER_ID,
+    });
+  });
+
+  it("accepts custom on the trip write requests without forcing it", () => {
+    const created = CreateTripRequestSchema.parse({ ...BASE_CREATE, visibility: "custom" });
+    expect(created.visibility).toBe("custom");
+    // Omitted visibility stays omitted (the server keeps the workspace default).
+    expect(CreateTripRequestSchema.parse(BASE_CREATE).visibility).toBeUndefined();
+    expect(UpdateTripRequestSchema.parse({ version: 2, visibility: "custom" }).visibility).toBe(
+      "custom",
+    );
   });
 });

@@ -2,7 +2,14 @@ import { z } from "zod";
 
 import { CountryCodeSchema, DateOnlySchema, IsoTimestampSchema, UuidV7Schema } from "../common/ids";
 import { AmountMinorSchema, CurrencyCodeSchema } from "../common/money";
-import { MediaStatusSchema, TripStatusSchema, TripVisibilitySchema } from "./enums";
+import {
+  MediaStatusSchema,
+  ParticipantRoleSchema,
+  ParticipantStatusSchema,
+  TripAccessGrantTargetTypeSchema,
+  TripStatusSchema,
+  TripVisibilitySchema,
+} from "./enums";
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -248,7 +255,67 @@ export const TripParticipantSchema = z
     workspaceId: UuidV7Schema,
     tripId: UuidV7Schema,
     userId: UuidV7Schema,
+    /**
+     * `invited` and `joined` both grant read access (the invitee may open the
+     * trip before answering); `declined` does not. Older rows are backfilled to
+     * `joined` by `0012_visibility_and_participants`.
+     */
+    status: ParticipantStatusSchema,
+    /** What the participant may do inside the trip (0012). */
+    role: ParticipantRoleSchema,
+    /**
+     * When the person was added to the trip. Kept under its pre-0012 name for
+     * existing readers; `invitedAt` carries the same instant under the meaning
+     * the participant model uses from 0012 onwards.
+     */
     joinedAt: IsoTimestampSchema,
+    invitedAt: IsoTimestampSchema,
+    /** When the invitee answered the invitation; `null` means "no answer yet". */
+    respondedAt: IsoTimestampSchema.nullable(),
   })
   .strict();
 export type TripParticipant = z.infer<typeof TripParticipantSchema>;
+
+/**
+ * One explicit audience entry of a `custom` trip. `targetType` + `targetId`
+ * describe the principal; the display strings (`label`, `sublabel`) live in the
+ * `resolved` half of {@link TripAccessGrantsResponseSchema} so a grant row stays
+ * stable when a workspace or user is renamed.
+ */
+export const TripAccessGrantSchema = z
+  .object({
+    id: UuidV7Schema,
+    targetType: TripAccessGrantTargetTypeSchema,
+    targetId: UuidV7Schema,
+    createdAt: IsoTimestampSchema,
+  })
+  .strict();
+export type TripAccessGrant = z.infer<typeof TripAccessGrantSchema>;
+
+/**
+ * A grant target with the labels the server resolved for it: workspace name, or
+ * a user's display name plus their email domain (`sublabel`). Resolving here
+ * keeps the P3 chips panel from issuing one lookup per grant.
+ */
+export const ResolvedAccessGrantTargetSchema = z
+  .object({
+    targetType: TripAccessGrantTargetTypeSchema,
+    targetId: UuidV7Schema,
+    label: z.string().min(1).max(160),
+    sublabel: z.string().max(200).nullable(),
+  })
+  .strict();
+export type ResolvedAccessGrantTarget = z.infer<typeof ResolvedAccessGrantTargetSchema>;
+
+export const TripAccessGrantsResponseSchema = z
+  .object({
+    grants: z.array(TripAccessGrantSchema),
+    resolved: z
+      .object({
+        workspaces: z.array(ResolvedAccessGrantTargetSchema),
+        users: z.array(ResolvedAccessGrantTargetSchema),
+      })
+      .strict(),
+  })
+  .strict();
+export type TripAccessGrantsResponse = z.infer<typeof TripAccessGrantsResponseSchema>;

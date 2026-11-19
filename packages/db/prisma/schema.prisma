@@ -57,6 +57,25 @@ enum TripVisibility {
   workspace
   private
   public_link
+  /// Explicit audience: only the creator plus the principals in
+  /// `TripAccessGrant` may read it. Added by `0012_visibility_and_participants`.
+  custom
+}
+
+/// Lifecycle of a `TripParticipant` row. A row exists as soon as someone is
+/// invited, so `joinedAt` alone can no longer answer "may this person read the
+/// trip?" — `status` does (invited and joined both grant access; declined does
+/// not).
+enum ParticipantStatus {
+  invited
+  joined
+  declined
+}
+
+/// What a participant may do once they are inside the trip.
+enum ParticipantRole {
+  viewer
+  editor
 }
 
 enum Mood {
@@ -395,6 +414,9 @@ model Trip {
   createdBy         User              @relation("TripCreator", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy         User              @relation("TripUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
   participants      TripParticipant[]
+  /// Explicit audiences for the `custom` visibility tier (0012). Read by both
+  /// `resolveTripAccess` and the SQL parity filter.
+  accessGrants      TripAccessGrant[]
   stops             Stop[]
   /// Structured destinations, ordered by `order`; soft-deleted rows stay for
   /// history and are filtered out by readers.
@@ -441,17 +463,51 @@ model TripDestination {
 }
 
 model TripParticipant {
-  id          String    @id @default(uuid(7)) @db.Uuid
-  workspaceId String    @db.Uuid
-  tripId      String    @db.Uuid
-  userId      String    @db.Uuid
-  joinedAt    DateTime  @default(now()) @db.Timestamptz(3)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String            @id @default(uuid(7)) @db.Uuid
+  workspaceId String            @db.Uuid
+  tripId      String            @db.Uuid
+  userId      String            @db.Uuid
+  /// Rows created before 0012 are backfilled to `joined` (they were added, not
+  /// merely invited); the column default stays `invited` for the invite flow.
+  status      ParticipantStatus @default(invited)
+  role        ParticipantRole   @default(viewer)
+  /// Who sent the invitation. Kept as a plain column (no relation), the same
+  /// way `WorkspaceMember.invitedById` is, so a deleted inviter never blocks a
+  /// participant row.
+  invitedById String?           @db.Uuid
+  joinedAt    DateTime          @default(now()) @db.Timestamptz(3)
+  /// Set when the invitee answers the invitation; NULL means "no answer yet".
+  respondedAt DateTime?         @db.Timestamptz(3)
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip        Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tripId, userId])
   @@index([workspaceId, userId])
+}
+
+/// One explicit audience entry for a `custom` trip: either a whole workspace
+/// (`workspaceId`) or a single user (`userId`), never both. Enforced by the
+/// `TripAccessGrant_target_exclusive_check` CHECK from 0012, because Prisma
+/// cannot express it.
+///
+/// `workspaceId` and `userId` intentionally have no foreign keys (same shape as
+/// `TripParticipant.invitedById`): a grant is a decision recorded by
+/// `grantedById`, and the audit trail must outlive a removed workspace row. The
+/// uniqueness pairs only bite on non-NULL values, so a trip can hold many user
+/// grants and many workspace grants at once.
+model TripAccessGrant {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  tripId      String    @db.Uuid
+  workspaceId String?   @db.Uuid
+  userId      String?   @db.Uuid
+  grantedById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, workspaceId])
+  @@unique([tripId, userId])
+  @@index([tripId])
 }
 
 model Stop {

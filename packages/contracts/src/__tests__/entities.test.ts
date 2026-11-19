@@ -23,10 +23,13 @@ import {
   CreateTripRequestSchema,
   UpdateStopRequestSchema,
   TripCoverSchema,
+  TripAccessGrantSchema,
+  TripAccessGrantsResponseSchema,
   TripDestinationProviderSchema,
   TripDestinationSchema,
   TripParticipantSchema,
   TripSchema,
+  TripVisibilitySchema,
   UpdateTripRequestSchema,
   UuidV7Schema,
 } from "../index";
@@ -709,7 +712,17 @@ describe("workspace scoping", () => {
   const scopedRows = [
     {
       schema: TripParticipantSchema,
-      row: { id: USER, workspaceId: WORKSPACE, tripId: TRIP, userId: USER, joinedAt: TS },
+      row: {
+        id: USER,
+        workspaceId: WORKSPACE,
+        tripId: TRIP,
+        userId: USER,
+        status: "joined",
+        role: "viewer",
+        joinedAt: TS,
+        invitedAt: TS,
+        respondedAt: null,
+      },
     },
     {
       schema: EntryMediaSchema,
@@ -735,5 +748,110 @@ describe("workspace scoping", () => {
     const withoutWorkspace = { ...row } as Record<string, unknown>;
     delete withoutWorkspace.workspaceId;
     expect(schema.safeParse(withoutWorkspace).success).toBe(false);
+  });
+});
+
+describe("trip visibility and participant contracts (0012)", () => {
+  const participantRow = {
+    id: USER,
+    workspaceId: WORKSPACE,
+    tripId: TRIP,
+    userId: OTHER,
+    status: "invited",
+    role: "editor",
+    joinedAt: TS,
+    invitedAt: TS,
+    respondedAt: null,
+  };
+
+  it("accepts the new custom visibility tier and keeps the old three", () => {
+    for (const visibility of ["workspace", "private", "public_link", "custom"]) {
+      expect(TripVisibilitySchema.parse(visibility)).toBe(visibility);
+    }
+    expect(TripVisibilitySchema.safeParse("Custom").success).toBe(false);
+    expect(TripSchema.parse({ ...trip, visibility: "custom" }).visibility).toBe("custom");
+  });
+
+  it("parses a participant with its lifecycle state and role", () => {
+    expect(TripParticipantSchema.parse(participantRow)).toEqual(participantRow);
+
+    // `status`, `role`, `invitedAt` and `respondedAt` are part of the entity:
+    // omitting any of them is a contract error, not a defaulted field.
+    for (const field of ["status", "role", "invitedAt", "respondedAt"]) {
+      const without = { ...participantRow } as Record<string, unknown>;
+      delete without[field];
+      expect(TripParticipantSchema.safeParse(without).success, field).toBe(false);
+    }
+
+    expect(TripParticipantSchema.safeParse({ ...participantRow, status: "waiting" }).success).toBe(
+      false,
+    );
+    expect(TripParticipantSchema.safeParse({ ...participantRow, role: "owner" }).success).toBe(false);
+
+    // A declined invitee stays a participant row (history) but carries the
+    // answer timestamp.
+    const declined = TripParticipantSchema.parse({
+      ...participantRow,
+      status: "declined",
+      respondedAt: TS,
+    });
+    expect(declined.status).toBe("declined");
+    expect(declined.respondedAt).toBe(TS);
+  });
+
+  it("keeps joinedAt and invitedAt as the same instant", () => {
+    // `invitedAt` renames the meaning of the pre-0012 `joinedAt`; both must stay
+    // parseable so old readers keep working while P2/P3 migrate.
+    const parsed = TripParticipantSchema.parse(participantRow);
+    expect(parsed.invitedAt).toBe(parsed.joinedAt);
+  });
+
+  it("describes a custom audience grant by principal, never by both", () => {
+    const grant = {
+      id: OTHER,
+      targetType: "workspace" as const,
+      targetId: WORKSPACE,
+      createdAt: TS,
+    };
+    expect(TripAccessGrantSchema.parse(grant)).toEqual(grant);
+    expect(
+      TripAccessGrantSchema.safeParse({ ...grant, targetType: "trip" }).success,
+    ).toBe(false);
+    expect(TripAccessGrantSchema.safeParse({ ...grant, label: "Atlas Studio" }).success).toBe(
+      false,
+    );
+  });
+
+  it("returns resolved labels for both grant families", () => {
+    const response = {
+      grants: [
+        { id: USER, targetType: "workspace" as const, targetId: WORKSPACE, createdAt: TS },
+        { id: OTHER, targetType: "user" as const, targetId: OTHER, createdAt: TS },
+      ],
+      resolved: {
+        workspaces: [
+          { targetType: "workspace" as const, targetId: WORKSPACE, label: "Atlas Studio", sublabel: null },
+        ],
+        users: [
+          {
+            targetType: "user" as const,
+            targetId: OTHER,
+            label: "Ada Lovelace",
+            sublabel: "example.com",
+          },
+        ],
+      },
+    };
+
+    const parsed = TripAccessGrantsResponseSchema.parse(response);
+    expect(parsed.resolved.workspaces[0]?.label).toBe("Atlas Studio");
+    expect(parsed.resolved.users[0]?.sublabel).toBe("example.com");
+
+    // The label is server-resolved and required: an unresolved chip would force
+    // the P3 UI into one lookup per grant.
+    const missingLabel = structuredClone(response) as Record<string, unknown>;
+    delete ((missingLabel.resolved as Record<string, unknown>).users as Array<Record<string, unknown>>)[0]
+      ?.label;
+    expect(TripAccessGrantsResponseSchema.safeParse(missingLabel).success).toBe(false);
   });
 });

@@ -18,8 +18,26 @@ export const TripStatusSchema = z.enum([
 ]);
 export type TripStatus = z.infer<typeof TripStatusSchema>;
 
-export const TripVisibilitySchema = z.enum(["workspace", "private", "public_link"]);
+/**
+ * Who may read a trip. `custom` means "only the creator plus the principals
+ * listed in `TripAccessGrant`" and is the only tier that consults grants;
+ * `public_link` keeps its own anonymous share-link path and is independent of
+ * both grants and participants.
+ */
+export const TripVisibilitySchema = z.enum(["workspace", "private", "public_link", "custom"]);
 export type TripVisibility = z.infer<typeof TripVisibilitySchema>;
+
+/** Lifecycle of an invitation to a trip. `invited` and `joined` both grant read access. */
+export const ParticipantStatusSchema = z.enum(["invited", "joined", "declined"]);
+export type ParticipantStatus = z.infer<typeof ParticipantStatusSchema>;
+
+/** What a participant may do inside the trip once they have access. */
+export const ParticipantRoleSchema = z.enum(["viewer", "editor"]);
+export type ParticipantRole = z.infer<typeof ParticipantRoleSchema>;
+
+/** A `custom` trip audience entry targets either a whole workspace or one user. */
+export const TripAccessGrantTargetTypeSchema = z.enum(["workspace", "user"]);
+export type TripAccessGrantTargetType = z.infer<typeof TripAccessGrantTargetTypeSchema>;
 
 export const MoodSchema = z.enum(["calm", "happy", "awe", "tired", "reflective", "excited"]);
 export type Mood = z.infer<typeof MoodSchema>;

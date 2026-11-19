@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import {
   AddTripParticipantRequestSchema,
@@ -26,6 +27,7 @@ import { SanitizeService } from "../../common/services/sanitize.service.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { ActivitiesService } from "../activities/activities.service.js";
 import { TripCoverService } from "../media/trip-cover.service.js";
+import { PrismaService } from "../prisma/prisma.service.js";
 import {
   assertBudgetPair,
   assertDateRange,
@@ -38,6 +40,7 @@ import {
   rawOriginCoordinatePair,
   sortParts,
   toBbox,
+  type TripAccessContext,
 } from "./content-values.js";
 import {
   presentParticipant,
@@ -114,6 +117,10 @@ export class TripsService {
     @Inject(TripCoverService) private readonly covers?: TripCoverService,
     @Inject(SanitizeService)
     private readonly sanitizer: SanitizeService = new SanitizeService(),
+    // Optional for the same reason as `covers` (hand-built instances in specs).
+    // Production resolves it from the global `PrismaModule`; see
+    // `loadAccessContext` for why its absence only narrows access.
+    @Optional() @Inject(PrismaService) private readonly prisma?: PrismaService,
   ) {}
 
   async list(
@@ -617,8 +624,45 @@ export class TripsService {
     tripId: string,
   ): Promise<TripRecord> {
     const trip = await this.requireTrip(membership.workspaceId, tripId);
-    assertTripVisible(membership, trip);
+    assertTripVisible(membership, trip, await this.loadAccessContext(membership, tripId));
     return trip;
+  }
+
+  /**
+   * Loads the two facts the access rule needs but the trip row does not carry:
+   * the actor's own participant row and the trip's grants.
+   *
+   * Both are single indexed lookups for the whole request (not one per trip), so
+   * `assertTripVisible` can stay a synchronous pure function. `PrismaService` is
+   * optional only so hand-built service instances in specs keep compiling; when
+   * it is absent the rule runs without that data, which can only *narrow*
+   * access (`custom` then needs creator/super-admin, and an invitee gets
+   * nothing) — never widen it. Production always has the global provider.
+   */
+  private async loadAccessContext(
+    membership: WorkspaceMembershipAccess,
+    tripId: string,
+  ): Promise<TripAccessContext> {
+    const client = this.prisma?.client;
+    if (!client) {
+      return {};
+    }
+
+    const [participation, grants] = await Promise.all([
+      client.tripParticipant.findFirst({
+        where: { tripId, userId: membership.userId },
+        select: { status: true },
+      }),
+      client.tripAccessGrant.findMany({
+        where: { tripId },
+        select: { workspaceId: true, userId: true },
+      }),
+    ]);
+
+    return {
+      participation: participation ?? null,
+      grants,
+    };
   }
 
   /** Projects covers for a page of trips with one Workspace-scoped media lookup. */

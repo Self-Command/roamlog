@@ -81,6 +81,10 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
     tags: z.array(nonEmpty(40)).max(20).optional(),
     destinations: z.array(nonEmpty(120)).max(30).optional(),
     // Never `public_link`: sharing is a user decision, not a model one.
+    // Never `custom` either: a custom trip names individual people and
+    // workspaces, and letting the model pick who may read a trip would turn a
+    // prompt into an authorization grant. The API accepts `custom` from a user
+    // request, but this tool surface stays at the two safe tiers.
     visibility: z.enum(["private", "workspace"]).optional(),
   }),
   "trips.get": z.object({ tripId: uuid }),
@@ -155,6 +159,9 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
         budgetCurrency: { type: "string", description: "ISO 4217, for example CNY" },
         tags: { type: "array", items: { type: "string" }, maxItems: 20 },
         destinations: { type: "array", items: { type: "string" }, maxItems: 30 },
+        // Mirrors the argument schema above: no `public_link` (sharing is a
+        // user decision) and no `custom` (the model must never choose a trip's
+        // audience — see the tool argument schema for the full reason).
         visibility: { type: "string", enum: ["private", "workspace"] },
       },
       required: ["title"],
