@@ -383,6 +383,10 @@ model Trip {
   createdAt         DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
   deletedAt         DateTime?         @db.Timestamptz(3)
+  /// Admin takedown. Kept apart from `deletedAt` (author delete) so the
+  /// moderation trail survives; visibility uses both columns.
+  moderatedAt       DateTime?         @db.Timestamptz(3)
+  moderatedById     String?           @db.Uuid
   workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   coverMedia        Media?            @relation("TripCover", fields: [coverMediaId], references: [id], onDelete: SetNull)
   createdBy         User              @relation("TripCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -474,6 +478,9 @@ model JournalEntry {
   createdAt   DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
   deletedAt   DateTime?       @db.Timestamptz(3)
+  /// Admin takedown; `deletedAt` remains the author's own delete.
+  moderatedAt DateTime?       @db.Timestamptz(3)
+  moderatedById String?       @db.Uuid
   workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   trip        Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
   createdBy   User            @relation("EntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -565,6 +572,9 @@ model Comment {
   createdAt    DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
   deletedAt    DateTime?         @db.Timestamptz(3)
+  /// Admin takedown; `deletedAt` remains the author's own delete.
+  moderatedAt  DateTime?         @db.Timestamptz(3)
+  moderatedById String?          @db.Uuid
   workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   trip         Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
   parent       Comment?          @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
@@ -630,6 +640,9 @@ model Media {
   createdAt       DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
   deletedAt       DateTime?    @db.Timestamptz(3)
+  /// Admin takedown; `deletedAt` remains the uploader's own delete.
+  moderatedAt     DateTime?    @db.Timestamptz(3)
+  moderatedById   String?      @db.Uuid
   workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   trip            Trip?        @relation(fields: [tripId], references: [id], onDelete: SetNull)
   uploader        User         @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
@@ -637,11 +650,39 @@ model Media {
   coveredTrips    Trip[]       @relation("TripCover")
   workspaceLogos  Workspace[]  @relation("WorkspaceLogo")
   expenseReceipts Expense[]    @relation("ExpenseReceipt")
+  motion          MediaMotion?
 
   @@unique([workspaceId, key])
   @@index([workspaceId, status, createdAt])
   @@index([tripId, createdAt])
   @@index([uploaderId])
+}
+
+/// The paired motion asset of an iOS Live Photo (or an Android Motion Photo).
+///
+/// Deliberately a sibling row instead of a second `Media`: covers, galleries,
+/// permissions, deletion and audit all hang off `Media`, so a second media row
+/// would double every one of those semantics. The 1:1 relation keeps the still
+/// as the only content unit while letting the video carry its own mime type,
+/// byte size and duration. Motion rows are additive: a plain image simply has
+/// no `MediaMotion` row.
+model MediaMotion {
+  id           String    @id @db.Uuid
+  /// One motion asset per media row; the unique constraint is the 1:1.
+  mediaId      String    @unique @db.Uuid
+  storageKey   String
+  thumbKey     String?
+  /// `video/quicktime` (iOS) or `video/mp4` (transcoded / Android).
+  mimeType     String
+  sizeBytes    Int
+  durationMs   Int?
+  width        Int?
+  height       Int?
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  deletedAt    DateTime? @db.Timestamptz(3)
+  media        Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@map("MediaMotion")
 }
 
 model Expense {
@@ -882,4 +923,40 @@ model PlatformRoleOverride {
   @@id([role, action])
   @@index([updatedById])
   @@map("PlatformRoleOverride")
+}
+
+/// A user-filed report against one piece of workspace content.
+///
+/// `targetId` is polymorphic (`targetType` + `targetId`) rather than four
+/// nullable FKs, because a report must survive the target being hard-deleted
+/// later and because the moderation queue aggregates across content kinds.
+/// The migration keeps a CHECK on `targetType`/`reason`/`status`.
+model Report {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  workspaceId    String    @db.Uuid
+  targetType     String
+  targetId       String    @db.Uuid
+  reason         String
+  detail         String?   @db.VarChar(1000)
+  reporterId     String    @db.Uuid
+  status         String    @default("open")
+  resolvedById   String?   @db.Uuid
+  resolvedAt     DateTime? @db.Timestamptz(3)
+  resolutionNote String?   @db.VarChar(1000)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([workspaceId, targetType, targetId])
+}
+
+/// Append-only trail of moderator decisions on a report.
+model ModerationAction {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  reportId  String   @db.Uuid
+  actorId   String   @db.Uuid
+  action    String
+  note      String?  @db.VarChar(1000)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([reportId])
 }
