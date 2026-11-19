@@ -34,6 +34,10 @@ export const PUBLIC_SETTING_KEYS = [
   "site.description",
   "general.defaultLanguage",
   "general.defaultTimeZone",
+  "seo.titleTemplate",
+  "seo.descriptionTemplate",
+  "seo.ogImageUrl",
+  "seo.robots",
   "theme.accent",
   "theme.defaultMode",
   "theme.loginTagline",
@@ -176,33 +180,39 @@ export function readPublicString(
   return readStringValue(settings, key);
 }
 
-function applyTitleTemplate(template: string, title: string): string {
-  return template.includes("%s") ? template.replace("%s", title) : template;
+/**
+ * `%s` -> page title. A template without `%s` is a complete title already, so
+ * it is rendered verbatim (this mirrors Next's own title-template behavior).
+ */
+export function applyTitleTemplate(template: string, title: string): string {
+  return template.includes("%s") ? template.replace(/%s/g, title) : template;
 }
 
 /**
  * Site-level metadata defaults. Nested pages keep their own `metadata` /
  * `generateMetadata`; Next merges those over this root object, so `title` and
- * `description` here are defaults plus the shared title template.
+ * `description` here are defaults plus the shared title template. A nested
+ * page's `robots` (for example the `/share` noindex) also wins over the site
+ * value below because Next replaces the field wholesale.
  */
 export function buildSiteMetadata(settings: PublicSettingsMap): Metadata {
   const configuredTitle = readPublicString(settings, "site.title");
   const siteTitle = configuredTitle ?? DEFAULT_SITE_TITLE;
   const siteDescription = readPublicString(settings, "site.description") ?? DEFAULT_SITE_DESCRIPTION;
-  const titleTemplate =
-    readStringValue(settings, "seo.titleTemplate") ??
-    (configuredTitle ? `%s · ${configuredTitle}` : DEFAULT_TITLE_TEMPLATE);
 
-  // The API currently exposes no SEO keys publicly (they are operator-only in
-  // the settings registry). If a deployment exposes them, consume them here
-  // instead of inventing a second source of truth.
-  const openGraphTitleTemplate = readStringValue(settings, "seo.titleTemplate");
-  const openGraphTitle = openGraphTitleTemplate
-    ? applyTitleTemplate(openGraphTitleTemplate, configuredTitle ?? DEFAULT_SITE_NAME)
-    : siteTitle;
-  const openGraphDescription =
+  // `seo.*` is part of the public projection. Blank or missing values fall back
+  // to the code defaults, never to an empty tag or an error.
+  const configuredTitleTemplate = readStringValue(settings, "seo.titleTemplate");
+  const titleTemplate =
+    configuredTitleTemplate ??
+    (configuredTitle ? `%s · ${configuredTitle}` : DEFAULT_TITLE_TEMPLATE);
+  const descriptionTemplate =
     readStringValue(settings, "seo.descriptionTemplate") ?? siteDescription;
   const openGraphImage = readStringValue(settings, "seo.ogImageUrl");
+  const robots = readStringValue(settings, "seo.robots") ?? DEFAULT_ROBOTS;
+  const openGraphTitle = configuredTitleTemplate
+    ? applyTitleTemplate(configuredTitleTemplate, configuredTitle ?? DEFAULT_SITE_NAME)
+    : siteTitle;
 
   return {
     title: {
@@ -213,14 +223,19 @@ export function buildSiteMetadata(settings: PublicSettingsMap): Metadata {
     openGraph: {
       type: "website",
       title: openGraphTitle,
-      description: openGraphDescription,
+      description: descriptionTemplate,
       ...(openGraphImage ? { images: [{ url: openGraphImage }] } : {}),
     },
-    robots: readStringValue(settings, "seo.robots") ?? DEFAULT_ROBOTS,
+    robots,
   };
 }
 
-export type ThemeMode = "light" | "dark" | "system";
+/**
+ * Only the modes the runtime renders. `light` was removed from the contract
+ * because `@roamlog/ui` ships dark tokens only; keeping it here would keep the
+ * fake setting alive on stale caches.
+ */
+export type ThemeMode = "dark" | "system";
 export type ThemeAccent = "white" | "amber" | "blue" | "emerald" | "rose";
 
 export const DEFAULT_THEME_MODE: ThemeMode = "system";
@@ -247,9 +262,12 @@ export const THEME_ACCENT_TOKENS: Record<
 };
 
 export function resolveThemeMode(value: unknown): ThemeMode {
-  return value === "light" || value === "dark" || value === "system"
-    ? value
-    : DEFAULT_THEME_MODE;
+  if (value === "dark" || value === "system") {
+    return value;
+  }
+  // A cached historical `"light"` value (the API normalizes stored rows) falls
+  // back to `system`: there is no light palette, so it must not reintroduce one.
+  return DEFAULT_THEME_MODE;
 }
 
 export function resolveThemeAccent(value: unknown): ThemeAccent {
@@ -263,10 +281,18 @@ export function resolveThemeAccent(value: unknown): ThemeAccent {
 }
 
 export interface ThemePresentation {
+  /** Configured mode, always `dark` or `system` (never `light`). */
   mode: ThemeMode;
   accent: ThemeAccent;
-  /** Server-rendered `data-theme`; `system` lets `color-scheme` follow the OS. */
+  /**
+   * Server-rendered `data-theme`. Only `dark` and `system` are emitted. There
+   * is no light palette yet, so the `:root` dark tokens apply either way:
+   * `system` means "follow the OS when a light palette exists", which today
+   * renders exactly like dark.
+   */
   dataTheme: ThemeMode;
+  /** `<meta name="color-scheme">` / CSS `color-scheme` value. */
+  colorScheme: "dark" | "light dark";
   /** Inline custom properties written on `<html>` during SSR (no flash). */
   style: Record<string, string>;
 }
@@ -275,17 +301,18 @@ export function resolveThemePresentation(settings: PublicSettingsMap): ThemePres
   const mode = resolveThemeMode(settings["theme.defaultMode"]);
   const accent = resolveThemeAccent(settings["theme.accent"]);
   const tokens = THEME_ACCENT_TOKENS[accent];
+  const colorScheme = mode === "system" ? "light dark" : "dark";
 
   return {
     mode,
     accent,
     dataTheme: mode,
+    colorScheme,
     style: {
       "--accent-primary": tokens.primary,
       "--accent-primary-soft": tokens.soft,
       "--accent-primary-glow": tokens.glow,
-      // `system` is resolved by the user agent via prefers-color-scheme.
-      colorScheme: mode === "system" ? "light dark" : mode,
+      colorScheme,
     },
   };
 }

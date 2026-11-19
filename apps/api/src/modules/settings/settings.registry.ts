@@ -1,5 +1,6 @@
 import {
   SETTINGS_GROUP_LABELS,
+  THEME_MODES,
   type SettingValue,
   type SystemSettingGroup,
   type SystemSettingValueType,
@@ -71,7 +72,6 @@ const SECRET = z.string().min(1).max(4_096);
 
 const THEME_ACCENTS = ["white", "amber", "blue", "emerald", "rose"] as const;
 const LANGUAGES = ["zh-CN", "en"] as const;
-const THEME_MODES = ["light", "dark", "system"] as const;
 const MAIL_PROVIDERS = ["resend", "smtp"] as const;
 const PLACE_PROVIDERS = ["geoapify", "photon"] as const;
 
@@ -151,12 +151,16 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     help: "Turn off to stop new accounts from self-registering.",
   }),
 
+  // SEO values are public by design: the anonymous web shell has to render the
+  // exact `<title>`, description, Open Graph image and robots directive that
+  // operators configure here, and crawlers read the same values. None of them
+  // is a credential or an internal parameter.
   define({
     key: "seo.titleTemplate",
     group: "seo",
     type: "string",
     schema: z.string().min(1).max(200),
-    isPublic: false,
+    isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "Title template",
@@ -167,7 +171,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     group: "seo",
     type: "string",
     schema: z.string().min(1).max(300),
-    isPublic: false,
+    isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "Description template",
@@ -178,7 +182,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     group: "seo",
     type: "string",
     schema: HTTP_URL.nullable(),
-    isPublic: false,
+    isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "Open Graph image",
@@ -189,7 +193,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     group: "seo",
     type: "string",
     schema: z.string().min(1).max(100),
-    isPublic: false,
+    isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "Robots directive",
@@ -228,7 +232,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isSecret: false,
     envLocked: false,
     label: "Default color mode",
-    help: "Color mode for visitors who have not chosen one.",
+    help: "Dark, or system. A light palette is not available yet, so system currently renders dark.",
     options: THEME_MODES,
   }),
   define({

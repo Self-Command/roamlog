@@ -25,10 +25,18 @@ export async function generateMetadata(): Promise<Metadata> {
   return buildSiteMetadata(await getPublicSettings());
 }
 
-export const viewport: Viewport = {
-  colorScheme: "dark",
-  themeColor: "#000000",
-};
+/**
+ * `color-scheme` mirrors the configured mode: `dark` for dark, `light dark` for
+ * `system`. The UI itself still renders dark in both cases because
+ * `@roamlog/ui` has only dark tokens; `light` is no longer a valid mode.
+ */
+export async function generateViewport(): Promise<Viewport> {
+  const theme = resolveThemePresentation(await getPublicSettings());
+  return {
+    colorScheme: theme.colorScheme,
+    themeColor: "#000000",
+  };
+}
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const settings = await getPublicSettings();

@@ -283,13 +283,69 @@ describe("SettingsService read cache", () => {
     expect(keys).toContain("site.title");
     expect(keys).toContain("general.defaultLanguage");
     expect(keys).toContain("theme.accent");
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "seo.titleTemplate",
+        "seo.descriptionTemplate",
+        "seo.ogImageUrl",
+        "seo.robots",
+      ]),
+    );
     for (const key of keys) {
       const definition = SETTINGS_BY_KEY.get(key);
       expect(definition?.isPublic, key).toBe(true);
       expect(definition?.isSecret, key).toBe(false);
     }
-    expect(keys).not.toContain("mail.smtpPassword");
+
+    const SECRET_KEYS = [
+      "mail.resendApiKey",
+      "mail.smtpPassword",
+      "storage.accessKey",
+      "storage.secretKey",
+      "places.apiKey",
+    ];
+    for (const key of SECRET_KEYS) {
+      expect(keys, key).not.toContain(key);
+      expect(JSON.stringify(response), key).not.toContain(key);
+    }
     expect(keys).not.toContain("general.registrationEnabled");
+    expect(keys).not.toContain("ai.timeoutMs");
+    expect(keys).not.toContain("limits.searchPerMinute");
+  });
+
+  it("normalizes a stored legacy light mode to system and warns once", async () => {
+    const { service, logger } = setup({
+      seed: [
+        makeRow({
+          key: "theme.defaultMode",
+          group: "theme",
+          value: "light",
+          isPublic: true,
+        }),
+      ],
+    });
+
+    await expect(service.get("theme.defaultMode")).resolves.toBe("system");
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "theme.defaultMode", stored: "light", normalized: "system" }),
+      "settings.legacy_value_normalized",
+    );
+
+    // The admin projection shows the same READ normalization without logging twice.
+    await expect(service.getAdminSetting("theme.defaultMode")).resolves.toMatchObject({
+      value: "system",
+    });
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes a legacy light value cached in Redis", async () => {
+    const redis = new FakeRedisBroker();
+    redis.values.set("settings:v0:theme.defaultMode", JSON.stringify({ value: "light" }));
+    const { service, logger } = setup({ redis });
+
+    await expect(service.get("theme.defaultMode")).resolves.toBe("system");
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   it("returns defaults when the row does not exist", async () => {

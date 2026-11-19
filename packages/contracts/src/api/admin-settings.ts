@@ -42,6 +42,20 @@ export const SystemSettingValueTypeSchema = z.enum(SETTINGS_VALUE_TYPES);
 export type SystemSettingValueType = z.infer<typeof SystemSettingValueTypeSchema>;
 
 /**
+ * Color modes the runtime actually implements.
+ *
+ * `light` used to be offered even though `@roamlog/ui` only shipped dark
+ * tokens: selecting it wrote `data-theme="light"` and a light `color-scheme`
+ * but the canvas stayed dark, so it was an honest-to-goodness fake setting.
+ * It is removed from the contract rather than shipped as a half-finished
+ * palette. `system` is the only non-dark intent until a light token set lands;
+ * today it renders with the same dark tokens.
+ */
+export const THEME_MODES = ["dark", "system"] as const;
+export const ThemeModeSchema = z.enum(THEME_MODES);
+export type ThemeMode = z.infer<typeof ThemeModeSchema>;
+
+/**
  * Any JSON value a non-secret setting may hold (null included).
  *
  * Deliberately structural instead of `z.json()`: the recursive Zod helper makes

@@ -9,7 +9,9 @@ import {
   DEFAULT_SITE_TITLE,
   DEFAULT_TITLE_TEMPLATE,
   PUBLIC_SETTINGS_REVALIDATE_SECONDS,
+  PUBLIC_SETTING_KEYS,
   THEME_ACCENT_TOKENS,
+  applyTitleTemplate,
   buildSiteMetadata,
   getPublicSettings,
   resolveThemeAccent,
@@ -133,6 +135,43 @@ describe("buildSiteMetadata", () => {
     expect(metadata.robots).toBe("noindex,nofollow");
   });
 
+  it("replaces %s in the title template and keeps a placeholder-free template as a complete title", () => {
+    expect(applyTitleTemplate("%s | Roamlog", "页面标题")).toBe("页面标题 | Roamlog");
+    expect(applyTitleTemplate("页面标题 | Roamlog", "另一个页面")).toBe("页面标题 | Roamlog");
+
+    const withPlaceholder = buildSiteMetadata({
+      "site.title": "Roamlog",
+      "seo.titleTemplate": "%s | Roamlog",
+    });
+    expect(withPlaceholder.title).toEqual({ default: "Roamlog", template: "%s | Roamlog" });
+    expect(withPlaceholder.openGraph).toMatchObject({ title: "Roamlog | Roamlog" });
+
+    const completeTitle = buildSiteMetadata({
+      "site.title": "Roamlog",
+      "seo.titleTemplate": "Roamlog",
+    });
+    expect(completeTitle.title).toEqual({ default: "Roamlog", template: "Roamlog" });
+    expect(completeTitle.openGraph).toMatchObject({ title: "Roamlog" });
+  });
+
+  it("omits openGraph.images when seo.ogImageUrl is empty", () => {
+    for (const settings of [
+      { "seo.ogImageUrl": "" },
+      { "seo.ogImageUrl": null },
+      {},
+    ] as PublicSettingsMap[]) {
+      const metadata = buildSiteMetadata(settings);
+      expect(metadata.openGraph && "images" in metadata.openGraph).toBe(false);
+    }
+  });
+
+  it("applies the configured robots directive", () => {
+    const metadata = buildSiteMetadata({ "seo.robots": "noindex,nofollow" });
+
+    expect(metadata.robots).toBe("noindex,nofollow");
+    expect(JSON.stringify(metadata)).not.toMatch(/light/u);
+  });
+
   it("falls back to the built-in defaults when the settings are missing", () => {
     const metadata = buildSiteMetadata({});
 
@@ -166,6 +205,8 @@ describe("resolveThemePresentation", () => {
   it("maps runtime accent and mode onto server-rendered CSS variables", () => {
     const fallback = resolveThemePresentation({});
     expect(fallback.mode).toBe("system");
+    expect(fallback.dataTheme).toBe("system");
+    expect(fallback.colorScheme).toBe("light dark");
     expect(fallback.accent).toBe("white");
     expect(fallback.style.colorScheme).toBe("light dark");
 
@@ -174,15 +215,39 @@ describe("resolveThemePresentation", () => {
       "theme.defaultMode": "dark",
     });
     expect(themed.dataTheme).toBe("dark");
+    expect(themed.colorScheme).toBe("dark");
     expect(themed.style.colorScheme).toBe("dark");
     expect(themed.style["--accent-primary"]).toBe(THEME_ACCENT_TOKENS.blue.primary);
     expect(themed.style["--accent-primary"]).not.toBe(fallback.style["--accent-primary"]);
     expect(themed.style["--accent-primary-glow"]).toBe(THEME_ACCENT_TOKENS.blue.glow);
   });
 
+  it("normalizes the removed light mode to system instead of rendering it", () => {
+    expect(resolveThemeMode("light")).toBe("system");
+    expect(resolveThemeMode("dark")).toBe("dark");
+    expect(resolveThemeMode("system")).toBe("system");
+
+    const presentation = resolveThemePresentation({ "theme.defaultMode": "light" });
+    expect(presentation.mode).toBe("system");
+    expect(presentation.dataTheme).toBe("system");
+    expect(presentation.colorScheme).toBe("light dark");
+    expect(JSON.stringify(presentation)).not.toContain('"light"');
+  });
+
   it("rejects unknown accent and mode values instead of throwing", () => {
     expect(resolveThemeMode("sepia")).toBe("system");
     expect(resolveThemeAccent("chartreuse")).toBe("white");
+  });
+
+  it("mirrors every public SEO key in PUBLIC_SETTING_KEYS", () => {
+    for (const key of [
+      "seo.titleTemplate",
+      "seo.descriptionTemplate",
+      "seo.ogImageUrl",
+      "seo.robots",
+    ]) {
+      expect(PUBLIC_SETTING_KEYS).toContain(key);
+    }
   });
 });
 

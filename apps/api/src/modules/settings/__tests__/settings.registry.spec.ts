@@ -29,24 +29,67 @@ describe("SETTINGS_REGISTRY", () => {
     }
   });
 
-  it("marks only non-secret public keys as public", () => {
-    const publicKeys = publicSettingDefinitions().map((entry) => entry.key);
+  it("exposes exactly the public, non-secret keys the anonymous shell consumes", () => {
+    const publicKeys = publicSettingDefinitions()
+      .map((entry) => entry.key)
+      .sort();
     expect(publicKeys).toEqual(
-      expect.arrayContaining([
+      [
         "site.title",
         "site.description",
         "general.defaultLanguage",
         "general.defaultTimeZone",
+        "seo.titleTemplate",
+        "seo.descriptionTemplate",
+        "seo.ogImageUrl",
+        "seo.robots",
         "theme.accent",
         "theme.defaultMode",
         "theme.loginTagline",
-      ]),
+      ].sort(),
     );
     for (const key of publicKeys) {
       expect(SETTINGS_BY_KEY.get(key)?.isSecret, key).toBe(false);
     }
-    expect(publicKeys).not.toContain("mail.resendApiKey");
-    expect(publicKeys).not.toContain("storage.secretKey");
+  });
+
+  it("keeps credentials, internal AI parameters and rate limits private", () => {
+    const mustStayPrivate = [
+      "mail.resendApiKey",
+      "mail.smtpPassword",
+      "mail.smtpUser",
+      "mail.smtpHost",
+      "mail.provider",
+      "storage.accessKey",
+      "storage.secretKey",
+      "storage.endpoint",
+      "storage.bucket",
+      "storage.publicEndpoint",
+      "places.apiKey",
+      "places.provider",
+      "ai.defaultProvider",
+      "ai.timeoutMs",
+      "ai.maxOutputTokens",
+      "ai.dailyQuota",
+      "limits.searchPerMinute",
+      "limits.uploadPerMinute",
+    ];
+    for (const key of mustStayPrivate) {
+      expect(SETTINGS_BY_KEY.get(key)?.isPublic, key).toBe(false);
+    }
+    expect(publicSettingDefinitions()).not.toContainEqual(
+      expect.objectContaining({ key: "mail.resendApiKey" }),
+    );
+  });
+
+  it("offers only the color modes that actually render", () => {
+    const entry = SETTINGS_BY_KEY.get("theme.defaultMode");
+
+    expect(entry?.options).toEqual(["dark", "system"]);
+    expect(entry?.defaultValue).toBe("system");
+    expect(entry?.schema.safeParse("dark").success).toBe(true);
+    expect(entry?.schema.safeParse("system").success).toBe(true);
+    expect(entry?.schema.safeParse("light").success).toBe(false);
   });
 
   it("covers every requested group and first-release key", () => {

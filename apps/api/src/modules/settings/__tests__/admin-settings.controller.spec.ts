@@ -259,6 +259,36 @@ describe("admin settings routes", () => {
     expect(response.body).toMatchObject({ status: 403, code: "ADMIN_ACCESS_DENIED" });
   });
 
+  it("serves SEO values anonymously and never a secret key name", async () => {
+    const { app } = await createApp({});
+
+    const response = await request(app.getHttpServer()).get("/v1/public/settings").expect(200);
+    const body = response.body as PublicSettingsResponse;
+    const keys = Object.keys(body.settings);
+
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "seo.titleTemplate",
+        "seo.descriptionTemplate",
+        "seo.ogImageUrl",
+        "seo.robots",
+      ]),
+    );
+    for (const key of [
+      "mail.resendApiKey",
+      "mail.smtpPassword",
+      "storage.accessKey",
+      "storage.secretKey",
+      "places.apiKey",
+      "ai.timeoutMs",
+      "limits.searchPerMinute",
+    ]) {
+      expect(keys, key).not.toContain(key);
+      expect(JSON.stringify(body), key).not.toContain(key);
+    }
+    expect(JSON.stringify(body)).not.toContain(STORED_PASSWORD);
+  });
+
   it("returns a 422 SETTINGS_INVALID problem without echoing rejected values", async () => {
     const { app, prisma } = await createApp({ user: superAdmin });
 
@@ -280,6 +310,23 @@ describe("admin settings routes", () => {
       ]),
     );
     expect(JSON.stringify(response.body)).not.toContain("leaked-candidate-value");
+    expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects the removed light theme mode with 422", async () => {
+    const { app, prisma } = await createApp({ user: superAdmin });
+
+    const response = await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .send({ updates: [{ key: "theme.defaultMode", value: "light" }] })
+      .expect(422);
+
+    expect(response.body).toMatchObject({ status: 422, code: "SETTINGS_INVALID" });
+    expect(response.body.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "theme.defaultMode", code: "INVALID_VALUE" }),
+      ]),
+    );
     expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
   });
 

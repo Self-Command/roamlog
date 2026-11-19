@@ -6,7 +6,7 @@ vi.mock("@/components/providers", () => ({
   Providers: ({ children }: { children: unknown }) => children,
 }));
 
-import RootLayout from "@/app/layout";
+import RootLayout, { generateMetadata, generateViewport } from "@/app/layout";
 
 interface RenderedHtmlProps {
   lang?: string;
@@ -79,6 +79,64 @@ describe("root layout runtime theme", () => {
     expect(whiteAccent).toBe("#fcfdff");
     expect(roseAccent).toBe("#ff2047");
     expect(roseAccent).not.toBe(whiteAccent);
+  });
+
+  it("renders a legacy light mode as system and never as a light theme", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => settingsResponse({ "theme.defaultMode": "light" })),
+    );
+
+    const html = await renderLayout();
+
+    expect(html.props["data-theme"]).toBe("system");
+    expect(html.props.style?.colorScheme).toBe("light dark");
+    expect(JSON.stringify(html.props)).not.toContain('"light"');
+  });
+
+  it("serves SEO metadata from the public settings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        settingsResponse({
+          "site.title": "Atlas Journal",
+          "seo.titleTemplate": "%s · Atlas",
+          "seo.descriptionTemplate": "Plan together, remember together.",
+          "seo.ogImageUrl": "https://cdn.example.com/og.png",
+          "seo.robots": "noindex,nofollow",
+        }),
+      ),
+    );
+
+    const metadata = await generateMetadata();
+
+    expect(metadata.title).toEqual({ default: "Atlas Journal", template: "%s · Atlas" });
+    expect(metadata.openGraph).toMatchObject({
+      title: "Atlas Journal · Atlas",
+      description: "Plan together, remember together.",
+      images: [{ url: "https://cdn.example.com/og.png" }],
+    });
+    expect(metadata.robots).toBe("noindex,nofollow");
+  });
+
+  it("emits the matching color-scheme viewport for dark and system", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => settingsResponse({ "theme.defaultMode": "system" })),
+    );
+    await expect(generateViewport()).resolves.toEqual({
+      colorScheme: "light dark",
+      themeColor: "#000000",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => settingsResponse({ "theme.defaultMode": "dark" })),
+    );
+    await expect(generateViewport()).resolves.toEqual({
+      colorScheme: "dark",
+      themeColor: "#000000",
+    });
   });
 
   it("renders built-in defaults and no error copy when the settings API fails", async () => {

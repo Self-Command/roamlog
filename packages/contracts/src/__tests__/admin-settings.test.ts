@@ -5,6 +5,8 @@ import {
   AdminSettingsResponseSchema,
   PublicSettingsResponseSchema,
   RevealAdminSettingRequestSchema,
+  THEME_MODES,
+  ThemeModeSchema,
   UpdateAdminSettingsRequestSchema,
 } from "../api/admin-settings";
 
@@ -115,6 +117,15 @@ describe("admin settings contracts", () => {
     expect(RevealAdminSettingRequestSchema.parse({ confirm: true })).toEqual({ confirm: true });
     expect(() => RevealAdminSettingRequestSchema.parse({ confirm: false })).toThrow();
     expect(() => RevealAdminSettingRequestSchema.parse({})).toThrow();
+  });
+
+  it("only accepts theme modes the runtime can actually render", () => {
+    expect(THEME_MODES).toEqual(["dark", "system"]);
+    expect(ThemeModeSchema.parse("dark")).toBe("dark");
+    expect(ThemeModeSchema.parse("system")).toBe("system");
+    // The removed fake light mode is a contract error, which the API maps to 422.
+    expect(ThemeModeSchema.safeParse("light").success).toBe(false);
+    expect(ThemeModeSchema.safeParse("auto").success).toBe(false);
   });
 
   it("serves only key/value pairs on the public projection", () => {

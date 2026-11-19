@@ -78,6 +78,8 @@ export class SettingsService implements OnModuleInit, OnModuleDestroy {
   private readonly definitions: ReadonlyMap<string, SettingDefinition>;
   private readonly registry: readonly SettingDefinition[];
   private readonly processCache = new Map<string, ProcessCacheEntry>();
+  /** Legacy values already warned about, so each key logs at most once. */
+  private readonly normalizedLegacyReads = new Set<string>();
   private subscriber: Redis | undefined;
   private secretBox: SecretBox | undefined;
 
@@ -194,6 +196,9 @@ export class SettingsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getPublicSettings(): Promise<PublicSettingsResponse> {
+    // `isPublic && !isSecret` is the only allowlist for the anonymous endpoint.
+    // Secrets are excluded even if a stored row were ever mis-flagged public:
+    // credentials must never cross this boundary.
     const definitions = this.registry.filter((entry) => entry.isPublic && !entry.isSecret);
     const pairs = await Promise.all(
       definitions.map(async (entry) => [entry.key, await this.get(entry.key)] as const),
@@ -474,8 +479,32 @@ export class SettingsService implements OnModuleInit, OnModuleDestroy {
     return this.validateRead(definition, row ? row.value : definition.defaultValue);
   }
 
+  /**
+   * Normalizes historical values that no longer pass their schema but must
+   * never turn a page (or the admin console) into a 500.
+   *
+   * `theme.defaultMode="light"` shipped before a light palette existed. Reads
+   * now map it to `system` (which the web shell renders with dark tokens until
+   * that palette lands) and emit one warning per process, instead of failing
+   * `validateRead`. Writes are not normalized: the contract rejects `light`
+   * with a 422 so operators cannot reintroduce it.
+   */
+  private normalizeLegacyRead(definition: SettingDefinition, value: unknown): unknown {
+    if (definition.key !== "theme.defaultMode" || value !== "light") {
+      return value;
+    }
+    if (!this.normalizedLegacyReads.has(definition.key)) {
+      this.normalizedLegacyReads.add(definition.key);
+      this.logger.warn(
+        { key: definition.key, stored: "light", normalized: "system" },
+        "settings.legacy_value_normalized",
+      );
+    }
+    return "system";
+  }
+
   private validateRead(definition: SettingDefinition, value: unknown): SettingValue {
-    const parsed = definition.schema.safeParse(value);
+    const parsed = definition.schema.safeParse(this.normalizeLegacyRead(definition, value));
     if (!parsed.success) {
       this.logger.error(
         { key: definition.key, issues: parsed.error.issues.map((issue) => issue.message) },
