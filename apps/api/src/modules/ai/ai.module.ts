@@ -13,6 +13,7 @@ import { AiController } from "./ai.controller.js";
 import { AiExecuteService } from "./ai-execute.service.js";
 import { AiPlanService } from "./ai-plan.service.js";
 import { AiQuotaService } from "./ai-quota.service.js";
+import { AiRewriteService } from "./ai-rewrite.service.js";
 import { AiRunStore } from "./ai-run.store.js";
 import { AI_CLOCK, AI_SETTINGS_SOURCE, AiSettingsResolver } from "./ai.settings.js";
 import { AiToolbox } from "./ai-tools.js";
@@ -41,6 +42,7 @@ import { AiToolbox } from "./ai-tools.js";
     AiRunStore,
     AiPlanService,
     AiExecuteService,
+    AiRewriteService,
   ],
 })
 export class AiModule {}
