@@ -29,6 +29,16 @@ Exit codes
   0  configuration passed
   1  configuration failed, or bad usage
 
+Additional checks
+  * CONFIG_ENCRYPTION_KEY is mandatory when APP_ENV=production, and every
+    CONFIG_ENCRYPTION_KEY / CONFIG_ENCRYPTION_KEYS entry must decode to exactly
+    32 bytes. The error includes the generation command.
+  * AI_* is optional: AI_BASE_URL/AI_API_KEY/AI_MODEL are required only when
+    AI_ENABLED=true. With AI disabled the API answers 503 AI_NOT_CONFIGURED,
+    which is not a startup failure.
+  * PLACES_*, GEOAPIFY_* and MEDIA_* are optional; invalid values are reported.
+    Errors name the variable and never print its value.
+
 Retired flags
   The retired data-mode build flags were removed with the mock data mode.
   The application only has the live API path, so a leftover export is
@@ -83,6 +93,12 @@ const PRODUCTION_EXPLICIT_KEYS = ["APP_ENV", "EMAIL_PROVIDER"] as const;
 
 const VALID_APP_ENV = ["development", "test", "staging", "production"] as const;
 const VALID_EMAIL_PROVIDER = ["resend", "smtp", "mailpit"] as const;
+const VALID_AI_PROTOCOLS = ["openai-chat", "openai-responses", "anthropic-messages"] as const;
+const VALID_PLACES_PROVIDERS = ["geoapify", "photon"] as const;
+const TRUE_VALUES = ["true", "1", "yes", "on"] as const;
+const FALSE_VALUES = ["false", "0", "no", "off"] as const;
+
+const ENCRYPTION_GENERATION_COMMAND = "Generate a key with: openssl rand -base64 32";
 
 /**
  * Same fragments EnvironmentSchema uses for placeholders, plus the marker the
@@ -109,6 +125,8 @@ const DOCUMENTATION_DOMAIN = "example.com";
  */
 const REDACTED_KEYS = [
   "BETTER_AUTH_SECRET",
+  "CONFIG_ENCRYPTION_KEY",
+  "CONFIG_ENCRYPTION_KEYS",
   "DATABASE_URL",
   "REDIS_URL",
   "REDIS_PASSWORD",
@@ -119,6 +137,8 @@ const REDACTED_KEYS = [
   "SMTP_USER",
   "SMTP_PASSWORD",
   "RESEND_API_KEY",
+  "AI_API_KEY",
+  "GEOAPIFY_API_KEY",
   "GOOGLE_CLIENT_SECRET",
   "GITHUB_CLIENT_SECRET",
   "APP_URL",
@@ -405,6 +425,158 @@ const checkMediaCorsOrigins = (requireHttps: boolean): void => {
   }
 };
 
+/**
+ * Optional integer knob. Empty values keep the application default, so only
+ * an explicit out-of-range value is an error.
+ */
+const checkIntegerOption = (key: string, minimum: number, maximum: number, unit: string): void => {
+  const raw = env[key]?.trim();
+  if (!raw) return;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    errors.push(`${key} must be an integer between ${minimum} and ${maximum} (${unit}).`);
+  }
+};
+
+const isFlagEnabled = (raw: string | undefined): boolean =>
+  raw !== undefined && (TRUE_VALUES as readonly string[]).includes(raw.trim().toLowerCase());
+
+const isBooleanFlag = (raw: string): boolean => {
+  const normalized = raw.trim().toLowerCase();
+  return (
+    (TRUE_VALUES as readonly string[]).includes(normalized) ||
+    (FALSE_VALUES as readonly string[]).includes(normalized)
+  );
+};
+
+/**
+ * Settings encryption is a production blocker: without a valid key the first
+ * secret save in Admin settings fails, and a key generated on the fly would
+ * make ciphertext unreadable after a restart. Validate every configured value
+ * and require the singular key when APP_ENV=production. Messages never echo the
+ * key material.
+ */
+const checkEncryptionKey = (): void => {
+  const singular = env.CONFIG_ENCRYPTION_KEY?.trim() ?? "";
+  const ring = (env.CONFIG_ENCRYPTION_KEYS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (!singular && ring.length === 0) {
+    if (env.APP_ENV?.trim() === "production") {
+      errors.push(
+        `CONFIG_ENCRYPTION_KEY is required when APP_ENV=production: secrets saved in Admin settings cannot be encrypted without it. ${ENCRYPTION_GENERATION_COMMAND}`,
+      );
+    } else {
+      warnings.push(
+        `CONFIG_ENCRYPTION_KEY is not set; saving a secret in Admin settings will fail with SETTINGS_ENCRYPTION_UNAVAILABLE. ${ENCRYPTION_GENERATION_COMMAND}`,
+      );
+    }
+    return;
+  }
+
+  const entries = [
+    ...ring.map((key, index) => ({ label: `CONFIG_ENCRYPTION_KEYS entry ${index + 1}`, key })),
+    ...(singular ? [{ label: "CONFIG_ENCRYPTION_KEY", key: singular }] : []),
+  ];
+
+  for (const entry of entries) {
+    const decoded = Buffer.from(entry.key, "base64");
+    // Buffer.from(..., "base64") ignores invalid characters, so compare the
+    // canonical round-trip before trusting the byte length.
+    if (decoded.length !== 32 || decoded.toString("base64") !== entry.key) {
+      errors.push(
+        `${entry.label} must be a base64-encoded 32-byte value (the value is not printed). ${ENCRYPTION_GENERATION_COMMAND}`,
+      );
+    }
+  }
+};
+
+/**
+ * AI is opt-in. A disabled planner is a supported deployment and must answer
+ * 503 AI_NOT_CONFIGURED at request time, never block `pnpm check:env` or API
+ * startup. Only AI_ENABLED=true makes the endpoint triple mandatory.
+ */
+const checkAiSettings = (): void => {
+  const enabledRaw = env.AI_ENABLED?.trim();
+  if (enabledRaw && !isBooleanFlag(enabledRaw)) {
+    errors.push("AI_ENABLED must be true or false.");
+  }
+
+  const protocol = env.AI_PROTOCOL?.trim().toLowerCase();
+  if (protocol && !(VALID_AI_PROTOCOLS as readonly string[]).includes(protocol)) {
+    errors.push(`AI_PROTOCOL must be one of ${VALID_AI_PROTOCOLS.join(", ")}.`);
+  }
+
+  if (!isFlagEnabled(enabledRaw)) {
+    // The API does not read AI_ENABLED: it considers AI configured as soon as
+    // AI_BASE_URL and AI_MODEL are set. Endpoint values left behind while the
+    // switch says "off" would still call and bill the provider.
+    if (env.AI_BASE_URL?.trim() || env.AI_API_KEY?.trim() || env.AI_MODEL?.trim()) {
+      warnings.push(
+        "AI_BASE_URL/AI_API_KEY/AI_MODEL are set while AI_ENABLED=false. The API derives `configured` from AI_BASE_URL+AI_MODEL and does not read AI_ENABLED, so AI would still be active; empty the endpoint values to keep it off, or set AI_ENABLED=true and provide all three.",
+      );
+    }
+    return;
+  }
+
+  for (const key of ["AI_BASE_URL", "AI_API_KEY", "AI_MODEL"] as const) {
+    if (!env[key]?.trim()) {
+      errors.push(
+        `${key} is required when AI_ENABLED=true. Set AI_ENABLED=false to keep the planner off and let the endpoints answer 503 AI_NOT_CONFIGURED.`,
+      );
+    }
+  }
+
+  checkUrls(["AI_BASE_URL"]);
+  checkIntegerOption("AI_TIMEOUT_MS", 5_000, 120_000, "milliseconds");
+  checkIntegerOption("AI_MAX_OUTPUT_TOKENS", 256, 32_000, "tokens");
+  checkIntegerOption("AI_DAILY_QUOTA", 0, 100_000, "plan runs per user per day");
+};
+
+/**
+ * Geoapify without a key degrades to Photon; disabling the fallback on top of
+ * that would leave place search with no provider at all.
+ */
+const checkPlacesSettings = (): void => {
+  const provider = env.PLACES_PROVIDER?.trim().toLowerCase();
+  if (provider && !(VALID_PLACES_PROVIDERS as readonly string[]).includes(provider)) {
+    errors.push(`PLACES_PROVIDER must be one of ${VALID_PLACES_PROVIDERS.join(", ")}.`);
+  }
+
+  const fallbackRaw = env.PLACES_FALLBACK_TO_PHOTON?.trim();
+  if (fallbackRaw && !isBooleanFlag(fallbackRaw)) {
+    errors.push("PLACES_FALLBACK_TO_PHOTON must be true or false.");
+  }
+
+  checkIntegerOption("GEOAPIFY_DAILY_LIMIT", 0, 1_000_000, "requests per UTC day");
+
+  const effectiveProvider = provider || "geoapify";
+  if (effectiveProvider === "geoapify" && !env.GEOAPIFY_API_KEY?.trim()) {
+    const fallbackEnabled = fallbackRaw === undefined || isFlagEnabled(fallbackRaw);
+    const detail =
+      "GEOAPIFY_API_KEY is empty, so Geoapify search is skipped. Set the key, or set PLACES_PROVIDER=photon.";
+    if (fallbackEnabled) {
+      warnings.push(`${detail} Photon fallback is enabled.`);
+    } else {
+      errors.push(
+        `${detail} PLACES_FALLBACK_TO_PHOTON=false would leave place search with no provider.`,
+      );
+    }
+  }
+};
+
+const checkMediaCompression = (): void => {
+  const keepRaw = env.MEDIA_KEEP_ORIGINAL?.trim();
+  if (keepRaw && !isBooleanFlag(keepRaw)) {
+    errors.push("MEDIA_KEEP_ORIGINAL must be true or false.");
+  }
+  checkIntegerOption("MEDIA_MAX_EDGE", 320, 8_192, "pixels");
+  checkIntegerOption("MEDIA_QUALITY", 1, 100, "percent");
+  checkIntegerOption("MEDIA_TARGET_BYTES", 100_000, 50_000_000, "bytes");
+};
+
 const reportPlaceholders = (keys: readonly string[], asError: boolean): void => {
   for (const key of keys) {
     const value = env[key]?.trim();
@@ -433,6 +605,14 @@ const reportRetiredDataModeFlags = (): void => {
 // Checked even in production mode, where the reviewed file (not process.env)
 // drives the rules: a leftover shell export is exactly the stale usage wanted.
 reportRetiredDataModeFlags();
+
+// Deployment-wide checks, independent of the preflight mode. Encryption is a
+// hard production requirement; AI, Places and media compression are optional
+// features that only fail when explicitly enabled with an unusable value.
+checkEncryptionKey();
+checkAiSettings();
+checkPlacesSettings();
+checkMediaCompression();
 
 if (options.mode === "production") {
   checkAppEnv();

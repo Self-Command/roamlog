@@ -440,29 +440,49 @@ pnpm admin:bootstrap -- --force
 
 关键变量：
 
-| 分组       | 变量                                                                                                     | 用途                                  |
-| ---------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| Runtime    | `NODE_ENV`, `APP_ENV`, `LOG_LEVEL`, `ROAMLOG_ENV_FILE`                                                   | Node 运行模式、部署形态、日志级别     |
-| URL        | `APP_URL`, `ADMIN_URL`, `API_URL`, `BETTER_AUTH_URL`                                                     | 公开 origin 与 Better Auth 基址       |
-| 网络边界   | `CORS_ORIGINS`, `TRUST_PROXY`, `SESSION_COOKIE_DOMAIN`                                                   | 精确 CORS、代理信任、父域 cookie      |
-| 前端构建   | `NEXT_PUBLIC_APP_ENV`                                                                                    | 部署环境徽标（production/staging）    |
-| 限流       | `RATE_LIMIT_WINDOW_SECONDS`, `AUTH_RATE_LIMIT_MAX`, `PUBLIC_SHARE_*_RATE_LIMIT_MAX`                      | 登录、分享、预签名请求限流            |
-| 数据库     | `DATABASE_URL`, `POSTGRES_*`                                                                             | PostgreSQL 连接与 Compose 初始化      |
-| Redis      | `REDIS_URL`, `REDIS_PREFIX`, `REDIS_PASSWORD`                                                            | 队列、限流、幂等、presence 与隔离前缀 |
-| 认证       | `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_*`, `GITHUB_CLIENT_*`                                               | session 签名与 OAuth                  |
-| 管理后台   | `ADMIN_2FA_ENFORCED`                                                                                     | 平台后台强制 TOTP                     |
-| 对象存储   | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_FORCE_PATH_STYLE`         | 私有媒体与导出（服务端内部 endpoint） |
-| 媒体投递   | `S3_PUBLIC_ENDPOINT`, `S3_PUBLIC_BASE_URL`, `MEDIA_SIGNED_URL_TTL_SECONDS`, `MEDIA_CORS_ORIGINS`         | 浏览器可见的签名 origin、TTL、桶 CORS |
-| MinIO 镜像 | `MINIO_IMAGE`, `MINIO_MC_IMAGE`                                                                          | 固定、可验证的镜像来源                |
-| 邮件       | `EMAIL_PROVIDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `RESEND_API_KEY`, `EMAIL_FROM` | Mailpit / SMTP relay / Resend         |
-| 地图       | `NEXT_PUBLIC_MAP_STYLE_URL`, `NEXT_PUBLIC_GEOCODER_URL`                                                  | 瓦片样式与城市搜索                    |
-| 导出       | `EXPORT_SIGNED_URL_TTL`                                                                                  | 签名下载 URL 有效期，默认 900 秒      |
-| 观测       | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `OTEL_EXPORTER_OTLP_ENDPOINT`                                 | 错误与 trace                          |
-| Bootstrap  | `BOOTSTRAP_SUPER_ADMIN_EMAIL`, `BOOTSTRAP_SUPER_ADMIN_NAME`                                              | 首个平台管理员目标                    |
-| Seed       | `DEMO_SEED_ENABLED`, `DEMO_*`, `ROAMLOG_SEED_S3_UPLOAD`                                                  | 仅 local/staging 演示数据             |
-| 发布       | `ROAMLOG_IMAGE_TAG`, `PRODUCTION_*_PORT`, `STAGING_*_PORT`                                               | 镜像 tag 与 loopback 端口             |
+| 分组       | 变量                                                                                                                            | 用途                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Runtime    | `NODE_ENV`, `APP_ENV`, `LOG_LEVEL`, `ROAMLOG_ENV_FILE`                                                                          | Node 运行模式、部署形态、日志级别              |
+| URL        | `APP_URL`, `ADMIN_URL`, `API_URL`, `BETTER_AUTH_URL`                                                                            | 公开 origin 与 Better Auth 基址                |
+| 网络边界   | `CORS_ORIGINS`, `TRUST_PROXY`, `SESSION_COOKIE_DOMAIN`                                                                          | 精确 CORS、代理信任、父域 cookie               |
+| 前端构建   | `NEXT_PUBLIC_APP_ENV`                                                                                                           | 部署环境徽标（production/staging）             |
+| 限流       | `RATE_LIMIT_WINDOW_SECONDS`, `AUTH_RATE_LIMIT_MAX`, `PUBLIC_SHARE_*_RATE_LIMIT_MAX`                                             | 登录、分享、预签名请求限流                     |
+| 数据库     | `DATABASE_URL`, `POSTGRES_*`                                                                                                    | PostgreSQL 连接与 Compose 初始化               |
+| Redis      | `REDIS_URL`, `REDIS_PREFIX`, `REDIS_PASSWORD`                                                                                   | 队列、限流、幂等、presence 与隔离前缀          |
+| 认证       | `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_*`, `GITHUB_CLIENT_*`                                                                      | session 签名与 OAuth                           |
+| 管理后台   | `ADMIN_2FA_ENFORCED`                                                                                                            | 平台后台强制 TOTP                              |
+| 对象存储   | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_FORCE_PATH_STYLE`                                | 私有媒体与导出（服务端内部 endpoint）          |
+| 媒体投递   | `S3_PUBLIC_ENDPOINT`, `S3_PUBLIC_BASE_URL`, `MEDIA_SIGNED_URL_TTL_SECONDS`, `MEDIA_CORS_ORIGINS`                                | 浏览器可见的签名 origin、TTL、桶 CORS          |
+| 图片压缩   | `MEDIA_MAX_EDGE`, `MEDIA_QUALITY`, `MEDIA_TARGET_BYTES`, `MEDIA_KEEP_ORIGINAL`                                                  | 上传前浏览器端压缩目标                         |
+| 设置加密   | `CONFIG_ENCRYPTION_KEY`, `CONFIG_ENCRYPTION_KEYS`                                                                               | 后台 secret 设置的 AES-256-GCM key 与轮转 ring |
+| 地点搜索   | `PLACES_PROVIDER`, `GEOAPIFY_API_KEY`, `PLACES_FALLBACK_TO_PHOTON`, `GEOAPIFY_DAILY_LIMIT`                                      | Geoapify 主源、Photon 兜底与每日额度           |
+| AI 规划    | `AI_ENABLED`, `AI_PROTOCOL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_OUTPUT_TOKENS`, `AI_DAILY_QUOTA` | 可选 AI planner：三协议、超时、输出上限与配额  |
+| MinIO 镜像 | `MINIO_IMAGE`, `MINIO_MC_IMAGE`                                                                                                 | 固定、可验证的镜像来源                         |
+| 邮件       | `EMAIL_PROVIDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `RESEND_API_KEY`, `EMAIL_FROM`                        | Mailpit / SMTP relay / Resend                  |
+| 地图       | `NEXT_PUBLIC_MAP_STYLE_URL`, `NEXT_PUBLIC_GEOCODER_URL`                                                                         | 瓦片样式与城市搜索                             |
+| 导出       | `EXPORT_SIGNED_URL_TTL`                                                                                                         | 签名下载 URL 有效期，默认 900 秒               |
+| 观测       | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `OTEL_EXPORTER_OTLP_ENDPOINT`                                                        | 错误与 trace                                   |
+| Bootstrap  | `BOOTSTRAP_SUPER_ADMIN_EMAIL`, `BOOTSTRAP_SUPER_ADMIN_NAME`                                                                     | 首个平台管理员目标                             |
+| Seed       | `DEMO_SEED_ENABLED`, `DEMO_*`, `ROAMLOG_SEED_S3_UPLOAD`                                                                         | 仅 local/staging 演示数据                      |
+| 发布       | `ROAMLOG_IMAGE_TAG`, `PRODUCTION_*_PORT`, `STAGING_*_PORT`                                                                      | 镜像 tag 与 loopback 端口                      |
 
 > `NEXT_PUBLIC_DATA_MODE` / `NEXT_PUBLIC_ADMIN_DATA_MODE` 已移除，应用只有真实 API 路径：Docker build args、Compose、env 模板和 `check-env` 都不再接受这两个变量。
+
+> **生产阻断项：`CONFIG_ENCRYPTION_KEY`。** 后台保存 Resend/SMTP/S3/Geoapify
+> 等 secret 依赖它。生成：`openssl rand -base64 32`。production 预检强制要求
+> 存在、可 base64 解码且为 32 字节；模板里的占位 key 会让预检以退出码 1 失败。
+> **丢失该 key 等于已存 secret 永久不可解**（数据库备份只有密文，无法恢复）。
+> 轮转必须用 `CONFIG_ENCRYPTION_KEYS` 把新 key 放首位、保留旧 key、在后台重存
+> 所有 secret 并确认没有行仍用旧 key 后再移除。详见
+> [settings-encryption.md](docs/operations/settings-encryption.md)。
+>
+> AI 整组可选：未配置 `AI_BASE_URL`/`AI_MODEL` 时端点返回 `503 AI_NOT_CONFIGURED`，不是启动失败；
+> `AI_ENABLED` 是预检开关，API 本身不读它（API 以 `AI_BASE_URL && AI_MODEL` 判定已配置），
+> 因此关闭 AI 时必须同时清空端点变量。只有 `AI_ENABLED=true` 才要求
+> `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`。地点搜索默认
+> Geoapify（免费额度 3000/天），Photon 兜底；地图与搜索结果必须展示
+> “© OpenStreetMap contributors / Powered by Geoapify”。详见
+> [ai-provider.md](docs/operations/ai-provider.md) 与 [places.md](docs/operations/places.md)。
 
 `APP_ENV` 与 `NODE_ENV` 的区别：staging 也以 `NODE_ENV=production` 运行以复用 Node 运行时行为，因此**生产专属校验（媒体公开 origin、真实邮件通道）只由 `APP_ENV=production` 触发**。省略 `APP_ENV` 会让 API 静默回落为 `development` 并跳过这些校验，`pnpm check:env -- --env production` 会因此直接报错。
 
@@ -484,7 +504,7 @@ pnpm check:env
 pnpm check:env -- --env production --env-file /opt/roamlog/config/.env.production
 ```
 
-严格模式复用 `apps/api/src/config/environment.ts` 的 `validateEnvironment()`，因此预检与 API 启动校验不会漂移。错误只报变量名与规则，不回显值；模板本身（含 `CHANGE_ME`）预期以退出码 `1` 失败，这是它作为“未填写”证明的方式。
+严格模式复用 `apps/api/src/config/environment.ts` 的 `validateEnvironment()`，因此预检与 API 启动校验不会漂移。production 模式还要求 `APP_ENV=production` 显式存在，并强制校验 `CONFIG_ENCRYPTION_KEY`（存在、base64、32 字节；错误信息会给出生成命令）。错误只报变量名与规则，不回显值；模板本身（含 `CHANGE_ME`）预期以退出码 `1` 失败，这是它作为“未填写”证明的方式。
 
 ## 常用命令
 

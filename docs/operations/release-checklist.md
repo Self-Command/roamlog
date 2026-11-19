@@ -56,6 +56,13 @@ Rules the preflight enforces (all must hold, they are named in any error line):
 - `MEDIA_CORS_ORIGINS` lists bare origins and includes the `APP_URL` origin.
 - `MEDIA_SIGNED_URL_TTL_SECONDS` is an integer in `60`–`604800`.
 - `BETTER_AUTH_SECRET` has at least 32 characters and no placeholder.
+- `CONFIG_ENCRYPTION_KEY` is present, is a base64-encoded 32-byte value, and is
+  backed up outside the database. Losing it makes every Admin settings secret
+  permanently undecryptable; never regenerate or rotate it during a release.
+  See [settings-encryption.md](./settings-encryption.md).
+- AI and Places are optional features: `AI_ENABLED=false` must not block the
+  release, and an empty `GEOAPIFY_API_KEY` is acceptable only while Photon
+  fallback stays enabled.
 
 Copy the `ERROR:` lines verbatim into the ticket if this step fails. They name
 the variable and the rule; they never contain the value.

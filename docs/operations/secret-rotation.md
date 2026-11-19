@@ -2,16 +2,17 @@
 
 ## Inventory
 
-| Secret                                         | Owner               | Rotation impact                                       | Stored in                               |
-| ---------------------------------------------- | ------------------- | ----------------------------------------------------- | --------------------------------------- |
-| `BETTER_AUTH_SECRET`                           | Auth owner          | Invalidates sessions/cookies and pending signed state | Staging secret manager / `.env.staging` |
-| `POSTGRES_PASSWORD`                            | Database owner      | API/worker/DB outage during change                    | DB provider / secret manager            |
-| `REDIS_PASSWORD`                               | Platform owner      | Queue/realtime outage during change                   | Redis provider / secret manager         |
-| `MINIO_ROOT_PASSWORD`                          | Platform owner      | Bootstrap only; no normal traffic if app uses S3 user | MinIO secret                            |
-| `S3_SECRET_KEY`                                | Platform owner      | Upload/export/media failures                          | S3 provider / secret manager            |
-| `RESEND_API_KEY`                               | Email owner         | Verification/reset/invite delivery failures           | Resend/secret manager                   |
-| `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_SECRET` | Auth owner          | OAuth login failures                                  | Provider/secret manager                 |
-| `SENTRY_DSN`                                   | Observability owner | Error reporting loss                                  | Sentry/secret manager                   |
+| Secret                                            | Owner               | Rotation impact                                       | Stored in                               |
+| ------------------------------------------------- | ------------------- | ----------------------------------------------------- | --------------------------------------- |
+| `BETTER_AUTH_SECRET`                              | Auth owner          | Invalidates sessions/cookies and pending signed state | Staging secret manager / `.env.staging` |
+| `POSTGRES_PASSWORD`                               | Database owner      | API/worker/DB outage during change                    | DB provider / secret manager            |
+| `REDIS_PASSWORD`                                  | Platform owner      | Queue/realtime outage during change                   | Redis provider / secret manager         |
+| `MINIO_ROOT_PASSWORD`                             | Platform owner      | Bootstrap only; no normal traffic if app uses S3 user | MinIO secret                            |
+| `S3_SECRET_KEY`                                   | Platform owner      | Upload/export/media failures                          | S3 provider / secret manager            |
+| `RESEND_API_KEY`                                  | Email owner         | Verification/reset/invite delivery failures           | Resend/secret manager                   |
+| `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_SECRET`    | Auth owner          | OAuth login failures                                  | Provider/secret manager                 |
+| `SENTRY_DSN`                                      | Observability owner | Error reporting loss                                  | Sentry/secret manager                   |
+| `CONFIG_ENCRYPTION_KEY`, `CONFIG_ENCRYPTION_KEYS` | Settings owner      | Wrong handling makes stored Admin secrets unreadable  | Secret manager + off-host backup        |
 
 `BOOTSTRAP_SUPER_ADMIN_EMAIL` is an operational target, not a secret. It is
 still personal data and must not be committed in a real deployment file.
@@ -79,6 +80,19 @@ Do not flush the queue as part of rotation.
 - Rotate OAuth client secrets in Google/GitHub, update callback URLs, restart
   API, and execute a full callback login before revoking the old value.
 - Confirm SPF/DKIM/DMARC for the sending domain before changing `EMAIL_FROM`.
+
+## Settings encryption key
+
+`CONFIG_ENCRYPTION_KEY` is not like the other secrets in this inventory: it
+protects the encrypted Admin settings (SMTP password, S3 credentials, Resend
+key, places key). Replacing it without a key ring makes **every stored secret
+permanently undecryptable**, and no backup can recover it. Never regenerate it
+"because the API still boots" — the API only needs it when a secret is written
+or read.
+
+Do not rotate it as part of a release. The full key-ring procedure, SQL
+verification and loss handling are in
+[settings-encryption.md](./settings-encryption.md).
 
 ## Post-rotation checks
 

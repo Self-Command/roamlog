@@ -13,6 +13,9 @@
 | [production-smoke-checklist.md](./production-smoke-checklist.md) | Post-deploy route, auth, media, edge, and rollback checks                 |
 | [rollback.md](./rollback.md)                                     | Application rollback and schema compatibility                             |
 | [secret-rotation.md](./secret-rotation.md)                       | Rotate auth, DB, Redis, S3, email, OAuth secrets                          |
+| [settings-encryption.md](./settings-encryption.md)               | Settings secret key, loss/rotation key ring, failure modes                |
+| [places.md](./places.md)                                         | Geoapify/Photon providers, quota, cache, attribution and terms            |
+| [ai-provider.md](./ai-provider.md)                               | AI protocols, provider recipes, timeout/quota, failure codes, cost        |
 | [health-and-monitoring.md](./health-and-monitoring.md)           | Endpoints, health checks, signals, SLOs, alerting                         |
 | [troubleshooting.md](./troubleshooting.md)                       | Compose, auth, email, queue, media, and ingress failures                  |
 
