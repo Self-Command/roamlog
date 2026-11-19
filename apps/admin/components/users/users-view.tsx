@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, MoreHorizontal, ShieldAlert } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  MoreHorizontal,
+  PencilLine,
+  ShieldAlert,
+} from "lucide-react";
 
 import { canPlatform } from "@roamlog/contracts";
 import type {
@@ -16,6 +23,7 @@ import {
   Button,
   Checkbox,
   EmptyState,
+  FormField,
   Input,
   Select,
   Sheet,
@@ -34,6 +42,14 @@ import {
   type AdminUserListParams,
 } from "../../lib/admin-data-source";
 import { AdminMutationError } from "../../lib/admin-api-error";
+import {
+  describeAdminUserEditError,
+  describeEmailDelivery,
+  validateAdminUserProfileForm,
+  type AdminUserProfileForm,
+  type AdminUserProfileInput,
+  type AdminUserProfilePort,
+} from "../../lib/admin-users";
 import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES, type AdminConsoleRole } from "../../lib/admin-types";
 import { formatDateTime } from "../../lib/format";
 
@@ -64,6 +80,7 @@ interface UsersViewProps {
   role: AdminConsoleRole;
   mutations?: AdminMutationPort;
   exportCsv?: (params: AdminUserListParams) => Promise<void>;
+  profiles?: AdminUserProfilePort;
 }
 
 interface StoredUserFilters {
@@ -198,7 +215,7 @@ const userActionCopy: Record<
   },
 };
 
-export function UsersView({ role, mutations, exportCsv }: UsersViewProps) {
+export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewProps) {
   const [storedFilters] = useState<StoredUserFilters>(() => readStoredFilters());
   const [query, setQuery] = useState(storedFilters.query);
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>(storedFilters.status);
@@ -212,8 +229,17 @@ export function UsersView({ role, mutations, exportCsv }: UsersViewProps) {
   const [nextRole, setNextRole] = useState<AdminConsoleRole>("support");
   const [statusMessage, setStatusMessage] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<AdminUserProfileForm | null>(null);
+  const [profileErrors, setProfileErrors] = useState<
+    Partial<Record<keyof AdminUserProfileForm, string>>
+  >({});
+  const [profileError, setProfileError] = useState("");
+  const [profileMessage, setProfileMessage] = useState("");
 
   const readOnly = role === "analyst";
+  const canEditProfile = canPlatform(role, "admin:users:update");
   const canSuspend = canPlatform(role, "admin:users:suspend");
   const canRestore = canPlatform(role, "admin:users:restore");
   const canDelete = canPlatform(role, "admin:users:delete");
@@ -257,6 +283,14 @@ export function UsersView({ role, mutations, exportCsv }: UsersViewProps) {
     visibleUsers.length > 0 && visibleUsers.every((user) => selectedIds.has(user.id));
   const bulkUsers = visibleUsers.filter((user) => selectedIds.has(user.id));
   const detailData: AdminUserDetail | null = detail.data ?? null;
+
+  useEffect(() => {
+    setIsEditingProfile(false);
+    setProfileDraft(null);
+    setProfileErrors({});
+    setProfileError("");
+    setProfileMessage("");
+  }, [detailUser?.id]);
 
   function resetPagination() {
     setCursorStack([undefined]);
@@ -409,6 +443,108 @@ export function UsersView({ role, mutations, exportCsv }: UsersViewProps) {
       );
     } finally {
       setIsExporting(false);
+    }
+  }
+
+  function startEditingProfile() {
+    if (!detailUser || !canEditProfile) {
+      return;
+    }
+    const source = detailData ?? detailUser;
+    setProfileDraft({
+      name: source.name,
+      email: source.email,
+      locale: source.locale,
+      timezone: source.timezone,
+      platformRole: source.platformRole,
+    });
+    setProfileErrors({});
+    setProfileError("");
+    setProfileMessage("");
+    setIsEditingProfile(true);
+  }
+
+  function cancelEditingProfile() {
+    setIsEditingProfile(false);
+    setProfileDraft(null);
+    setProfileErrors({});
+    setProfileError("");
+  }
+
+  function changeProfileField<K extends keyof AdminUserProfileForm>(
+    field: K,
+    value: AdminUserProfileForm[K],
+  ) {
+    setProfileDraft((current) => (current ? { ...current, [field]: value } : current));
+    setProfileErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  async function saveProfile() {
+    if (!detailUser || !profileDraft) {
+      return;
+    }
+    const errors = validateAdminUserProfileForm(profileDraft);
+    setProfileErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setProfileError("");
+      setProfileMessage("");
+      return;
+    }
+
+    const source = detailData ?? detailUser;
+    const patch: AdminUserProfileInput = {};
+    const name = profileDraft.name.trim();
+    const email = profileDraft.email.trim();
+    const locale = profileDraft.locale.trim();
+    const timezone = profileDraft.timezone.trim();
+    if (name !== source.name) {
+      patch.name = name;
+    }
+    if (email.toLowerCase() !== source.email.toLowerCase()) {
+      patch.email = email;
+    }
+    if (locale !== source.locale) {
+      patch.locale = locale;
+    }
+    if (timezone !== source.timezone) {
+      patch.timezone = timezone;
+    }
+    if (profileDraft.platformRole !== source.platformRole) {
+      patch.platformRole = profileDraft.platformRole;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      setProfileMessage("没有检测到需要保存的修改。");
+      setIsEditingProfile(false);
+      return;
+    }
+    if (!profiles) {
+      setProfileError("未连接 Admin API，资料未提交。");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setProfileError("");
+    setProfileMessage("");
+    try {
+      const saved = await profiles.updateProfile(detailUser.id, patch);
+      // Re-read both queries: the drawer shows the persisted record, and the
+      // server-paginated list must not keep a stale name/email.
+      await detail.refetch();
+      await api.refetch();
+      setProfileDraft({
+        name: saved.name,
+        email: saved.email,
+        locale: saved.locale,
+        timezone: saved.timezone,
+        platformRole: saved.platformRole,
+      });
+      setIsEditingProfile(false);
+      setProfileMessage(describeEmailDelivery(patch.email ? saved.delivery : undefined));
+    } catch (error) {
+      setProfileError(describeAdminUserEditError(error));
+    } finally {
+      setIsSavingProfile(false);
     }
   }
 
@@ -841,6 +977,145 @@ export function UsersView({ role, mutations, exportCsv }: UsersViewProps) {
                   {detailUser.emailVerified ? "Email verified" : "Email pending"}
                 </Badge>
               </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!canEditProfile || detailLoading || isEditingProfile}
+                  title={
+                    canEditProfile
+                      ? "编辑姓名、邮箱、语言、时区与平台角色"
+                      : "仅 super_admin 可编辑用户资料"
+                  }
+                  onClick={startEditingProfile}
+                >
+                  <PencilLine aria-hidden="true" />
+                  编辑资料
+                </Button>
+                {!canEditProfile ? (
+                  <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
+                    只读 · 仅 super_admin 可编辑
+                  </span>
+                ) : null}
+              </div>
+
+              {isEditingProfile && profileDraft ? (
+                <section
+                  aria-labelledby="user-edit-heading"
+                  className="mt-4 space-y-3 rounded-card border border-hairline-strong bg-surface-1 p-4"
+                >
+                  <h3 id="user-edit-heading" className="type-eyebrow">
+                    编辑用户资料
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <FormField id="user-edit-name" label="姓名" required error={profileErrors.name}>
+                      <Input
+                        autoComplete="off"
+                        value={profileDraft.name}
+                        onChange={(event) =>
+                          changeProfileField("name", event.currentTarget.value)
+                        }
+                      />
+                    </FormField>
+                    <FormField id="user-edit-email" label="邮箱" required error={profileErrors.email}>
+                      <Input
+                        type="email"
+                        autoComplete="off"
+                        value={profileDraft.email}
+                        onChange={(event) =>
+                          changeProfileField("email", event.currentTarget.value)
+                        }
+                      />
+                    </FormField>
+                    <FormField
+                      id="user-edit-locale"
+                      label="语言"
+                      hint="BCP 47，例如 zh-CN"
+                      error={profileErrors.locale}
+                    >
+                      <Input
+                        autoComplete="off"
+                        value={profileDraft.locale}
+                        onChange={(event) =>
+                          changeProfileField("locale", event.currentTarget.value)
+                        }
+                      />
+                    </FormField>
+                    <FormField
+                      id="user-edit-timezone"
+                      label="时区"
+                      hint="IANA，例如 Asia/Shanghai"
+                      error={profileErrors.timezone}
+                    >
+                      <Input
+                        autoComplete="off"
+                        value={profileDraft.timezone}
+                        onChange={(event) =>
+                          changeProfileField("timezone", event.currentTarget.value)
+                        }
+                      />
+                    </FormField>
+                    <FormField id="user-edit-role" label="平台角色">
+                      <Select
+                        value={profileDraft.platformRole}
+                        onChange={(event) =>
+                          changeProfileField(
+                            "platformRole",
+                            event.currentTarget.value as PlatformRole,
+                          )
+                        }
+                      >
+                        <option value="user">User</option>
+                        <option value="support">Support</option>
+                        <option value="analyst">Analyst</option>
+                        <option value="admin">Admin</option>
+                        <option value="super_admin">Super admin</option>
+                      </Select>
+                    </FormField>
+                  </div>
+                  <p className="text-[11px] leading-5 text-muted">
+                    修改邮箱会把验证状态重置为 PENDING 并触发一次验证邮件；邮件失败不会回滚资料修改。
+                  </p>
+                  {profileError ? (
+                    <p role="alert" className="text-[11px] leading-5 text-accent-red">
+                      {profileError}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      disabled={isSavingProfile}
+                      onClick={() => void saveProfile()}
+                    >
+                      {isSavingProfile ? "保存中…" : "保存资料"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isSavingProfile}
+                      onClick={cancelEditingProfile}
+                    >
+                      取消
+                    </Button>
+                  </div>
+                </section>
+              ) : null}
+
+              {profileMessage ? (
+                <p
+                  role="status"
+                  className="mt-3 rounded-control border border-accent-green/20 bg-accent-green/5 px-3 py-2 text-[11px] leading-5 text-ink"
+                >
+                  {profileMessage}
+                </p>
+              ) : null}
+
+              {profileError && !isEditingProfile ? (
+                <p role="alert" className="mt-3 text-[11px] leading-5 text-accent-red">
+                  {profileError}
+                </p>
+              ) : null}
 
               <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline">
                 {[
