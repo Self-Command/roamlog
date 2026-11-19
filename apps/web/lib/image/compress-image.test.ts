@@ -81,6 +81,16 @@ describe("encodeQualityLadder", () => {
     expect(encode.mock.calls.map(([quality]) => quality)).toEqual([...IMAGE_QUALITY_STEPS]);
   });
 
+  it("reports the failure ceiling as decimal 1.5 MB, never binary 1.4 MB", async () => {
+    const encode = vi.fn(async () => blobOfSize(IMAGE_TARGET_BYTES + 1));
+
+    const failure: unknown = await encodeQualityLadder({ encode }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ImageCompressionError);
+    expect((failure as Error).message).toContain("1.5 MB");
+    expect((failure as Error).message).not.toContain("1.4 MB");
+  });
+
   it("uses the production target of 1.5MB", () => {
     expect(IMAGE_TARGET_BYTES).toBe(1_500_000);
     expect([...IMAGE_QUALITY_STEPS]).toEqual([0.82, 0.7, 0.6, 0.55]);

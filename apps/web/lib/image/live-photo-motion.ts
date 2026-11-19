@@ -1,3 +1,5 @@
+import { formatBytes } from "../format-bytes";
+
 /**
  * Motion-asset validation for Live Photo uploads.
  *
@@ -28,11 +30,6 @@ export interface ValidateMotionOptions {
   durationMs?: number | null;
   maxBytes?: number;
   maxDurationMs?: number;
-}
-
-function formatMegabytes(bytes: number): string {
-  const megabytes = bytes / (1024 * 1024);
-  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`;
 }
 
 export function resolveMotionMimeType(
@@ -74,7 +71,7 @@ export function validateMotionFile(
       ok: false,
       error: {
         code: "TOO_LARGE",
-        message: `动图需小于 ${formatMegabytes(maxBytes)}，当前文件为 ${formatMegabytes(file.size)}。`,
+        message: `动图需小于 ${formatBytes(maxBytes)}，当前文件为 ${formatBytes(file.size)}。`,
       },
     };
   }

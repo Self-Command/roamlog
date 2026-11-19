@@ -32,9 +32,15 @@ describe("validateMotionFile", () => {
     expect(result.ok === false && result.error.message).toContain("MOV");
   });
 
-  it("rejects a clip over the byte ceiling", () => {
+  it("rejects a clip over the byte ceiling and reports decimal megabytes", () => {
     const result = validateMotionFile(mov(LIVE_PHOTO_MOTION_MAX_BYTES + 1));
     expect(result).toMatchObject({ ok: false, error: { code: "TOO_LARGE" } });
+
+    // 50 MiB is 52,428,800 bytes: decimal units must say 52.4 MB, not the
+    // binary "50 MB" that contradicted every other size in the product.
+    const message = result.ok === false ? result.error.message : "";
+    expect(message).toContain("52.4 MB");
+    expect(message).not.toContain("50 MB");
   });
 
   it("rejects a clip over the duration ceiling", () => {

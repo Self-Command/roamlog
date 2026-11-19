@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -82,12 +82,45 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
+const ADMIN_APP_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../app/admin");
+
+const NAV_ITEMS = ADMIN_NAV_GROUPS.flatMap((group) => group.items);
+
+/** A nav href only leads somewhere if the App Router page file behind it exists. */
+function hasPageFile(href: string): boolean {
+  const segment = href.replace(/^\/admin\/?/, "");
+  return existsSync(join(ADMIN_APP_DIR, segment, "page.tsx"));
+}
+
 describe("AdminShell", () => {
-  it("does not link to the unfinished moderation page", () => {
+  it("links the moderation queue and never ships a nav entry without a page", () => {
     const hrefs = ADMIN_NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href));
-    expect(hrefs).not.toContain(["/admin", "content"].join("/"));
-    const routes = readdirSync(join(dirname(fileURLToPath(import.meta.url)), "../../app/admin"));
-    expect(routes).not.toContain("content");
+
+    // B4_MODERATION rebuilt the real report queue and restored the nav entry.
+    // The old assertion here checked for its absence, which after that work
+    // asserted that working software was missing.
+    expect(hrefs).toContain("/admin/content");
+    expect(NAV_ITEMS.find((item) => item.href === "/admin/content")?.label).toBe("内容审核");
+    expect(existsSync(join(ADMIN_APP_DIR, "content", "page.tsx"))).toBe(true);
+
+    // The original intent, kept and widened: every nav item must resolve to a
+    // page. This still catches "nav has an entry but the page is gone", which is
+    // the dead link the old directory blacklist was trying to prevent.
+    const deadLinks = hrefs.filter((href) => !hasPageFile(href));
+    expect(deadLinks).toEqual([]);
+  });
+
+  it("renders the moderation entry as a real link", () => {
+    render(
+      <AdminShell activePath="/admin/content">
+        <h1>内容审核</h1>
+      </AdminShell>,
+    );
+
+    expect(screen.getByRole("link", { name: "内容审核" })).toHaveAttribute(
+      "href",
+      "/admin/content",
+    );
   });
 
   it("renders navigation and identity without fabricated environment, 2FA or notification badges", () => {

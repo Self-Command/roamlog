@@ -1,3 +1,5 @@
+import { formatBytes } from "../format-bytes";
+
 /** Hard limits for the browser-side cover pipeline. Kept in one module so the
  * worker, the main-thread fallback, and the upload state machine cannot drift. */
 export const IMAGE_MAX_EDGE = 2000;
@@ -134,11 +136,6 @@ export function shouldSkipCompression(
   );
 }
 
-function formatMegabytes(bytes: number): string {
-  const megabytes = bytes / (1024 * 1024);
-  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`;
-}
-
 /**
  * Tries WebP at 0.82, then walks the fixed ladder down to 0.55. Four attempts is
  * the hard cap; if the last result is still over target, the caller must decide
@@ -166,7 +163,7 @@ export async function encodeQualityLadder(options: {
 
   throw new ImageCompressionError(
     "TOO_LARGE_AFTER_COMPRESSION",
-    `图片压缩到最低质量后仍超过 ${formatMegabytes(targetBytes)}，请换一张较小的图片。`,
+    `图片压缩到最低质量后仍超过 ${formatBytes(targetBytes)}，请换一张较小的图片。`,
     `lastSize=${lastBlob?.size ?? 0};quality=${lastQuality};iterations=${qualities.length}`,
   );
 }
