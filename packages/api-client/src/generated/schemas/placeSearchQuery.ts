@@ -19,4 +19,10 @@ export interface PlaceSearchQuery {
    */
   limit?: number;
   lang?: PlaceSearchQueryLang;
+  /**
+   * @minLength 2
+   * @maxLength 2
+   * @pattern ^[A-Z]{2}$
+   */
+  country?: string;
 }

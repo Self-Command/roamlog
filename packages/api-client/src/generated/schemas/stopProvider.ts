@@ -14,5 +14,7 @@ export type StopProvider = (typeof StopProvider)[keyof typeof StopProvider] | nu
 export const StopProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

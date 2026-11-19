@@ -443,6 +443,7 @@ export * from "./placeProviderProperty";
 export * from "./placeSearchQuery";
 export * from "./placeSearchQueryLang";
 export * from "./placeSearchResponse";
+export * from "./placeSearchResponseFallback";
 export * from "./placeSearchResponseItemsItem";
 export * from "./placeSearchResponseItemsItemProvider";
 export * from "./placeSearchResponseItemsItemType";

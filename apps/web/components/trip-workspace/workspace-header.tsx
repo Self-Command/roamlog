@@ -19,6 +19,7 @@ import { formatLongDate, formatDateRange, getTripStatusLabel, getTripStatusTone 
 
 const VISIBILITY_LABELS: Record<Trip["visibility"], string> = {
   workspace: "工作区可见",
+  custom: "指定可见",
   private: "仅自己",
   public_link: "有公开链接",
 };

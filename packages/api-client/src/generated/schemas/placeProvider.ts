@@ -11,5 +11,7 @@ export type PlaceProvider = (typeof PlaceProvider)[keyof typeof PlaceProvider];
 export const PlaceProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

@@ -16,5 +16,7 @@ export type TripPageItemsItemDestinationsV2ItemProvider =
 export const TripPageItemsItemDestinationsV2ItemProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

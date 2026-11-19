@@ -82,7 +82,13 @@ export type TripDestinationList = z.infer<typeof TripDestinationListSchema>;
  * (`api/places` already imports `IanaTimeZoneSchema` from this module).
  * `entities.test.ts` asserts both enums never drift.
  */
-export const TripDestinationProviderSchema = z.enum(["geoapify", "photon", "local"]);
+export const TripDestinationProviderSchema = z.enum([
+  "geoapify",
+  "photon",
+  "tencent",
+  "local",
+  "map_pin",
+]);
 export type TripDestinationProvider = z.infer<typeof TripDestinationProviderSchema>;
 
 /**

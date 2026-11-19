@@ -10,10 +10,18 @@ export type PlaceType = z.infer<typeof PlaceTypeSchema>;
  * Search-provider enum. It is defined separately from the stored `Stop`
  * `PlaceProviderSchema` for readability, but the two **must** carry the same
  * values: every place a search returns has to be storable on a stop without
- * being relabelled. Stops persist `address`/`bbox` since 0006 and `geoapify`
- * since 0007; `entities.test.ts` asserts the two value sets never drift.
+ * being relabelled. `tencent` marks mainland-China results (normalized from
+ * GCJ-02 to WGS-84), and `map_pin` marks the local "pick on the map" fallback.
+ * Stops persist `address`/`bbox` since 0006 and `geoapify` since 0007;
+ * `entities.test.ts` asserts the two value sets never drift.
  */
-export const PlaceSearchProviderSchema = z.enum(["geoapify", "photon", "local"]);
+export const PlaceSearchProviderSchema = z.enum([
+  "geoapify",
+  "photon",
+  "tencent",
+  "local",
+  "map_pin",
+]);
 export type PlaceSearchProvider = z.infer<typeof PlaceSearchProviderSchema>;
 
 /**
@@ -76,6 +84,11 @@ export const PlaceSearchQuerySchema = z
     q: z.string().trim().min(1).max(120),
     limit: z.coerce.number().int().min(1).max(10).default(6),
     lang: z.enum(["zh", "en"]).optional(),
+    /**
+     * Optional ISO 3166-1 alpha-2 hint. `CN` routes the query to the
+     * mainland-China provider even when the query itself is romanized.
+     */
+    country: CountryCodeSchema.optional(),
   })
   .strict();
 export type PlaceSearchQuery = z.infer<typeof PlaceSearchQuerySchema>;
@@ -86,6 +99,13 @@ export const PlaceSearchResponseSchema = z
     provider: PlaceSearchProviderSchema,
     degraded: z.boolean(),
     cached: z.boolean(),
+    /**
+     * Present only when the response could not be served by a place source and
+     * the caller should offer the "pick on the map" path instead. `map_pick`
+     * means the client obtains WGS-84 coordinates from our own tile, with
+     * `name = "地图选点"`, `address = null` and `providerPlaceId = null`.
+     */
+    fallback: z.literal("map_pick").optional(),
   })
   .strict();
 export type PlaceSearchResponse = z.infer<typeof PlaceSearchResponseSchema>;

@@ -64,6 +64,10 @@ export function providerLabel(provider: PlaceProvider | null): string {
       return "Geoapify 搜索";
     case "photon":
       return "Photon 搜索";
+    case "tencent":
+      return "腾讯地图搜索";
+    case "map_pin":
+      return "地图选点";
     case "local":
       return "本地地点库";
     case null:

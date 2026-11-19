@@ -8,7 +8,7 @@
  * would breach the provider terms. Manually typed places have no third-party
  * source, so they must not borrow either credit.
  */
-export type PlacesProvider = "geoapify" | "photon" | "local" | null;
+export type PlacesProvider = "geoapify" | "photon" | "tencent" | "local" | "map_pin" | null;
 
 export interface PlacesAttributionCopy {
   /** Full credit for roomy surfaces and for assistive technology. */
@@ -25,6 +25,9 @@ export const OSM_ATTRIBUTION_HREF = "https://www.openstreetmap.org/copyright";
 const GEOAPIFY_ATTRIBUTION_HREF = "https://www.geoapify.com/";
 const PHOTON_ATTRIBUTION_HREF = "https://photon.komoot.io/";
 const OSM_SHORT = "© OSM contributors";
+const TENCENT_ATTRIBUTION_HREF = "https://map.qq.com/";
+const MAP_PIN_ATTRIBUTION_TEXT = "地图选点";
+
 const LOCAL_ATTRIBUTION_TEXT = "手动录入";
 
 export function placesAttribution(provider: PlacesProvider): PlacesAttributionCopy {
@@ -40,6 +43,22 @@ export function placesAttribution(provider: PlacesProvider): PlacesAttributionCo
         text: `Search by Photon · ${OSM_ATTRIBUTION_TEXT}`,
         href: PHOTON_ATTRIBUTION_HREF,
         short: `Photon · ${OSM_SHORT}`,
+      };
+    case "tencent":
+      // Mainland-China search results come from Tencent Maps (normalized from
+      // GCJ-02 to WGS-84); the tiles underneath are still OpenStreetMap.
+      return {
+        text: `搜索服务：腾讯地图 · ${OSM_ATTRIBUTION_TEXT}`,
+        href: TENCENT_ATTRIBUTION_HREF,
+        short: `腾讯地图 · ${OSM_SHORT}`,
+      };
+    case "map_pin":
+      // The coordinate came from a click on our own tiles, so there is no
+      // third-party geocoder to credit — only the map data itself.
+      return {
+        text: `${MAP_PIN_ATTRIBUTION_TEXT} · ${OSM_ATTRIBUTION_TEXT}`,
+        href: OSM_ATTRIBUTION_HREF,
+        short: MAP_PIN_ATTRIBUTION_TEXT,
       };
     case "local":
       // Manual entry never leaves the workspace, so it carries no third-party credit.

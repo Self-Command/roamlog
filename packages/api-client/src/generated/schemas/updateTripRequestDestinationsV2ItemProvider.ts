@@ -16,5 +16,7 @@ export type UpdateTripRequestDestinationsV2ItemProvider =
 export const UpdateTripRequestDestinationsV2ItemProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

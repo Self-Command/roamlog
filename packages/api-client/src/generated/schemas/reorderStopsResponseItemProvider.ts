@@ -15,5 +15,7 @@ export type ReorderStopsResponseItemProvider =
 export const ReorderStopsResponseItemProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

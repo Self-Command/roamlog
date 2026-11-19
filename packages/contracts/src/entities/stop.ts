@@ -8,7 +8,13 @@ import { IanaTimeZoneSchema, GeoBboxSchema } from "./trip";
  * returns Geoapify results by default (Photon is the fallback), a picked place
  * must be storable verbatim instead of being rejected or relabelled.
  */
-export const PlaceProviderSchema = z.enum(["geoapify", "photon", "local"]);
+export const PlaceProviderSchema = z.enum([
+  "geoapify",
+  "photon",
+  "tencent",
+  "local",
+  "map_pin",
+]);
 export type PlaceProvider = z.infer<typeof PlaceProviderSchema>;
 
 export const StopSchema = z

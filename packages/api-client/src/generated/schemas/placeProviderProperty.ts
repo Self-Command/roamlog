@@ -12,5 +12,7 @@ export type PlaceProviderProperty =
 export const PlaceProviderProperty = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

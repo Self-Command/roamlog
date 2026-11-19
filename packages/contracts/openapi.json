@@ -2947,7 +2947,9 @@
                         "enum": [
                           "geoapify",
                           "photon",
+                          "tencent",
                           "local",
+                          "map_pin",
                           null
                         ]
                       },
@@ -5734,7 +5736,9 @@
             "enum": [
               "geoapify",
               "photon",
+              "tencent",
               "local",
+              "map_pin",
               null
             ]
           },
@@ -5967,7 +5971,9 @@
                   "enum": [
                     "geoapify",
                     "photon",
+                    "tencent",
                     "local",
+                    "map_pin",
                     null
                   ]
                 },
@@ -10212,7 +10218,9 @@
             "enum": [
               "geoapify",
               "photon",
-              "local"
+              "tencent",
+              "local",
+              "map_pin"
             ]
           },
           "providerPlaceId": {
@@ -10335,7 +10343,9 @@
         "enum": [
           "geoapify",
           "photon",
-          "local"
+          "tencent",
+          "local",
+          "map_pin"
         ]
       },
       "PlaceSearchQuery": {
@@ -10358,6 +10368,12 @@
               "zh",
               "en"
             ]
+          },
+          "country": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "pattern": "^[A-Z]{2}$"
           }
         },
         "required": [
@@ -10378,7 +10394,9 @@
                   "enum": [
                     "geoapify",
                     "photon",
-                    "local"
+                    "tencent",
+                    "local",
+                    "map_pin"
                   ]
                 },
                 "providerPlaceId": {
@@ -10503,7 +10521,9 @@
             "enum": [
               "geoapify",
               "photon",
-              "local"
+              "tencent",
+              "local",
+              "map_pin"
             ]
           },
           "degraded": {
@@ -10511,6 +10531,12 @@
           },
           "cached": {
             "type": "boolean"
+          },
+          "fallback": {
+            "type": "string",
+            "enum": [
+              "map_pick"
+            ]
           }
         },
         "required": [
@@ -11201,7 +11227,9 @@
             "enum": [
               "geoapify",
               "photon",
+              "tencent",
               "local",
+              "map_pin",
               null
             ]
           },
@@ -11388,7 +11416,9 @@
             "enum": [
               "geoapify",
               "photon",
+              "tencent",
               "local",
+              "map_pin",
               null
             ]
           },
@@ -11581,7 +11611,9 @@
                 "enum": [
                   "geoapify",
                   "photon",
+                  "tencent",
                   "local",
+                  "map_pin",
                   null
                 ]
               },
@@ -11681,7 +11713,9 @@
                   "enum": [
                     "geoapify",
                     "photon",
+                    "tencent",
                     "local",
+                    "map_pin",
                     null
                   ]
                 },
@@ -13766,7 +13800,9 @@
               "enum": [
                 "geoapify",
                 "photon",
+                "tencent",
                 "local",
+                "map_pin",
                 null
               ]
             },
@@ -14918,7 +14954,9 @@
             "enum": [
               "geoapify",
               "photon",
+              "tencent",
               "local",
+              "map_pin",
               null
             ]
           },
@@ -15119,7 +15157,9 @@
               "enum": [
                 "geoapify",
                 "photon",
+                "tencent",
                 "local",
+                "map_pin",
                 null
               ]
             },
@@ -15520,7 +15560,9 @@
                   "enum": [
                     "geoapify",
                     "photon",
+                    "tencent",
                     "local",
+                    "map_pin",
                     null
                   ]
                 },
@@ -16351,7 +16393,9 @@
                         "enum": [
                           "geoapify",
                           "photon",
+                          "tencent",
                           "local",
+                          "map_pin",
                           null
                         ]
                       },
@@ -17630,7 +17674,9 @@
             "enum": [
               "geoapify",
               "photon",
+              "tencent",
               "local",
+              "map_pin",
               null
             ]
           },
@@ -17865,7 +17911,9 @@
                   "enum": [
                     "geoapify",
                     "photon",
+                    "tencent",
                     "local",
+                    "map_pin",
                     null
                   ]
                 },
@@ -27778,6 +27826,17 @@
             },
             "required": false,
             "name": "lang",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2,
+              "pattern": "^[A-Z]{2}$"
+            },
+            "required": false,
+            "name": "country",
             "in": "query"
           }
         ],

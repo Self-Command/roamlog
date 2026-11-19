@@ -243,6 +243,7 @@ export const STATUS_LABELS: Record<TripStatus, string> = {
 
 export const VISIBILITY_LABELS: Record<TripVisibility, string> = {
   workspace: "工作区可见",
+  custom: "指定可见",
   private: "仅自己可见",
   public_link: "公开链接",
 };

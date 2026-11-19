@@ -15,5 +15,7 @@ export type PublicTripOriginProvider =
 export const PublicTripOriginProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

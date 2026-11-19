@@ -12,5 +12,7 @@ export type PlaceSearchResponseProvider =
 export const PlaceSearchResponseProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

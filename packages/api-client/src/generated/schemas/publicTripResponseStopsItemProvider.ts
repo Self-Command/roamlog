@@ -16,5 +16,7 @@ export type PublicTripResponseStopsItemProvider =
 export const PublicTripResponseStopsItemProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

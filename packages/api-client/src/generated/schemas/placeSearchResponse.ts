@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { PlaceSearchResponseFallback } from "./placeSearchResponseFallback";
 import type { PlaceSearchResponseItemsItem } from "./placeSearchResponseItemsItem";
 import type { PlaceSearchResponseProvider } from "./placeSearchResponseProvider";
 
@@ -14,4 +15,5 @@ export interface PlaceSearchResponse {
   provider: PlaceSearchResponseProvider;
   degraded: boolean;
   cached: boolean;
+  fallback?: PlaceSearchResponseFallback;
 }

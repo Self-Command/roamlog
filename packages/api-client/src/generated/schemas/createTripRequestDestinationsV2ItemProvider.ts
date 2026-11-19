@@ -16,5 +16,7 @@ export type CreateTripRequestDestinationsV2ItemProvider =
 export const CreateTripRequestDestinationsV2ItemProvider = {
   geoapify: "geoapify",
   photon: "photon",
+  tencent: "tencent",
   local: "local",
+  map_pin: "map_pin",
 } as const;

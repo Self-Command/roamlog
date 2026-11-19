@@ -19,4 +19,10 @@ export type SearchPlacesParams = {
    */
   limit?: number;
   lang?: SearchPlacesLang;
+  /**
+   * @minLength 2
+   * @maxLength 2
+   * @pattern ^[A-Z]{2}$
+   */
+  country?: string;
 };
