@@ -36,31 +36,31 @@ export const SETTING_FIELD_CONSUMPTION: Readonly<Record<string, SettingFieldCons
     // carries that limit instead of letting a green group badge imply it.
     "mail.provider": {
       status: "backend",
-      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+      label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
     },
     "mail.from": {
       status: "backend",
-      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+      label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
     },
     "mail.resendApiKey": {
       status: "backend",
-      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+      label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
     },
     "mail.smtpHost": {
       status: "backend",
-      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+      label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
     },
     "mail.smtpPort": {
       status: "backend",
-      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+      label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
     },
     "mail.smtpUser": {
       status: "backend",
-      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+      label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
     },
     "mail.smtpPassword": {
       status: "backend",
-      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+      label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
     },
     "places.provider": { status: "backend", label: "后端已消费" },
     "places.apiKey": { status: "backend", label: "后端已消费" },
@@ -70,7 +70,7 @@ export const SETTING_FIELD_CONSUMPTION: Readonly<Record<string, SettingFieldCons
     "places.dailyQuota": { status: "backend", label: "后端已消费" },
     "limits.searchPerMinute": {
       status: "backend",
-      label: "后端已消费（Places 搜索限流，按请求解析）",
+      label: "后端已消费（地点搜索限流，按请求解析）",
     },
     "limits.uploadPerMinute": {
       status: "unwired",
@@ -96,14 +96,14 @@ export function settingsGroupConsumption(group: SystemSettingGroup): SettingsCon
     return {
       status: "frontend",
       label:
-        "前端已消费（标题/描述/主题）；general.registrationEnabled 未接入（不生效）",
+        "前端已消费（标题/描述/主题）；注册开关未接入（不生效）",
     };
   }
   if (group === "seo") {
     return {
       status: "frontend",
       label:
-        "前端已消费（标题/描述/OG/robots）；seo.sitemapEnabled 未接入（不生效）",
+        "前端已消费（标题/描述/社交预览/爬虫指令）；站点地图未接入（不生效）",
     };
   }
   return SETTINGS_CONSUMPTION[group];

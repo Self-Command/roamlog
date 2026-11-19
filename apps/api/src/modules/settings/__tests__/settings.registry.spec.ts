@@ -272,4 +272,51 @@ describe("SETTINGS_REGISTRY", () => {
       }
     }
   });
+
+  it("localizes every label, help string and validation message", () => {
+    for (const entry of SETTINGS_REGISTRY) {
+      expect(entry.label, entry.key).toMatch(/[\u4e00-\u9fa5]/u);
+      expect(entry.help, entry.key).toMatch(/[\u4e00-\u9fa5]/u);
+
+      // Wrong-type input exercises the schema's custom `error` message; every
+      // setting type must answer in Chinese instead of Zod's English default.
+      const parsed = entry.schema.safeParse({ __invalid: true });
+      expect(parsed.success, entry.key).toBe(false);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          expect(issue.message, `${entry.key}: ${issue.message}`).toMatch(/[\u4e00-\u9fa5]/u);
+        }
+      }
+    }
+
+    const url = SETTINGS_BY_KEY.get("storage.endpoint")?.schema.safeParse("ftp://example.com");
+    expect(url?.success).toBe(false);
+    if (url && !url.success) {
+      expect(url.error.issues[0]?.message).toBe("必须是 http(s) URL。");
+    }
+
+    const timeZone = SETTINGS_BY_KEY.get("general.defaultTimeZone")?.schema.safeParse("Mars/Base");
+    expect(timeZone?.success).toBe(false);
+    if (timeZone && !timeZone.success) {
+      expect(timeZone.error.issues[0]?.message).toContain("IANA 时区");
+    }
+
+    const tooLong = SETTINGS_BY_KEY.get("site.title")?.schema.safeParse("x".repeat(81));
+    expect(tooLong?.success).toBe(false);
+    if (tooLong && !tooLong.success) {
+      expect(tooLong.error.issues[0]?.message).toBe("站点标题不能超过 80 个字符。");
+    }
+
+    const tooSmall = SETTINGS_BY_KEY.get("mail.smtpPort")?.schema.safeParse(0);
+    expect(tooSmall?.success).toBe(false);
+    if (tooSmall && !tooSmall.success) {
+      expect(tooSmall.error.issues[0]?.message).toBe("SMTP 端口不能小于 1。");
+    }
+
+    const badEnum = SETTINGS_BY_KEY.get("mail.provider")?.schema.safeParse("pigeon");
+    expect(badEnum?.success).toBe(false);
+    if (badEnum && !badEnum.success) {
+      expect(badEnum.error.issues[0]?.message).toContain("邮件服务商必须是以下选项之一");
+    }
+  });
 });

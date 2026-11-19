@@ -1,12 +1,17 @@
 import {
   Activity,
+  Bot,
   Building2,
   Flag,
+  HardDrive,
   Image,
+  Images,
   LayoutDashboard,
   ListChecks,
   Mail,
+  MapPin,
   ScrollText,
+  Send,
   Settings2,
   ShieldCheck,
   ToggleLeft,
@@ -47,6 +52,16 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [{ href: "/admin/media", label: "媒体库", icon: Image }],
   },
   {
+    label: "服务配置",
+    items: [
+      { href: "/admin/services/ai", label: "AI 服务", icon: Bot },
+      { href: "/admin/services/storage", label: "存储服务", icon: HardDrive },
+      { href: "/admin/services/places", label: "地图服务", icon: MapPin },
+      { href: "/admin/services/mail", label: "发信服务", icon: Send },
+      { href: "/admin/services/media", label: "媒体处理", icon: Images },
+    ],
+  },
+  {
     label: "数据与运营",
     items: [
       { href: "/admin/emails", label: "邮件", icon: Mail },
@@ -71,12 +86,25 @@ export function isNavItemActive(itemHref: string, activePath: string): boolean {
 }
 
 export function getBreadcrumbs(activePath: string): AdminBreadcrumb[] {
-  const items = ADMIN_NAV_GROUPS.flatMap((group) => group.items).filter((item) => !item.disabled);
-  const current = items.find((item) => isNavItemActive(item.href, activePath));
+  const groups = ADMIN_NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.disabled),
+  }));
+  const currentGroup = groups.find((group) =>
+    group.items.some((item) => isNavItemActive(item.href, activePath)),
+  );
+  const current = currentGroup?.items.find((item) => isNavItemActive(item.href, activePath));
 
   if (!current || current.href === "/admin") {
-    return [{ label: "OPS", href: "/admin" }, { label: "总览" }];
+    return [{ label: "平台", href: "/admin" }, { label: "总览" }];
   }
 
-  return [{ label: "OPS", href: "/admin" }, { label: current.label }];
+  // Follow the sidebar hierarchy: 平台 / 一级分组 / 当前页面. The overview group
+  // is the product root, so it never adds a redundant middle crumb.
+  const crumbs: AdminBreadcrumb[] = [{ label: "平台", href: "/admin" }];
+  if (currentGroup && currentGroup.label !== "平台概览") {
+    crumbs.push({ label: currentGroup.label });
+  }
+  crumbs.push({ label: current.label });
+  return crumbs;
 }

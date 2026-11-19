@@ -5,7 +5,6 @@ import { UuidV7Schema } from "@roamlog/contracts";
 import { WorkspaceAccessService } from "../services/workspace-access.service.js";
 import type { AuthenticatedRequest } from "./actor-context.js";
 import { SessionGuard } from "./session.guard.js";
-import { TripParticipantRoleGuard } from "./trip-participant-role.guard.js";
 import { VerifiedEmailGuard } from "./verified-email.guard.js";
 
 @Injectable()
@@ -14,8 +13,6 @@ export class TenantGuard implements CanActivate {
     @Inject(SessionGuard) private readonly sessionGuard: SessionGuard,
     @Inject(VerifiedEmailGuard) private readonly verifiedEmailGuard: VerifiedEmailGuard,
     @Inject(WorkspaceAccessService) private readonly access: WorkspaceAccessService,
-    @Inject(TripParticipantRoleGuard)
-    private readonly tripParticipantRoleGuard: TripParticipantRoleGuard,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -35,10 +32,6 @@ export class TenantGuard implements CanActivate {
     const membership = await this.access.requireMembership(request.user.id, parsedWorkspaceId.data);
     request.workspaceMembership = membership;
     request.workspaceId = membership.workspaceId;
-    // Trip-scoped requests get their effective role resolved from
-    // `TripParticipant` after the Workspace membership is known. The guard is a
-    // no-op for workspace-level routes (no `:tripId` param).
-    await this.tripParticipantRoleGuard.canActivate(context);
     return true;
   }
 }

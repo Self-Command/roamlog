@@ -1,16 +1,16 @@
-import { normalizeSettingsGroup } from "../../../lib/admin-settings";
+import type { Metadata } from "next";
+
 import { SettingsPageClient } from "../../../components/settings/settings-page-client";
 
-interface AdminSettingsPageProps {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
+export const metadata: Metadata = {
+  title: "系统设置",
+};
 
 /**
- * `/admin/settings?group=mail` is resolved on the server so a deep link renders
- * the requested group on the first paint, not after a client-side effect.
+ * `/admin/settings` — the four system-level groups only. Service configuration
+ * lives at `/admin/services/*` and is reached from the sidebar, never from a
+ * nested settings navigation.
  */
-export default async function AdminSettingsPage({ searchParams }: AdminSettingsPageProps) {
-  const params = await searchParams;
-  const requested = Array.isArray(params.group) ? params.group[0] : params.group;
-  return <SettingsPageClient initialGroup={normalizeSettingsGroup(requested)} />;
+export default function AdminSettingsPage() {
+  return <SettingsPageClient />;
 }

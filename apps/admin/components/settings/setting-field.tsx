@@ -8,6 +8,8 @@ import { Badge, Button, Input, Select, Switch, Textarea } from "@roamlog/ui";
 import { formatDateTime } from "../../lib/format";
 import {
   SETTINGS_SOURCE_LABELS,
+  SETTING_TYPE_LABELS,
+  settingOptionLabel,
   settingValueSource,
   type JsonDraft,
   type SettingDraftValue,
@@ -36,6 +38,8 @@ function fieldIds(key: string) {
     label: `setting-${key}-label`,
     help: `setting-${key}-help`,
     source: `setting-${key}-source`,
+    error: `setting-${key}-error`,
+    control: `setting-${key}-control`,
   };
 }
 
@@ -68,7 +72,7 @@ function FieldHeading({
         <h3 id={ids.label} className="text-[13px] font-medium text-ink">
           {item.label}
         </h3>
-        <Badge tone="neutral">{item.type}</Badge>
+        <Badge tone="neutral">{SETTING_TYPE_LABELS[item.type]}</Badge>
         {item.isPublic ? <Badge tone="blue">公开</Badge> : null}
         {item.isSecret ? <Badge tone="orange">密钥</Badge> : null}
         {consumption ? (
@@ -114,7 +118,7 @@ function FieldHeading({
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="mt-2 text-[11px] leading-5 text-accent-red">
+        <p id={ids.error} role="alert" className="mt-2 text-[11px] leading-5 text-accent-red">
           {error}
         </p>
       ) : null}
@@ -126,17 +130,23 @@ function JsonObjectEditor({
   item,
   draft,
   labelId,
+  controlId,
+  describedBy,
   onChange,
 }: {
   item: AdminSettingItem;
   draft: JsonDraft;
   labelId: string;
+  controlId: string;
+  describedBy?: string;
   onChange: (value: SettingDraftValue) => void;
 }) {
   if (draft.mode === "raw") {
     return (
       <Textarea
+        id={controlId}
         aria-labelledby={labelId}
+        aria-describedby={describedBy}
         aria-label={`${item.label} JSON`}
         value={draft.text}
         readOnly={item.envLocked}
@@ -329,6 +339,8 @@ export function SettingField(props: SettingFieldProps) {
     onRequestReveal,
   } = props;
   const ids = fieldIds(item.key);
+  const describedBy =
+    [item.help ? ids.help : null, error ? ids.error : null].filter(Boolean).join(" ") || undefined;
 
   const control = (() => {
     if (item.type === "secret") {
@@ -350,8 +362,10 @@ export function SettingField(props: SettingFieldProps) {
       return (
         <div className="flex items-center gap-3">
           <Switch
+            id={ids.control}
             aria-label={item.label}
             aria-labelledby={ids.label}
+            aria-describedby={describedBy}
             checked={draft === true}
             disabled={item.envLocked}
             onCheckedChange={(checked) => onChange(checked)}
@@ -367,8 +381,9 @@ export function SettingField(props: SettingFieldProps) {
       const value = typeof draft === "string" ? draft : "";
       return (
         <Input
+          id={ids.control}
           aria-labelledby={ids.label}
-          aria-describedby={ids.help}
+          aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
           type="number"
           inputMode="decimal"
@@ -387,7 +402,14 @@ export function SettingField(props: SettingFieldProps) {
           ? (draft as JsonDraft)
           : { mode: "raw", text: "" };
       return (
-        <JsonObjectEditor item={item} draft={jsonDraft} labelId={ids.label} onChange={onChange} />
+        <JsonObjectEditor
+          item={item}
+          draft={jsonDraft}
+          labelId={ids.label}
+          controlId={ids.control}
+          describedBy={describedBy}
+          onChange={onChange}
+        />
       );
     }
 
@@ -398,7 +420,9 @@ export function SettingField(props: SettingFieldProps) {
         value && !item.options.includes(value) ? [value, ...item.options] : item.options;
       return (
         <Select
+          id={ids.control}
           aria-labelledby={ids.label}
+          aria-describedby={describedBy}
           value={value}
           disabled={item.envLocked}
           className="h-9 font-mono text-xs"
@@ -406,7 +430,7 @@ export function SettingField(props: SettingFieldProps) {
         >
           {options.map((option) => (
             <option key={option} value={option}>
-              {option}
+              {settingOptionLabel(option)}
             </option>
           ))}
         </Select>
@@ -415,8 +439,9 @@ export function SettingField(props: SettingFieldProps) {
 
     return (
       <Input
+        id={ids.control}
         aria-labelledby={ids.label}
-        aria-describedby={ids.help}
+        aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
         type="text"
         value={value}

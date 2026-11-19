@@ -36,7 +36,8 @@ describe("admin settings helpers", () => {
     expect(normalizeSettingsGroup("mail")).toBe("mail");
     expect(normalizeSettingsGroup(undefined)).toBe("general");
     expect(normalizeSettingsGroup("nope")).toBe("general");
-    expect(settingsGroupHref("seo")).toBe("/admin/settings?group=seo");
+    expect(settingsGroupHref("seo")).toBe("/admin/settings");
+    expect(settingsGroupHref("mail")).toBe("/admin/services/mail");
   });
 
   it("maps every group to its real consumption status without the old vague claim", () => {
@@ -47,7 +48,7 @@ describe("admin settings helpers", () => {
     expect(SETTINGS_CONSUMPTION.places.label).toContain("后端已消费");
     expect(SETTINGS_CONSUMPTION.ai).toEqual({
       status: "backend",
-      label: "后端已消费（AiModule 运行期读取）",
+      label: "后端已消费（AI 模块运行期读取）",
     });
     expect(SETTINGS_CONSUMPTION.ai.label).not.toContain("不生效");
 
@@ -56,7 +57,7 @@ describe("admin settings helpers", () => {
         status: "backend",
         label:
           group === "mail"
-            ? "后端已消费，worker 仍读环境变量"
+            ? "后端已消费，任务进程仍读环境变量"
             : "后端已消费（API 运行期读取；保存前会跑连通性探测）",
       });
     }
@@ -97,12 +98,12 @@ describe("admin settings helpers", () => {
     ]) {
       expect(settingFieldConsumption(key)).toEqual({
         status: "backend",
-        label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+        label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
       });
     }
     // Group badge must still say the worker reads the environment, so a green
     // API path is not read as “every mail path”.
-    expect(SETTINGS_CONSUMPTION.mail.label).toContain("worker 仍读环境变量");
+    expect(SETTINGS_CONSUMPTION.mail.label).toContain("任务进程仍读环境变量");
     expect(settingsGroupConsumption("mail")).toBe(SETTINGS_CONSUMPTION.mail);
   });
 
@@ -110,15 +111,15 @@ describe("admin settings helpers", () => {
     const media = settingsGroupConsumption("media");
     expect(media.status).toBe("frontend");
     expect(media.label).toContain("前端已消费 4/6 个键");
-    expect(media.label).toContain("keepOriginal 与 livePhotoEnabled 未接入（不生效）");
+    expect(media.label).toContain("保留原图与实况照片未接入（不生效）");
 
     const general = settingsGroupConsumption("general");
     expect(general.status).toBe("frontend");
-    expect(general.label).toContain("general.registrationEnabled 未接入（不生效）");
+    expect(general.label).toContain("注册开关未接入（不生效）");
 
     const seo = settingsGroupConsumption("seo");
     expect(seo.status).toBe("frontend");
-    expect(seo.label).toContain("seo.sitemapEnabled 未接入（不生效）");
+    expect(seo.label).toContain("站点地图未接入（不生效）");
 
     expect(settingsGroupConsumption("mail")).toBe(SETTINGS_CONSUMPTION.mail);
     expect(settingsGroupConsumption("places")).toBe(SETTINGS_CONSUMPTION.places);
@@ -172,7 +173,7 @@ describe("admin settings helpers", () => {
   it("never labels limits.uploadPerMinute backend while the presign limiter is unwired", () => {
     expect(settingFieldConsumption("limits.searchPerMinute")).toEqual({
       status: "backend",
-      label: "后端已消费（Places 搜索限流，按请求解析）",
+      label: "后端已消费（地点搜索限流，按请求解析）",
     });
     expect(settingFieldConsumption("limits.uploadPerMinute")).toEqual({
       status: "unwired",
@@ -262,9 +263,24 @@ describe("admin settings helpers", () => {
       default: null,
       value: "https://example.com/og.png",
     });
-    const required = item({ key: "site.title", type: "string", label: "Title", value: "Roamlog" });
+    const required = item({
+      key: "site.title",
+      type: "string",
+      label: "Title",
+      default: "Roamlog",
+      value: "Roamlog",
+    });
+
+    const optionalEmpty = item({
+      key: "mail.smtpUser",
+      type: "string",
+      label: "SMTP user",
+      default: "",
+      value: "",
+    });
 
     expect(localSettingError(nullable, "")).toBeNull();
+    expect(localSettingError(optionalEmpty, "")).toBeNull();
     expect(collectGroupUpdates([nullable], { "seo.ogImageUrl": "" }, {}).updates).toEqual([
       { key: "seo.ogImageUrl", value: null },
     ]);

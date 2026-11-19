@@ -25,16 +25,20 @@ export const SETTINGS_GROUPS = [
 export const SystemSettingGroupSchema = z.enum(SETTINGS_GROUPS);
 export type SystemSettingGroup = z.infer<typeof SystemSettingGroupSchema>;
 
+/**
+ * Display labels for the Admin settings console. The keys are wire values and
+ * never change; only these labels are localized for the admin UI.
+ */
 export const SETTINGS_GROUP_LABELS: Record<SystemSettingGroup, string> = {
-  general: "General",
+  general: "通用",
   seo: "SEO",
-  theme: "Theme",
-  mail: "Mail",
-  storage: "Storage",
-  media: "Media",
+  theme: "主题",
+  mail: "邮件",
+  storage: "存储",
+  media: "媒体",
   ai: "AI",
-  places: "Places",
-  limits: "Limits",
+  places: "地点",
+  limits: "限制",
 };
 
 export const SETTINGS_VALUE_TYPES = ["string", "number", "boolean", "json", "secret"] as const;

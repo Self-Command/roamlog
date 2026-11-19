@@ -37,17 +37,64 @@ export interface SettingDefinition {
 /** DI token so tests/modules can swap the registry without touching the API. */
 export const SETTINGS_REGISTRY_TOKEN = Symbol("roamlog:settings-registry");
 
-const HTTP_URL = z
-  .url()
-  .max(2_048)
-  .refine((value) => /^https?:\/\//u.test(value), {
-    message: "Must be an http(s) URL.",
+function textSetting(label: string, min: number, max: number) {
+  return z
+    .string({ error: `${label}必须是文本。` })
+    .min(min, `${label}不能少于 ${min} 个字符。`)
+    .max(max, `${label}不能超过 ${max} 个字符。`);
+}
+
+function maxTextSetting(label: string, max: number) {
+  return z
+    .string({ error: `${label}必须是文本。` })
+    .max(max, `${label}不能超过 ${max} 个字符。`);
+}
+
+function numberSetting(label: string, min: number, max: number) {
+  return z
+    .number({ error: `${label}必须是数字。` })
+    .int(`${label}必须是整数。`)
+    .min(min, `${label}不能小于 ${min}。`)
+    .max(max, `${label}不能大于 ${max}。`);
+}
+
+function decimalSetting(label: string, min: number, max: number) {
+  return z
+    .number({ error: `${label}必须是数字。` })
+    .min(min, `${label}不能小于 ${min}。`)
+    .max(max, `${label}不能大于 ${max}。`);
+}
+
+function booleanSetting(label: string) {
+  return z.boolean({ error: `${label}必须是布尔值。` });
+}
+
+function enumSetting<T extends readonly [string, ...string[]]>(label: string, values: T) {
+  return z.enum(values, {
+    error: `${label}必须是以下选项之一：${values.join("、")}。`,
   });
+}
+
+const HTTP_URL = z
+  .string({ error: "URL 必须是文本。" })
+  .min(1, "URL 不能为空。")
+  .max(2_048, "URL 不能超过 2048 个字符。")
+  .refine(
+    (value) => {
+      try {
+        const url = new URL(value);
+        return url.protocol === "http:" || url.protocol === "https:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "必须是 http(s) URL。" },
+  );
 
 const IANA_TIME_ZONE = z
-  .string()
-  .min(1)
-  .max(64)
+  .string({ error: "时区必须是文本。" })
+  .min(1, "时区不能为空。")
+  .max(64, "时区不能超过 64 个字符。")
   .refine(
     (value) => {
       try {
@@ -57,18 +104,18 @@ const IANA_TIME_ZONE = z
         return false;
       }
     },
-    { message: "Must be an IANA time zone such as Asia/Shanghai." },
+    { message: "必须是 IANA 时区，例如 Asia/Shanghai。" },
   );
 
 const MAIL_FROM = z
-  .string()
-  .min(3)
-  .max(320)
+  .string({ error: "发件地址必须是文本。" })
+  .min(3, "发件地址不能少于 3 个字符。")
+  .max(320, "发件地址不能超过 320 个字符。")
   .refine((value) => value.includes("@") && !/[\r\n]/u.test(value), {
-    message: "Must be a mail address such as Roamlog <no-reply@example.com>.",
+    message: "必须是邮件地址，例如 Roamlog <no-reply@example.com>。",
   });
 
-const SECRET = z.string().min(1).max(4_096);
+const SECRET = textSetting("密钥", 1, 4_096);
 
 const THEME_ACCENTS = ["white", "amber", "blue", "emerald", "rose"] as const;
 const LANGUAGES = ["zh-CN", "en"] as const;
@@ -98,34 +145,34 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     key: "site.title",
     group: "general",
     type: "string",
-    schema: z.string().min(1).max(80),
+    schema: textSetting("站点标题", 1, 80),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Site title",
-    help: "Shown in the browser tab, SEO titles, and the public site header.",
+    label: "站点标题",
+    help: "显示在浏览器标签页、SEO 标题和站点页头中。",
   }),
   define({
     key: "site.description",
     group: "general",
     type: "string",
-    schema: z.string().min(1).max(300),
+    schema: textSetting("站点描述", 1, 300),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Site description",
-    help: "Default meta description and the short line shown on public pages.",
+    label: "站点描述",
+    help: "默认的元描述，也是公开页面展示的简短介绍。",
   }),
   define({
     key: "general.defaultLanguage",
     group: "general",
     type: "string",
-    schema: z.enum(LANGUAGES),
+    schema: enumSetting("默认语言", LANGUAGES),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Default language",
-    help: "Language used before a visitor or member picks one.",
+    label: "默认语言",
+    help: "访客或成员选择语言之前使用的语言。",
     options: LANGUAGES,
   }),
   define({
@@ -136,19 +183,19 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Default time zone",
-    help: "IANA time zone used for new accounts and date rendering.",
+    label: "默认时区",
+    help: "用于新账户和日期显示的 IANA 时区。",
   }),
   define({
     key: "general.registrationEnabled",
     group: "general",
     type: "boolean",
-    schema: z.boolean(),
+    schema: booleanSetting("开放注册"),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Registration open",
-    help: "Turn off to stop new accounts from self-registering.",
+    label: "开放注册",
+    help: "关闭后，新账户将无法自助注册。",
   }),
 
   // SEO values are public by design: the anonymous web shell has to render the
@@ -159,23 +206,23 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     key: "seo.titleTemplate",
     group: "seo",
     type: "string",
-    schema: z.string().min(1).max(200),
+    schema: textSetting("标题模板", 1, 200),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Title template",
-    help: "Use %s where the page title goes, for example %s · Roamlog.",
+    label: "标题模板",
+    help: "使用 %s 代表页面标题，例如 %s · Roamlog。",
   }),
   define({
     key: "seo.descriptionTemplate",
     group: "seo",
     type: "string",
-    schema: z.string().min(1).max(300),
+    schema: textSetting("描述模板", 1, 300),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Description template",
-    help: "Default description for pages without their own.",
+    label: "描述模板",
+    help: "没有独立描述的页面使用的默认描述。",
   }),
   define({
     key: "seo.ogImageUrl",
@@ -185,78 +232,78 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Open Graph image",
-    help: "Absolute URL of the social preview image. Leave empty to omit it.",
+    label: "社交预览图",
+    help: "社交预览图的绝对 URL；留空则不输出。",
   }),
   define({
     key: "seo.robots",
     group: "seo",
     type: "string",
-    schema: z.string().min(1).max(100),
+    schema: textSetting("爬虫指令", 1, 100),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Robots directive",
-    help: "Value for the robots meta tag, for example index,follow.",
+    label: "爬虫指令",
+    help: "用于 robots meta 标签的值，例如 index,follow。",
   }),
   define({
     key: "seo.sitemapEnabled",
     group: "seo",
     type: "boolean",
-    schema: z.boolean(),
+    schema: booleanSetting("站点地图"),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Sitemap",
-    help: "Publish /sitemap.xml for public trips.",
+    label: "站点地图",
+    help: "为公开行程发布 /sitemap.xml。",
   }),
 
   define({
     key: "theme.accent",
     group: "theme",
     type: "string",
-    schema: z.enum(THEME_ACCENTS),
+    schema: enumSetting("强调色", THEME_ACCENTS),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Accent color",
-    help: "Accent used across buttons, focus rings, and charts.",
+    label: "强调色",
+    help: "用于按钮、焦点环和图表的强调色。",
     options: THEME_ACCENTS,
   }),
   define({
     key: "theme.defaultMode",
     group: "theme",
     type: "string",
-    schema: z.enum(THEME_MODES),
+    schema: enumSetting("默认配色模式", THEME_MODES),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Default color mode",
-    help: "Dark, or system. A light palette is not available yet, so system currently renders dark.",
+    label: "默认配色模式",
+    help: "深色或跟随系统；当前没有浅色调色板，跟随系统仍显示深色。",
     options: THEME_MODES,
   }),
   define({
     key: "theme.loginTagline",
     group: "theme",
     type: "string",
-    schema: z.string().max(160),
+    schema: maxTextSetting("登录页标语", 160),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Login tagline",
-    help: "Short line under the login heading.",
+    label: "登录页标语",
+    help: "显示在登录标题下方的短句。",
   }),
 
   define({
     key: "mail.provider",
     group: "mail",
     type: "string",
-    schema: z.enum(MAIL_PROVIDERS),
+    schema: enumSetting("邮件服务商", MAIL_PROVIDERS),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Mail provider",
-    help: "Resend or an SMTP relay. Credentials below match the selected provider.",
+    label: "邮件服务商",
+    help: "邮件服务商可选 Resend 或 SMTP 中继；下方凭据需与所选服务商匹配。",
     options: MAIL_PROVIDERS,
   }),
   define({
@@ -267,8 +314,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "From address",
-    help: "Sender shown on transactional mail.",
+    label: "发件地址",
+    help: "事务邮件中显示的发件人。",
   }),
   define({
     key: "mail.resendApiKey",
@@ -278,41 +325,41 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: true,
     envLocked: false,
-    label: "Resend API key",
-    help: "Stored encrypted. Only the last four characters are shown.",
+    label: "邮件 API 密钥（Resend）",
+    help: "加密存储，仅显示末四位字符。",
   }),
   define({
     key: "mail.smtpHost",
     group: "mail",
     type: "string",
-    schema: z.string().min(1).max(255),
+    schema: textSetting("SMTP 主机", 1, 255),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "SMTP host",
-    help: "Relay hostname used when the provider is SMTP.",
+    label: "SMTP 主机",
+    help: "邮件服务商为 SMTP 时使用的中继主机名。",
   }),
   define({
     key: "mail.smtpPort",
     group: "mail",
     type: "number",
-    schema: z.number().int().min(1).max(65_535),
+    schema: numberSetting("SMTP 端口", 1, 65_535),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "SMTP port",
-    help: "Usually 587 for STARTTLS or 465 for implicit TLS.",
+    label: "SMTP 端口",
+    help: "通常使用 STARTTLS 的 587，或隐式 TLS 的 465。",
   }),
   define({
     key: "mail.smtpUser",
     group: "mail",
     type: "string",
-    schema: z.string().max(255),
+    schema: maxTextSetting("SMTP 用户名", 255),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "SMTP user",
-    help: "Username for the SMTP relay. May be empty for unauthenticated relays.",
+    label: "SMTP 用户名",
+    help: "用于 SMTP 中继的用户名；无认证中继可留空。",
   }),
   define({
     key: "mail.smtpPassword",
@@ -322,8 +369,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: true,
     envLocked: false,
-    label: "SMTP password",
-    help: "Stored encrypted and never returned by the settings API.",
+    label: "SMTP 密码",
+    help: "加密存储，设置 API 永不返回。",
   }),
 
   define({
@@ -334,8 +381,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Storage endpoint",
-    help: "S3-compatible API endpoint the server signs against.",
+    label: "存储端点",
+    help: "服务端签名使用的 S3 兼容 API 端点。",
   }),
   define({
     key: "storage.publicEndpoint",
@@ -345,30 +392,30 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Public endpoint",
-    help: "Browser-facing origin for presigned URLs. Leave empty to reuse the endpoint.",
+    label: "公开访问端点",
+    help: "预签名 URL 的浏览器访问源；留空则复用存储端点。",
   }),
   define({
     key: "storage.bucket",
     group: "storage",
     type: "string",
-    schema: z.string().min(1).max(255),
+    schema: textSetting("存储桶", 1, 255),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Bucket",
-    help: "Bucket that stores media and exports.",
+    label: "存储桶",
+    help: "保存媒体与导出文件的存储桶。",
   }),
   define({
     key: "storage.region",
     group: "storage",
     type: "string",
-    schema: z.string().min(1).max(64),
+    schema: textSetting("区域", 1, 64),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Region",
-    help: "Signing region, for example us-east-1.",
+    label: "区域",
+    help: "签名区域，例如 us-east-1。",
   }),
   define({
     key: "storage.accessKey",
@@ -378,8 +425,8 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: true,
     envLocked: false,
-    label: "Access key",
-    help: "Stored encrypted; only the last four characters are shown.",
+    label: "访问密钥",
+    help: "加密存储，仅显示末四位字符。",
   }),
   define({
     key: "storage.secretKey",
@@ -389,19 +436,19 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: true,
     envLocked: false,
-    label: "Secret key",
-    help: "Stored encrypted and never returned by the settings API.",
+    label: "私密密钥",
+    help: "加密存储，设置 API 永不返回。",
   }),
   define({
     key: "storage.forcePathStyle",
     group: "storage",
     type: "boolean",
-    schema: z.boolean(),
+    schema: booleanSetting("强制路径样式"),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Force path style",
-    help: "Required by MinIO and some B2/Wasabi deployments.",
+    label: "强制路径样式",
+    help: "使用 MinIO 及部分 B2/Wasabi 部署时需要开启。",
   }),
 
   // `media` is a mixed group: only the four values the browser compressor
@@ -412,56 +459,56 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     key: "media.maxEdge",
     group: "media",
     type: "number",
-    schema: z.number().int().min(500).max(8_000),
+    schema: numberSetting("最长边（像素）", 500, 8_000),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Max edge (px)",
-    help: "Longest edge the browser keeps when compressing an image. The web client reads it from the public projection and clamps it to 500–4000.",
+    label: "最长边（像素）",
+    help: "浏览器压缩图片时保留的最长边；Web 客户端从公开投影读取，并限制在 500–4000。",
   }),
   define({
     key: "media.quality",
     group: "media",
     type: "number",
-    schema: z.number().min(0.4).max(0.95),
+    schema: decimalSetting("WebP 质量", 0.4, 0.95),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "WebP quality",
-    help: "Compression quality between 0.4 and 0.95. The browser starts its quality ladder at this value.",
+    label: "WebP 质量",
+    help: "0.4 到 0.95 之间的压缩质量；浏览器以此值作为质量梯度起点。",
   }),
   define({
     key: "media.targetBytes",
     group: "media",
     type: "number",
-    schema: z.number().int().min(100_000).max(10_000_000),
+    schema: numberSetting("目标字节数", 100_000, 10_000_000),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Target bytes",
-    help: "Size the client compressor aims for before uploading; the web client clamps it to 100 KB–5 MB.",
+    label: "目标字节数",
+    help: "客户端压缩器上传前追求的大小；Web 客户端限制在 100 KB–5 MB。",
   }),
   define({
     key: "media.keepOriginal",
     group: "media",
     type: "boolean",
-    schema: z.boolean(),
+    schema: booleanSetting("保留原图"),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Keep originals",
-    help: "Upload the untouched original alongside the compressed derivative. 当前未接入：改动不影响上传行为。",
+    label: "保留原图",
+    help: "与压缩副本一同上传未经处理的原始文件。当前未接入：改动不影响上传行为。",
   }),
   define({
     key: "media.livePhotoEnabled",
     group: "media",
     type: "boolean",
-    schema: z.boolean(),
+    schema: booleanSetting("实况照片"),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Live Photos",
-    help: "Accept paired still/motion uploads from iOS. 当前未接入：改动不影响上传行为。",
+    label: "实况照片",
+    help: "接受 iOS 拍摄的静态图与动态图配对上传。当前未接入：改动不影响上传行为。",
   }),
   define({
     key: "media.maxUploadBytes",
@@ -471,79 +518,79 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     // setting stops at the decimal 25 MB mark so an operator can never save a
     // value the presign endpoint would refuse; do not raise this without
     // changing the media module's cap at the same time.
-    schema: z.number().int().min(1_000_000).max(25_000_000),
+    schema: numberSetting("最大上传字节数", 1_000_000, 25_000_000),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "Max upload bytes",
-    help: "Largest single upload the presign endpoint accepts. 上限 25 MB，由服务端强制；客户端会先拦一次。",
+    label: "最大上传字节数",
+    help: "预签名端点接受的最大单文件体积。上限 25 MB，由服务端强制；客户端会先拦一次。",
   }),
 
   define({
     key: "ai.defaultProvider",
     group: "ai",
     type: "string",
-    schema: z.string().min(1).max(80),
+    schema: textSetting("默认 AI 服务商", 1, 80),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Default AI provider",
-    help: "Provider id used when a workspace has no override.",
+    label: "默认 AI 服务商",
+    help: "工作区未单独指定时使用的服务商标识。",
   }),
   define({
     key: "ai.timeoutMs",
     group: "ai",
     type: "number",
-    schema: z.number().int().min(1_000).max(120_000),
+    schema: numberSetting("请求超时（毫秒）", 1_000, 120_000),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Request timeout (ms)",
-    help: "Per-request timeout for AI planning calls.",
+    label: "请求超时（毫秒）",
+    help: "用于 AI 规划调用的单次请求超时。",
   }),
   define({
     key: "ai.maxOutputTokens",
     group: "ai",
     type: "number",
-    schema: z.number().int().min(256).max(65_536),
+    schema: numberSetting("最大输出 Token 数", 256, 65_536),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Max output tokens",
-    help: "Upper bound passed to the provider.",
+    label: "最大输出 Token 数",
+    help: "传给服务商的输出 Token 上限。",
   }),
   define({
     key: "ai.dailyQuota",
     group: "ai",
     type: "number",
-    schema: z.number().int().min(0).max(1_000_000),
+    schema: numberSetting("每日配额", 0, 1_000_000),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Daily quota",
-    help: "Platform-wide AI calls per day. Zero disables planning.",
+    label: "每日配额",
+    help: "平台每天允许的 AI 调用次数；设为零时停用规划。",
   }),
   define({
     key: "ai.baseUrl",
     group: "ai",
     type: "string",
-    schema: z.string().min(1).max(200).nullish(),
+    schema: textSetting("AI 基础 URL", 1, 200).nullish(),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "AI base URL",
-    help: "OpenAI-compatible endpoint, e.g. https://api.openai.com/v1",
+    label: "AI 基础 URL",
+    help: "兼容 OpenAI 的端点，例如 https://api.openai.com/v1。",
   }),
   define({
     key: "ai.model",
     group: "ai",
     type: "string",
-    schema: z.string().min(1).max(80).nullish(),
+    schema: textSetting("AI 模型", 1, 80).nullish(),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "AI model",
-    help: "Model id served at the base URL",
+    label: "AI 模型",
+    help: "基础 URL 提供的模型标识。",
   }),
   define({
     key: "ai.apiKey",
@@ -553,20 +600,20 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: true,
     envLocked: false,
-    label: "AI API key",
-    help: "Stored encrypted; only the last four characters are shown.",
+    label: "AI API 密钥",
+    help: "加密存储，仅显示末四位字符。",
   }),
 
   define({
     key: "places.provider",
     group: "places",
     type: "string",
-    schema: z.enum(PLACE_PROVIDERS),
+    schema: enumSetting("地点服务商", PLACE_PROVIDERS),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Places provider",
-    help: "Geoapify first, Photon as the keyless fallback.",
+    label: "地点服务商",
+    help: "优先使用 Geoapify，无密钥时回退到 Photon。",
     options: PLACE_PROVIDERS,
   }),
   define({
@@ -577,75 +624,75 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isPublic: false,
     isSecret: true,
     envLocked: false,
-    label: "Places API key",
-    help: "Stored encrypted; only the last four characters are shown.",
+    label: "地点 API 密钥",
+    help: "加密存储，仅显示末四位字符。",
   }),
   define({
     key: "places.lang",
     group: "places",
     type: "string",
-    schema: z.string().min(2).max(16),
+    schema: textSetting("搜索语言", 2, 16),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Search language",
-    help: "Language code passed to providers that support it.",
+    label: "搜索语言",
+    help: "传给支持该参数的服务商的语言代码。",
   }),
   define({
     key: "places.limit",
     group: "places",
     type: "number",
-    schema: z.number().int().min(1).max(10),
+    schema: numberSetting("结果数量上限", 1, 10),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Result limit",
-    help: "Maximum suggestions returned per search.",
+    label: "结果数量上限",
+    help: "每次搜索返回的最大建议数量。",
   }),
   define({
     key: "places.cacheTtlSeconds",
     group: "places",
     type: "number",
-    schema: z.number().int().min(60).max(86_400),
+    schema: numberSetting("缓存有效期（秒）", 60, 86_400),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Cache TTL (seconds)",
-    help: "How long normalized place results stay cached.",
+    label: "缓存有效期（秒）",
+    help: "规范化地点结果的缓存时长。",
   }),
   define({
     key: "places.dailyQuota",
     group: "places",
     type: "number",
-    schema: z.number().int().min(0).max(1_000_000),
+    schema: numberSetting("每日配额", 0, 1_000_000),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Daily quota",
-    help: "Provider calls per day before degrading to the fallback.",
+    label: "每日配额",
+    help: "每天的服务商调用上限，超出后降级到回退方案。",
   }),
 
   define({
     key: "limits.searchPerMinute",
     group: "limits",
     type: "number",
-    schema: z.number().int().min(1).max(600),
+    schema: numberSetting("每分钟搜索请求数", 1, 600),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Search requests / minute",
-    help: "Per-account search rate limit.",
+    label: "每分钟搜索请求数",
+    help: "每账户的搜索速率限制。",
   }),
   define({
     key: "limits.uploadPerMinute",
     group: "limits",
     type: "number",
-    schema: z.number().int().min(1).max(600),
+    schema: numberSetting("每分钟上传请求数", 1, 600),
     isPublic: false,
     isSecret: false,
     envLocked: false,
-    label: "Uploads / minute",
-    help: "Per-account presign rate limit.",
+    label: "每分钟上传请求数",
+    help: "每账户的预签名速率限制。",
   }),
 ]);
 

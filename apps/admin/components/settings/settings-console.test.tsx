@@ -2,16 +2,17 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type {
-  AdminSettingItem,
-  AdminSettingUpdate,
-  AdminSettingsResponse,
-  UpdateAdminSettingsResponse,
+import {
+  SETTINGS_GROUP_LABELS,
+  type AdminSettingItem,
+  type AdminSettingUpdate,
+  type AdminSettingsResponse,
+  type UpdateAdminSettingsResponse,
 } from "@roamlog/contracts";
 
 import { AdminMutationError } from "../../lib/admin-api-error";
 import { AdminSettingsError, type AdminSettingsApi } from "../../lib/admin-settings-api";
-import { SettingsConsole } from "./settings-console";
+import { SettingsGroupForm } from "./settings-group-form";
 
 const RESEND_PLAINTEXT = "re_plaintext_that_must_not_leak_9876";
 
@@ -348,16 +349,8 @@ async function renderConsole(
   role: "super_admin" | "analyst" = "super_admin",
 ) {
   const fake = createApi(responseOf());
-  render(<SettingsConsole role={role} initialGroup={initialGroup} api={fake.api} />);
-  const headings: Record<typeof initialGroup, string> = {
-    general: "General",
-    mail: "Mail",
-    media: "Media",
-    ai: "AI",
-    places: "Places",
-    storage: "Storage",
-  };
-  await screen.findByRole("heading", { name: headings[initialGroup] });
+  render(<SettingsGroupForm group={initialGroup} role={role} api={fake.api} />);
+  await screen.findByRole("heading", { name: SETTINGS_GROUP_LABELS[initialGroup] });
   return fake;
 }
 
@@ -403,11 +396,10 @@ describe("SettingsConsole", () => {
   });
 
   it("marks the wired mail group as backend and keeps the worker limit visible", async () => {
-    const user = userEvent.setup();
     await renderConsole("mail");
 
-    expect(screen.getByRole("heading", { name: "Mail" })).toBeInTheDocument();
-    const status = screen.getByText("后端已消费，worker 仍读环境变量");
+    expect(screen.getByRole("heading", { name: SETTINGS_GROUP_LABELS.mail })).toBeInTheDocument();
+    const status = screen.getByText("后端已消费，任务进程仍读环境变量");
     expect(status).toHaveAttribute("data-consumption-status", "backend");
     expect(status.className).toContain("text-accent-blue");
     expect(status.className).not.toContain("text-accent-yellow");
@@ -418,24 +410,22 @@ describe("SettingsConsole", () => {
       expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
         "后端已消费",
       );
-      expect(within(field).getByText(/worker 导出通知不生效/)).toBeInTheDocument();
+      expect(within(field).getByText(/任务进程导出通知不生效/)).toBeInTheDocument();
     }
     expect(screen.getByLabelText("SMTP port")).toHaveValue(587);
 
-    await user.click(screen.getByRole("link", { name: /General/ }));
-    expect(screen.getByRole("heading", { name: "General" })).toBeInTheDocument();
+    // A single-group form has no group picker of its own; navigation lives in
+    // the admin sidebar. Only the mail group may be rendered here.
+    expect(screen.queryByRole("navigation", { name: "设置分组" })).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        "前端已消费（标题/描述/主题）；general.registrationEnabled 未接入（不生效）",
-      ),
-    ).toBeInTheDocument();
-    expect(window.location.search).toBe("?group=general");
+      screen.queryByRole("heading", { name: SETTINGS_GROUP_LABELS.general }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows places as backend-consumed and labels all six keys", async () => {
     await renderConsole("places");
 
-    const status = screen.getByText("后端已消费（PlacesModule 运行期读取）");
+    const status = screen.getByText("后端已消费（地点模块运行期读取）");
     expect(status).toHaveAttribute("data-consumption-status", "backend");
     expect(status.className).toContain("text-accent-blue");
     expect(status.className).not.toContain("text-accent-green");
@@ -458,8 +448,8 @@ describe("SettingsConsole", () => {
   it("shows ai as backend-consumed and never as unwired", async () => {
     await renderConsole("ai");
 
-    expect(screen.getByRole("heading", { name: "AI" })).toBeInTheDocument();
-    const status = screen.getByText("后端已消费（AiModule 运行期读取）");
+    expect(screen.getByRole("heading", { name: SETTINGS_GROUP_LABELS.ai })).toBeInTheDocument();
+    const status = screen.getByText("后端已消费（AI 模块运行期读取）");
     expect(status).toHaveAttribute("data-consumption-status", "backend");
     expect(status.className).toContain("text-accent-blue");
     expect(status.textContent).not.toContain("不生效");
@@ -482,9 +472,9 @@ describe("SettingsConsole", () => {
     await renderConsole("media");
 
     expect(
-      screen.getByText(/前端已消费 4\/6 个键（maxEdge、quality、targetBytes、maxUploadBytes）/),
+      screen.getByText(/前端已消费 4\/6 个键（最长边、质量、目标字节、最大上传字节）/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/keepOriginal 与 livePhotoEnabled 未接入（不生效）/)).toBeInTheDocument();
+    expect(screen.getByText(/保留原图与实况照片未接入（不生效）/)).toBeInTheDocument();
 
     for (const label of [
       "Max edge (px)",
@@ -509,7 +499,7 @@ describe("SettingsConsole", () => {
   it("keeps save disabled until something actually changed", async () => {
     const user = userEvent.setup();
     await renderConsole("general");
-    const save = screen.getByRole("button", { name: "保存更改" });
+    const save = screen.getByRole("button", { name: /保存更改/ });
     expect(save).toBeDisabled();
 
     await user.type(screen.getByLabelText("Site title"), "!");
@@ -542,7 +532,7 @@ describe("SettingsConsole", () => {
       ),
     };
     fake.setCurrent(updated);
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     expect(fake.update).toHaveBeenCalledWith([
       { key: "general.defaultLanguage", value: "en" },
@@ -564,7 +554,7 @@ describe("SettingsConsole", () => {
       ),
     };
     fake.setCurrent(updated);
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     expect(fake.update).toHaveBeenCalledWith([{ key: "mail.smtpPort", value: 2525 }]);
     expect(fake.update.mock.calls[0]?.[0]?.[0]?.value).not.toBe("2525");
@@ -598,7 +588,7 @@ describe("SettingsConsole", () => {
       ),
     };
     fake.setCurrent(updated);
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     expect(fake.update).toHaveBeenCalledWith([{ key: "mail.resendApiKey", value: newSecret }]);
     expect(screen.getByLabelText("Resend API key 当前值")).toHaveValue("••••1234");
@@ -652,7 +642,7 @@ describe("SettingsConsole", () => {
   it("auto-hides revealed plaintext after the 10 second audit window", async () => {
     vi.useFakeTimers();
     const fake = createApi(responseOf());
-    render(<SettingsConsole role="super_admin" initialGroup="mail" api={fake.api} />);
+    render(<SettingsGroupForm group="mail" role="super_admin" api={fake.api} />);
     await act(async () => {
       await Promise.resolve();
     });
@@ -700,13 +690,13 @@ describe("SettingsConsole", () => {
 
     const port = screen.getByLabelText("SMTP port");
     fireEvent.change(port, { target: { value: "70000" } });
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     const field = screen.getByRole("article", { name: "设置项 SMTP port" });
     expect(await within(field).findByText(/Number must be less than or equal to 65535/)).toBeInTheDocument();
     expect(port).toHaveValue(70000);
     expect(screen.getByText("有字段未通过服务端校验")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存更改" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /保存更改/ })).toBeEnabled();
   });
 
   it("shows a super-admin permission error on save and keeps the draft", async () => {
@@ -724,7 +714,7 @@ describe("SettingsConsole", () => {
 
     const title = screen.getByLabelText("Site title");
     await user.type(title, "!");
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     expect(await screen.findByText("需要超级管理员权限。")).toBeInTheDocument();
     expect(title).toHaveValue("Roamlog!");
@@ -746,7 +736,7 @@ describe("SettingsConsole", () => {
 
     const title = screen.getByLabelText("Site title");
     await user.type(title, "!");
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     expect(await screen.findByText("保存失败，可重试")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试保存" })).toBeInTheDocument();
@@ -756,8 +746,8 @@ describe("SettingsConsole", () => {
   it("disables writes for non-super-admin roles", async () => {
     await renderConsole("general", "analyst");
 
-    expect(screen.getByRole("button", { name: "保存更改" })).toBeDisabled();
-    expect(screen.getByText(/系统设置需要超级管理员权限/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /保存更改/ })).toBeDisabled();
+    expect(screen.getByText(/后台设置需要超级管理员权限/)).toBeInTheDocument();
   });
 
   it("shows the database source and updatedAt after a save re-read", async () => {
@@ -775,7 +765,7 @@ describe("SettingsConsole", () => {
       ),
     };
     fake.setCurrent(updated);
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     expect(await screen.findByText("已保存并重新读取 1 项设置。")).toBeInTheDocument();
     const field = screen.getByRole("article", { name: "设置项 Site title" });
@@ -800,7 +790,7 @@ describe("SettingsConsole", () => {
     const endpoint = screen.getByLabelText("S3 endpoint");
     await user.clear(endpoint);
     await user.type(endpoint, "http://127.0.0.1:19999");
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     // role=alert is what makes a screen reader announce the block immediately.
     const alert = await screen.findByRole("alert");
@@ -828,7 +818,7 @@ describe("SettingsConsole", () => {
     // The retry action stays ghost/outline; the save button is the only white primary.
     const retry = within(alert).getByRole("button", { name: "重试保存" });
     expect(retry.className).not.toContain("bg-ink");
-    expect(screen.getByRole("button", { name: "保存更改" }).className).toContain("bg-ink");
+    expect(screen.getByRole("button", { name: /保存更改/ }).className).toContain("bg-ink");
 
     // Nothing was reset: the draft that failed is still on screen.
     expect(endpoint).toHaveValue("http://127.0.0.1:19999");
@@ -849,7 +839,7 @@ describe("SettingsConsole", () => {
     );
 
     await user.type(screen.getByLabelText("Bucket"), "-tmp");
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     const alert = await screen.findByRole("alert");
     const rows = alert.querySelectorAll("[data-probe-check-ok]");
@@ -874,7 +864,7 @@ describe("SettingsConsole", () => {
     );
 
     await user.type(screen.getByLabelText("Bucket"), "-tmp");
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("缺少访问凭据：请先填写 Access Key 与 Secret Key");
@@ -907,7 +897,7 @@ describe("SettingsConsole", () => {
 
     const port = screen.getByLabelText("SMTP port");
     fireEvent.change(port, { target: { value: "2526" } });
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(
@@ -926,7 +916,7 @@ describe("SettingsConsole", () => {
     );
 
     fireEvent.change(screen.getByLabelText("SMTP port"), { target: { value: "2526" } });
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     const alert = await screen.findByRole("alert");
     const headline = alert.querySelector("[data-probe-headline]");
@@ -952,7 +942,7 @@ describe("SettingsConsole", () => {
     fireEvent.change(port, { target: { value: "2526" } });
     const secret = screen.getByLabelText("设置新值 Resend API key");
     await user.type(secret, "re_typed_secret_1234");
-    await user.click(screen.getByRole("button", { name: "保存更改" }));
+    await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("探测服务不可用，配置未保存。可稍后重试");
