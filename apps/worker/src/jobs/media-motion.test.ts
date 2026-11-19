@@ -150,8 +150,9 @@ describe("media job — Live Photo motion", () => {
   });
 
   it("leaves an ordinary image untouched when no motion row exists", async () => {
+    const available = vi.fn(() => true);
     const extractor: MotionThumbnailExtractor = {
-      available: () => true,
+      available,
       extract: vi.fn(),
     };
     const { deps, motionUpdateMany, putObject } = fakeDeps({ motion: null, extractor });
@@ -161,7 +162,7 @@ describe("media job — Live Photo motion", () => {
       status: "ready",
       mediaId: MEDIA_ID,
     });
-    expect(extractor.available).not.toHaveBeenCalled();
+    expect(available).not.toHaveBeenCalled();
     expect(extractor.extract).not.toHaveBeenCalled();
     expect(motionUpdateMany).not.toHaveBeenCalled();
     expect(putObject).not.toHaveBeenCalled();
@@ -176,9 +177,14 @@ describe("media job — Live Photo motion", () => {
       motion: { id: "m-1", mediaId: MEDIA_ID, storageKey: MOTION_KEY, thumbKey: null, mimeType: "video/quicktime", durationMs: 2400, deletedAt: null },
       extractor,
     });
-    (deps.storage.getObject as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("S3 unavailable"),
-    );
+    (deps.storage.getObject as unknown as { mockImplementation(fn: (key: string) => Promise<unknown>): void })
+      .mockImplementation(async (key: string) => {
+        // The still still reads fine; only the motion object is unreachable.
+        if (key === MOTION_KEY) {
+          throw new Error("S3 unavailable");
+        }
+        return { bytes: JPEG_BYTES, contentType: "image/jpeg" };
+      });
     const ctx = context();
 
     await expect(handleMediaJob("media.process", data, ctx, deps)).resolves.toEqual({
