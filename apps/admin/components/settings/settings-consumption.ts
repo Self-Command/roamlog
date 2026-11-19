@@ -36,6 +36,18 @@ export const SETTING_FIELD_CONSUMPTION: Readonly<Record<string, SettingFieldCons
     "places.limit": { status: "backend", label: "后端已消费" },
     "places.cacheTtlSeconds": { status: "backend", label: "后端已消费" },
     "places.dailyQuota": { status: "backend", label: "后端已消费" },
+    "limits.searchPerMinute": {
+      status: "backend",
+      label: "后端已消费（Places 搜索限流，按请求解析）",
+    },
+    "limits.uploadPerMinute": {
+      status: "unwired",
+      label: "未接入（presign 限流仍读环境变量）",
+    },
+    "ai.defaultProvider": { status: "backend", label: "后端已消费" },
+    "ai.timeoutMs": { status: "backend", label: "后端已消费" },
+    "ai.maxOutputTokens": { status: "backend", label: "后端已消费" },
+    "ai.dailyQuota": { status: "backend", label: "后端已消费" },
   });
 
 /** `null` means the group map is accurate enough for this key. */

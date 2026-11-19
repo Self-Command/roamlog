@@ -44,9 +44,11 @@ export interface SettingsConsumption {
  * - `unwired`: stored in the database only; changing it does not change
  *   behavior, because the runtime still reads an environment variable.
  *
- * `mail`, `storage`, `ai` and `limits` are `unwired` until their runtime owners
- * actually consume `SettingsService`; see `settings-consumption.ts` for
- * field-level exceptions.
+ * `mail` and `storage` are `unwired` until their runtime owners actually
+ * consume `SettingsService`. `limits` is partially wired: the search allowance
+ * is enforced by the place-search limiter, while the presign allowance is still
+ * read from the environment, so its group badge stays yellow with the split
+ * spelled out; see `settings-consumption.ts` for field-level exceptions.
  */
 export const SETTINGS_CONSUMPTION: Record<SystemSettingGroup, SettingsConsumption> = {
   general: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
@@ -59,9 +61,12 @@ export const SETTINGS_CONSUMPTION: Record<SystemSettingGroup, SettingsConsumptio
     label:
       "前端已消费 4/6 个键（maxEdge、quality、targetBytes、maxUploadBytes）；keepOriginal 与 livePhotoEnabled 未接入（不生效）",
   },
-  ai: { status: "unwired", label: "未接入（不生效，仍读环境变量）" },
+  ai: { status: "backend", label: "后端已消费（AiModule 运行期读取）" },
   places: { status: "backend", label: "后端已消费（PlacesModule 运行期读取）" },
-  limits: { status: "unwired", label: "未接入（不生效，仍读环境变量）" },
+  limits: {
+    status: "unwired",
+    label: "部分接入（搜索限流已生效；上传限流未接入，仍读环境变量）",
+  },
 };
 
 export const SETTINGS_SOURCE_LABELS = {

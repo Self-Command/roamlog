@@ -45,13 +45,27 @@ describe("admin settings helpers", () => {
     expect(SETTINGS_CONSUMPTION.theme).toMatchObject({ status: "frontend" });
     expect(SETTINGS_CONSUMPTION.places).toMatchObject({ status: "backend" });
     expect(SETTINGS_CONSUMPTION.places.label).toContain("后端已消费");
+    expect(SETTINGS_CONSUMPTION.ai).toEqual({
+      status: "backend",
+      label: "后端已消费（AiModule 运行期读取）",
+    });
+    expect(SETTINGS_CONSUMPTION.ai.label).not.toContain("不生效");
 
-    for (const group of ["mail", "storage", "ai", "limits"] as const) {
+    for (const group of ["mail", "storage"] as const) {
       expect(SETTINGS_CONSUMPTION[group]).toEqual({
         status: "unwired",
         label: "未接入（不生效，仍读环境变量）",
       });
     }
+
+    // `limits` is partially wired: the group badge must stay yellow, and the
+    // label must name which half works instead of claiming the whole group.
+    expect(SETTINGS_CONSUMPTION.limits.status).toBe("unwired");
+    expect(SETTINGS_CONSUMPTION.limits.label).toContain("搜索限流已生效");
+    expect(SETTINGS_CONSUMPTION.limits.label).toContain("上传限流未接入");
+    expect(SETTINGS_CONSUMPTION.limits.label).not.toBe(
+      "未接入（不生效，仍读环境变量）",
+    );
 
     const rendered = [
       ...Object.values(SETTINGS_CONSUMPTION).map((entry) => entry.label),
@@ -78,6 +92,8 @@ describe("admin settings helpers", () => {
 
     expect(settingsGroupConsumption("mail")).toBe(SETTINGS_CONSUMPTION.mail);
     expect(settingsGroupConsumption("places")).toBe(SETTINGS_CONSUMPTION.places);
+    expect(settingsGroupConsumption("ai")).toBe(SETTINGS_CONSUMPTION.ai);
+    expect(settingsGroupConsumption("ai").label).not.toContain("不生效");
   });
 
   it("labels the six media keys one by one instead of one group badge", () => {
@@ -110,6 +126,10 @@ describe("admin settings helpers", () => {
       "places.limit",
       "places.cacheTtlSeconds",
       "places.dailyQuota",
+      "ai.defaultProvider",
+      "ai.timeoutMs",
+      "ai.maxOutputTokens",
+      "ai.dailyQuota",
     ]) {
       expect(settingFieldConsumption(key)).toEqual({
         status: "backend",
@@ -117,6 +137,21 @@ describe("admin settings helpers", () => {
       });
     }
     expect(settingFieldConsumption("site.title")).toBeNull();
+  });
+
+  it("never labels limits.uploadPerMinute backend while the presign limiter is unwired", () => {
+    expect(settingFieldConsumption("limits.searchPerMinute")).toEqual({
+      status: "backend",
+      label: "后端已消费（Places 搜索限流，按请求解析）",
+    });
+    expect(settingFieldConsumption("limits.uploadPerMinute")).toEqual({
+      status: "unwired",
+      label: "未接入（presign 限流仍读环境变量）",
+    });
+    // Guard against a future "make the group green" shortcut: the group badge
+    // may only turn green when both keys are consumed.
+    expect(SETTINGS_CONSUMPTION.limits.status).not.toBe("backend");
+    expect(settingsGroupConsumption("limits").status).toBe("unwired");
   });
 
   it("derives the value source from envLocked and updatedAt, never from guesses", () => {
