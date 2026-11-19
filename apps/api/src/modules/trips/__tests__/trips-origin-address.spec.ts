@@ -68,7 +68,7 @@ function membership(role: WorkspaceMembershipAccess["role"] = "owner"): Workspac
 const actor = { user: { id: USER_ID } } as never;
 
 function build(options: { row?: TripRecord } = {}) {
-  let row = options.row ?? tripRow();
+  const row = options.row ?? tripRow();
   const repository = {
     transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback({})),
     findTrip: vi.fn(async () => row),
@@ -76,7 +76,8 @@ function build(options: { row?: TripRecord } = {}) {
       tripRow({ ...data, id: TRIP_ID } as Partial<TripRecord>),
     ),
     updateTrip: vi.fn(async (_tx: unknown, args: { data: Record<string, unknown> }) => {
-      row = tripRow({ ...row, ...args.data } as Partial<TripRecord>);
+      // Test double for a real UPDATE: merge the patch into the stored row.
+      Object.assign(row, args.data);
       return 1;
     }),
     createParticipant: vi.fn(async () => ({})),

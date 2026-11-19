@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ActivitySchema,
+  EntryRevisionSchema,
+  ItineraryItemSchema,
+  StopSchema,
+  TripParticipantSchema,
+} from "@roamlog/contracts";
+
+import {
+  presentActivity,
+  presentItineraryItem,
+  presentParticipant,
+  presentRevision,
   presentStop,
   presentTrip,
   type PresentStopInput,
@@ -135,5 +147,166 @@ describe("presentStop", () => {
 
   it("rejects a provider outside the contract enum instead of guessing", () => {
     expect(() => presentStop(stopRecord({ provider: "manual" }))).toThrow();
+  });
+});
+
+const PARTICIPANT_ID = "01942f30-1200-7000-8000-000000000005";
+const REVISION_ID = "01942f30-1200-7000-8000-000000000006";
+const ITINERARY_ID = "01942f30-1200-7000-8000-000000000007";
+const ACTIVITY_ID = "01942f30-1200-7000-8000-000000000008";
+const FUTURE_TIMESTAMP = new Date("2026-11-19T08:00:00.000Z");
+
+function participantRow() {
+  return {
+    id: PARTICIPANT_ID,
+    workspaceId: WORKSPACE_ID,
+    tripId: TRIP_ID,
+    userId: USER_ID,
+    joinedAt: new Date("2026-11-10T00:00:00.000Z"),
+  };
+}
+
+function revisionRow() {
+  return {
+    id: REVISION_ID,
+    workspaceId: WORKSPACE_ID,
+    entryId: "01942f30-1200-7000-8000-000000000009",
+    version: 1,
+    title: "First night in Euljiro",
+    contentJson: { type: "doc", content: [] },
+    contentHtml: "<p>Old copy.</p>",
+    editedById: USER_ID,
+    createdAt: new Date("2026-11-10T00:00:00.000Z"),
+  };
+}
+
+function itineraryRow() {
+  return {
+    id: ITINERARY_ID,
+    tripId: TRIP_ID,
+    workspaceId: WORKSPACE_ID,
+    date: new Date("2026-11-11T00:00:00.000Z"),
+    startTime: null,
+    endTime: null,
+    title: "Gwangjang breakfast",
+    type: "food",
+    location: "Gwangjang Market",
+    notes: "",
+    done: false,
+    order: 0,
+    assigneeId: null,
+    version: 1,
+    createdById: USER_ID,
+    updatedById: USER_ID,
+    createdAt: new Date("2026-11-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-11-01T00:00:00.000Z"),
+    deletedAt: null,
+  };
+}
+
+function activityRow() {
+  return {
+    id: ACTIVITY_ID,
+    workspaceId: WORKSPACE_ID,
+    tripId: null,
+    actorId: USER_ID,
+    verb: "trip.created",
+    entityType: "trip",
+    entityId: TRIP_ID,
+    metadata: { status: "active" },
+    createdAt: new Date("2026-11-01T00:00:00.000Z"),
+  };
+}
+
+/**
+ * Regression guards for the remaining trips presenters: every contract schema is
+ * `.strict()`, so an additive database column must be ignored by the explicit
+ * field list instead of failing validation and turning a read into a 500.
+ */
+describe("presenter row-shape guards", () => {
+  it("presentStop ignores columns the contract does not declare", () => {
+    const record = {
+      ...stopRecord(),
+      someFutureColumn: "x",
+      moderatedAt: FUTURE_TIMESTAMP,
+    };
+
+    const presented = presentStop(record);
+
+    expect(() => presentStop(record)).not.toThrow();
+    expect(StopSchema.parse(presented)).toEqual(presented);
+    expect(presented).not.toHaveProperty("someFutureColumn");
+    expect(presented).not.toHaveProperty("moderatedAt");
+    expect(presented.provider).toBeNull();
+    expect(presented.providerPlaceId).toBeNull();
+    expect(presented.timeZone).toBeNull();
+    expect(presented.address).toBeNull();
+    expect(presented.bbox).toBeNull();
+    expect(presented.deletedAt).toBeNull();
+  });
+
+  it("presentParticipant ignores columns the contract does not declare", () => {
+    const record = {
+      ...participantRow(),
+      someFutureColumn: "x",
+      moderatedAt: FUTURE_TIMESTAMP,
+    };
+
+    const presented = presentParticipant(record);
+
+    expect(() => presentParticipant(record)).not.toThrow();
+    expect(TripParticipantSchema.parse(presented)).toEqual(presented);
+    expect(presented).not.toHaveProperty("someFutureColumn");
+    expect(presented).not.toHaveProperty("moderatedAt");
+  });
+
+  it("presentRevision ignores columns the contract does not declare", () => {
+    const record = {
+      ...revisionRow(),
+      someFutureColumn: "x",
+      moderatedAt: FUTURE_TIMESTAMP,
+    };
+
+    const presented = presentRevision(record);
+
+    expect(() => presentRevision(record)).not.toThrow();
+    expect(EntryRevisionSchema.parse(presented)).toEqual(presented);
+    expect(presented).not.toHaveProperty("someFutureColumn");
+    expect(presented).not.toHaveProperty("moderatedAt");
+  });
+
+  it("presentItineraryItem ignores columns the contract does not declare", () => {
+    const record = {
+      ...itineraryRow(),
+      someFutureColumn: "x",
+      moderatedAt: FUTURE_TIMESTAMP,
+    };
+
+    const presented = presentItineraryItem(record);
+
+    expect(() => presentItineraryItem(record)).not.toThrow();
+    expect(ItineraryItemSchema.parse(presented)).toEqual(presented);
+    expect(presented).not.toHaveProperty("someFutureColumn");
+    expect(presented).not.toHaveProperty("moderatedAt");
+    expect(presented.startTime).toBeNull();
+    expect(presented.endTime).toBeNull();
+    expect(presented.assigneeId).toBeNull();
+    expect(presented.deletedAt).toBeNull();
+  });
+
+  it("presentActivity ignores columns the contract does not declare", () => {
+    const record = {
+      ...activityRow(),
+      someFutureColumn: "x",
+      moderatedAt: FUTURE_TIMESTAMP,
+    };
+
+    const presented = presentActivity(record);
+
+    expect(() => presentActivity(record)).not.toThrow();
+    expect(ActivitySchema.parse(presented)).toEqual(presented);
+    expect(presented).not.toHaveProperty("someFutureColumn");
+    expect(presented).not.toHaveProperty("moderatedAt");
+    expect(presented.tripId).toBeNull();
   });
 });

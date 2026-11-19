@@ -107,7 +107,8 @@ function build(options: { row?: StopRecord } = {}) {
       return row;
     }),
     updateStop: vi.fn(async (_tx: unknown, args: { data: Record<string, unknown> }) => {
-      row = stopRow({ ...row, ...args.data } as Partial<StopRecord>);
+      // Test double for a real UPDATE: merge the patch into the stored row.
+      Object.assign(row, args.data);
       return 1;
     }),
   };

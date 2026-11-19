@@ -119,9 +119,12 @@ function build(options: { row?: TripRecord; destinations?: TripDestinationRecord
     transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback({})),
     findTrip: vi.fn(async (_workspaceId: string, tripId: string) =>
       row.id === tripId
-        ? { ...row, destinationsV2: activeDestinationRows(tripId) }
+        ? Object.assign({}, row, { destinationsV2: activeDestinationRows(tripId) })
         : destinations.some((destination) => destination.tripId === tripId)
-          ? { ...row, id: tripId, destinationsV2: activeDestinationRows(tripId) }
+          ? Object.assign({}, row, {
+              id: tripId,
+              destinationsV2: activeDestinationRows(tripId),
+            })
           : null,
     ),
     createTrip: vi.fn(async (_tx: unknown, data: Record<string, unknown>) => {
@@ -129,12 +132,14 @@ function build(options: { row?: TripRecord; destinations?: TripDestinationRecord
       return row;
     }),
     updateTrip: vi.fn(async (_tx: unknown, args: { data: Record<string, unknown> }) => {
-      row = tripRow({ ...row, ...args.data } as Partial<TripRecord>);
+      // Test double for a real UPDATE: merge the patch into the stored row.
+      Object.assign(row, args.data);
       return 1;
     }),
     createParticipant: vi.fn(async () => ({})),
     softDeleteTrip: vi.fn(async (_tx: unknown, args: { actorId: string }) => {
-      row = tripRow({ ...row, deletedAt: NOW, updatedById: args.actorId });
+      row.deletedAt = NOW;
+      row.updatedById = args.actorId;
       return 1;
     }),
     createDestinations: vi.fn(

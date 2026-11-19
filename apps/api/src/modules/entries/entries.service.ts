@@ -463,16 +463,46 @@ export class EntriesService {
   }
 
   private presentEntry(record: EntryRecord): JournalEntry {
+    // Explicit passthrough: the presenter argument is built field by field, so
+    // a future `EntryRecord` column can never reach the strict contract.
     return presentEntry({
-      ...record,
+      id: record.id,
+      tripId: record.tripId,
+      workspaceId: record.workspaceId,
+      title: record.title,
+      date: record.date,
+      location: record.location,
+      lat: record.lat,
+      lng: record.lng,
+      mood: record.mood,
+      weather: record.weather,
+      contentJson: record.contentJson,
       contentHtml: this.sanitizer.sanitizeHtml(record.contentHtml),
+      excerpt: record.excerpt,
+      tags: record.tags,
+      favorite: record.favorite,
+      version: record.version,
+      createdById: record.createdById,
+      updatedById: record.updatedById,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      deletedAt: record.deletedAt,
     });
   }
 
   private presentRevision(record: RevisionRecord): EntryRevision {
+    // Same explicit passthrough for revisions: `presentRevision` validates a
+    // strict schema, and this layer only replaces the sanitized HTML.
     return presentRevision({
-      ...record,
+      id: record.id,
+      workspaceId: record.workspaceId,
+      entryId: record.entryId,
+      version: record.version,
+      title: record.title,
+      contentJson: record.contentJson,
       contentHtml: this.sanitizer.sanitizeHtml(record.contentHtml),
+      editedById: record.editedById,
+      createdAt: record.createdAt,
     });
   }
 }

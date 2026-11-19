@@ -23,17 +23,33 @@ import { NOW, USER_OWNER_ID, WORKSPACE_A_ID, makeActor } from "./identity-fixtur
 describe("trip origin normalization", () => {
   let app: INestApplication;
   const createTrip = vi.fn();
+  const findTrip = vi.fn();
+  let storedTrip: ReturnType<typeof tripRecord> | null = null;
 
   beforeAll(async () => {
-    createTrip.mockImplementation(async (_tx: unknown, data: Record<string, unknown>) =>
-      tripRecord({
+    createTrip.mockImplementation(async (_tx: unknown, data: Record<string, unknown>) => {
+      storedTrip = tripRecord({
         ...data,
         id: "01942f30-1200-7000-8000-000000000901",
         version: 1,
         createdAt: NOW,
         updatedAt: NOW,
         deletedAt: null,
-      }),
+      });
+      return storedTrip;
+    });
+    // `TripsService.create` re-reads the row inside the same transaction right
+    // after it writes destinations (`trips.service.ts:241/262`). The real
+    // repository returns the created row for the caller's workspace and `null`
+    // for anything else; the mock mirrors that contract instead of resolving
+    // to the first row unconditionally.
+    findTrip.mockImplementation(
+      async (workspaceId: string, tripId: string, _tx?: unknown) =>
+        storedTrip !== null &&
+        workspaceId === WORKSPACE_A_ID &&
+        tripId === storedTrip.id
+          ? storedTrip
+          : null,
     );
     const moduleRef = await Test.createTestingModule({
       imports: [
@@ -59,6 +75,8 @@ describe("trip origin normalization", () => {
         transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback({})),
         findMedia: vi.fn(),
         createTrip,
+        createDestinations: vi.fn().mockResolvedValue(undefined),
+        findTrip,
         createParticipant: vi.fn().mockResolvedValue({ id: "participant" }),
       })
       .overrideGuard(TenantGuard)

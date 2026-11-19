@@ -195,8 +195,18 @@ export interface PresentStopInput {
 }
 
 export function presentStop(record: PresentStopInput): Stop {
+  // Explicit field list — the row is never spread into the `.strict()` contract.
+  // `StopSchema` is strict, so an additive column (`moderatedAt`, a future place
+  // column) would otherwise turn every read into a 500.
   return StopSchema.parse({
-    ...record,
+    id: record.id,
+    tripId: record.tripId,
+    workspaceId: record.workspaceId,
+    city: record.city,
+    country: record.country,
+    countryCode: record.countryCode,
+    lat: record.lat,
+    lng: record.lng,
     provider: record.provider ?? null,
     providerPlaceId: record.providerPlaceId ?? null,
     timeZone: record.timeZone ?? null,
@@ -204,6 +214,11 @@ export function presentStop(record: PresentStopInput): Stop {
     bbox: toBbox(record.bbox),
     startDate: presentDate(record.startDate),
     endDate: presentDate(record.endDate),
+    notes: record.notes,
+    order: record.order,
+    version: record.version,
+    createdById: record.createdById,
+    updatedById: record.updatedById,
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
     deletedAt: nullableIso(record.deletedAt),
@@ -217,8 +232,12 @@ export function presentParticipant(record: {
   userId: string;
   joinedAt: Date | string;
 }): TripParticipant {
+  // `TripParticipantSchema` is strict and the row is never spread.
   return TripParticipantSchema.parse({
-    ...record,
+    id: record.id,
+    workspaceId: record.workspaceId,
+    tripId: record.tripId,
+    userId: record.userId,
     joinedAt: iso(record.joinedAt),
   });
 }
@@ -286,8 +305,18 @@ export function presentRevision(record: {
   editedById: string;
   createdAt: Date | string;
 }): EntryRevision {
+  // `EntryRevisionSchema` is strict; list the contract fields explicitly so a
+  // future revision column (or a read model with extra joins) cannot 500 the
+  // revision history.
   return EntryRevisionSchema.parse({
-    ...record,
+    id: record.id,
+    workspaceId: record.workspaceId,
+    entryId: record.entryId,
+    version: record.version,
+    title: record.title,
+    contentJson: record.contentJson,
+    contentHtml: record.contentHtml,
+    editedById: record.editedById,
     createdAt: iso(record.createdAt),
   });
 }
@@ -313,9 +342,24 @@ export function presentItineraryItem(record: {
   updatedAt: Date | string;
   deletedAt: Date | string | null;
 }): ItineraryItem {
+  // `ItineraryItemSchema` is strict; the row is never spread.
   return ItineraryItemSchema.parse({
-    ...record,
+    id: record.id,
+    tripId: record.tripId,
+    workspaceId: record.workspaceId,
     date: presentDate(record.date),
+    startTime: record.startTime,
+    endTime: record.endTime,
+    title: record.title,
+    type: record.type,
+    location: record.location,
+    notes: record.notes,
+    done: record.done,
+    order: record.order,
+    assigneeId: record.assigneeId,
+    version: record.version,
+    createdById: record.createdById,
+    updatedById: record.updatedById,
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
     deletedAt: nullableIso(record.deletedAt),
@@ -333,8 +377,16 @@ export function presentActivity(record: {
   metadata: unknown;
   createdAt: Date | string;
 }): Activity {
+  // `ActivitySchema` is strict; only the declared columns reach the contract,
+  // and `metadata` is normalized to an object before validation.
   return ActivitySchema.parse({
-    ...record,
+    id: record.id,
+    workspaceId: record.workspaceId,
+    tripId: record.tripId,
+    actorId: record.actorId,
+    verb: record.verb,
+    entityType: record.entityType,
+    entityId: record.entityId,
     metadata:
       typeof record.metadata === "object" &&
       record.metadata !== null &&
