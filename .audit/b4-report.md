@@ -158,6 +158,21 @@ $ pnpm --filter @roamlog/web exec vitest run components/moderation
 - 修复：`presentTrip` / `presentEntry` / `admin.presenters.presentMedia` / `presentComment` 全部**显式构造**；新增 4 条防复发测试（valid row + moderatedAt + `someFutureColumn` 不抛、schema 可 parse）。
 - 结果：同一 E2E 同一请求 **500 → 200**（见 3.6 第一条与 restore 后 200）。
 
+### 3.8 提交后复验（含 D2 的 0009_media_motion）
+```
+$ DATABASE_URL=...schema=b4_final prisma migrate deploy
+→ 0001..0009 全部应用成功（空库全序）
+$ ROAMLOG_TEST_DATABASE_URL=...schema=b4_final pnpm --filter @roamlog/db test
+→ Test Files 16 passed (16) / Tests 77 passed (77)
+$ pnpm --filter @roamlog/admin build
+→ exit 0（再次确认，路由含 ○ /admin/content）
+验后已 DROP SCHEMA b4_final 与 b4_e2e。
+```
+
+### 3.9 非成员行为
+`TenantGuard → WorkspaceAccessService.requireMembership` 对非成员返回
+`404 WORKSPACE_NOT_FOUND`（不是 403、不泄露工作区存在性）；成员身份是举报端点唯一门槛（Viewer 通过）。该守卫是既有且有测试的基础设施，本任务复用未改。
+
 ## 4. 整行 spread 清单（Root 要求）
 
 已改为显式构造（B4 相关）：
