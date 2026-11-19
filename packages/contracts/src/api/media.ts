@@ -3,9 +3,23 @@ import { z } from "zod";
 import { DateOnlySchema, IsoTimestampSchema, UuidV7Schema } from "../common/ids";
 import { createSortSchema, CursorPageSchema, CursorQuerySchema } from "../common/pagination";
 import { MediaStatusSchema } from "../entities/enums";
-import { MediaSchema } from "../entities/media";
+import {
+  MediaMotionMimeTypeSchema,
+  MediaSchema,
+} from "../entities/media";
 import { TripSchema } from "../entities/trip";
 import { MessageResponseSchema } from "./common";
+
+/**
+ * Limits for the paired motion asset. The still is compressed in the browser
+ * (D1); the motion is deliberately *not* re-encoded there — a second pass over
+ * a `.mov` risks the `moov` atom and the Apple still-image-time metadata — so
+ * the size and duration caps are the only client-side guards besides magic-byte
+ * checks on the server. Kept here so the API, the web uploader and the tests
+ * read one number.
+ */
+export const MEDIA_MOTION_MAX_BYTES = 50 * 1024 * 1024;
+export const MEDIA_MOTION_MAX_DURATION_MS = 30_000;
 
 export const MediaPresignRequestSchema = z
   .object({
@@ -51,6 +65,58 @@ export const CompleteMediaRequestSchema = z
   })
   .strict();
 export type CompleteMediaRequest = z.infer<typeof CompleteMediaRequestSchema>;
+
+/**
+ * Ask the API for a presigned PUT of the paired motion asset.
+ *
+ * Same presign machinery as the still (`StorageService.createPresignedUpload`,
+ * one signed URL, one `Content-Type` header); the only difference is the video
+ * content type and the tighter size ceiling. The response also carries the
+ * server-generated `storageKey` because the completion callback has to prove
+ * which object it is completing — the key is always derived from the media
+ * folder, never accepted from the client.
+ */
+export const MediaMotionPresignRequestSchema = z
+  .object({
+    fileName: z.string().min(1).max(255),
+    mimeType: MediaMotionMimeTypeSchema,
+    size: z.number().int().positive().max(MEDIA_MOTION_MAX_BYTES),
+    durationMs: z.number().int().nonnegative().max(MEDIA_MOTION_MAX_DURATION_MS).optional(),
+  })
+  .strict();
+export type MediaMotionPresignRequest = z.infer<typeof MediaMotionPresignRequestSchema>;
+
+export const MediaMotionPresignResponseSchema = z
+  .object({
+    mediaId: UuidV7Schema,
+    storageKey: z
+      .string()
+      .min(1)
+      .max(500)
+      .describe("Server-derived object key; echoed back on completion."),
+    uploadUrl: z.url(),
+    method: z.literal("PUT"),
+    headers: z.record(z.string(), z.string()),
+    expiresAt: IsoTimestampSchema,
+  })
+  .strict();
+export type MediaMotionPresignResponse = z.infer<typeof MediaMotionPresignResponseSchema>;
+
+/**
+ * Completion callback after the motion PUT succeeded.
+ *
+ * `sizeBytes` is the client's view; the API still HEADs the object and refuses a
+ * mismatch, so a client cannot register a motion row that points at nothing.
+ */
+export const CompleteMediaMotionRequestSchema = z
+  .object({
+    storageKey: z.string().min(1).max(500),
+    mimeType: MediaMotionMimeTypeSchema,
+    sizeBytes: z.number().int().positive().max(MEDIA_MOTION_MAX_BYTES),
+    durationMs: z.number().int().nonnegative().max(MEDIA_MOTION_MAX_DURATION_MS).nullable(),
+  })
+  .strict();
+export type CompleteMediaMotionRequest = z.infer<typeof CompleteMediaMotionRequestSchema>;
 
 export const MediaListQuerySchema = CursorQuerySchema.extend({
   tripId: UuidV7Schema.optional(),

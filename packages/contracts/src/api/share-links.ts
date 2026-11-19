@@ -1,10 +1,12 @@
 import { z } from "zod";
 
 import { CountryCodeSchema, DateOnlySchema, IsoTimestampSchema, UuidV7Schema } from "../common/ids";
+import { MediaMotionSchema } from "../entities/media";
 import { ShareLinkCreatedSchema, ShareLinkSchema } from "../entities/share-link";
 import { JournalEntrySchema } from "../entities/journal";
 import { TripCoverSchema, TripDestinationListSchema, TripTagListSchema } from "../entities/trip";
 import { TripStatusSchema } from "../entities/enums";
+import { PlaceProviderSchema } from "../entities/stop";
 import { BudgetSummarySchema } from "./expenses";
 import { MessageResponseSchema } from "./common";
 
@@ -46,6 +48,12 @@ export const PublicTripSchema = z
     coverMediaId: UuidV7Schema.nullable(),
     cover: TripCoverSchema.nullable(),
     origin: z.string().min(1).max(120),
+    /**
+     * Source of the stored origin place, when the trip recorded one. Nullable so
+     * a share created before the provider was stored (or a manually typed
+     * origin) keeps validating.
+     */
+    originProvider: PlaceProviderSchema.nullable(),
     destinations: TripDestinationListSchema,
     countryCodes: z.array(CountryCodeSchema),
     tags: TripTagListSchema,
@@ -61,6 +69,8 @@ export const PublicStopSchema = z
     countryCode: CountryCodeSchema,
     lat: z.number().min(-90).max(90).nullable(),
     lng: z.number().min(-180).max(180).nullable(),
+    /** Source of the stop's place metadata, so the public page can credit it. */
+    provider: PlaceProviderSchema.nullable(),
     address: z
       .string()
       .max(400)
@@ -86,6 +96,12 @@ export const PublicMediaSchema = z
     caption: z.string().max(500).nullable(),
     date: DateOnlySchema.nullable(),
     location: z.string().max(200).nullable(),
+    /**
+     * A shared Live Photo must stay playable on the public page: the motion URL
+     * is signed exactly like the still's, and the storage key never appears.
+     */
+    livePhoto: z.boolean().optional(),
+    motion: MediaMotionSchema.nullable().optional(),
   })
   .strict();
 export type PublicMedia = z.infer<typeof PublicMediaSchema>;
