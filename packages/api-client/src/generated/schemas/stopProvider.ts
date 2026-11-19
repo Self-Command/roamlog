@@ -12,6 +12,7 @@
 export type StopProvider = (typeof StopProvider)[keyof typeof StopProvider] | null;
 
 export const StopProvider = {
+  geoapify: "geoapify",
   photon: "photon",
   local: "local",
 } as const;

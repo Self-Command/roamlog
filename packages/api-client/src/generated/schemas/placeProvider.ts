@@ -9,6 +9,7 @@
 export type PlaceProvider = (typeof PlaceProvider)[keyof typeof PlaceProvider];
 
 export const PlaceProvider = {
+  geoapify: "geoapify",
   photon: "photon",
   local: "local",
 } as const;

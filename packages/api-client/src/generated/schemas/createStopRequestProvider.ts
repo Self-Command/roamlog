@@ -13,6 +13,7 @@ export type CreateStopRequestProvider =
   (typeof CreateStopRequestProvider)[keyof typeof CreateStopRequestProvider] | null;
 
 export const CreateStopRequestProvider = {
+  geoapify: "geoapify",
   photon: "photon",
   local: "local",
 } as const;

@@ -11,4 +11,5 @@ export type ReadyResponseStatus = (typeof ReadyResponseStatus)[keyof typeof Read
 export const ReadyResponseStatus = {
   ok: "ok",
   degraded: "degraded",
+  unavailable: "unavailable",
 } as const;

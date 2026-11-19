@@ -13,6 +13,7 @@ export type UpdateStopRequestProvider =
   (typeof UpdateStopRequestProvider)[keyof typeof UpdateStopRequestProvider] | null;
 
 export const UpdateStopRequestProvider = {
+  geoapify: "geoapify",
   photon: "photon",
   local: "local",
 } as const;

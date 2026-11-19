@@ -5452,6 +5452,7 @@
               "null"
             ],
             "enum": [
+              "geoapify",
               "photon",
               "local",
               null
@@ -9725,6 +9726,7 @@
       "PlaceProvider": {
         "type": "string",
         "enum": [
+          "geoapify",
           "photon",
           "local"
         ]
@@ -11438,7 +11440,8 @@
             "type": "string",
             "enum": [
               "ok",
-              "degraded"
+              "degraded",
+              "unavailable"
             ]
           },
           "checks": {
@@ -12946,6 +12949,7 @@
                 "null"
               ],
               "enum": [
+                "geoapify",
                 "photon",
                 "local",
                 null
@@ -14097,6 +14101,7 @@
               "null"
             ],
             "enum": [
+              "geoapify",
               "photon",
               "local",
               null
@@ -14297,6 +14302,7 @@
                 "null"
               ],
               "enum": [
+                "geoapify",
                 "photon",
                 "local",
                 null
@@ -16428,6 +16434,7 @@
               "null"
             ],
             "enum": [
+              "geoapify",
               "photon",
               "local",
               null

@@ -13,6 +13,7 @@ export type ReorderStopsResponseItemProvider =
   (typeof ReorderStopsResponseItemProvider)[keyof typeof ReorderStopsResponseItemProvider] | null;
 
 export const ReorderStopsResponseItemProvider = {
+  geoapify: "geoapify",
   photon: "photon",
   local: "local",
 } as const;

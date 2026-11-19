@@ -13,6 +13,7 @@ export type StopListResponseItemProvider =
   (typeof StopListResponseItemProvider)[keyof typeof StopListResponseItemProvider] | null;
 
 export const StopListResponseItemProvider = {
+  geoapify: "geoapify",
   photon: "photon",
   local: "local",
 } as const;
