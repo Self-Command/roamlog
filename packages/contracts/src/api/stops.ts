@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CountryCodeSchema, DateOnlySchema, UuidV7Schema } from "../common/ids";
 import { ItineraryItemSchema } from "../entities/itinerary";
 import { PlaceProviderSchema, StopSchema } from "../entities/stop";
-import { IanaTimeZoneSchema } from "../entities/trip";
+import { GeoBboxSchema, IanaTimeZoneSchema } from "../entities/trip";
 import { ItineraryItemTypeSchema, TimeOfDaySchema } from "../entities/enums";
 import { MessageResponseSchema } from "./common";
 
@@ -20,6 +20,8 @@ export const CreateStopRequestSchema = z
     provider: PlaceProviderSchema.nullable().optional(),
     providerPlaceId: z.string().min(1).max(200).nullable().optional(),
     timeZone: IanaTimeZoneSchema.nullable().optional(),
+    address: z.string().max(400).nullable().optional(),
+    bbox: GeoBboxSchema.nullable().optional(),
     startDate: DateOnlySchema,
     endDate: DateOnlySchema,
     notes: z.string().max(4000).optional(),
@@ -48,6 +50,15 @@ export const UpdateStopRequestSchema = z
     provider: PlaceProviderSchema.nullable().optional(),
     providerPlaceId: z.string().min(1).max(200).nullable().optional(),
     timeZone: IanaTimeZoneSchema.nullable().optional(),
+    address: z
+      .string()
+      .max(400)
+      .nullable()
+      .optional()
+      .describe("Send null to clear the stored address; omit to keep it."),
+    bbox: GeoBboxSchema.nullable()
+      .optional()
+      .describe("Send null to clear the stored bbox; omit to keep it."),
     startDate: DateOnlySchema.optional(),
     endDate: DateOnlySchema.optional(),
     notes: z.string().max(4000).optional(),

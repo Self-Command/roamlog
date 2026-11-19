@@ -19,6 +19,7 @@ import { ActivitiesService } from "../activities/activities.service.js";
 import {
   assertDateRange,
   assertDateWithinTrip,
+  assertRawBbox,
   assertTripVisible,
   dateOnlyToDate,
 } from "./content-values.js";
@@ -53,6 +54,9 @@ export class StopsService {
     rawInput: unknown,
   ): Promise<Stop> {
     this.permissions.assertCan(membership.role, "stop:create", "stop");
+    // The box is checked on the raw body so a bad one is `422 INVALID_BBOX`
+    // instead of the schema's generic 400.
+    assertRawBbox(rawInput, "bbox");
     const input = parseRequest(CreateStopRequestSchema, rawInput);
     const startDate = dateOnlyToDate(input.startDate);
     const endDate = dateOnlyToDate(input.endDate);
@@ -78,6 +82,8 @@ export class StopsService {
         provider: input.provider ?? null,
         providerPlaceId: input.providerPlaceId ?? null,
         timeZone: input.timeZone ?? null,
+        address: input.address ?? null,
+        bbox: input.bbox ?? null,
         createdById: actor.user.id,
         updatedById: actor.user.id,
       });
@@ -101,6 +107,7 @@ export class StopsService {
     rawInput: unknown,
   ): Promise<Stop> {
     this.permissions.assertCan(membership.role, "stop:update", "stop");
+    assertRawBbox(rawInput, "bbox");
     const input = parseRequest(UpdateStopRequestSchema, rawInput);
     const current = await this.repository.findStop(membership.workspaceId, stopId);
     if (!current) {
@@ -123,6 +130,8 @@ export class StopsService {
       ...(input.provider !== undefined ? { provider: input.provider } : {}),
       ...(input.providerPlaceId !== undefined ? { providerPlaceId: input.providerPlaceId } : {}),
       ...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
+      ...(input.address !== undefined ? { address: input.address } : {}),
+      ...(input.bbox !== undefined ? { bbox: input.bbox } : {}),
       updatedById: actor.user.id,
     };
 

@@ -1,5 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { Prisma } from "@roamlog/db";
 import type {
+  GeoBbox,
   TripStatus,
   TripVisibility,
 } from "@roamlog/contracts";
@@ -23,6 +25,8 @@ export interface TripCreateData {
   originLat: number | null;
   originLng: number | null;
   originCountryCode: string | null;
+  originAddress: string | null;
+  originBbox: GeoBbox | null;
   timeZone: string | null;
   destinations: string[];
   countryCodes: string[];
@@ -47,6 +51,8 @@ export interface TripUpdateData {
   originLat?: number | null;
   originLng?: number | null;
   originCountryCode?: string | null;
+  originAddress?: string | null;
+  originBbox?: GeoBbox | null;
   timeZone?: string | null;
   destinations?: string[];
   countryCodes?: string[];
@@ -64,6 +70,27 @@ export interface DuplicateChildren {
   itineraryItems: Array<Record<string, unknown>>;
   entries: Array<Record<string, unknown>>;
   participants: Array<{ userId: string }>;
+}
+
+/**
+ * Converts a contract bounding box into a Prisma `Json` write value.
+ *
+ * Prisma rejects a bare `null` for a nullable `Json` column; `Prisma.DbNull` is
+ * the value that writes SQL NULL. `undefined` stays `undefined` so a partial
+ * update leaves the stored box untouched.
+ */
+function bboxJson(
+  value: GeoBbox | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return value === null ? Prisma.DbNull : (value as unknown as Prisma.InputJsonValue);
+}
+
+/** Same conversion for a create, where the column is always written. */
+function bboxJsonRequired(value: GeoBbox | null): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  return value === null ? Prisma.DbNull : (value as unknown as Prisma.InputJsonValue);
 }
 
 @Injectable()
@@ -104,7 +131,10 @@ export class TripsRepository {
   }
 
   async createTrip(tx: ContentTransaction, data: TripCreateData): Promise<TripRecord> {
-    return (await tx.trip.create({ data })) as TripRecord;
+    const { originBbox, ...rest } = data;
+    return (await tx.trip.create({
+      data: { ...rest, originBbox: bboxJsonRequired(originBbox) },
+    })) as TripRecord;
   }
 
   async updateTrip(
@@ -116,6 +146,7 @@ export class TripsRepository {
       data: TripUpdateData;
     },
   ) {
+    const { originBbox, ...rest } = args.data;
     const result = await tx.trip.updateMany({
       where: {
         id: args.tripId,
@@ -124,7 +155,8 @@ export class TripsRepository {
         deletedAt: null,
       },
       data: {
-        ...args.data,
+        ...rest,
+        ...(originBbox === undefined ? {} : { originBbox: bboxJson(originBbox) }),
         version: { increment: 1 },
       },
     });

@@ -14,8 +14,12 @@ import {
   PlaceSearchQuerySchema,
   PlaceSearchResponseSchema,
   PublicMediaSchema,
+  PublicStopSchema,
   ShareLinkSchema,
   StopSchema,
+  CreateStopRequestSchema,
+  CreateTripRequestSchema,
+  UpdateStopRequestSchema,
   TripCoverSchema,
   TripParticipantSchema,
   TripSchema,
@@ -49,6 +53,8 @@ const trip = {
   originLat: null,
   originLng: null,
   originCountryCode: null,
+  originAddress: null,
+  originBbox: null,
   timeZone: "Asia/Tokyo",
   destinations: ["Kyoto", "Osaka"],
   countryCodes: ["JP"],
@@ -134,6 +140,68 @@ describe("entity contracts", () => {
     expect(TripSchema.safeParse({ ...trip, timeZone: "Asia Shanghai" }).success).toBe(false);
   });
 
+  it("keeps originAddress and originBbox nullable and order-aware", () => {
+    const withPlace = {
+      ...trip,
+      originAddress: "京都市, 京都府, 日本",
+      originBbox: [135.6, 34.85, 135.93, 35.17],
+    };
+
+    expect(TripSchema.parse(trip).originAddress).toBeNull();
+    expect(TripSchema.parse(trip).originBbox).toBeNull();
+    expect(TripSchema.parse(withPlace).originBbox).toEqual([135.6, 34.85, 135.93, 35.17]);
+    // west <= east and south <= north, or it is not a box.
+    expect(TripSchema.safeParse({ ...withPlace, originBbox: [135.93, 34.85, 135.6, 35.17] }).success).toBe(
+      false,
+    );
+    expect(TripSchema.safeParse({ ...withPlace, originBbox: [135.6, 35.17, 135.93, 34.85] }).success).toBe(
+      false,
+    );
+    // Longitude/latitude limits, arity, and element types.
+    expect(TripSchema.safeParse({ ...withPlace, originBbox: [181, 34.85, 181.5, 35.17] }).success).toBe(
+      false,
+    );
+    expect(TripSchema.safeParse({ ...withPlace, originBbox: [135.6, 91, 135.93, 92] }).success).toBe(false);
+    expect(TripSchema.safeParse({ ...withPlace, originBbox: [135.6, 34.85, 135.93] }).success).toBe(false);
+    expect(TripSchema.safeParse({ ...withPlace, originBbox: [135.6, 34.85, 135.93, "35.17"] }).success).toBe(
+      false,
+    );
+    // The column is VARCHAR(400).
+    expect(TripSchema.safeParse({ ...withPlace, originAddress: "x".repeat(401) }).success).toBe(false);
+    // Unknown keys stay rejected.
+    expect(TripSchema.safeParse({ ...withPlace, bbox: [] }).success).toBe(false);
+  });
+
+  it("accepts originAddress/originBbox on create and update requests", () => {
+    const created = CreateTripRequestSchema.parse({
+      title: "Kyoto",
+      startDate: "2026-11-21",
+      endDate: "2026-11-24",
+      originAddress: "京都市, 京都府, 日本",
+      originBbox: [135.6, 34.85, 135.93, 35.17],
+    });
+    expect(created.originAddress).toBe("京都市, 京都府, 日本");
+    expect(created.originBbox).toEqual([135.6, 34.85, 135.93, 35.17]);
+
+    const cleared = UpdateTripRequestSchema.parse({ version: 1, originAddress: null, originBbox: null });
+    expect(cleared.originAddress).toBeNull();
+    expect(cleared.originBbox).toBeNull();
+
+    // Omitted keys stay omitted so the API can leave the columns untouched.
+    const untouched = UpdateTripRequestSchema.parse({ version: 1, title: "Kyoto" });
+    expect(untouched).not.toHaveProperty("originAddress");
+    expect(untouched).not.toHaveProperty("originBbox");
+
+    expect(
+      CreateTripRequestSchema.safeParse({
+        title: "Kyoto",
+        startDate: "2026-11-21",
+        endDate: "2026-11-24",
+        originBbox: [135.6, 34.85],
+      }).success,
+    ).toBe(false);
+  });
+
   it("enforces unique, bounded trip tags, destinations, and guest names", () => {
     expect(TripSchema.safeParse({ ...trip, tags: ["autumn", "Autumn"] }).success).toBe(false);
     expect(TripSchema.safeParse({ ...trip, destinations: ["Kyoto", " Kyoto "] }).success).toBe(
@@ -192,6 +260,8 @@ describe("entity contracts", () => {
       provider: "photon" as const,
       providerPlaceId: "photon:kyoto",
       timeZone: "Asia/Tokyo",
+      address: "京都市, 京都府, 日本",
+      bbox: [135.6, 34.85, 135.93, 35.17],
       startDate: "2026-11-21",
       endDate: "2026-11-24",
       notes: "",
@@ -205,7 +275,89 @@ describe("entity contracts", () => {
     };
 
     expect(StopSchema.parse(stop).providerPlaceId).toBe("photon:kyoto");
+    expect(StopSchema.parse(stop).address).toBe("京都市, 京都府, 日本");
+    expect(StopSchema.parse(stop).bbox).toEqual([135.6, 34.85, 135.93, 35.17]);
     expect(StopSchema.safeParse({ ...stop, timeZone: "local time" }).success).toBe(false);
+  });
+
+  it("keeps the stop address/bbox nullable and rejects inverted or short boxes", () => {
+    const stop = {
+      id: OTHER,
+      tripId: TRIP,
+      workspaceId: WORKSPACE,
+      city: "Kyoto",
+      country: "Japan",
+      countryCode: "JP",
+      lat: null,
+      lng: null,
+      provider: null,
+      providerPlaceId: null,
+      timeZone: null,
+      address: null,
+      bbox: null,
+      startDate: "2026-11-21",
+      endDate: "2026-11-24",
+      notes: "",
+      order: 0,
+      version: 1,
+      createdById: USER,
+      updatedById: USER,
+      createdAt: TS,
+      updatedAt: TS,
+      deletedAt: null,
+    };
+
+    expect(StopSchema.parse(stop).address).toBeNull();
+    expect(StopSchema.parse(stop).bbox).toBeNull();
+    expect(StopSchema.safeParse({ ...stop, bbox: [1, 2, 3] }).success).toBe(false);
+    expect(StopSchema.safeParse({ ...stop, bbox: [10, 20, 5, 30] }).success).toBe(false);
+    expect(StopSchema.safeParse({ ...stop, address: "x".repeat(401) }).success).toBe(false);
+
+    // Create/update requests take the same optional nullable pair.
+    const base = {
+      city: "Kyoto",
+      country: "Japan",
+      countryCode: "JP",
+      startDate: "2026-11-21",
+      endDate: "2026-11-24",
+    };
+    expect(
+      CreateStopRequestSchema.parse({
+        ...base,
+        address: "京都市, 京都府, 日本",
+        bbox: [135.6, 34.85, 135.93, 35.17],
+      }).bbox,
+    ).toEqual([135.6, 34.85, 135.93, 35.17]);
+    expect(UpdateStopRequestSchema.parse({ version: 1, address: null, bbox: null })).toEqual({
+      version: 1,
+      address: null,
+      bbox: null,
+    });
+    const untouched = UpdateStopRequestSchema.parse({ version: 1, notes: "later" });
+    expect(untouched).not.toHaveProperty("address");
+    expect(untouched).not.toHaveProperty("bbox");
+    expect(CreateStopRequestSchema.safeParse({ ...base, bbox: [1, 2, 3, 4, 5] }).success).toBe(false);
+  });
+
+  it("exposes the public stop address but never its bbox", () => {
+    const publicStop = {
+      id: OTHER,
+      city: "Kyoto",
+      country: "Japan",
+      countryCode: "JP",
+      lat: 35.0116,
+      lng: 135.7681,
+      address: "京都市, 京都府, 日本",
+      startDate: "2026-11-21",
+      endDate: "2026-11-24",
+      notes: "",
+      order: 0,
+    };
+
+    expect(PublicStopSchema.parse(publicStop).address).toBe("京都市, 京都府, 日本");
+    expect(PublicStopSchema.safeParse({ ...publicStop, address: null }).success).toBe(true);
+    // A bbox in a public stop is an unknown key: the schema is strict.
+    expect(PublicStopSchema.safeParse({ ...publicStop, bbox: [1, 2, 3, 4] }).success).toBe(false);
   });
 
   it("defines bounded place search input and output", () => {

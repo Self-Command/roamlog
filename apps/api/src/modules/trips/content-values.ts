@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { UuidV7Schema, type WorkspaceRole } from "@roamlog/contracts";
+import { GeoBboxSchema, UuidV7Schema, type GeoBbox, type WorkspaceRole } from "@roamlog/contracts";
 
 export const UNSPECIFIED_TRIP_ORIGIN = "未填写";
 
@@ -128,6 +128,82 @@ export function rawOriginCoordinatePair(
 
 function coordinateSlot(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Rejects a bounding box that is not `[west, south, east, north]` inside the
+ * WGS84 range.
+ *
+ * The shape check runs on the raw body before schema parsing so a malformed box
+ * is reported as `422 INVALID_BBOX` with the field that caused it, matching the
+ * existing coordinate-pair handling. `null` (and an absent value) are accepted:
+ * `null` clears a stored box, absence leaves it untouched.
+ */
+export function assertBbox(value: unknown, field = "bbox"): void {
+  if (value === null || value === undefined) {
+    return;
+  }
+  const parsed = GeoBboxSchema.safeParse(value);
+  if (parsed.success) {
+    return;
+  }
+  throw new UnprocessableEntityException({
+    code: "INVALID_BBOX",
+    message: "bbox must be [west, south, east, north] inside the WGS84 range.",
+    errors: [
+      {
+        field,
+        code: "INVALID_BBOX",
+        message: parsed.error.issues[0]?.message ?? "Invalid bounding box.",
+      },
+    ],
+  });
+}
+
+/**
+ * Reads one bounding-box field out of an unvalidated request body.
+ *
+ * Returns `false` when the key is absent (an update must then leave the column
+ * untouched) and `true` with the raw value otherwise, so the caller can hand
+ * `null` through as an explicit clear.
+ */
+export function rawBboxField(
+  rawInput: unknown,
+  field: string,
+): { present: boolean; value: unknown } {
+  if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) {
+    return { present: false, value: null };
+  }
+  const body = rawInput as Record<string, unknown>;
+  return field in body ? { present: true, value: body[field] } : { present: false, value: null };
+}
+
+/**
+ * Validates the bounding box when the raw body mentions it.
+ *
+ * Absent keys pass untouched (an update must not clear a stored box), and an
+ * explicit `null` is accepted because it clears the column.
+ */
+export function assertRawBbox(rawInput: unknown, field = "bbox"): void {
+  const raw = rawBboxField(rawInput, field);
+  if (raw.present) {
+    assertBbox(raw.value, field);
+  }
+}
+
+/**
+ * Normalizes a stored `JSONB` value into the contract tuple.
+ *
+ * A row that does not hold a valid box reports `null` rather than throwing: one
+ * malformed column must not turn an entire trip read into a 500. New writes are
+ * already schema-checked, so this only guards legacy or out-of-band rows.
+ */
+export function toBbox(value: unknown): GeoBbox | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const parsed = GeoBboxSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export function assertUuid(value: string, field: string): void {

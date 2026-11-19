@@ -1,4 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { Prisma } from "@roamlog/db";
+import type { GeoBbox } from "@roamlog/contracts";
 
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { MaxOrderResult, StopRecord, TripRecord } from "./content-records.js";
@@ -19,6 +21,8 @@ export interface StopCreateData {
   provider: string | null;
   providerPlaceId: string | null;
   timeZone: string | null;
+  address: string | null;
+  bbox: GeoBbox | null;
   createdById: string;
   updatedById: string;
 }
@@ -36,7 +40,27 @@ export interface StopUpdateData {
   provider?: string | null;
   providerPlaceId?: string | null;
   timeZone?: string | null;
+  address?: string | null;
+  bbox?: GeoBbox | null;
   updatedById: string;
+}
+
+/**
+ * Prisma rejects a bare `null` for a nullable `Json` column; `Prisma.DbNull`
+ * writes SQL NULL instead. See the trip repository for the same conversion.
+ */
+function bboxJson(
+  value: GeoBbox | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return value === null ? Prisma.DbNull : (value as unknown as Prisma.InputJsonValue);
+}
+
+/** Same conversion for a create, where the column is always written. */
+function bboxJsonRequired(value: GeoBbox | null): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  return value === null ? Prisma.DbNull : (value as unknown as Prisma.InputJsonValue);
 }
 
 @Injectable()
@@ -91,7 +115,10 @@ export class StopsRepository {
   }
 
   async createStop(tx: ContentTransaction, data: StopCreateData): Promise<StopRecord> {
-    return (await tx.stop.create({ data })) as StopRecord;
+    const { bbox, ...rest } = data;
+    return (await tx.stop.create({
+      data: { ...rest, bbox: bboxJsonRequired(bbox) },
+    })) as StopRecord;
   }
 
   async updateStop(
@@ -103,6 +130,7 @@ export class StopsRepository {
       data: StopUpdateData;
     },
   ) {
+    const { bbox, ...rest } = args.data;
     const result = await tx.stop.updateMany({
       where: {
         id: args.stopId,
@@ -111,7 +139,8 @@ export class StopsRepository {
         deletedAt: null,
       },
       data: {
-        ...args.data,
+        ...rest,
+        ...(bbox === undefined ? {} : { bbox: bboxJson(bbox) }),
         version: { increment: 1 },
       },
     });

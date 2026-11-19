@@ -5,6 +5,7 @@ import { AmountMinorSchema, CurrencyCodeSchema } from "../common/money";
 import { createSortSchema, CursorPageSchema, CursorQuerySchema } from "../common/pagination";
 import { ActivitySchema } from "../entities/activity";
 import {
+  GeoBboxSchema,
   IanaTimeZoneSchema,
   TripDestinationListSchema,
   TripGuestNameListSchema,
@@ -44,6 +45,8 @@ const CreateTripShape = {
   originLat: z.number().min(-90).max(90).nullable().optional(),
   originLng: z.number().min(-180).max(180).nullable().optional(),
   originCountryCode: CountryCodeSchema.nullable().optional(),
+  originAddress: z.string().max(400).nullable().optional(),
+  originBbox: GeoBboxSchema.nullable().optional(),
   timeZone: IanaTimeZoneSchema.nullable().optional(),
   destinations: TripDestinationListSchema.optional(),
   countryCodes: z.array(CountryCodeSchema).optional(),
@@ -100,6 +103,15 @@ const UpdateTripShape = {
   originLat: z.number().min(-90).max(90).nullable().optional(),
   originLng: z.number().min(-180).max(180).nullable().optional(),
   originCountryCode: CountryCodeSchema.nullable().optional(),
+  originAddress: z
+    .string()
+    .max(400)
+    .nullable()
+    .optional()
+    .describe("Send null to clear the stored address; omit to keep it."),
+  originBbox: GeoBboxSchema.nullable()
+    .optional()
+    .describe("Send null to clear the stored bbox; omit to keep it."),
   timeZone: IanaTimeZoneSchema.nullable().optional(),
   destinations: TripDestinationListSchema.optional(),
   countryCodes: z.array(CountryCodeSchema).optional(),

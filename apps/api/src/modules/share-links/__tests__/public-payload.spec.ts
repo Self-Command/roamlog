@@ -181,6 +181,54 @@ describe("ShareLinksService public read model", () => {
     expect(payload.trip.coverMediaId).toBeNull();
   });
 
+  it("exposes each stop address but never the private bbox", async () => {
+    const bundle: PublicTripBundle = {
+      ...bundleWith([], []),
+      stops: [
+        {
+          id: "01942f30-1200-7000-8000-000000000020",
+          city: "京都",
+          country: "日本",
+          countryCode: "JP",
+          lat: 35.0116,
+          lng: 135.7681,
+          address: "京都市, 京都府, 日本",
+          bbox: [135.6, 34.85, 135.93, 35.17],
+          startDate: new Date("2026-11-10T00:00:00.000Z"),
+          endDate: new Date("2026-11-12T00:00:00.000Z"),
+          notes: "",
+          order: 0,
+        },
+        {
+          id: "01942f30-1200-7000-8000-000000000021",
+          city: "大阪",
+          country: "日本",
+          countryCode: "JP",
+          lat: null,
+          lng: null,
+          address: null,
+          bbox: null,
+          startDate: new Date("2026-11-12T00:00:00.000Z"),
+          endDate: new Date("2026-11-14T00:00:00.000Z"),
+          notes: "",
+          order: 1,
+        },
+      ],
+    };
+    const { service } = buildService(bundle);
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.stops.map((stop) => stop.address)).toEqual([
+      "京都市, 京都府, 日本",
+      null,
+    ]);
+    // The bbox is planning data: it must not leak to a public visitor, and the
+    // strict PublicStop schema would reject the projection if it did.
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toContain("bbox");
+    expect(serialized).not.toContain("[135.6,34.85");
+  });
+
   it("projects media into the strict PublicMedia shape without storage coordinates", async () => {
     const { service } = buildService(
       bundleWith([mediaRow()], [mediaRow()]),

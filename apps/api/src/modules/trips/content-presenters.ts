@@ -17,7 +17,7 @@ import {
   type TripParticipant,
 } from "@roamlog/contracts";
 
-import { canonicalTripOrigin, iso, nullableIso, presentDate } from "./content-values.js";
+import { canonicalTripOrigin, iso, nullableIso, presentDate, toBbox } from "./content-values.js";
 
 /**
  * Row shape accepted by {@link presentTrip}.
@@ -40,6 +40,9 @@ export interface PresentTripInput {
   originLat?: number | null;
   originLng?: number | null;
   originCountryCode?: string | null;
+  originAddress?: string | null;
+  /** Raw `JSONB`; normalized with {@link toBbox} so legacy rows report `null`. */
+  originBbox?: unknown;
   timeZone?: string | null;
   destinations: string[];
   countryCodes: string[];
@@ -77,6 +80,8 @@ export function presentTrip(record: PresentTripInput, cover: TripCover | null = 
     originLat: record.originLat ?? null,
     originLng: record.originLng ?? null,
     originCountryCode: record.originCountryCode ?? null,
+    originAddress: record.originAddress ?? null,
+    originBbox: toBbox(record.originBbox),
     timeZone: record.timeZone ?? null,
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
@@ -97,6 +102,9 @@ export interface PresentStopInput {
   provider?: string | null;
   providerPlaceId?: string | null;
   timeZone?: string | null;
+  address?: string | null;
+  /** Raw `JSONB`; normalized with {@link toBbox} so legacy rows report `null`. */
+  bbox?: unknown;
   startDate: Date | string;
   endDate: Date | string;
   notes: string;
@@ -115,6 +123,8 @@ export function presentStop(record: PresentStopInput): Stop {
     provider: record.provider ?? null,
     providerPlaceId: record.providerPlaceId ?? null,
     timeZone: record.timeZone ?? null,
+    address: record.address ?? null,
+    bbox: toBbox(record.bbox),
     startDate: presentDate(record.startDate),
     endDate: presentDate(record.endDate),
     createdAt: iso(record.createdAt),

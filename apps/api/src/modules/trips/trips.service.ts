@@ -29,12 +29,14 @@ import {
   assertBudgetPair,
   assertDateRange,
   assertOriginCoordinatePair,
+  assertRawBbox,
   assertTripVisible,
   assertUuid,
   canonicalTripOrigin,
   dateOnlyToDate,
   rawOriginCoordinatePair,
   sortParts,
+  toBbox,
 } from "./content-values.js";
 import {
   presentParticipant,
@@ -132,6 +134,9 @@ export class TripsService {
     if (rawPair) {
       assertOriginCoordinatePair(rawPair.lat, rawPair.lng);
     }
+    // A malformed `originBbox` is a business-rule failure: report 422 instead of
+    // letting the schema turn it into a generic 400.
+    assertRawBbox(rawInput, "originBbox");
     const input = parseRequest(CreateTripRequestSchema, rawInput);
     const startDate = dateOnlyToDate(input.startDate);
     const endDate = dateOnlyToDate(input.endDate);
@@ -157,6 +162,8 @@ export class TripsService {
         originLat,
         originLng,
         originCountryCode: input.originCountryCode ?? null,
+        originAddress: input.originAddress ?? null,
+        originBbox: input.originBbox ?? null,
         timeZone: input.timeZone ?? null,
         destinations: input.destinations ?? [],
         countryCodes: input.countryCodes ?? [],
@@ -207,6 +214,7 @@ export class TripsService {
     rawInput: unknown,
   ): Promise<Trip> {
     this.permissions.assertCan(membership.role, "trip:update", "trip");
+    assertRawBbox(rawInput, "originBbox");
     const input = parseRequest(UpdateTripRequestSchema, rawInput);
     const current = await this.requireVisibleTrip(membership, tripId);
     const nextStart = input.startDate ? dateOnlyToDate(input.startDate) : current.startDate;
@@ -238,6 +246,8 @@ export class TripsService {
       ...(input.originCountryCode !== undefined
         ? { originCountryCode: input.originCountryCode }
         : {}),
+      ...(input.originAddress !== undefined ? { originAddress: input.originAddress } : {}),
+      ...(input.originBbox !== undefined ? { originBbox: input.originBbox } : {}),
       ...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
       ...(input.destinations !== undefined ? { destinations: input.destinations } : {}),
       ...(input.countryCodes !== undefined ? { countryCodes: input.countryCodes } : {}),
@@ -340,6 +350,10 @@ export class TripsService {
         originLat: source.originLat ?? null,
         originLng: source.originLng ?? null,
         originCountryCode: source.originCountryCode ?? null,
+        originAddress: source.originAddress ?? null,
+        // A duplicate copies the address and box so the copy keeps the place the
+        // original was planned around; an unreadable stored box is dropped.
+        originBbox: toBbox(source.originBbox),
         timeZone: source.timeZone ?? null,
         destinations: [...source.destinations],
         countryCodes: [...source.countryCodes],

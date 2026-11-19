@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { CountryCodeSchema, DateOnlySchema, IsoTimestampSchema, UuidV7Schema } from "../common/ids";
-import { IanaTimeZoneSchema } from "./trip";
+import { IanaTimeZoneSchema, GeoBboxSchema } from "./trip";
 
 export const PlaceProviderSchema = z.enum(["photon", "local"]);
 export type PlaceProvider = z.infer<typeof PlaceProviderSchema>;
@@ -19,6 +19,12 @@ export const StopSchema = z
     provider: PlaceProviderSchema.nullable(),
     providerPlaceId: z.string().min(1).max(200).nullable(),
     timeZone: IanaTimeZoneSchema.nullable(),
+    address: z
+      .string()
+      .max(400)
+      .nullable()
+      .describe("Formatted address of the selected place, when one was picked."),
+    bbox: GeoBboxSchema.nullable(),
     startDate: DateOnlySchema,
     endDate: DateOnlySchema,
     notes: z.string().max(4000),

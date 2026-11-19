@@ -237,6 +237,9 @@ export class ShareLinksService {
         countryCode: stop.countryCode,
         lat: stop.lat ?? null,
         lng: stop.lng ?? null,
+        // The formatted address is shown on the public page so a visitor can see
+        // the place; the bbox stays private (it is never read here at all).
+        address: typeof stop.address === "string" ? stop.address : null,
         startDate: dateOnly(stop.startDate),
         endDate: dateOnly(stop.endDate),
         notes: stop.notes ?? "",

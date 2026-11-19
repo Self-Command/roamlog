@@ -19,6 +19,14 @@ export interface TripRecord {
   originLat: number | null;
   originLng: number | null;
   originCountryCode: string | null;
+  /**
+   * Raw `JSONB` column value, not a validated tuple: rows written before the
+   * 0006 migration (or by an out-of-band client) may hold anything. Presenters
+   * run {@link toBbox} so a malformed row degrades to `null` instead of failing
+   * an otherwise readable trip.
+   */
+  originAddress: string | null;
+  originBbox: unknown;
   timeZone: string | null;
   destinations: string[];
   countryCodes: string[];
@@ -52,6 +60,9 @@ export interface StopRecord {
   provider: string | null;
   providerPlaceId: string | null;
   timeZone: string | null;
+  address: string | null;
+  /** See {@link TripRecord.originBbox}: raw `JSONB`, normalized by the presenter. */
+  bbox: unknown;
   version: number;
   createdById: string;
   updatedById: string;

@@ -27,6 +27,8 @@ function tripRow(overrides: Partial<TripRecord> = {}): TripRecord {
     originLat: null,
     originLng: null,
     originCountryCode: null,
+    originAddress: null,
+    originBbox: null,
     timeZone: null,
     destinations: ["Seoul"],
     countryCodes: ["KR"],

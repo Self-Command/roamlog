@@ -61,6 +61,11 @@ export const PublicStopSchema = z
     countryCode: CountryCodeSchema,
     lat: z.number().min(-90).max(90).nullable(),
     lng: z.number().min(-180).max(180).nullable(),
+    address: z
+      .string()
+      .max(400)
+      .nullable()
+      .describe("Formatted place address. The bbox stays private."),
     startDate: DateOnlySchema,
     endDate: DateOnlySchema,
     notes: z.string().max(4000),

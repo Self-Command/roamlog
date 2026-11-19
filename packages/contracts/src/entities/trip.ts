@@ -31,6 +31,30 @@ function createUniqueStringListSchema(label: string, maxItems: number, maxLength
     });
 }
 
+/**
+ * A place envelope, ordered `[west, south, east, north]` to match the GeoJSON
+ * bounding-box order (and the order the places providers normalize to).
+ *
+ * Longitude is capped at ±180 and latitude at ±90, and the box must not be
+ * inverted: a provider that swaps the axes or returns a corner pair is rejected
+ * here instead of being stored as a meaningless rectangle.
+ */
+export const GeoBboxSchema = z
+  .tuple([
+    z.number().min(-180).max(180).describe("west"),
+    z.number().min(-90).max(90).describe("south"),
+    z.number().min(-180).max(180).describe("east"),
+    z.number().min(-90).max(90).describe("north"),
+  ])
+  .refine(([west, , east]) => west <= east, {
+    message: "bbox west must not be greater than east.",
+  })
+  .refine(([, south, , north]) => south <= north, {
+    message: "bbox south must not be greater than north.",
+  })
+  .describe("Bounding box as [west, south, east, north].");
+export type GeoBbox = z.infer<typeof GeoBboxSchema>;
+
 export const TripTagListSchema = createUniqueStringListSchema("tags", 20, 40);
 export type TripTagList = z.infer<typeof TripTagListSchema>;
 
@@ -109,6 +133,12 @@ export const TripSchema = z
     originLat: z.number().min(-90).max(90).nullable(),
     originLng: z.number().min(-180).max(180).nullable(),
     originCountryCode: CountryCodeSchema.nullable(),
+    originAddress: z
+      .string()
+      .max(400)
+      .nullable()
+      .describe("Formatted address of the selected origin place, when one was picked."),
+    originBbox: GeoBboxSchema.nullable(),
     timeZone: IanaTimeZoneSchema.nullable(),
     destinations: TripDestinationListSchema,
     countryCodes: z.array(CountryCodeSchema),
