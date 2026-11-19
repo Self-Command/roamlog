@@ -91,6 +91,22 @@ export const AiChatRequestSchema = z
   .object({
     message: z.string().min(1).max(2000),
     hints: AiPlanHintSchema.optional(),
+    /**
+     * Existing conversation. When omitted the server creates a new conversation
+     * and reads no history; this is what keeps every pre-streaming client working
+     * unchanged — none of the three new fields is required.
+     */
+    conversationId: UuidV7Schema.optional(),
+    /**
+     * assistant-ui message id of the user message, used for an idempotent append
+     * (a retried request reuses the same row instead of duplicating it). 1..64.
+     */
+    clientMessageId: z.string().min(1).max(64).optional(),
+    /**
+     * assistant-ui `unstable_assistantMessageId` for this turn, so a reloaded
+     * history can align the persisted assistant message with the local one. 1..64.
+     */
+    assistantMessageId: z.string().min(1).max(64).optional(),
   })
   .strict();
 export type AiChatRequest = z.infer<typeof AiChatRequestSchema>;
@@ -277,4 +293,264 @@ export const AI_ERROR_CODES = {
   rewriteTextTooLong: "AI_REWRITE_TEXT_TOO_LONG",
   rewriteSelectionMismatch: "AI_SELECTION_HASH_MISMATCH",
   rewriteEmpty: "AI_REWRITE_EMPTY",
+  /** Client disconnected or the upstream stream was aborted; stream-only. */
+  aborted: "AI_ABORTED",
+  /** Unclassified server failure while a stream is already open. */
+  internal: "AI_INTERNAL",
+  /** Another stream is active for the same conversation (HTTP 409 before flush). */
+  conversationBusy: "AI_CONVERSATION_BUSY",
 } as const;
+
+export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
+
+/** Every AI problem code as a validator, derived from the single source above. */
+export const AiErrorCodeSchema = z.enum(
+  Object.values(AI_ERROR_CODES) as [AiErrorCode, ...AiErrorCode[]],
+);
+
+/* -------------------------------------------------------------------------- */
+/* SSE stream event protocol v1 (frozen: append-only, names must never change) */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Event names below are frozen once published. New events may only be appended
+ * as a new discriminant; an existing `type` value must never be renamed.
+ *
+ * Frame protocol: `id: <n>`, `event: <type>`, `data: <single-line JSON>`, then a
+ * blank line. `meta` is always first, `done` is exactly once and always last,
+ * and `error` is always followed by `done` with `finishReason: "error"`.
+ */
+export const AiStreamEventTypeSchema = z.enum([
+  "meta",
+  "text.delta",
+  "plan",
+  "usage",
+  "error",
+  "done",
+]);
+export type AiStreamEventType = z.infer<typeof AiStreamEventTypeSchema>;
+
+export const AiStreamFinishReasonSchema = z.enum([
+  "stop",
+  "tool-calls",
+  "length",
+  "aborted",
+  "error",
+]);
+export type AiStreamFinishReason = z.infer<typeof AiStreamFinishReasonSchema>;
+
+/** First event of every stream: binds the turn to conversation/message ids. */
+export const AiStreamMetaEventSchema = z
+  .object({
+    type: z.literal("meta"),
+    v: z.literal(1),
+    conversationId: UuidV7Schema,
+    userMessageId: z.string().min(1).max(128),
+    assistantMessageId: z.string().min(1).max(128),
+    provider: AiProviderSchema,
+  })
+  .strict();
+export type AiStreamMetaEvent = z.infer<typeof AiStreamMetaEventSchema>;
+
+/** One upstream text delta per event (small coalescing windows are allowed). */
+export const AiStreamTextDeltaEventSchema = z
+  .object({
+    type: z.literal("text.delta"),
+    delta: z.string(),
+  })
+  .strict();
+export type AiStreamTextDeltaEvent = z.infer<typeof AiStreamTextDeltaEventSchema>;
+
+/**
+ * Tool-call plan, emitted once at the end of a planning round. The payload is
+ * intentionally isomorphic to the existing `AiChatResponse` fields so the web
+ * `plan-card` can consume it without a translation layer.
+ */
+export const AiStreamPlanEventSchema = z
+  .object({
+    type: z.literal("plan"),
+    runId: AiRunIdSchema,
+    message: z.string().max(4000),
+    plannedCalls: z.array(AiToolCallSchema).max(20),
+    readOnlyTrace: z.array(AiToolCallSchema).max(40),
+    warnings: z.array(AiPlanWarningSchema).max(20).optional(),
+    expiresAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AiStreamPlanEvent = z.infer<typeof AiStreamPlanEventSchema>;
+
+/** Accumulated token usage, emitted once before `done` when the upstream reports it. */
+export const AiStreamUsageEventSchema = z
+  .object({
+    type: z.literal("usage"),
+    usage: AiUsageSchema,
+  })
+  .strict();
+export type AiStreamUsageEvent = z.infer<typeof AiStreamUsageEventSchema>;
+
+/**
+ * In-stream failure. The `code` set reuses `AI_ERROR_CODES` and extends it with
+ * `AI_ABORTED`, `AI_INTERNAL` and `AI_CONVERSATION_BUSY`; after this event the
+ * server must still emit `done` with `finishReason: "error"`.
+ */
+export const AiStreamErrorEventSchema = z
+  .object({
+    type: z.literal("error"),
+    code: AiErrorCodeSchema,
+    message: z.string().min(1).max(1000),
+    retryable: z.boolean(),
+    runId: AiRunIdSchema.optional(),
+  })
+  .strict();
+export type AiStreamErrorEvent = z.infer<typeof AiStreamErrorEventSchema>;
+
+/** The only authoritative end of a stream; exactly once and always last. */
+export const AiStreamDoneEventSchema = z
+  .object({
+    type: z.literal("done"),
+    messageId: z.string().min(1).max(128),
+    finishReason: AiStreamFinishReasonSchema,
+    usage: AiUsageSchema.optional(),
+  })
+  .strict();
+export type AiStreamDoneEvent = z.infer<typeof AiStreamDoneEventSchema>;
+
+export const AiStreamEventSchema = z.discriminatedUnion("type", [
+  AiStreamMetaEventSchema,
+  AiStreamTextDeltaEventSchema,
+  AiStreamPlanEventSchema,
+  AiStreamUsageEventSchema,
+  AiStreamErrorEventSchema,
+  AiStreamDoneEventSchema,
+]);
+export type AiStreamEvent = z.infer<typeof AiStreamEventSchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Conversation persistence REST DTOs                                          */
+/* -------------------------------------------------------------------------- */
+
+export const AiConversationStatusSchema = z.enum(["regular", "archived"]);
+export type AiConversationStatus = z.infer<typeof AiConversationStatusSchema>;
+
+/**
+ * `placeholder` is the truncated first-message title, `model` a generated
+ * summary and `manual` a user rename that background title generation must
+ * never overwrite.
+ */
+export const AiConversationTitleSourceSchema = z.enum(["placeholder", "model", "manual"]);
+export type AiConversationTitleSource = z.infer<typeof AiConversationTitleSourceSchema>;
+
+export const AiConversationSchema = z
+  .object({
+    id: UuidV7Schema,
+    workspaceId: UuidV7Schema,
+    userId: UuidV7Schema,
+    title: z.string().max(120).nullable(),
+    titleSource: AiConversationTitleSourceSchema,
+    status: AiConversationStatusSchema,
+    lastMessageAt: IsoTimestampSchema.nullable(),
+    createdAt: IsoTimestampSchema,
+    updatedAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AiConversation = z.infer<typeof AiConversationSchema>;
+
+/** Cursor is `lastMessageAt` + `id` (base64); default page size is 30, max 100. */
+export const AiConversationListQuerySchema = z.object({
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export type AiConversationListQuery = z.infer<typeof AiConversationListQuerySchema>;
+
+export const AiConversationListResponseSchema = z
+  .object({
+    items: z.array(AiConversationSchema),
+    nextCursor: z.string().nullable(),
+  })
+  .strict();
+export type AiConversationListResponse = z.infer<typeof AiConversationListResponseSchema>;
+
+export const CreateAiConversationRequestSchema = z
+  .object({
+    /** Optional initial title; the server derives a placeholder when omitted. */
+    title: z.string().min(1).max(120).optional(),
+  })
+  .strict();
+export type CreateAiConversationRequest = z.infer<typeof CreateAiConversationRequestSchema>;
+
+/** Renaming is the only user-editable conversation field. */
+export const UpdateAiConversationRequestSchema = z
+  .object({
+    title: z.string().min(1).max(120),
+  })
+  .strict();
+export type UpdateAiConversationRequest = z.infer<typeof UpdateAiConversationRequestSchema>;
+
+/**
+ * A required-but-open JSON value: `content` must be present, but its shape is
+ * deliberately not enumerated here. The server stores an assistant-ui
+ * `ThreadMessageLike` JSONB payload (string or parts array), so the contract
+ * layer validates only its presence, not its structure.
+ */
+const RequiredUnknownSchema = z.unknown().refine((value) => value !== undefined, {
+  message: "Required.",
+});
+
+/** assistant-ui `ThreadMessageLike` equivalent for one persisted message. */
+export const AiThreadMessageSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    role: z.enum(["user", "assistant", "system"]),
+    content: RequiredUnknownSchema,
+    createdAt: IsoTimestampSchema,
+    clientId: z.string().min(1).max(64).nullable(),
+    status: z.unknown().optional(),
+    metadata: z.unknown().optional(),
+    attachments: z.unknown().optional(),
+  })
+  .strict();
+export type AiThreadMessage = z.infer<typeof AiThreadMessageSchema>;
+
+/** Alias for call sites that name the persisted conversation message DTO. */
+export const AiConversationMessageSchema = AiThreadMessageSchema;
+export type AiConversationMessage = AiThreadMessage;
+
+/** Flat parent-linked replay: `{ parentId, message }[]` plus the current head. */
+export const AiConversationMessagesResponseSchema = z
+  .object({
+    headId: z.string().min(1).max(128).nullable(),
+    messages: z.array(
+      z
+        .object({
+          parentId: z.string().min(1).max(128).nullable(),
+          message: AiThreadMessageSchema,
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type AiConversationMessagesResponse = z.infer<typeof AiConversationMessagesResponseSchema>;
+
+/** Idempotent append/update keyed by the assistant-ui message id (`clientId`). */
+export const UpsertAiMessageRequestSchema = z
+  .object({
+    content: RequiredUnknownSchema,
+    parentId: z.string().min(1).max(128).nullable().optional(),
+    status: z.unknown().optional(),
+  })
+  .strict();
+export type UpsertAiMessageRequest = z.infer<typeof UpsertAiMessageRequestSchema>;
+
+export const DeleteAiMessagesRequestSchema = z
+  .object({
+    ids: z.array(z.string().min(1).max(128)).min(1).max(100),
+  })
+  .strict();
+export type DeleteAiMessagesRequest = z.infer<typeof DeleteAiMessagesRequestSchema>;
+
+export const AiConversationTitleResponseSchema = z
+  .object({
+    title: z.string().min(1).max(120),
+  })
+  .strict();
+export type AiConversationTitleResponse = z.infer<typeof AiConversationTitleResponseSchema>;

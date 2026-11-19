@@ -14,4 +14,16 @@ export type CreateAiChatBody = {
    */
   message: string;
   hints?: CreateAiChatBodyHints;
+  /** Sortable UUIDv7 identifier. */
+  conversationId?: string;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   */
+  clientMessageId?: string;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   */
+  assistantMessageId?: string;
 };

@@ -85,11 +85,13 @@ describe("OpenAPI document", () => {
       expect(paths, `missing OpenAPI path: ${required}`).toContain(required);
     }
 
-    // The exact total is owned by `pnpm contracts:check`, which diffs the whole
-    // generated document against the committed openapi.json. A lower bound here
-    // keeps unrelated test edits out of every new-endpoint change while the
-    // curated assertions above still catch a deleted route.
-    expect(paths.length).toBeGreaterThanOrEqual(94);
+    // AI streaming + conversation persistence (Wave 0.2) adds 12 operations,
+    // but OpenAPI path items are per URL template, so the 11 §2.5 endpoints
+    // collapse into 7 path items (GET/POST share `/conversations`, GET/PATCH/
+    // DELETE share `/{conversationId}`, GET/DELETE share `/{messages}`) and the
+    // stream endpoint adds 1 more: 105 + 8 = 113 unique paths, 144 + 12 = 156
+    // operations.
+    expect(paths.length).toBe(113);
 
     const operations = Object.values(doc.paths).reduce(
       (count, pathItem) =>

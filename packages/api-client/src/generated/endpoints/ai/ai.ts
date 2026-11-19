@@ -5,22 +5,46 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
   QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
 } from "@tanstack/react-query";
 
 import type {
+  ArchiveAiConversation200,
   CreateAiChat201,
   CreateAiChatBody,
+  CreateAiConversation201,
+  CreateAiConversationBody,
+  DeleteAiConversationMessagesBody,
   ExecuteAiRun201,
   ExecuteAiRunBody,
+  GenerateAiConversationTitle200,
+  GetAiConversation200,
+  ListAiConversationMessages200,
+  ListAiConversations200,
+  ListAiConversationsParams,
+  MessageResponse,
   ProblemDetails,
   RewriteAiSelection200,
   RewriteAiSelectionBody,
+  StreamAiChatBody,
+  UnarchiveAiConversation200,
+  UpdateAiConversation200,
+  UpdateAiConversationBody,
+  UpsertAiConversationMessage200,
+  UpsertAiConversationMessageBody,
 } from "../../schemas";
 
 const getHeaders = (
@@ -50,6 +74,21 @@ const getHeaders = (
     RequestInit["headers"],
     Record<string, unknown>
   >;
+};
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === "queryKey") continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
 };
 
 export type createAiChatResponse201 = {
@@ -182,6 +221,154 @@ export const useCreateAiChat = <TError = ProblemDetails, TContext = unknown>(
   TContext
 > => {
   return useMutation(getCreateAiChatMutationOptions(options), queryClient);
+};
+export type streamAiChatResponse200 = {
+  data: string;
+  status: 200;
+};
+
+export type streamAiChatResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type streamAiChatResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type streamAiChatResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type streamAiChatResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type streamAiChatResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type streamAiChatResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type streamAiChatResponseSuccess = streamAiChatResponse200 & {
+  headers: Headers;
+};
+export type streamAiChatResponseError = (
+  | streamAiChatResponse400
+  | streamAiChatResponse401
+  | streamAiChatResponse403
+  | streamAiChatResponse409
+  | streamAiChatResponse429
+  | streamAiChatResponse503
+) & {
+  headers: Headers;
+};
+
+export type streamAiChatResponse = streamAiChatResponseSuccess | streamAiChatResponseError;
+
+export const getStreamAiChatUrl = (workspaceId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/chat/stream`;
+};
+
+/**
+ * Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: "error"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.
+ * @summary Stream one AI chat turn as Server-Sent Events
+ */
+export const streamAiChat = async (
+  workspaceId: string,
+  streamAiChatBody: StreamAiChatBody,
+  options?: RequestInit,
+): Promise<streamAiChatResponse> => {
+  const res = await fetch(getStreamAiChatUrl(workspaceId), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(streamAiChatBody),
+  });
+
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: streamAiChatResponse["data"] = body
+    ? contentType.includes("json")
+      ? JSON.parse(body)
+      : body
+    : {};
+  return { data, status: res.status, headers: res.headers } as streamAiChatResponse;
+};
+
+export const getStreamAiChatMutationKey = () => ["streamAiChat"] as const;
+
+export const getStreamAiChatMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof streamAiChat>>,
+    TError,
+    StreamAiChatMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof streamAiChat>>,
+  TError,
+  StreamAiChatMutationVariables,
+  TContext
+> => {
+  const mutationKey = getStreamAiChatMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof streamAiChat>>,
+    StreamAiChatMutationVariables
+  > = (props) => {
+    const { workspaceId, data } = props ?? {};
+
+    return streamAiChat(workspaceId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StreamAiChatMutationResult = NonNullable<Awaited<ReturnType<typeof streamAiChat>>>;
+export type StreamAiChatMutationBody = StreamAiChatBody;
+export type StreamAiChatMutationError = ProblemDetails;
+export type StreamAiChatMutationVariables = { workspaceId: string; data: StreamAiChatBody };
+
+/**
+ * Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: "error"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.
+ * @summary Stream one AI chat turn as Server-Sent Events
+ */
+export const useStreamAiChat = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof streamAiChat>>,
+      TError,
+      StreamAiChatMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof streamAiChat>>,
+  TError,
+  StreamAiChatMutationVariables,
+  TContext
+> => {
+  return useMutation(getStreamAiChatMutationOptions(options), queryClient);
 };
 export type executeAiRunResponse201 = {
   data: ExecuteAiRun201;
@@ -479,4 +666,1841 @@ export const useRewriteAiSelection = <TError = ProblemDetails, TContext = unknow
   TContext
 > => {
   return useMutation(getRewriteAiSelectionMutationOptions(options), queryClient);
+};
+export type listAiConversationsResponse200 = {
+  data: ListAiConversations200;
+  status: 200;
+};
+
+export type listAiConversationsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type listAiConversationsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type listAiConversationsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type listAiConversationsResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type listAiConversationsResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type listAiConversationsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type listAiConversationsResponseSuccess = listAiConversationsResponse200 & {
+  headers: Headers;
+};
+export type listAiConversationsResponseError = (
+  | listAiConversationsResponse400
+  | listAiConversationsResponse401
+  | listAiConversationsResponse403
+  | listAiConversationsResponse404
+  | listAiConversationsResponse429
+  | listAiConversationsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAiConversationsResponse =
+  listAiConversationsResponseSuccess | listAiConversationsResponseError;
+
+export const getListAiConversationsUrl = (
+  workspaceId: string,
+  params?: ListAiConversationsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/workspaces/${workspaceId}/ai/conversations?${stringifiedParams}`
+    : `/v1/workspaces/${workspaceId}/ai/conversations`;
+};
+
+/**
+ * Lists `status=regular` conversations for the current user, ordered by `lastMessageAt DESC`. `limit` defaults to 30 and is capped at 100; `cursor` is the base64 composite cursor of `lastMessageAt` + `id`.
+ * @summary List AI conversations in a Workspace
+ */
+export const listAiConversations = async (
+  workspaceId: string,
+  params?: ListAiConversationsParams,
+  options?: RequestInit,
+): Promise<listAiConversationsResponse> => {
+  const res = await fetch(getListAiConversationsUrl(workspaceId, params), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAiConversationsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as listAiConversationsResponse;
+};
+
+export const getListAiConversationsQueryKey = (
+  workspaceId: string,
+  params?: ListAiConversationsParams,
+) => {
+  return [`/v1/workspaces/${workspaceId}/ai/conversations`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAiConversationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAiConversations>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  params?: ListAiConversationsParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAiConversationsQueryKey(workspaceId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAiConversations>>> = ({ signal }) =>
+    listAiConversations(workspaceId, params, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: workspaceId !== null && workspaceId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type ListAiConversationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAiConversations>>
+>;
+export type ListAiConversationsQueryError = ProblemDetails;
+
+/**
+ * Lists `status=regular` conversations for the current user, ordered by `lastMessageAt DESC`. `limit` defaults to 30 and is capped at 100; `cursor` is the base64 composite cursor of `lastMessageAt` + `id`.
+ * @summary List AI conversations in a Workspace
+ */
+export function useListAiConversations<
+  TData = Awaited<ReturnType<typeof listAiConversations>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  params: undefined | ListAiConversationsParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAiConversations>>,
+          TError,
+          Awaited<ReturnType<typeof listAiConversations>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Lists `status=regular` conversations for the current user, ordered by `lastMessageAt DESC`. `limit` defaults to 30 and is capped at 100; `cursor` is the base64 composite cursor of `lastMessageAt` + `id`.
+ * @summary List AI conversations in a Workspace
+ */
+export function useListAiConversations<
+  TData = Awaited<ReturnType<typeof listAiConversations>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  params?: ListAiConversationsParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAiConversations>>,
+          TError,
+          Awaited<ReturnType<typeof listAiConversations>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Lists `status=regular` conversations for the current user, ordered by `lastMessageAt DESC`. `limit` defaults to 30 and is capped at 100; `cursor` is the base64 composite cursor of `lastMessageAt` + `id`.
+ * @summary List AI conversations in a Workspace
+ */
+export function useListAiConversations<
+  TData = Awaited<ReturnType<typeof listAiConversations>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  params?: ListAiConversationsParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Lists `status=regular` conversations for the current user, ordered by `lastMessageAt DESC`. `limit` defaults to 30 and is capped at 100; `cursor` is the base64 composite cursor of `lastMessageAt` + `id`.
+ * @summary List AI conversations in a Workspace
+ */
+export function useListAiConversations<
+  TData = Awaited<ReturnType<typeof listAiConversations>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  params?: ListAiConversationsParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListAiConversationsQueryOptions(workspaceId, params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type createAiConversationResponse201 = {
+  data: CreateAiConversation201;
+  status: 201;
+};
+
+export type createAiConversationResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type createAiConversationResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type createAiConversationResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type createAiConversationResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type createAiConversationResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type createAiConversationResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type createAiConversationResponseSuccess = createAiConversationResponse201 & {
+  headers: Headers;
+};
+export type createAiConversationResponseError = (
+  | createAiConversationResponse400
+  | createAiConversationResponse401
+  | createAiConversationResponse403
+  | createAiConversationResponse404
+  | createAiConversationResponse429
+  | createAiConversationResponse500
+) & {
+  headers: Headers;
+};
+
+export type createAiConversationResponse =
+  createAiConversationResponseSuccess | createAiConversationResponseError;
+
+export const getCreateAiConversationUrl = (workspaceId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations`;
+};
+
+/**
+ * Creates an empty conversation for the current user (`RemoteThreadListAdapter.initialize`). An optional initial title is accepted; otherwise the title stays null until the first message produces a placeholder.
+ * @summary Create an empty AI conversation
+ */
+export const createAiConversation = async (
+  workspaceId: string,
+  createAiConversationBody: CreateAiConversationBody,
+  options?: RequestInit,
+): Promise<createAiConversationResponse> => {
+  const res = await fetch(getCreateAiConversationUrl(workspaceId), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(createAiConversationBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createAiConversationResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as createAiConversationResponse;
+};
+
+export const getCreateAiConversationMutationKey = () => ["createAiConversation"] as const;
+
+export const getCreateAiConversationMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAiConversation>>,
+    TError,
+    CreateAiConversationMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAiConversation>>,
+  TError,
+  CreateAiConversationMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCreateAiConversationMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAiConversation>>,
+    CreateAiConversationMutationVariables
+  > = (props) => {
+    const { workspaceId, data } = props ?? {};
+
+    return createAiConversation(workspaceId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateAiConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createAiConversation>>
+>;
+export type CreateAiConversationMutationBody = CreateAiConversationBody;
+export type CreateAiConversationMutationError = ProblemDetails;
+export type CreateAiConversationMutationVariables = {
+  workspaceId: string;
+  data: CreateAiConversationBody;
+};
+
+/**
+ * Creates an empty conversation for the current user (`RemoteThreadListAdapter.initialize`). An optional initial title is accepted; otherwise the title stays null until the first message produces a placeholder.
+ * @summary Create an empty AI conversation
+ */
+export const useCreateAiConversation = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createAiConversation>>,
+      TError,
+      CreateAiConversationMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createAiConversation>>,
+  TError,
+  CreateAiConversationMutationVariables,
+  TContext
+> => {
+  return useMutation(getCreateAiConversationMutationOptions(options), queryClient);
+};
+export type getAiConversationResponse200 = {
+  data: GetAiConversation200;
+  status: 200;
+};
+
+export type getAiConversationResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type getAiConversationResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type getAiConversationResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type getAiConversationResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type getAiConversationResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type getAiConversationResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getAiConversationResponseSuccess = getAiConversationResponse200 & {
+  headers: Headers;
+};
+export type getAiConversationResponseError = (
+  | getAiConversationResponse400
+  | getAiConversationResponse401
+  | getAiConversationResponse403
+  | getAiConversationResponse404
+  | getAiConversationResponse429
+  | getAiConversationResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAiConversationResponse =
+  getAiConversationResponseSuccess | getAiConversationResponseError;
+
+export const getGetAiConversationUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}`;
+};
+
+/**
+ * @summary Get AI conversation metadata
+ */
+export const getAiConversation = async (
+  workspaceId: string,
+  conversationId: string,
+  options?: RequestInit,
+): Promise<getAiConversationResponse> => {
+  const res = await fetch(getGetAiConversationUrl(workspaceId, conversationId), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAiConversationResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getAiConversationResponse;
+};
+
+export const getGetAiConversationQueryKey = (workspaceId: string, conversationId: string) => {
+  return [`/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}`] as const;
+};
+
+export const getGetAiConversationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAiConversation>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAiConversationQueryKey(workspaceId, conversationId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiConversation>>> = ({ signal }) =>
+    getAiConversation(workspaceId, conversationId, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled:
+      workspaceId !== null &&
+      workspaceId !== undefined &&
+      conversationId !== null &&
+      conversationId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetAiConversationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAiConversation>>
+>;
+export type GetAiConversationQueryError = ProblemDetails;
+
+/** @summary Get AI conversation metadata */
+export function useGetAiConversation<
+  TData = Awaited<ReturnType<typeof getAiConversation>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAiConversation>>,
+          TError,
+          Awaited<ReturnType<typeof getAiConversation>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get AI conversation metadata */
+export function useGetAiConversation<
+  TData = Awaited<ReturnType<typeof getAiConversation>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAiConversation>>,
+          TError,
+          Awaited<ReturnType<typeof getAiConversation>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get AI conversation metadata */
+export function useGetAiConversation<
+  TData = Awaited<ReturnType<typeof getAiConversation>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get AI conversation metadata */
+export function useGetAiConversation<
+  TData = Awaited<ReturnType<typeof getAiConversation>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetAiConversationQueryOptions(workspaceId, conversationId, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type updateAiConversationResponse200 = {
+  data: UpdateAiConversation200;
+  status: 200;
+};
+
+export type updateAiConversationResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type updateAiConversationResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type updateAiConversationResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateAiConversationResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type updateAiConversationResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type updateAiConversationResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type updateAiConversationResponseSuccess = updateAiConversationResponse200 & {
+  headers: Headers;
+};
+export type updateAiConversationResponseError = (
+  | updateAiConversationResponse400
+  | updateAiConversationResponse401
+  | updateAiConversationResponse403
+  | updateAiConversationResponse404
+  | updateAiConversationResponse429
+  | updateAiConversationResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateAiConversationResponse =
+  updateAiConversationResponseSuccess | updateAiConversationResponseError;
+
+export const getUpdateAiConversationUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}`;
+};
+
+/**
+ * Changes the title and sets `titleSource=manual`, so asynchronous title generation never overwrites a user rename.
+ * @summary Rename an AI conversation
+ */
+export const updateAiConversation = async (
+  workspaceId: string,
+  conversationId: string,
+  updateAiConversationBody: UpdateAiConversationBody,
+  options?: RequestInit,
+): Promise<updateAiConversationResponse> => {
+  const res = await fetch(getUpdateAiConversationUrl(workspaceId, conversationId), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateAiConversationBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAiConversationResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateAiConversationResponse;
+};
+
+export const getUpdateAiConversationMutationKey = () => ["updateAiConversation"] as const;
+
+export const getUpdateAiConversationMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAiConversation>>,
+    TError,
+    UpdateAiConversationMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAiConversation>>,
+  TError,
+  UpdateAiConversationMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateAiConversationMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAiConversation>>,
+    UpdateAiConversationMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId, data } = props ?? {};
+
+    return updateAiConversation(workspaceId, conversationId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAiConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAiConversation>>
+>;
+export type UpdateAiConversationMutationBody = UpdateAiConversationBody;
+export type UpdateAiConversationMutationError = ProblemDetails;
+export type UpdateAiConversationMutationVariables = {
+  workspaceId: string;
+  conversationId: string;
+  data: UpdateAiConversationBody;
+};
+
+/**
+ * Changes the title and sets `titleSource=manual`, so asynchronous title generation never overwrites a user rename.
+ * @summary Rename an AI conversation
+ */
+export const useUpdateAiConversation = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateAiConversation>>,
+      TError,
+      UpdateAiConversationMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateAiConversation>>,
+  TError,
+  UpdateAiConversationMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateAiConversationMutationOptions(options), queryClient);
+};
+export type deleteAiConversationResponse200 = {
+  data: MessageResponse;
+  status: 200;
+};
+
+export type deleteAiConversationResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type deleteAiConversationResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type deleteAiConversationResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type deleteAiConversationResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type deleteAiConversationResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type deleteAiConversationResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type deleteAiConversationResponseSuccess = deleteAiConversationResponse200 & {
+  headers: Headers;
+};
+export type deleteAiConversationResponseError = (
+  | deleteAiConversationResponse400
+  | deleteAiConversationResponse401
+  | deleteAiConversationResponse403
+  | deleteAiConversationResponse404
+  | deleteAiConversationResponse429
+  | deleteAiConversationResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteAiConversationResponse =
+  deleteAiConversationResponseSuccess | deleteAiConversationResponseError;
+
+export const getDeleteAiConversationUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}`;
+};
+
+/**
+ * Marks the conversation deleted without removing its messages; the row is excluded from every subsequent read.
+ * @summary Soft-delete an AI conversation
+ */
+export const deleteAiConversation = async (
+  workspaceId: string,
+  conversationId: string,
+  options?: RequestInit,
+): Promise<deleteAiConversationResponse> => {
+  const res = await fetch(getDeleteAiConversationUrl(workspaceId, conversationId), {
+    ...options,
+    method: "DELETE",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAiConversationResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as deleteAiConversationResponse;
+};
+
+export const getDeleteAiConversationMutationKey = () => ["deleteAiConversation"] as const;
+
+export const getDeleteAiConversationMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAiConversation>>,
+    TError,
+    DeleteAiConversationMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAiConversation>>,
+  TError,
+  DeleteAiConversationMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteAiConversationMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAiConversation>>,
+    DeleteAiConversationMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId } = props ?? {};
+
+    return deleteAiConversation(workspaceId, conversationId, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAiConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAiConversation>>
+>;
+
+export type DeleteAiConversationMutationError = ProblemDetails;
+export type DeleteAiConversationMutationVariables = { workspaceId: string; conversationId: string };
+
+/**
+ * Marks the conversation deleted without removing its messages; the row is excluded from every subsequent read.
+ * @summary Soft-delete an AI conversation
+ */
+export const useDeleteAiConversation = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteAiConversation>>,
+      TError,
+      DeleteAiConversationMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAiConversation>>,
+  TError,
+  DeleteAiConversationMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteAiConversationMutationOptions(options), queryClient);
+};
+export type archiveAiConversationResponse200 = {
+  data: ArchiveAiConversation200;
+  status: 200;
+};
+
+export type archiveAiConversationResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type archiveAiConversationResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type archiveAiConversationResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type archiveAiConversationResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type archiveAiConversationResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type archiveAiConversationResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type archiveAiConversationResponseSuccess = archiveAiConversationResponse200 & {
+  headers: Headers;
+};
+export type archiveAiConversationResponseError = (
+  | archiveAiConversationResponse400
+  | archiveAiConversationResponse401
+  | archiveAiConversationResponse403
+  | archiveAiConversationResponse404
+  | archiveAiConversationResponse429
+  | archiveAiConversationResponse500
+) & {
+  headers: Headers;
+};
+
+export type archiveAiConversationResponse =
+  archiveAiConversationResponseSuccess | archiveAiConversationResponseError;
+
+export const getArchiveAiConversationUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/archive`;
+};
+
+/**
+ * @summary Archive an AI conversation
+ */
+export const archiveAiConversation = async (
+  workspaceId: string,
+  conversationId: string,
+  options?: RequestInit,
+): Promise<archiveAiConversationResponse> => {
+  const res = await fetch(getArchiveAiConversationUrl(workspaceId, conversationId), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: archiveAiConversationResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as archiveAiConversationResponse;
+};
+
+export const getArchiveAiConversationMutationKey = () => ["archiveAiConversation"] as const;
+
+export const getArchiveAiConversationMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof archiveAiConversation>>,
+    TError,
+    ArchiveAiConversationMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof archiveAiConversation>>,
+  TError,
+  ArchiveAiConversationMutationVariables,
+  TContext
+> => {
+  const mutationKey = getArchiveAiConversationMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof archiveAiConversation>>,
+    ArchiveAiConversationMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId } = props ?? {};
+
+    return archiveAiConversation(workspaceId, conversationId, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ArchiveAiConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof archiveAiConversation>>
+>;
+
+export type ArchiveAiConversationMutationError = ProblemDetails;
+export type ArchiveAiConversationMutationVariables = {
+  workspaceId: string;
+  conversationId: string;
+};
+
+/** @summary Archive an AI conversation */
+export const useArchiveAiConversation = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof archiveAiConversation>>,
+      TError,
+      ArchiveAiConversationMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof archiveAiConversation>>,
+  TError,
+  ArchiveAiConversationMutationVariables,
+  TContext
+> => {
+  return useMutation(getArchiveAiConversationMutationOptions(options), queryClient);
+};
+export type unarchiveAiConversationResponse200 = {
+  data: UnarchiveAiConversation200;
+  status: 200;
+};
+
+export type unarchiveAiConversationResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type unarchiveAiConversationResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type unarchiveAiConversationResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type unarchiveAiConversationResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type unarchiveAiConversationResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type unarchiveAiConversationResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type unarchiveAiConversationResponseSuccess = unarchiveAiConversationResponse200 & {
+  headers: Headers;
+};
+export type unarchiveAiConversationResponseError = (
+  | unarchiveAiConversationResponse400
+  | unarchiveAiConversationResponse401
+  | unarchiveAiConversationResponse403
+  | unarchiveAiConversationResponse404
+  | unarchiveAiConversationResponse429
+  | unarchiveAiConversationResponse500
+) & {
+  headers: Headers;
+};
+
+export type unarchiveAiConversationResponse =
+  unarchiveAiConversationResponseSuccess | unarchiveAiConversationResponseError;
+
+export const getUnarchiveAiConversationUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/unarchive`;
+};
+
+/**
+ * @summary Unarchive an AI conversation
+ */
+export const unarchiveAiConversation = async (
+  workspaceId: string,
+  conversationId: string,
+  options?: RequestInit,
+): Promise<unarchiveAiConversationResponse> => {
+  const res = await fetch(getUnarchiveAiConversationUrl(workspaceId, conversationId), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unarchiveAiConversationResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as unarchiveAiConversationResponse;
+};
+
+export const getUnarchiveAiConversationMutationKey = () => ["unarchiveAiConversation"] as const;
+
+export const getUnarchiveAiConversationMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unarchiveAiConversation>>,
+    TError,
+    UnarchiveAiConversationMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unarchiveAiConversation>>,
+  TError,
+  UnarchiveAiConversationMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUnarchiveAiConversationMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unarchiveAiConversation>>,
+    UnarchiveAiConversationMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId } = props ?? {};
+
+    return unarchiveAiConversation(workspaceId, conversationId, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnarchiveAiConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unarchiveAiConversation>>
+>;
+
+export type UnarchiveAiConversationMutationError = ProblemDetails;
+export type UnarchiveAiConversationMutationVariables = {
+  workspaceId: string;
+  conversationId: string;
+};
+
+/** @summary Unarchive an AI conversation */
+export const useUnarchiveAiConversation = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof unarchiveAiConversation>>,
+      TError,
+      UnarchiveAiConversationMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof unarchiveAiConversation>>,
+  TError,
+  UnarchiveAiConversationMutationVariables,
+  TContext
+> => {
+  return useMutation(getUnarchiveAiConversationMutationOptions(options), queryClient);
+};
+export type listAiConversationMessagesResponse200 = {
+  data: ListAiConversationMessages200;
+  status: 200;
+};
+
+export type listAiConversationMessagesResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type listAiConversationMessagesResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type listAiConversationMessagesResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type listAiConversationMessagesResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type listAiConversationMessagesResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type listAiConversationMessagesResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type listAiConversationMessagesResponseSuccess = listAiConversationMessagesResponse200 & {
+  headers: Headers;
+};
+export type listAiConversationMessagesResponseError = (
+  | listAiConversationMessagesResponse400
+  | listAiConversationMessagesResponse401
+  | listAiConversationMessagesResponse403
+  | listAiConversationMessagesResponse404
+  | listAiConversationMessagesResponse429
+  | listAiConversationMessagesResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAiConversationMessagesResponse =
+  listAiConversationMessagesResponseSuccess | listAiConversationMessagesResponseError;
+
+export const getListAiConversationMessagesUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/messages`;
+};
+
+/**
+ * Returns the flat `{ parentId, message }[]` branch plus `headId` (`ThreadHistoryAdapter.load`). `message.content` is the stored assistant-ui `ThreadMessageLike` JSONB and is intentionally not enumerated by the contract.
+ * @summary Load a conversation's message history
+ */
+export const listAiConversationMessages = async (
+  workspaceId: string,
+  conversationId: string,
+  options?: RequestInit,
+): Promise<listAiConversationMessagesResponse> => {
+  const res = await fetch(getListAiConversationMessagesUrl(workspaceId, conversationId), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAiConversationMessagesResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as listAiConversationMessagesResponse;
+};
+
+export const getListAiConversationMessagesQueryKey = (
+  workspaceId: string,
+  conversationId: string,
+) => {
+  return [`/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/messages`] as const;
+};
+
+export const getListAiConversationMessagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAiConversationMessages>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversationMessages>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAiConversationMessagesQueryKey(workspaceId, conversationId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAiConversationMessages>>> = ({
+    signal,
+  }) => listAiConversationMessages(workspaceId, conversationId, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled:
+      workspaceId !== null &&
+      workspaceId !== undefined &&
+      conversationId !== null &&
+      conversationId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof listAiConversationMessages>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type ListAiConversationMessagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAiConversationMessages>>
+>;
+export type ListAiConversationMessagesQueryError = ProblemDetails;
+
+/**
+ * Returns the flat `{ parentId, message }[]` branch plus `headId` (`ThreadHistoryAdapter.load`). `message.content` is the stored assistant-ui `ThreadMessageLike` JSONB and is intentionally not enumerated by the contract.
+ * @summary Load a conversation's message history
+ */
+export function useListAiConversationMessages<
+  TData = Awaited<ReturnType<typeof listAiConversationMessages>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversationMessages>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAiConversationMessages>>,
+          TError,
+          Awaited<ReturnType<typeof listAiConversationMessages>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns the flat `{ parentId, message }[]` branch plus `headId` (`ThreadHistoryAdapter.load`). `message.content` is the stored assistant-ui `ThreadMessageLike` JSONB and is intentionally not enumerated by the contract.
+ * @summary Load a conversation's message history
+ */
+export function useListAiConversationMessages<
+  TData = Awaited<ReturnType<typeof listAiConversationMessages>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversationMessages>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAiConversationMessages>>,
+          TError,
+          Awaited<ReturnType<typeof listAiConversationMessages>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns the flat `{ parentId, message }[]` branch plus `headId` (`ThreadHistoryAdapter.load`). `message.content` is the stored assistant-ui `ThreadMessageLike` JSONB and is intentionally not enumerated by the contract.
+ * @summary Load a conversation's message history
+ */
+export function useListAiConversationMessages<
+  TData = Awaited<ReturnType<typeof listAiConversationMessages>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversationMessages>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns the flat `{ parentId, message }[]` branch plus `headId` (`ThreadHistoryAdapter.load`). `message.content` is the stored assistant-ui `ThreadMessageLike` JSONB and is intentionally not enumerated by the contract.
+ * @summary Load a conversation's message history
+ */
+export function useListAiConversationMessages<
+  TData = Awaited<ReturnType<typeof listAiConversationMessages>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAiConversationMessages>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListAiConversationMessagesQueryOptions(
+    workspaceId,
+    conversationId,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type deleteAiConversationMessagesResponse200 = {
+  data: MessageResponse;
+  status: 200;
+};
+
+export type deleteAiConversationMessagesResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type deleteAiConversationMessagesResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type deleteAiConversationMessagesResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type deleteAiConversationMessagesResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type deleteAiConversationMessagesResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type deleteAiConversationMessagesResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type deleteAiConversationMessagesResponseSuccess =
+  deleteAiConversationMessagesResponse200 & {
+    headers: Headers;
+  };
+export type deleteAiConversationMessagesResponseError = (
+  | deleteAiConversationMessagesResponse400
+  | deleteAiConversationMessagesResponse401
+  | deleteAiConversationMessagesResponse403
+  | deleteAiConversationMessagesResponse404
+  | deleteAiConversationMessagesResponse429
+  | deleteAiConversationMessagesResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteAiConversationMessagesResponse =
+  deleteAiConversationMessagesResponseSuccess | deleteAiConversationMessagesResponseError;
+
+export const getDeleteAiConversationMessagesUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/messages`;
+};
+
+/**
+ * @summary Delete specific messages from a conversation
+ */
+export const deleteAiConversationMessages = async (
+  workspaceId: string,
+  conversationId: string,
+  deleteAiConversationMessagesBody: DeleteAiConversationMessagesBody,
+  options?: RequestInit,
+): Promise<deleteAiConversationMessagesResponse> => {
+  const res = await fetch(getDeleteAiConversationMessagesUrl(workspaceId, conversationId), {
+    ...options,
+    method: "DELETE",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(deleteAiConversationMessagesBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAiConversationMessagesResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as deleteAiConversationMessagesResponse;
+};
+
+export const getDeleteAiConversationMessagesMutationKey = () =>
+  ["deleteAiConversationMessages"] as const;
+
+export const getDeleteAiConversationMessagesMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAiConversationMessages>>,
+    TError,
+    DeleteAiConversationMessagesMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAiConversationMessages>>,
+  TError,
+  DeleteAiConversationMessagesMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteAiConversationMessagesMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAiConversationMessages>>,
+    DeleteAiConversationMessagesMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId, data } = props ?? {};
+
+    return deleteAiConversationMessages(workspaceId, conversationId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAiConversationMessagesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAiConversationMessages>>
+>;
+export type DeleteAiConversationMessagesMutationBody = DeleteAiConversationMessagesBody;
+export type DeleteAiConversationMessagesMutationError = ProblemDetails;
+export type DeleteAiConversationMessagesMutationVariables = {
+  workspaceId: string;
+  conversationId: string;
+  data: DeleteAiConversationMessagesBody;
+};
+
+/** @summary Delete specific messages from a conversation */
+export const useDeleteAiConversationMessages = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteAiConversationMessages>>,
+      TError,
+      DeleteAiConversationMessagesMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAiConversationMessages>>,
+  TError,
+  DeleteAiConversationMessagesMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteAiConversationMessagesMutationOptions(options), queryClient);
+};
+export type upsertAiConversationMessageResponse200 = {
+  data: UpsertAiConversationMessage200;
+  status: 200;
+};
+
+export type upsertAiConversationMessageResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type upsertAiConversationMessageResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type upsertAiConversationMessageResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type upsertAiConversationMessageResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type upsertAiConversationMessageResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type upsertAiConversationMessageResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type upsertAiConversationMessageResponseSuccess = upsertAiConversationMessageResponse200 & {
+  headers: Headers;
+};
+export type upsertAiConversationMessageResponseError = (
+  | upsertAiConversationMessageResponse400
+  | upsertAiConversationMessageResponse401
+  | upsertAiConversationMessageResponse403
+  | upsertAiConversationMessageResponse404
+  | upsertAiConversationMessageResponse429
+  | upsertAiConversationMessageResponse500
+) & {
+  headers: Headers;
+};
+
+export type upsertAiConversationMessageResponse =
+  upsertAiConversationMessageResponseSuccess | upsertAiConversationMessageResponseError;
+
+export const getUpsertAiConversationMessageUrl = (
+  workspaceId: string,
+  conversationId: string,
+  clientId: string,
+) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/messages/${clientId}`;
+};
+
+/**
+ * Upserts by the client-generated message id (`clientId`). A retried request returns the existing row instead of duplicating history.
+ * @summary Idempotently append or update one message
+ */
+export const upsertAiConversationMessage = async (
+  workspaceId: string,
+  conversationId: string,
+  clientId: string,
+  upsertAiConversationMessageBody: UpsertAiConversationMessageBody,
+  options?: RequestInit,
+): Promise<upsertAiConversationMessageResponse> => {
+  const res = await fetch(
+    getUpsertAiConversationMessageUrl(workspaceId, conversationId, clientId),
+    {
+      ...options,
+      method: "PUT",
+      headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+      body: JSON.stringify(upsertAiConversationMessageBody),
+    },
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: upsertAiConversationMessageResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as upsertAiConversationMessageResponse;
+};
+
+export const getUpsertAiConversationMessageMutationKey = () =>
+  ["upsertAiConversationMessage"] as const;
+
+export const getUpsertAiConversationMessageMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertAiConversationMessage>>,
+    TError,
+    UpsertAiConversationMessageMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertAiConversationMessage>>,
+  TError,
+  UpsertAiConversationMessageMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpsertAiConversationMessageMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertAiConversationMessage>>,
+    UpsertAiConversationMessageMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId, clientId, data } = props ?? {};
+
+    return upsertAiConversationMessage(workspaceId, conversationId, clientId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertAiConversationMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertAiConversationMessage>>
+>;
+export type UpsertAiConversationMessageMutationBody = UpsertAiConversationMessageBody;
+export type UpsertAiConversationMessageMutationError = ProblemDetails;
+export type UpsertAiConversationMessageMutationVariables = {
+  workspaceId: string;
+  conversationId: string;
+  clientId: string;
+  data: UpsertAiConversationMessageBody;
+};
+
+/**
+ * Upserts by the client-generated message id (`clientId`). A retried request returns the existing row instead of duplicating history.
+ * @summary Idempotently append or update one message
+ */
+export const useUpsertAiConversationMessage = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof upsertAiConversationMessage>>,
+      TError,
+      UpsertAiConversationMessageMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof upsertAiConversationMessage>>,
+  TError,
+  UpsertAiConversationMessageMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpsertAiConversationMessageMutationOptions(options), queryClient);
+};
+export type generateAiConversationTitleResponse200 = {
+  data: GenerateAiConversationTitle200;
+  status: 200;
+};
+
+export type generateAiConversationTitleResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type generateAiConversationTitleResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type generateAiConversationTitleResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type generateAiConversationTitleResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type generateAiConversationTitleResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type generateAiConversationTitleResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type generateAiConversationTitleResponseSuccess = generateAiConversationTitleResponse200 & {
+  headers: Headers;
+};
+export type generateAiConversationTitleResponseError = (
+  | generateAiConversationTitleResponse400
+  | generateAiConversationTitleResponse401
+  | generateAiConversationTitleResponse403
+  | generateAiConversationTitleResponse404
+  | generateAiConversationTitleResponse429
+  | generateAiConversationTitleResponse500
+) & {
+  headers: Headers;
+};
+
+export type generateAiConversationTitleResponse =
+  generateAiConversationTitleResponseSuccess | generateAiConversationTitleResponseError;
+
+export const getGenerateAiConversationTitleUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/title/generate`;
+};
+
+/**
+ * Runs the small-model title summariser and returns `{ title }`. Idempotent while `titleSource=model`; `titleSource=manual` is never overwritten.
+ * @summary Generate a conversation title from the first user message
+ */
+export const generateAiConversationTitle = async (
+  workspaceId: string,
+  conversationId: string,
+  options?: RequestInit,
+): Promise<generateAiConversationTitleResponse> => {
+  const res = await fetch(getGenerateAiConversationTitleUrl(workspaceId, conversationId), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: generateAiConversationTitleResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as generateAiConversationTitleResponse;
+};
+
+export const getGenerateAiConversationTitleMutationKey = () =>
+  ["generateAiConversationTitle"] as const;
+
+export const getGenerateAiConversationTitleMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateAiConversationTitle>>,
+    TError,
+    GenerateAiConversationTitleMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateAiConversationTitle>>,
+  TError,
+  GenerateAiConversationTitleMutationVariables,
+  TContext
+> => {
+  const mutationKey = getGenerateAiConversationTitleMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateAiConversationTitle>>,
+    GenerateAiConversationTitleMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId } = props ?? {};
+
+    return generateAiConversationTitle(workspaceId, conversationId, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateAiConversationTitleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateAiConversationTitle>>
+>;
+
+export type GenerateAiConversationTitleMutationError = ProblemDetails;
+export type GenerateAiConversationTitleMutationVariables = {
+  workspaceId: string;
+  conversationId: string;
+};
+
+/**
+ * Runs the small-model title summariser and returns `{ title }`. Idempotent while `titleSource=model`; `titleSource=manual` is never overwritten.
+ * @summary Generate a conversation title from the first user message
+ */
+export const useGenerateAiConversationTitle = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof generateAiConversationTitle>>,
+      TError,
+      GenerateAiConversationTitleMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof generateAiConversationTitle>>,
+  TError,
+  GenerateAiConversationTitleMutationVariables,
+  TContext
+> => {
+  return useMutation(getGenerateAiConversationTitleMutationOptions(options), queryClient);
 };
