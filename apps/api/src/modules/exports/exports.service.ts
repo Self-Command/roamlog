@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import {
   CreateExportRequestSchema,
@@ -24,6 +25,7 @@ import {
   type WorkspaceMembershipAccess,
 } from "../../common/services/workspace-access.service.js";
 import { AuditService } from "../audit/audit.service.js";
+import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { StorageService } from "../storage/storage.service.js";
 import { assertTripVisible, sortParts } from "../trips/content-values.js";
 import { canAccessExport, canDownloadExport, isExportExpired } from "./export-rules.js";
@@ -32,8 +34,14 @@ import { presentExport, presentExportDetail } from "./export.presenter.js";
 import { ExportsRepository } from "./exports.repository.js";
 import { JobQueueService, deterministicJobId } from "./job-queue.service.js";
 
+/** At most one `export.bucket_missing` warning per process per window. */
+const BUCKET_MISSING_WARN_INTERVAL_MS = 60_000;
+
 @Injectable()
 export class ExportsService {
+  private lastMissingBucketWarningAt = 0;
+  private missingBucketCount = 0;
+
   constructor(
     @Inject(ExportsRepository) private readonly repository: ExportsRepository,
     @Inject(WorkspaceAccessService) private readonly access: WorkspaceAccessService,
@@ -41,6 +49,7 @@ export class ExportsService {
     @Inject(StorageService) private readonly storage: StorageService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(JobQueueService) private readonly queue: JobQueueService,
+    @Optional() @Inject(PinoLoggerService) private readonly logger?: PinoLoggerService,
   ) {}
 
   async create(
@@ -57,6 +66,12 @@ export class ExportsService {
     );
     this.permissions.assertCan(membership.role, "export:create", "export");
 
+    // Capture the bucket now, from the effective configuration (never
+    // `process.env.S3_BUCKET`): this is the bucket the artifact is written to,
+    // and the row must remember it so a later admin switch cannot strand the
+    // download on a bucket that never held the object.
+    const bucket = await this.storage.currentBucket();
+
     const record = await this.repository.createExport({
       workspaceId,
       tripId,
@@ -66,6 +81,7 @@ export class ExportsService {
       includeComments: input.includeComments,
       includeExpenses: input.includeExpenses,
       includeMedia: input.includeMedia,
+      bucket,
     });
 
     try {
@@ -157,7 +173,11 @@ export class ExportsService {
       return presentExportDetail(record, null);
     }
 
-    const signed = await this.storage.createSignedReadUrl(record.storageKey ?? "");
+    const signed = await this.storage.createSignedReadUrl(
+      record.storageKey ?? "",
+      undefined,
+      this.bucketFor(record),
+    );
     await this.audit.record({
       actorId: actor.user.id,
       actorType: "user",
@@ -178,7 +198,7 @@ export class ExportsService {
     await this.assertCanRead(actor, record);
     if (record.storageKey) {
       try {
-        await this.storage.deleteObject(record.storageKey);
+        await this.storage.deleteObject(record.storageKey, this.bucketFor(record));
       } catch {
         // A missing object must not prevent the user from removing history.
       }
@@ -244,6 +264,38 @@ export class ExportsService {
       });
     }
     return this.access.requireMembership(userId, first.workspaceId);
+  }
+
+  /**
+   * Bucket the row's object lives in; `undefined` means "current bucket".
+   *
+   * Rows created before 0011_export_bucket have NULL. Signing or deleting them
+   * against the current bucket preserves the historical behaviour, but it is a
+   * guess: emit one throttled warning so a bucket switch that strands old
+   * exports is visible in logs instead of only as a 404 for the user.
+   */
+  private bucketFor(record: ExportRecord): string | undefined {
+    const bucket = typeof record.bucket === "string" ? record.bucket.trim() : "";
+    if (bucket) {
+      return bucket;
+    }
+    this.noteMissingBucket(record.id);
+    return undefined;
+  }
+
+  private noteMissingBucket(exportId: string): void {
+    this.missingBucketCount += 1;
+    const now = Date.now();
+    if (now - this.lastMissingBucketWarningAt < BUCKET_MISSING_WARN_INTERVAL_MS) {
+      return;
+    }
+    this.lastMissingBucketWarningAt = now;
+    const count = this.missingBucketCount;
+    this.missingBucketCount = 0;
+    this.logger?.warn(
+      { code: "EXPORT_BUCKET_MISSING", count, sampleExportId: exportId },
+      "export.bucket_missing",
+    );
   }
 
   private async requireExport(exportId: string): Promise<ExportRecord> {

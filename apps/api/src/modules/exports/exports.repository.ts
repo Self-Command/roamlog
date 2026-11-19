@@ -17,6 +17,12 @@ export interface ExportCreateData {
   includeComments: boolean;
   includeExpenses: boolean;
   includeMedia: boolean;
+  /**
+   * Bucket the worker will upload the artifact to, captured from
+   * `StorageService.currentBucket()` at request time. NULL is only valid for
+   * rows created before 0011_export_bucket.
+   */
+  bucket: string;
 }
 
 @Injectable()

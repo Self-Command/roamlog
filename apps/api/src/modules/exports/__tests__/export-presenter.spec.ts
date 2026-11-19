@@ -18,6 +18,7 @@ function validExportRow(): ExportRecord {
     includeMedia: true,
     status: "queued",
     storageKey: null,
+    bucket: "roamlog-bucket-a",
     error: null,
     expiresAt: null,
     createdAt: new Date("2026-11-19T08:00:00.000Z"),

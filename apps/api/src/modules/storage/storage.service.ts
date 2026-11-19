@@ -298,16 +298,25 @@ export class StorageService {
     };
   }
 
-  async deleteObject(key: string): Promise<void> {
+  /**
+   * Deletes one object.
+   *
+   * `bucket` follows the same per-row override as {@link createSignedReadUrl}:
+   * a row that records the bucket it was written to is deleted from *that*
+   * bucket after an admin switches the configured bucket. Empty/blank values
+   * mean "current bucket", which is the legacy-row fallback.
+   */
+  async deleteObject(key: string, bucket?: string): Promise<void> {
     assertStorageKey(key);
     const bundle = await this.bundle();
+    const targetBucket = normalizedBucket(bucket) ?? bundle.bucket;
     await bundle.internal.send(
       new DeleteObjectCommand({
-        Bucket: bundle.bucket,
+        Bucket: targetBucket,
         Key: key,
       }),
     );
-    this.logger.debug({ bucket: bundle.bucket, key }, "storage.object_deleted");
+    this.logger.debug({ bucket: targetBucket, key }, "storage.object_deleted");
   }
 
   async checkHealth(): Promise<void> {
