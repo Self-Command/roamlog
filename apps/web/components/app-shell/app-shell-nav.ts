@@ -10,10 +10,12 @@ import {
   Map,
   Menu,
   Settings,
+  Sparkles,
   Users,
 } from "lucide-react";
 
 const futureLabels = {
+  ai: "AI 助手",
   journal: "日志",
   map: "地图",
   insights: "洞察",
@@ -84,6 +86,12 @@ export function buildShellNavigation(
         label: "洞察",
         icon: BarChart3,
         active: isSectionActive("/insights"),
+      },
+      {
+        href: `${workspaceRoot}/ai`,
+        label: "AI 助手",
+        icon: Sparkles,
+        active: isSectionActive("/ai"),
       },
     ],
     secondaryNav: [
