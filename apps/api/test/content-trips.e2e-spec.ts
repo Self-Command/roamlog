@@ -155,19 +155,43 @@ describe("TripsService", () => {
     );
   });
 
-  it("filters private trips for Editors while Owners see the full Workspace", async () => {
+  it("applies the one visibility rule to Editors and Owners alike", async () => {
     const { repository, service } = setup();
     repository.listTrips.mockResolvedValue([]);
+
+    // Both roles now go through `tripVisibilityWhere`. The old owner/admin
+    // bypass (`where: {}`) is gone, so the clauses are identical apart from the
+    // actor ids — the list must agree with `assertTripVisible` on detail reads.
+    const expectedOr = (userId: string) => [
+      { createdById: userId },
+      {
+        workspaceId: WORKSPACE_A_ID,
+        visibility: { in: ["workspace", "public_link"] },
+      },
+      {
+        participants: {
+          some: {
+            userId,
+            status: { in: ["invited", "joined"] },
+          },
+        },
+      },
+      {
+        visibility: "custom",
+        accessGrants: { some: { userId } },
+      },
+      {
+        visibility: "custom",
+        accessGrants: { some: { workspaceId: WORKSPACE_A_ID } },
+      },
+    ];
 
     await service.list(makeActor(USER_EDITOR_ID), membership("editor"), { limit: 20 });
     expect(repository.listTrips).toHaveBeenLastCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           workspaceId: WORKSPACE_A_ID,
-          OR: [
-            { visibility: { in: ["workspace", "public_link"] } },
-            { createdById: USER_EDITOR_ID },
-          ],
+          OR: expectedOr(USER_EDITOR_ID),
         }),
       }),
     );
@@ -175,7 +199,7 @@ describe("TripsService", () => {
     await service.list(makeActor(USER_OWNER_ID), membership("owner"), { limit: 20 });
     expect(repository.listTrips).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        where: expect.not.objectContaining({ OR: expect.anything() }),
+        where: expect.objectContaining({ OR: expectedOr(USER_OWNER_ID) }),
       }),
     );
   });

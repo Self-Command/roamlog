@@ -47,6 +47,7 @@ import {
   presentTrip,
 } from "./content-presenters.js";
 import type { ContentTransaction } from "./content-transaction.js";
+import { tripVisibilityWhere } from "./trip-access.js";
 import {
   TripsRepository,
   type TripCreateData,
@@ -124,7 +125,7 @@ export class TripsService {
   ) {}
 
   async list(
-    _actor: AuthenticatedActor,
+    actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
     rawQuery: unknown,
   ): Promise<TripPage> {
@@ -135,15 +136,6 @@ export class TripsService {
       ["updatedAt", "createdAt", "startDate", "title"],
       "updatedAt",
     );
-    const privateVisibility =
-      membership.role === "owner" || membership.role === "admin"
-        ? {}
-        : {
-            OR: [
-              { visibility: { in: ["workspace", "public_link"] } },
-              { createdById: membership.userId },
-            ],
-          };
     const where = {
       workspaceId: membership.workspaceId,
       deletedAt: null,
@@ -169,7 +161,15 @@ export class TripsService {
       ...(query.participantId
         ? { participants: { some: { userId: query.participantId } } }
         : {}),
-      ...privateVisibility,
+      // The same rule the detail paths call (`assertTripVisible` ->
+      // `tripVisibilityWhere`): a `where` fragment, not an owner/admin bypass,
+      // so the list cannot show a trip whose detail read 404s — or hide one the
+      // detail read admits.
+      ...tripVisibilityWhere({
+        userId: membership.userId,
+        workspaceId: membership.workspaceId,
+        platformRole: actor.user.platformRole,
+      }),
     };
     const records = await this.repository.listTrips({
       where,
