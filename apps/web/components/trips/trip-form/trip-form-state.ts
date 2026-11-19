@@ -214,6 +214,13 @@ export interface TripFormValues {
   budgetCurrency: string;
   tags: string[];
   guestNames: string[];
+  /**
+   * Trip-level privacy switch (`Trip.showExactPhotoLocation`). It is part of the
+   * trip settings, not of the photos tab: turning it off changes what the whole
+   * trip exposes on the public share page. Optional in the contract, and absent
+   * means the product default (`true`).
+   */
+  showExactPhotoLocation: boolean;
 }
 
 export type TripFormField =
@@ -272,6 +279,7 @@ export function emptyTripFormValues(): TripFormValues {
     budgetCurrency: "",
     tags: [],
     guestNames: [],
+    showExactPhotoLocation: true,
   };
 }
 
@@ -349,6 +357,8 @@ export function valuesFromTrip(trip: Trip): TripFormValues {
     budgetCurrency: trip.budgetCurrency ?? "",
     tags: [...trip.tags],
     guestNames: [...trip.guestNames],
+    // Absent in the contract means the product default: exact location is on.
+    showExactPhotoLocation: trip.showExactPhotoLocation !== false,
   };
 }
 
@@ -553,6 +563,7 @@ export function buildUpdateTripRequest(
     (code) => code.toUpperCase() !== (initialTrip.originCountryCode ?? "").toUpperCase(),
   );
   const nextCountryCodes = deriveCountryCodes(values, preservedCountryCodes);
+  const initialShowExactPhotoLocation = initialTrip.showExactPhotoLocation !== false;
 
   const patch: UpdateTripRequest = { version: initialTrip.version };
 
@@ -562,6 +573,11 @@ export function buildUpdateTripRequest(
   if (values.visibility !== initialTrip.visibility) patch.visibility = values.visibility;
   if (values.startDate !== initialTrip.startDate) patch.startDate = values.startDate;
   if (values.endDate !== initialTrip.endDate) patch.endDate = values.endDate;
+  // Trip-level privacy setting: only travels when the person actually flipped it,
+  // and always next to `version` so the server can reject a stale write.
+  if (values.showExactPhotoLocation !== initialShowExactPhotoLocation) {
+    patch.showExactPhotoLocation = values.showExactPhotoLocation;
+  }
 
   const originChanged =
     (currentOrigin?.origin ?? "") !== initialOriginName ||

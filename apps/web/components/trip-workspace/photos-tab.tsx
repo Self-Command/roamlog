@@ -10,10 +10,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  Label,
-  Switch,
 } from "@roamlog/ui";
 import { ImageOff, Images, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import {
@@ -24,7 +23,6 @@ import {
   formatExposureSummary,
   hasExactLocation,
 } from "@/components/media";
-import { useUpdateTripMutation } from "@/lib/query";
 
 import { deniedReason } from "./capabilities";
 import { ReportMenu } from "@/components/moderation/report-menu";
@@ -140,52 +138,55 @@ function PhotoCard({
 }
 
 /**
- * The trip-level switch the public share page reads.
+ * Read-only notice for the trip-level `showExactPhotoLocation` switch.
  *
- * Sits next to the grid it governs rather than in a hidden settings dialog: the
- * "有位置" markers below are exactly what the switch takes away from a visitor,
- * so the consequence is legible in the same view. `Trip.showExactPhotoLocation`
- * is optional in the contract, and absent means the product default (`true`).
+ * The control itself belongs to the trip settings — the form the header's
+ * "编辑旅行" button opens — because it governs the trip, not this tab. Rendering
+ * it here made a trip-wide privacy decision look like a per-tab display
+ * preference, so this tab only reports the current state and links to where it
+ * can be changed.
+ *
+ * The copy stays inside what the server actually enforces: the flag is read by
+ * the public share page only, so it must not claim anything about the in-app map
+ * or photo detail. `Trip.showExactPhotoLocation` is optional in the contract, and
+ * absent means the product default (`true`).
  */
-function ExactLocationSwitch({
-  checked,
-  disabled,
-  pending,
-  onChange,
+function ExactLocationNotice({
+  exact,
+  editHref,
+  canEdit,
 }: {
-  checked: boolean;
-  disabled: boolean;
-  pending: boolean;
-  onChange: (next: boolean) => void;
+  exact: boolean;
+  editHref: string;
+  canEdit: boolean;
 }) {
   return (
     <section className="surface-card flex items-start justify-between gap-4 px-4 py-3">
       <div className="min-w-0 space-y-0.5">
-        <Label htmlFor="public-exact-photo-location" className="text-[13px] text-ink">
-          公开页显示精确位置
-        </Label>
+        <p className="text-[13px] text-ink">公开页显示精确位置：{exact ? "开启" : "关闭"}</p>
         <p className="text-[11px] leading-4 text-muted">
-          关闭后，公开分享页只显示城市，不显示照片拍摄的精确位置。
+          {exact
+            ? "公开分享页会显示照片拍摄的精确位置。"
+            : "公开分享页只显示城市，不显示照片拍摄的精确位置。"}
+          这是行程设置，不在照片页修改。
         </p>
-        {disabled ? (
+        {canEdit ? null : (
           <p className="text-[10px] leading-4 text-stone">当前角色不能修改行程设置。</p>
-        ) : null}
+        )}
       </div>
-      <Switch
-        id="public-exact-photo-location"
-        checked={checked}
-        disabled={disabled || pending}
-        onCheckedChange={onChange}
-        aria-label="公开页显示精确位置"
-      />
+      {canEdit ? (
+        <Button asChild variant="ghost" size="sm">
+          <Link href={editHref}>编辑旅行</Link>
+        </Button>
+      ) : null}
     </section>
   );
 }
 
 export function PhotosTab({ tripId }: { tripId: string }) {
-  const { capabilities, mutate, pending, role, trip, workspace } = useTripWorkspace();
+  const { capabilities, mutate, pending, role, trip, workspace, workspaceSlug } =
+    useTripWorkspace();
   const media = useTripMedia(tripId);
-  const updateTrip = useUpdateTripMutation();
   const deleteMedia = useDeleteMedia();
   const [deleteTarget, setDeleteTarget] = useState<Media | null>(null);
   const [detailTarget, setDetailTarget] = useState<Media | null>(null);
@@ -202,7 +203,8 @@ export function PhotosTab({ tripId }: { tripId: string }) {
 
   const deleteTitle = capabilities.deleteMedia ? undefined : deniedReason(role, "删除照片");
   // Absent means the default the product decided on: a shared trip shows the
-  // exact point a photo was taken at.
+  // exact point a photo was taken at. Display only — the switch is a trip
+  // setting and lives in the edit form this tab links to.
   const showExactLocation = trip.showExactPhotoLocation !== false;
 
   async function confirmDelete() {
@@ -221,30 +223,16 @@ export function PhotosTab({ tripId }: { tripId: string }) {
     if (deleted) setDeleteTarget(null);
   }
 
-  async function toggleExactLocation(next: boolean) {
-    await mutate({
-      label: "公开页照片位置",
-      execute: async () =>
-        updateTrip.mutateAsync({
-          tripId: trip.id,
-          input: { version: trip.version, showExactPhotoLocation: next },
-        }),
-      forbidden: "当前角色不能修改行程设置。",
-      failure: "位置显示设置没有保存。",
-    });
-  }
-
   const detailUrl = detailTarget ? mediaPreviewUrl(detailTarget) : null;
   const detailLabel = detailTarget?.caption ?? "旅行照片";
 
   return (
     <>
       <div className="space-y-3">
-        <ExactLocationSwitch
-          checked={showExactLocation}
-          disabled={!capabilities.updateTrip}
-          pending={pending}
-          onChange={(next) => void toggleExactLocation(next)}
+        <ExactLocationNotice
+          exact={showExactLocation}
+          editHref={`/w/${workspaceSlug}/trips/${trip.id}/edit`}
+          canEdit={capabilities.updateTrip}
         />
 
         <QueryPanel

@@ -308,6 +308,24 @@ describe("buildUpdateTripRequest", () => {
     expect(buildUpdateTripRequest(valuesFromTrip(trip), trip)).toBeNull();
   });
 
+  it("treats an absent exact-location flag as on and sends it only when flipped", () => {
+    const trip = makeRoundTrip({ version: 9 });
+    const values = valuesFromTrip(trip);
+
+    // Optional in the contract: absent means the product default (`true`).
+    expect(values.showExactPhotoLocation).toBe(true);
+    expect(buildUpdateTripRequest(values, trip)).toBeNull();
+    expect(buildUpdateTripRequest({ ...values, showExactPhotoLocation: false }, trip)).toEqual({
+      version: 9,
+      showExactPhotoLocation: false,
+    });
+
+    // A trip that stored `false` starts off, so re-saving it is not a change.
+    const storedOff = makeRoundTrip({ version: 9, showExactPhotoLocation: false });
+    expect(valuesFromTrip(storedOff).showExactPhotoLocation).toBe(false);
+    expect(buildUpdateTripRequest(valuesFromTrip(storedOff), storedOff)).toBeNull();
+  });
+
   it("sends only the changed title plus the required version", () => {
     const trip = makeRoundTrip({ id: "0198f000-0000-7000-8000-0000000000aa", version: 4 });
     const patch = buildUpdateTripRequest({ ...valuesFromTrip(trip), title: "冬季京都" }, trip);

@@ -12,8 +12,10 @@ import {
   Badge,
   Button,
   Input,
+  Label,
   PageHeader,
   Select,
+  Switch,
   Textarea,
   buttonVariants,
 } from "@roamlog/ui";
@@ -161,6 +163,52 @@ function focusField(id: string | undefined) {
 
 function placeOptionId(place: Place): string {
   return `${place.provider}:${String(place.providerPlaceId)}`;
+}
+
+const EXACT_LOCATION_FIELD_ID = "trip-exact-photo-location";
+const EXACT_LOCATION_HINT_ID = `${EXACT_LOCATION_FIELD_ID}-hint`;
+
+/**
+ * Trip-level privacy switch.
+ *
+ * It belongs to the trip settings — this form, reached through "编辑旅行" — and
+ * not to the photos tab, because it is a decision about the trip rather than
+ * about one tab. `Trip.showExactPhotoLocation` is read by the public share page
+ * only (the authenticated media reads ignore it), so the copy must promise
+ * exactly that and nothing wider.
+ *
+ * A boolean is submitted on the same `PATCH /v1/trips/{id}` as every other field,
+ * which is also where `version` rides, so a stale write is still rejected.
+ */
+function ExactPhotoLocationField({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="surface-card flex items-start justify-between gap-4 px-4 py-3">
+      <div className="min-w-0 space-y-0.5">
+        <Label htmlFor={EXACT_LOCATION_FIELD_ID} className="text-[13px] text-ink">
+          公开页显示精确位置
+        </Label>
+        <p id={EXACT_LOCATION_HINT_ID} className="text-xs leading-5 text-muted">
+          默认开启。关闭后，公开分享页只显示城市，不显示照片拍摄的精确位置；工作区成员在应用内看到的照片位置不受影响。
+        </p>
+      </div>
+      <Switch
+        id={EXACT_LOCATION_FIELD_ID}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onChange}
+        aria-label="公开页显示精确位置"
+        aria-describedby={EXACT_LOCATION_HINT_ID}
+      />
+    </div>
+  );
 }
 
 export function TripForm(props: TripFormProps) {
@@ -760,6 +808,21 @@ export function TripForm(props: TripFormProps) {
                 />
               </div>
             </section>
+
+            {isCreate ? null : (
+              <section className="space-y-5">
+                <div className="flex items-baseline justify-between gap-4 border-b border-hairline pb-2">
+                  <h2 className="type-eyebrow">07 / 隐私</h2>
+                  <span className="type-meta text-stone">影响公开分享页</span>
+                </div>
+
+                <ExactPhotoLocationField
+                  checked={values.showExactPhotoLocation}
+                  disabled={pending}
+                  onChange={(next) => updateFields({ showExactPhotoLocation: next })}
+                />
+              </section>
+            )}
           </fieldset>
 
           <aside className="min-w-0 lg:sticky lg:top-8 lg:self-start">

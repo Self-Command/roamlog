@@ -1,5 +1,5 @@
 import type { Media, MediaExif } from "@roamlog/contracts";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -339,31 +339,48 @@ describe("照片 tab（真实 media 签名 URL）", () => {
     ).toBeInTheDocument();
   });
 
-  it("精确位置开关默认开启，关闭时把 showExactPhotoLocation 写回行程", async () => {
-    const updateTrip = vi.fn(async () => makeTrip({ id: TRIP_ID }));
-    adapterState.adapter = {
-      ...adapterWith({ workspace: EDITOR }),
-      updateTrip,
-    };
-    stubFetch([
+  it("照片页只读展示精确位置状态，改动入口指向编辑旅行", async () => {
+    const calls = stubFetch([
       route("GET", `/v1/trips/${TRIP_ID}/media`, { items: [], nextCursor: null, hasMore: false }),
     ]);
 
     renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: EDITOR });
 
-    const toggle = await screen.findByRole("switch", { name: "公开页显示精确位置" });
-    expect(toggle).toBeChecked();
+    // Absent in the contract means the product default: the switch is on.
+    expect(await screen.findByText(/公开页显示精确位置：开启/)).toBeInTheDocument();
+    // The copy must stay inside what the server enforces: the share page only.
+    expect(screen.getByText(/公开分享页会显示照片拍摄的精确位置/)).toBeInTheDocument();
+    expect(screen.queryByText(/地图/)).toBeNull();
+    expect(screen.queryByText(/照片详情/)).toBeNull();
+    // The switch is a trip-level setting now, so the photos tab must not offer it.
+    expect(screen.queryByRole("switch")).toBeNull();
 
-    fireEvent.click(toggle);
+    const editLink = screen.getByRole("link", { name: "编辑旅行" });
+    expect(editLink).toHaveAttribute("href", `/w/roamlog-crew/trips/${TRIP_ID}/edit`);
 
-    await waitFor(() => expect(updateTrip).toHaveBeenCalledTimes(1));
-    expect(updateTrip).toHaveBeenCalledWith(
-      TRIP_ID,
-      expect.objectContaining({ version: TRIP.version, showExactPhotoLocation: false }),
-    );
+    // Read-only means read-only: the tab issues no trip write of its own.
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
   });
 
-  it("只读角色看不到可操作的精确位置开关", async () => {
+  it("关闭精确位置时照片页只说明公开分享页只显示城市，不再提供开关", async () => {
+    stubFetch([
+      route("GET", `/v1/trips/${TRIP_ID}/media`, { items: [], nextCursor: null, hasMore: false }),
+    ]);
+
+    renderTab(<PhotosTab tripId={TRIP_ID} />, {
+      trip: makeTrip({ id: TRIP_ID, showExactPhotoLocation: false }),
+      workspace: EDITOR,
+    });
+
+    expect(await screen.findByText(/公开页显示精确位置：关闭/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/公开分享页只显示城市，不显示照片拍摄的精确位置/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.getByRole("link", { name: "编辑旅行" })).toBeInTheDocument();
+  });
+
+  it("只读角色看不到编辑入口，照片页也不再提供开关", async () => {
     stubFetch([
       route("GET", `/v1/trips/${TRIP_ID}/media`, { items: [], nextCursor: null, hasMore: false }),
     ]);
@@ -371,7 +388,10 @@ describe("照片 tab（真实 media 签名 URL）", () => {
     renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: VIEWER });
 
     expect(await screen.findByText("这趟旅行还没有照片")).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "公开页显示精确位置" })).toBeDisabled();
+    expect(await screen.findByText(/公开页显示精确位置：开启/)).toBeInTheDocument();
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByRole("link", { name: "编辑旅行" })).toBeNull();
+    expect(screen.getByText("当前角色不能修改行程设置。")).toBeInTheDocument();
   });
 });
 

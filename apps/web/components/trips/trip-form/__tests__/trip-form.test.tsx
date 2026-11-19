@@ -88,6 +88,25 @@ function makeImage(name = "cover.jpg", type = "image/jpeg", size = 2_048): File 
 }
 
 describe("TripForm create", () => {
+  it("不在创建表单里提供精确位置开关，因为创建契约没有该字段", () => {
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="create"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref="/w/roamlog-crew/trips"
+        onSubmit={vi.fn(async () => undefined)}
+      />,
+    );
+
+    // `CreateTripRequest` has no `showExactPhotoLocation`; offering the control
+    // would be a switch that silently cannot be saved.
+    expect(screen.queryByRole("switch", { name: "公开页显示精确位置" })).toBeNull();
+    expect(screen.queryByText("07 / 隐私")).toBeNull();
+  });
+
   it("blocks submit and surfaces the required-title error", async () => {
     const onSubmit = vi.fn(async () => undefined);
     const user = userEvent.setup();
@@ -348,6 +367,43 @@ describe("TripForm edit", () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit).toHaveBeenCalledWith({ version: 4, title: "冬季京都" });
+  });
+
+  it("提交公开页精确位置开关：默认开启，关闭时带上 false 与正确 version", async () => {
+    // The fixture has no `showExactPhotoLocation`, so the form must fall back to
+    // the product default (`true`) instead of rendering an indeterminate switch.
+    const trip = makeTrip({ version: 7, countryCodes: ["CN", "JP"] });
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const toggle = screen.getByRole("switch", { name: "公开页显示精确位置" });
+    expect(toggle).toBeChecked();
+    expect(screen.getByText("影响公开分享页")).toBeInTheDocument();
+    // The promise must match what the API enforces: the share page only, never
+    // the in-app map or photo detail.
+    expect(toggle).toHaveAccessibleDescription(/公开分享页只显示城市/);
+    expect(toggle).not.toHaveAccessibleDescription(/地图/);
+
+    await user.click(toggle);
+    expect(toggle).not.toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+
+    // The version must ride along so the server can reject a stale write.
+    expect(onSubmit).toHaveBeenCalledWith({ version: 7, showExactPhotoLocation: false });
   });
 
   it("explains that nothing changed instead of sending an empty patch", async () => {
