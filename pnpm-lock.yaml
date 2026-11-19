@@ -372,9 +372,6 @@ importers:
       '@roamlog/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@roamlog/api-mocks':
-        specifier: workspace:*
-        version: link:../../packages/api-mocks
       '@roamlog/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
