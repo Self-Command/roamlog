@@ -97,14 +97,32 @@ export function presentMedia(record: {
   createdAt: Date | string;
   updatedAt: Date | string;
   deletedAt: Date | string | null;
+  moderatedAt?: Date | string | null;
+  moderatedById?: string | null;
 }): Media {
   return MediaSchema.parse({
-    ...record,
+    id: record.id,
+    workspaceId: record.workspaceId,
+    tripId: record.tripId,
+    uploaderId: record.uploaderId,
+    bucket: record.bucket,
+    key: record.key,
+    mimeType: record.mimeType,
+    size: record.size,
+    width: record.width,
+    height: record.height,
+    blurhash: record.blurhash,
     variants: jsonObject(record.variants),
+    status: record.status,
+    error: record.error,
+    caption: record.caption,
     date: record.date === null ? null : presentDate(record.date),
+    location: record.location,
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
     deletedAt: nullableIso(record.deletedAt),
+    moderatedAt: record.moderatedAt === undefined ? null : nullableIso(record.moderatedAt),
+    moderatedById: record.moderatedById ?? null,
   });
 }
 
@@ -122,12 +140,24 @@ export function presentComment(record: {
   createdAt: Date | string;
   updatedAt: Date | string;
   deletedAt: Date | string | null;
+  moderatedAt?: Date | string | null;
+  moderatedById?: string | null;
 }): Comment {
   return CommentSchema.parse({
-    ...record,
+    id: record.id,
+    workspaceId: record.workspaceId,
+    tripId: record.tripId,
+    targetType: record.targetType,
+    targetId: record.targetId,
+    parentId: record.parentId,
+    authorId: record.authorId,
+    body: record.body,
     resolvedAt: nullableIso(record.resolvedAt),
+    resolvedById: record.resolvedById,
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
     deletedAt: nullableIso(record.deletedAt),
+    moderatedAt: record.moderatedAt === undefined ? null : nullableIso(record.moderatedAt),
+    moderatedById: record.moderatedById ?? null,
   });
 }

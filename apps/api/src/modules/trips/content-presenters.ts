@@ -58,6 +58,8 @@ export interface PresentTripInput {
   createdAt: Date | string;
   updatedAt: Date | string;
   deletedAt: Date | string | null;
+  moderatedAt?: Date | string | null;
+  moderatedById?: string | null;
 }
 
 /**
@@ -70,22 +72,43 @@ export interface PresentTripInput {
 export function presentTrip(record: PresentTripInput, cover: TripCover | null = null): Trip {
   const startDate = presentDate(record.startDate);
   const endDate = presentDate(record.endDate);
+  // Fields are listed explicitly: the row also carries operator-only columns
+  // (`moderatedAt`, `moderatedById`) and future schema additions, and the
+  // `.strict()` contract must never receive a column it does not declare.
   return TripSchema.parse({
-    ...record,
-    origin: canonicalTripOrigin(record.origin),
+    id: record.id,
+    workspaceId: record.workspaceId,
+    title: record.title,
+    summary: record.summary,
+    status: record.status,
     startDate,
     endDate,
     durationDays: tripDurationDays(startDate, endDate),
+    coverMediaId: record.coverMediaId,
     cover,
+    origin: canonicalTripOrigin(record.origin),
     originLat: record.originLat ?? null,
     originLng: record.originLng ?? null,
     originCountryCode: record.originCountryCode ?? null,
     originAddress: record.originAddress ?? null,
     originBbox: toBbox(record.originBbox),
     timeZone: record.timeZone ?? null,
+    destinations: record.destinations,
+    countryCodes: record.countryCodes,
+    tags: record.tags,
+    guestNames: record.guestNames,
+    budgetAmountMinor: record.budgetAmountMinor,
+    budgetCurrency: record.budgetCurrency,
+    visibility: record.visibility,
+    favorite: record.favorite,
+    version: record.version,
+    createdById: record.createdById,
+    updatedById: record.updatedById,
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
     deletedAt: nullableIso(record.deletedAt),
+    moderatedAt: record.moderatedAt === undefined ? null : nullableIso(record.moderatedAt),
+    moderatedById: record.moderatedById ?? null,
   });
 }
 
@@ -168,13 +191,33 @@ export function presentEntry(record: {
   createdAt: Date | string;
   updatedAt: Date | string;
   deletedAt: Date | string | null;
+  moderatedAt?: Date | string | null;
+  moderatedById?: string | null;
 }): JournalEntry {
   return JournalEntrySchema.parse({
-    ...record,
+    id: record.id,
+    tripId: record.tripId,
+    workspaceId: record.workspaceId,
+    title: record.title,
     date: presentDate(record.date),
+    location: record.location,
+    lat: record.lat,
+    lng: record.lng,
+    mood: record.mood,
+    weather: record.weather,
+    contentJson: record.contentJson,
+    contentHtml: record.contentHtml,
+    excerpt: record.excerpt,
+    tags: record.tags,
+    favorite: record.favorite,
+    version: record.version,
+    createdById: record.createdById,
+    updatedById: record.updatedById,
     createdAt: iso(record.createdAt),
     updatedAt: iso(record.updatedAt),
     deletedAt: nullableIso(record.deletedAt),
+    moderatedAt: record.moderatedAt === undefined ? null : nullableIso(record.moderatedAt),
+    moderatedById: record.moderatedById ?? null,
   });
 }
 

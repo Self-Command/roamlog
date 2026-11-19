@@ -26,6 +26,7 @@ import { PlacesModule } from "./modules/places/places.module.js";
 import { PrismaModule } from "./modules/prisma/prisma.module.js";
 import { RealtimeModule } from "./modules/realtime/realtime.module.js";
 import { RedisModule } from "./modules/redis/redis.module.js";
+import { ReportsModule } from "./modules/reports/reports.module.js";
 import { SearchModule } from "./modules/search/search.module.js";
 import { SettingsModule } from "./modules/settings/settings.module.js";
 import { ShareLinksModule } from "./modules/share-links/share-links.module.js";
@@ -62,6 +63,7 @@ import { WorkspacesModule } from "./modules/workspaces/workspaces.module.js";
     ExportsModule,
     SearchModule,
     ShareLinksModule,
+    ReportsModule,
     WorkspacesModule,
     InvitationsModule,
     UsersModule,
