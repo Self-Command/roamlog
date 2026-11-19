@@ -199,11 +199,13 @@ $ pnpm --filter @roamlog/web test
  ✓ lib/api/ai.test.ts (16 tests)
  ✓ components/ai/ai-console.test.tsx (17 tests)
  ...
- Test Files  38 passed (38)
-      Tests  317 passed (317)
-   Duration  29.74s
+ Test Files  39 passed (39)
+      Tests  322 passed (322)
+   Duration  28.10s
 [exit code: 0]
 ```
+
+（收尾时并行 Agent 又新增了 1 个测试文件/5 条测试；这是提交后的最终数字。此前同一命令在 38 files / 317 tests 时也是全绿。）
 
 本任务两个测试文件的分组结果：
 
