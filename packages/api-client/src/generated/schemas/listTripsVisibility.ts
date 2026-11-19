@@ -12,4 +12,5 @@ export const ListTripsVisibility = {
   workspace: "workspace",
   private: "private",
   public_link: "public_link",
+  custom: "custom",
 } as const;

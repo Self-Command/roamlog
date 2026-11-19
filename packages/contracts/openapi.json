@@ -3114,7 +3114,8 @@
                   "enum": [
                     "workspace",
                     "private",
-                    "public_link"
+                    "public_link",
+                    "custom"
                   ]
                 },
                 "favorite": {
@@ -3694,7 +3695,8 @@
                 "enum": [
                   "workspace",
                   "private",
-                  "public_link"
+                  "public_link",
+                  "custom"
                 ]
               },
               "notificationDefaults": {
@@ -4036,7 +4038,8 @@
                       "enum": [
                         "workspace",
                         "private",
-                        "public_link"
+                        "public_link",
+                        "custom"
                       ]
                     },
                     "notificationDefaults": {
@@ -6117,7 +6120,8 @@
             "enum": [
               "workspace",
               "private",
-              "public_link"
+              "public_link",
+              "custom"
             ]
           },
           "favorite": {
@@ -6177,7 +6181,8 @@
                 "enum": [
                   "workspace",
                   "private",
-                  "public_link"
+                  "public_link",
+                  "custom"
                 ]
               },
               "notificationDefaults": {
@@ -9508,7 +9513,8 @@
                   "enum": [
                     "workspace",
                     "private",
-                    "public_link"
+                    "public_link",
+                    "custom"
                   ]
                 },
                 "notificationDefaults": {
@@ -15681,7 +15687,8 @@
             "enum": [
               "workspace",
               "private",
-              "public_link"
+              "public_link",
+              "custom"
             ]
           },
           "favorite": {
@@ -16034,7 +16041,8 @@
             "enum": [
               "workspace",
               "private",
-              "public_link"
+              "public_link",
+              "custom"
             ]
           },
           "from": {
@@ -16510,7 +16518,8 @@
                   "enum": [
                     "workspace",
                     "private",
-                    "public_link"
+                    "public_link",
+                    "custom"
                   ]
                 },
                 "favorite": {
@@ -16641,8 +16650,36 @@
             "format": "uuid",
             "description": "Sortable UUIDv7 identifier."
           },
+          "status": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "joined",
+              "declined"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "editor"
+            ]
+          },
           "joinedAt": {
             "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "invitedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "respondedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "ISO 8601 timestamp with an explicit UTC offset."
           }
@@ -16652,7 +16689,11 @@
           "workspaceId",
           "tripId",
           "userId",
-          "joinedAt"
+          "status",
+          "role",
+          "joinedAt",
+          "invitedAt",
+          "respondedAt"
         ],
         "additionalProperties": false
       },
@@ -16681,8 +16722,36 @@
               "format": "uuid",
               "description": "Sortable UUIDv7 identifier."
             },
+            "status": {
+              "type": "string",
+              "enum": [
+                "invited",
+                "joined",
+                "declined"
+              ]
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "viewer",
+                "editor"
+              ]
+            },
             "joinedAt": {
               "type": "string",
+              "format": "date-time",
+              "description": "ISO 8601 timestamp with an explicit UTC offset."
+            },
+            "invitedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO 8601 timestamp with an explicit UTC offset."
+            },
+            "respondedAt": {
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "date-time",
               "description": "ISO 8601 timestamp with an explicit UTC offset."
             }
@@ -16692,7 +16761,11 @@
             "workspaceId",
             "tripId",
             "userId",
-            "joinedAt"
+            "status",
+            "role",
+            "joinedAt",
+            "invitedAt",
+            "respondedAt"
           ],
           "additionalProperties": false
         }
@@ -17945,7 +18018,8 @@
             "enum": [
               "workspace",
               "private",
-              "public_link"
+              "public_link",
+              "custom"
             ]
           },
           "favorite": {
@@ -18003,7 +18077,8 @@
                 "enum": [
                   "workspace",
                   "private",
-                  "public_link"
+                  "public_link",
+                  "custom"
                 ]
               },
               "notificationDefaults": {
@@ -18260,7 +18335,8 @@
                 "enum": [
                   "workspace",
                   "private",
-                  "public_link"
+                  "public_link",
+                  "custom"
                 ]
               },
               "notificationDefaults": {
@@ -18681,7 +18757,8 @@
                   "enum": [
                     "workspace",
                     "private",
-                    "public_link"
+                    "public_link",
+                    "custom"
                   ]
                 },
                 "notificationDefaults": {
@@ -19258,7 +19335,8 @@
             "enum": [
               "workspace",
               "private",
-              "public_link"
+              "public_link",
+              "custom"
             ]
           },
           "notificationDefaults": {
@@ -19364,7 +19442,8 @@
                 "enum": [
                   "workspace",
                   "private",
-                  "public_link"
+                  "public_link",
+                  "custom"
                 ]
               },
               "notificationDefaults": {
@@ -22541,7 +22620,8 @@
               "enum": [
                 "workspace",
                 "private",
-                "public_link"
+                "public_link",
+                "custom"
               ]
             },
             "required": false,

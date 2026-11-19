@@ -5,6 +5,8 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { TripParticipantRole } from "./tripParticipantRole";
+import type { TripParticipantStatus } from "./tripParticipantStatus";
 
 export interface TripParticipant {
   /** Sortable UUIDv7 identifier. */
@@ -15,6 +17,15 @@ export interface TripParticipant {
   tripId: string;
   /** Sortable UUIDv7 identifier. */
   userId: string;
+  status: TripParticipantStatus;
+  role: TripParticipantRole;
   /** ISO 8601 timestamp with an explicit UTC offset. */
   joinedAt: string;
+  /** ISO 8601 timestamp with an explicit UTC offset. */
+  invitedAt: string;
+  /**
+   * ISO 8601 timestamp with an explicit UTC offset.
+   * @nullable
+   */
+  respondedAt: string | null;
 }
