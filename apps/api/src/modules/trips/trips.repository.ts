@@ -36,6 +36,8 @@ export interface TripCreateData {
   budgetCurrency: string | null;
   visibility: TripVisibility;
   favorite: boolean;
+  /** Omitted lets the column default (`true`) decide. */
+  showExactPhotoLocation?: boolean;
   createdById: string;
   updatedById: string;
 }
@@ -62,6 +64,8 @@ export interface TripUpdateData {
   budgetCurrency?: string | null;
   visibility?: TripVisibility;
   favorite?: boolean;
+  /** Owner switch for the public share page (0014); omitted keeps the stored value. */
+  showExactPhotoLocation?: boolean;
   updatedById: string;
 }
 

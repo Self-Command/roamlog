@@ -72,6 +72,12 @@ export interface TripRecord {
   budgetCurrency: string | null;
   visibility: TripVisibility;
   favorite: boolean;
+  /**
+   * Owner switch for the public share page (0014). Optional so a row read
+   * through a query that predates the migration, or a partial select, degrades
+   * to the product default instead of failing the presenter.
+   */
+  showExactPhotoLocation?: boolean | null;
   version: number;
   createdById: string;
   updatedById: string;

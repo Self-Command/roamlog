@@ -341,6 +341,9 @@ export class TripsService {
         : {}),
       ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
       ...(input.favorite !== undefined ? { favorite: input.favorite } : {}),
+      ...(input.showExactPhotoLocation !== undefined
+        ? { showExactPhotoLocation: input.showExactPhotoLocation }
+        : {}),
       updatedById: actor.user.id,
     };
 
@@ -454,6 +457,10 @@ export class TripsService {
         budgetCurrency: source.budgetCurrency,
         visibility: source.visibility,
         favorite: false,
+        // The switch is the Owner's privacy decision, not a per-copy detail: a
+        // duplicate that silently reset it to the default would re-expose
+        // locations the Owner had turned off.
+        showExactPhotoLocation: source.showExactPhotoLocation ?? true,
         createdById: actor.user.id,
         updatedById: actor.user.id,
       });

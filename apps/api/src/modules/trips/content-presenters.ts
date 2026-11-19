@@ -78,6 +78,12 @@ export interface PresentTripInput {
   budgetCurrency: string | null;
   visibility: string;
   favorite: boolean;
+  /**
+   * The Owner's public-share switch (0014). Optional because callers that
+   * predate the migration (and stubs without the column) must present the
+   * product default — `true` — rather than fail or emit `undefined`.
+   */
+  showExactPhotoLocation?: boolean | null;
   version: number;
   createdById: string;
   updatedById: string;
@@ -157,6 +163,10 @@ export function presentTrip(record: PresentTripInput, cover: TripCover | null = 
     budgetCurrency: record.budgetCurrency,
     visibility: record.visibility,
     favorite: record.favorite,
+    // Explicitly re-defaulted rather than trusted: `Trip.showExactPhotoLocation`
+    // is optional in the contract, and omitting the field would make every
+    // consumer re-implement the "absent means on" product decision.
+    showExactPhotoLocation: record.showExactPhotoLocation ?? true,
     version: record.version,
     createdById: record.createdById,
     updatedById: record.updatedById,

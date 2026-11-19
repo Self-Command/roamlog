@@ -1,5 +1,5 @@
-import type { Media } from "@roamlog/contracts";
-import { screen } from "@testing-library/react";
+import type { Media, MediaExif } from "@roamlog/contracts";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -256,6 +256,122 @@ describe("照片 tab（真实 media 签名 URL）", () => {
     renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: EDITOR });
 
     expect(await screen.findByText("这趟旅行还没有照片")).toBeInTheDocument();
+  });
+
+  it("有 EXIF 的照片显示相机与曝光，老照片只显示自己的日期", async () => {
+    stubFetch([
+      route("GET", `/v1/trips/${TRIP_ID}/media`, {
+        items: [
+          makeMedia({
+            id: "0198f000-0000-7000-8000-0000000000b3",
+            caption: "清水寺",
+            date: "2026-11-02",
+            exif: {
+              Make: "Apple",
+              Model: "iPhone 15 Pro",
+              FNumber: 1.8,
+              FocalLength: 24,
+              ExposureTime: "1/250",
+              ISO: 200,
+              DateTimeOriginal: "2026-11-02T03:04:05.000Z",
+              latitude: 35.0116,
+              longitude: 135.7681,
+            } as MediaExif,
+          }),
+          makeMedia({
+            id: "0198f000-0000-7000-8000-0000000000b4",
+            caption: "老照片",
+            date: "2026-11-03",
+          }),
+        ],
+        nextCursor: null,
+        hasMore: false,
+      }),
+    ]);
+
+    renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: EDITOR });
+
+    expect(await screen.findByText("iPhone 15 Pro")).toBeInTheDocument();
+    expect(screen.getByText("ƒ/1.8 · 24mm")).toBeInTheDocument();
+    expect(screen.getByText("有位置")).toBeInTheDocument();
+    // The card without metadata renders no EXIF block at all — only its date.
+    expect(screen.getAllByTestId("media-exif-summary")).toHaveLength(1);
+    expect(screen.getByText("老照片")).toBeInTheDocument();
+  });
+
+  it("点开照片才渲染 L2 详情：镜头、曝光 chips 与拍摄时间", async () => {
+    stubFetch([
+      route("GET", `/v1/trips/${TRIP_ID}/media`, {
+        items: [
+          makeMedia({
+            id: "0198f000-0000-7000-8000-0000000000b5",
+            caption: "清水寺",
+            variants: {
+              original: { key: "seed/a.jpg", url: "https://img.example.test/a.jpg" },
+              thumb: { key: "seed/a-thumb.jpg", url: "https://img.example.test/a-thumb.jpg" },
+            },
+            exif: {
+              Make: "Apple",
+              Model: "iPhone 15 Pro",
+              LensModel: "iPhone 15 Pro back triple camera 6.765mm f/1.78",
+              FNumber: 1.8,
+              FocalLength: 24,
+              ExposureTime: "1/250",
+              ISO: 200,
+            } as MediaExif,
+          }),
+        ],
+        nextCursor: null,
+        hasMore: false,
+      }),
+    ]);
+
+    renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: EDITOR });
+
+    expect(screen.queryByTestId("media-exif-detail")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "查看照片详情：清水寺" }));
+
+    expect(await screen.findByTestId("media-exif-detail")).toBeInTheDocument();
+    expect(screen.getByText("ISO 200")).toBeInTheDocument();
+    expect(screen.getByText("1/250 s")).toBeInTheDocument();
+    expect(
+      screen.getByText("iPhone 15 Pro back triple camera 6.765mm f/1.78"),
+    ).toBeInTheDocument();
+  });
+
+  it("精确位置开关默认开启，关闭时把 showExactPhotoLocation 写回行程", async () => {
+    const updateTrip = vi.fn(async () => makeTrip({ id: TRIP_ID }));
+    adapterState.adapter = {
+      ...adapterWith({ workspace: EDITOR }),
+      updateTrip,
+    };
+    stubFetch([
+      route("GET", `/v1/trips/${TRIP_ID}/media`, { items: [], nextCursor: null, hasMore: false }),
+    ]);
+
+    renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: EDITOR });
+
+    const toggle = await screen.findByRole("switch", { name: "公开页显示精确位置" });
+    expect(toggle).toBeChecked();
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(updateTrip).toHaveBeenCalledTimes(1));
+    expect(updateTrip).toHaveBeenCalledWith(
+      TRIP_ID,
+      expect.objectContaining({ version: TRIP.version, showExactPhotoLocation: false }),
+    );
+  });
+
+  it("只读角色看不到可操作的精确位置开关", async () => {
+    stubFetch([
+      route("GET", `/v1/trips/${TRIP_ID}/media`, { items: [], nextCursor: null, hasMore: false }),
+    ]);
+
+    renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: VIEWER });
+
+    expect(await screen.findByText("这趟旅行还没有照片")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "公开页显示精确位置" })).toBeDisabled();
   });
 });
 

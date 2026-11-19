@@ -196,6 +196,15 @@ const UpdateTripShape = {
   budgetCurrency: CurrencyCodeSchema.nullable().optional(),
   visibility: TripVisibilitySchema.optional(),
   favorite: z.boolean().optional(),
+  /**
+   * Owner switch for the public share page (0014): when `false`, a share link
+   * shows each photo's city and drops its exact WGS-84 point. Omitted means
+   * "keep the stored value"; the column defaults to `true`.
+   */
+  showExactPhotoLocation: z
+    .boolean()
+    .optional()
+    .describe("Owner switch: expose exact photo GPS on the public share page."),
 };
 
 export const UpdateTripRequestSchema = z

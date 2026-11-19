@@ -239,12 +239,28 @@ function text(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
-  // eslint-disable-next-line no-control-regex
-  const cleaned = value
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const cleaned = stripControlCharacters(value).replace(/\s+/g, " ").trim();
   return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
+ * The characters the old `[\u0000-\u001f\u007f]` class matched: C0 plus DEL.
+ *
+ * Asked as a code-point predicate because `no-control-regex` rejects the escaped
+ * range outright, and a rule that fires on a correct regex is better answered by
+ * saying the same thing in code than by suppressing it. Each hit becomes a space
+ * so the caller's `\s+` collapse folds runs of them into one separator.
+ */
+function isControlCodePoint(code: number): boolean {
+  return code < 0x20 || code === 0x7f;
+}
+
+function stripControlCharacters(value: string): string {
+  let cleaned = "";
+  for (const character of value) {
+    cleaned += isControlCodePoint(character.codePointAt(0) ?? 0) ? " " : character;
+  }
+  return cleaned;
 }
 
 /** EXIF enum tags arrive as dictionary labels; a raw code is kept verbatim. */

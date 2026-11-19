@@ -97,6 +97,18 @@ describe("presentTrip", () => {
     expect(trip.coverMediaId).toBeNull();
   });
 
+  it("defaults the exact photo location switch to on and passes an explicit off through", () => {
+    // Absent column (a row read before 0014, or a stub): the product default is
+    // "a shared trip shows where the photo was taken".
+    expect(presentTrip(tripRecord()).showExactPhotoLocation).toBe(true);
+    expect(presentTrip(tripRecord({ showExactPhotoLocation: null })).showExactPhotoLocation).toBe(
+      true,
+    );
+    expect(
+      presentTrip(tripRecord({ showExactPhotoLocation: false })).showExactPhotoLocation,
+    ).toBe(false);
+  });
+
   it("defaults unmigrated place metadata to null instead of inventing a location", () => {
     const trip = presentTrip(tripRecord());
     expect(trip.originLat).toBeNull();
