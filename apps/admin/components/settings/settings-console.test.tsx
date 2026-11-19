@@ -220,12 +220,48 @@ const placesItems: AdminSettingItem[] = [
   }),
 ];
 
+const aiItems: AdminSettingItem[] = [
+  makeItem({
+    key: "ai.defaultProvider",
+    type: "string",
+    label: "Default AI provider",
+    group: "ai",
+    default: "openai-chat",
+    value: "openai-chat",
+  }),
+  makeItem({
+    key: "ai.timeoutMs",
+    type: "number",
+    label: "Request timeout (ms)",
+    group: "ai",
+    default: 60_000,
+    value: 60_000,
+  }),
+  makeItem({
+    key: "ai.maxOutputTokens",
+    type: "number",
+    label: "Max output tokens",
+    group: "ai",
+    default: 6_000,
+    value: 6_000,
+  }),
+  makeItem({
+    key: "ai.dailyQuota",
+    type: "number",
+    label: "Daily quota",
+    group: "ai",
+    default: 20,
+    value: 20,
+  }),
+];
+
 function responseOf(): AdminSettingsResponse {
   return {
     groups: [
       { group: "general", label: "General", items: generalItems },
       { group: "mail", label: "Mail", items: mailItems },
       { group: "media", label: "Media", items: mediaItems },
+      { group: "ai", label: "AI", items: aiItems },
       { group: "places", label: "Places", items: placesItems },
     ],
     generatedAt: "2026-11-19T05:00:00.000Z",
@@ -264,7 +300,7 @@ function createApi(initial: AdminSettingsResponse) {
 }
 
 async function renderConsole(
-  initialGroup: "general" | "mail" | "media" | "places" = "general",
+  initialGroup: "general" | "mail" | "media" | "ai" | "places" = "general",
   role: "super_admin" | "analyst" = "super_admin",
 ) {
   const fake = createApi(responseOf());
@@ -274,9 +310,11 @@ async function renderConsole(
       ? "Mail"
       : initialGroup === "media"
         ? "Media"
-        : initialGroup === "places"
-          ? "Places"
-          : "General";
+        : initialGroup === "ai"
+          ? "AI"
+          : initialGroup === "places"
+            ? "Places"
+            : "General";
   await screen.findByRole("heading", { name: heading });
   return fake;
 }
@@ -346,6 +384,29 @@ describe("SettingsConsole", () => {
       "Search language",
       "Result limit",
       "Cache TTL (seconds)",
+      "Daily quota",
+    ]) {
+      const field = screen.getByRole("article", { name: `设置项 ${label}` });
+      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
+        "后端已消费",
+      );
+    }
+  });
+
+  it("shows ai as backend-consumed and never as unwired", async () => {
+    await renderConsole("ai");
+
+    expect(screen.getByRole("heading", { name: "AI" })).toBeInTheDocument();
+    const status = screen.getByText("后端已消费（AiModule 运行期读取）");
+    expect(status).toHaveAttribute("data-consumption-status", "backend");
+    expect(status.className).toContain("text-accent-blue");
+    expect(status.textContent).not.toContain("不生效");
+    expect(screen.queryByText(/未接入（不生效/)).not.toBeInTheDocument();
+
+    for (const label of [
+      "Default AI provider",
+      "Request timeout (ms)",
+      "Max output tokens",
       "Daily quota",
     ]) {
       const field = screen.getByRole("article", { name: `设置项 ${label}` });
