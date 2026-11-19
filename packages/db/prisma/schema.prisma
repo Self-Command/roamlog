@@ -927,6 +927,10 @@ model Export {
   includeMedia    Boolean      @default(true)
   status          ExportStatus @default(queued)
   storageKey      String?
+  /// Storage bucket the artifact was written to. NULL on rows that predate
+  /// 0011_export_bucket: readers fall back to the current bucket with a
+  /// throttled `export.bucket_missing` warning instead of signing the wrong one.
+  bucket          String?
   error           String?
   expiresAt       DateTime?    @db.Timestamptz(3)
   createdAt       DateTime     @default(now()) @db.Timestamptz(3)
