@@ -11,7 +11,16 @@ import { PinoLoggerService } from "../modules/observability/pino-logger.service.
 import { requestMetricsMiddleware } from "../modules/observability/request-metrics.middleware.js";
 import { SentryService } from "../modules/observability/sentry.service.js";
 
-export function configureApp(app: INestApplication): void {
+export interface ConfigureAppOptions {
+  /**
+   * Nest's own signal listeners re-raise the signal after `close()` (exit 143)
+   * and have no grace deadline. The production bootstrap owns SIGTERM/SIGINT in
+   * `bootstrap/shutdown.ts` and passes `false`; tests keep the default.
+   */
+  shutdownHooks?: boolean;
+}
+
+export function configureApp(app: INestApplication, options: ConfigureAppOptions = {}): void {
   const config = app.get(AppConfigService);
   const logger = app.get(PinoLoggerService);
   const metrics = app.get(MetricsService);
@@ -22,7 +31,9 @@ export function configureApp(app: INestApplication): void {
 
   app.setGlobalPrefix("v1");
   app.useLogger(logger);
-  app.enableShutdownHooks();
+  if (options.shutdownHooks !== false) {
+    app.enableShutdownHooks();
+  }
 
   if (config.trustProxy) {
     express.set("trust proxy", 1);
