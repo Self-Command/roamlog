@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminMediaPageItemsItemMotion } from "./adminMediaPageItemsItemMotion";
 import type { AdminMediaPageItemsItemStatus } from "./adminMediaPageItemsItemStatus";
 import type { AdminMediaPageItemsItemVariants } from "./adminMediaPageItemsItemVariants";
 
@@ -83,4 +84,21 @@ export type AdminMediaPageItemsItem = {
    * @nullable
    */
   deletedAt: string | null;
+  /**
+   * ISO 8601 timestamp with an explicit UTC offset.
+   * @nullable
+   */
+  moderatedAt?: string | null;
+  /**
+   * Sortable UUIDv7 identifier.
+   * @nullable
+   */
+  moderatedById?: string | null;
+  /** Whether a paired motion asset exists for this still. */
+  livePhoto?: boolean;
+  /**
+   * Paired motion asset; `null` for an ordinary image.
+   * @nullable
+   */
+  motion?: AdminMediaPageItemsItemMotion;
 };

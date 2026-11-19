@@ -70,4 +70,14 @@ export type AdminEntryPageItemsItem = {
    * @nullable
    */
   deletedAt: string | null;
+  /**
+   * ISO 8601 timestamp with an explicit UTC offset.
+   * @nullable
+   */
+  moderatedAt?: string | null;
+  /**
+   * Sortable UUIDv7 identifier.
+   * @nullable
+   */
+  moderatedById?: string | null;
 };

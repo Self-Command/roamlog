@@ -520,6 +520,22 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
                 }
               },
               "required": [
@@ -879,6 +895,22 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
                 }
               },
               "required": [
@@ -1323,6 +1355,63 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "livePhoto": {
+                  "type": "boolean",
+                  "description": "Whether a paired motion asset exists for this still."
+                },
+                "motion": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri",
+                      "description": "Signed motion URL (video), same expiry as `expiresAt`."
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "enum": [
+                        "video/quicktime",
+                        "video/mp4"
+                      ]
+                    },
+                    "durationMs": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType",
+                    "durationMs"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Paired motion asset; `null` for an ordinary image."
                 }
               },
               "required": [
@@ -2922,6 +3011,22 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
                 }
               },
               "required": [
@@ -4751,6 +4856,22 @@
             ],
             "format": "date-time",
             "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedById": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
           }
         },
         "required": [
@@ -4911,6 +5032,22 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
                 }
               },
               "required": [
@@ -6205,6 +6342,22 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
                 }
               },
               "required": [
@@ -7569,6 +7722,63 @@
             "format": "date-time",
             "description": "ISO 8601 timestamp with an explicit UTC offset."
           },
+          "moderatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedById": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "livePhoto": {
+            "type": "boolean",
+            "description": "Whether a paired motion asset exists for this still."
+          },
+          "motion": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri",
+                "description": "Signed motion URL (video), same expiry as `expiresAt`."
+              },
+              "mimeType": {
+                "type": "string",
+                "enum": [
+                  "video/quicktime",
+                  "video/mp4"
+                ]
+              },
+              "durationMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "url",
+              "mimeType",
+              "durationMs"
+            ],
+            "additionalProperties": false,
+            "description": "Paired motion asset; `null` for an ordinary image."
+          },
           "url": {
             "type": [
               "string",
@@ -8290,6 +8500,22 @@
             ],
             "format": "date-time",
             "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedById": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
           }
         },
         "required": [
@@ -8446,6 +8672,63 @@
             ],
             "format": "date-time",
             "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedById": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "livePhoto": {
+            "type": "boolean",
+            "description": "Whether a paired motion asset exists for this still."
+          },
+          "motion": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri",
+                "description": "Signed motion URL (video), same expiry as `expiresAt`."
+              },
+              "mimeType": {
+                "type": "string",
+                "enum": [
+                  "video/quicktime",
+                  "video/mp4"
+                ]
+              },
+              "durationMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "url",
+              "mimeType",
+              "durationMs"
+            ],
+            "additionalProperties": false,
+            "description": "Paired motion asset; `null` for an ordinary image."
           }
         },
         "required": [
@@ -8637,6 +8920,63 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "livePhoto": {
+                  "type": "boolean",
+                  "description": "Whether a paired motion asset exists for this still."
+                },
+                "motion": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri",
+                      "description": "Signed motion URL (video), same expiry as `expiresAt`."
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "enum": [
+                        "video/quicktime",
+                        "video/mp4"
+                      ]
+                    },
+                    "durationMs": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType",
+                    "durationMs"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Paired motion asset; `null` for an ordinary image."
                 }
               },
               "required": [
@@ -10298,6 +10638,45 @@
                     "null"
                   ],
                   "maxLength": 200
+                },
+                "livePhoto": {
+                  "type": "boolean"
+                },
+                "motion": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri",
+                      "description": "Signed motion URL (video), same expiry as `expiresAt`."
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "enum": [
+                        "video/quicktime",
+                        "video/mp4"
+                      ]
+                    },
+                    "durationMs": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType",
+                    "durationMs"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -10400,6 +10779,45 @@
               "null"
             ],
             "maxLength": 200
+          },
+          "livePhoto": {
+            "type": "boolean"
+          },
+          "motion": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri",
+                "description": "Signed motion URL (video), same expiry as `expiresAt`."
+              },
+              "mimeType": {
+                "type": "string",
+                "enum": [
+                  "video/quicktime",
+                  "video/mp4"
+                ]
+              },
+              "durationMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "url",
+              "mimeType",
+              "durationMs"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -10508,6 +10926,18 @@
             "minimum": -180,
             "maximum": 180
           },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "geoapify",
+              "photon",
+              "local",
+              null
+            ]
+          },
           "address": {
             "type": [
               "string",
@@ -10542,6 +10972,7 @@
           "countryCode",
           "lat",
           "lng",
+          "provider",
           "address",
           "startDate",
           "endDate",
@@ -10682,6 +11113,18 @@
             "minLength": 1,
             "maxLength": 120
           },
+          "originProvider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "geoapify",
+              "photon",
+              "local",
+              null
+            ]
+          },
           "destinations": {
             "type": "array",
             "items": {
@@ -10721,6 +11164,7 @@
           "coverMediaId",
           "cover",
           "origin",
+          "originProvider",
           "destinations",
           "countryCodes",
           "tags"
@@ -10862,6 +11306,18 @@
                 "minLength": 1,
                 "maxLength": 120
               },
+              "originProvider": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "geoapify",
+                  "photon",
+                  "local",
+                  null
+                ]
+              },
               "destinations": {
                 "type": "array",
                 "items": {
@@ -10901,6 +11357,7 @@
               "coverMediaId",
               "cover",
               "origin",
+              "originProvider",
               "destinations",
               "countryCodes",
               "tags"
@@ -10949,6 +11406,18 @@
                   "minimum": -180,
                   "maximum": 180
                 },
+                "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "geoapify",
+                    "photon",
+                    "local",
+                    null
+                  ]
+                },
                 "address": {
                   "type": [
                     "string",
@@ -10983,6 +11452,7 @@
                 "countryCode",
                 "lat",
                 "lng",
+                "provider",
                 "address",
                 "startDate",
                 "endDate",
@@ -11149,6 +11619,45 @@
                           "null"
                         ],
                         "maxLength": 200
+                      },
+                      "livePhoto": {
+                        "type": "boolean"
+                      },
+                      "motion": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uri",
+                            "description": "Signed motion URL (video), same expiry as `expiresAt`."
+                          },
+                          "mimeType": {
+                            "type": "string",
+                            "enum": [
+                              "video/quicktime",
+                              "video/mp4"
+                            ]
+                          },
+                          "durationMs": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "url",
+                          "mimeType",
+                          "durationMs"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -11254,6 +11763,45 @@
                     "null"
                   ],
                   "maxLength": 200
+                },
+                "livePhoto": {
+                  "type": "boolean"
+                },
+                "motion": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uri",
+                      "description": "Signed motion URL (video), same expiry as `expiresAt`."
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "enum": [
+                        "video/quicktime",
+                        "video/mp4"
+                      ]
+                    },
+                    "durationMs": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType",
+                    "durationMs"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -14769,6 +15317,22 @@
             ],
             "format": "date-time",
             "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "moderatedById": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
           }
         },
         "required": [
@@ -15442,6 +16006,22 @@
                   ],
                   "format": "date-time",
                   "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "moderatedById": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
                 }
               },
               "required": [
@@ -26342,6 +26922,36 @@
                         "additionalProperties": false
                       },
                       "maxItems": 40
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 60
+                          },
+                          "message": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 300
+                          },
+                          "subject": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 80
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "message",
+                          "subject"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 20
                     },
                     "usage": {
                       "type": "object",

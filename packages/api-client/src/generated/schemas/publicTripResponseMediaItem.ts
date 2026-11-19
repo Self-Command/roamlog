@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { PublicTripResponseMediaItemMotion } from "./publicTripResponseMediaItemMotion";
 
 export type PublicTripResponseMediaItem = {
   /** Sortable UUIDv7 identifier. */
@@ -48,4 +49,7 @@ export type PublicTripResponseMediaItem = {
    * @nullable
    */
   location: string | null;
+  livePhoto?: boolean;
+  /** @nullable */
+  motion?: PublicTripResponseMediaItemMotion;
 };

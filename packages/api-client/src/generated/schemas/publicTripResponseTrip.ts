@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { PublicTripResponseTripCover } from "./publicTripResponseTripCover";
+import type { PublicTripResponseTripOriginProvider } from "./publicTripResponseTripOriginProvider";
 import type { PublicTripResponseTripStatus } from "./publicTripResponseTripStatus";
 
 export type PublicTripResponseTrip = {
@@ -37,6 +38,8 @@ export type PublicTripResponseTrip = {
    * @maxLength 120
    */
   origin: string;
+  /** @nullable */
+  originProvider: PublicTripResponseTripOriginProvider;
   /**
    * @maxItems 30
    * @items.minLength 1

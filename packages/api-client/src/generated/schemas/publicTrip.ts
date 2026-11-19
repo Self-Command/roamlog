@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { PublicTripCover } from "./publicTripCover";
+import type { PublicTripOriginProvider } from "./publicTripOriginProvider";
 import type { PublicTripStatus } from "./publicTripStatus";
 
 export interface PublicTrip {
@@ -37,6 +38,8 @@ export interface PublicTrip {
    * @maxLength 120
    */
   origin: string;
+  /** @nullable */
+  originProvider: PublicTripOriginProvider;
   /**
    * @maxItems 30
    * @items.minLength 1

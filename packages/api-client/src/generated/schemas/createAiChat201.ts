@@ -9,6 +9,7 @@ import type { CreateAiChat201PlannedCallsItem } from "./createAiChat201PlannedCa
 import type { CreateAiChat201Provider } from "./createAiChat201Provider";
 import type { CreateAiChat201ReadOnlyTraceItem } from "./createAiChat201ReadOnlyTraceItem";
 import type { CreateAiChat201Usage } from "./createAiChat201Usage";
+import type { CreateAiChat201WarningsItem } from "./createAiChat201WarningsItem";
 
 export type CreateAiChat201 = {
   /**
@@ -22,6 +23,8 @@ export type CreateAiChat201 = {
   plannedCalls: CreateAiChat201PlannedCallsItem[];
   /** @maxItems 40 */
   readOnlyTrace: CreateAiChat201ReadOnlyTraceItem[];
+  /** @maxItems 20 */
+  warnings?: CreateAiChat201WarningsItem[];
   usage: CreateAiChat201Usage;
   provider: CreateAiChat201Provider;
   /** ISO 8601 timestamp with an explicit UTC offset. */

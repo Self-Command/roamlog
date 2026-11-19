@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { PublicTripResponseStopsItemProvider } from "./publicTripResponseStopsItemProvider";
 
 export type PublicTripResponseStopsItem = {
   /** Sortable UUIDv7 identifier. */
@@ -37,6 +38,8 @@ export type PublicTripResponseStopsItem = {
    * @nullable
    */
   lng: number | null;
+  /** @nullable */
+  provider: PublicTripResponseStopsItemProvider;
   /**
    * Formatted place address. The bbox stays private.
    * @maxLength 400
