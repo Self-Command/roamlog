@@ -114,4 +114,6 @@ export interface UpdateTripRequest {
   budgetCurrency?: string | null;
   visibility?: UpdateTripRequestVisibility;
   favorite?: boolean;
+  /** Owner switch: expose exact photo GPS on the public share page. */
+  showExactPhotoLocation?: boolean;
 }

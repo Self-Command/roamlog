@@ -20097,6 +20097,10 @@
           },
           "favorite": {
             "type": "boolean"
+          },
+          "showExactPhotoLocation": {
+            "type": "boolean",
+            "description": "Owner switch: expose exact photo GPS on the public share page."
           }
         },
         "required": [
@@ -25640,6 +25644,622 @@
             }
           }
         }
+      },
+      "patch": {
+        "operationId": "updateTripParticipant",
+        "tags": [
+          "Participants"
+        ],
+        "summary": "Change a participant's role or invitation status",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "tripId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "viewer",
+                      "editor"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "invited",
+                      "joined",
+                      "declined"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripParticipant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trips/{tripId}/access-grants": {
+      "get": {
+        "operationId": "listTripAccessGrants",
+        "tags": [
+          "Trips"
+        ],
+        "summary": "List a trip's explicit access grants",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "tripId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "grants": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Sortable UUIDv7 identifier."
+                          },
+                          "targetType": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "user"
+                            ]
+                          },
+                          "targetId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Sortable UUIDv7 identifier."
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "ISO 8601 timestamp with an explicit UTC offset."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "targetType",
+                          "targetId",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "resolved": {
+                      "type": "object",
+                      "properties": {
+                        "workspaces": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "targetType": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "user"
+                                ]
+                              },
+                              "targetId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "description": "Sortable UUIDv7 identifier."
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
+                              },
+                              "sublabel": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "targetType",
+                              "targetId",
+                              "label",
+                              "sublabel"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "targetType": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "user"
+                                ]
+                              },
+                              "targetId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "description": "Sortable UUIDv7 identifier."
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
+                              },
+                              "sublabel": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "targetType",
+                              "targetId",
+                              "label",
+                              "sublabel"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "workspaces",
+                        "users"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "grants",
+                    "resolved"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setTripAccessGrants",
+        "tags": [
+          "Trips"
+        ],
+        "summary": "Replace a trip's explicit access grants",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "tripId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workspaces": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "maxItems": 50
+                  },
+                  "users": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "workspaces",
+                  "users"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "grants": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Sortable UUIDv7 identifier."
+                          },
+                          "targetType": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "user"
+                            ]
+                          },
+                          "targetId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Sortable UUIDv7 identifier."
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "ISO 8601 timestamp with an explicit UTC offset."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "targetType",
+                          "targetId",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "resolved": {
+                      "type": "object",
+                      "properties": {
+                        "workspaces": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "targetType": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "user"
+                                ]
+                              },
+                              "targetId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "description": "Sortable UUIDv7 identifier."
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
+                              },
+                              "sublabel": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "targetType",
+                              "targetId",
+                              "label",
+                              "sublabel"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "targetType": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "user"
+                                ]
+                              },
+                              "targetId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "description": "Sortable UUIDv7 identifier."
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
+                              },
+                              "sublabel": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "targetType",
+                              "targetId",
+                              "label",
+                              "sublabel"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "workspaces",
+                        "users"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "grants",
+                    "resolved"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/trips/{tripId}/activity": {
@@ -30055,6 +30675,8 @@
                               "places.search",
                               "trips.create",
                               "trips.get",
+                              "trips.list",
+                              "trips.update",
                               "stops.add",
                               "stops.list",
                               "itinerary.addDay",
@@ -30086,6 +30708,8 @@
                               "places.search",
                               "trips.create",
                               "trips.get",
+                              "trips.list",
+                              "trips.update",
                               "stops.add",
                               "stops.list",
                               "itinerary.addDay",
@@ -30296,6 +30920,8 @@
                             "places.search",
                             "trips.create",
                             "trips.get",
+                            "trips.list",
+                            "trips.update",
                             "stops.add",
                             "stops.list",
                             "itinerary.addDay",
@@ -30351,6 +30977,8 @@
                               "places.search",
                               "trips.create",
                               "trips.get",
+                              "trips.list",
+                              "trips.update",
                               "stops.add",
                               "stops.list",
                               "itinerary.addDay",
@@ -30461,6 +31089,200 @@
           },
           "429": {
             "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspaceId}/ai/rewrite": {
+      "post": {
+        "operationId": "rewriteAiSelection",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Rewrite a text selection with one of the closed instructions",
+        "description": "Rewrites the submitted selection and returns the new text plus the echoed `selectionHash`, the model and the token usage. The operation is chosen from a fixed enum; there is no free-text instruction field. `selectionHash` is the SHA-256 of `text` and is rejected on mismatch, so a stale preview can never overwrite a different selection. Nothing is persisted: the client replaces the selection and saves through the normal journal entry endpoint with `version`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tripId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Sortable UUIDv7 identifier."
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  },
+                  "instruction": {
+                    "type": "string",
+                    "enum": [
+                      "shorten",
+                      "expand",
+                      "polish",
+                      "tone_formal",
+                      "tone_casual",
+                      "fix_grammar"
+                    ]
+                  },
+                  "selectionHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "Lowercase hex SHA-256 of the exact selected text."
+                  },
+                  "locale": {
+                    "type": "string",
+                    "enum": [
+                      "zh",
+                      "en"
+                    ]
+                  }
+                },
+                "required": [
+                  "text",
+                  "instruction",
+                  "selectionHash"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "replacement": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20000
+                    },
+                    "selectionHash": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$",
+                      "description": "Lowercase hex SHA-256 of the exact selected text."
+                    },
+                    "model": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "inputTokens": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "replacement",
+                    "selectionHash",
+                    "model",
+                    "usage"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
             "content": {
               "application/json": {
                 "schema": {

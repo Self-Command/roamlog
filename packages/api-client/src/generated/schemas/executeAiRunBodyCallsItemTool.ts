@@ -13,6 +13,8 @@ export const ExecuteAiRunBodyCallsItemTool = {
   placessearch: "places.search",
   tripscreate: "trips.create",
   tripsget: "trips.get",
+  tripslist: "trips.list",
+  tripsupdate: "trips.update",
   stopsadd: "stops.add",
   stopslist: "stops.list",
   itineraryaddDay: "itinerary.addDay",

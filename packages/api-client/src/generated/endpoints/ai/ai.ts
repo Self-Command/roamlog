@@ -19,6 +19,8 @@ import type {
   ExecuteAiRun201,
   ExecuteAiRunBody,
   ProblemDetails,
+  RewriteAiSelection200,
+  RewriteAiSelectionBody,
 } from "../../schemas";
 
 const getHeaders = (
@@ -322,4 +324,159 @@ export const useExecuteAiRun = <TError = ProblemDetails, TContext = unknown>(
   TContext
 > => {
   return useMutation(getExecuteAiRunMutationOptions(options), queryClient);
+};
+export type rewriteAiSelectionResponse200 = {
+  data: RewriteAiSelection200;
+  status: 200;
+};
+
+export type rewriteAiSelectionResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type rewriteAiSelectionResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type rewriteAiSelectionResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type rewriteAiSelectionResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type rewriteAiSelectionResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type rewriteAiSelectionResponse502 = {
+  data: ProblemDetails;
+  status: 502;
+};
+
+export type rewriteAiSelectionResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type rewriteAiSelectionResponseSuccess = rewriteAiSelectionResponse200 & {
+  headers: Headers;
+};
+export type rewriteAiSelectionResponseError = (
+  | rewriteAiSelectionResponse400
+  | rewriteAiSelectionResponse401
+  | rewriteAiSelectionResponse403
+  | rewriteAiSelectionResponse422
+  | rewriteAiSelectionResponse429
+  | rewriteAiSelectionResponse502
+  | rewriteAiSelectionResponse503
+) & {
+  headers: Headers;
+};
+
+export type rewriteAiSelectionResponse =
+  rewriteAiSelectionResponseSuccess | rewriteAiSelectionResponseError;
+
+export const getRewriteAiSelectionUrl = (workspaceId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/rewrite`;
+};
+
+/**
+ * Rewrites the submitted selection and returns the new text plus the echoed `selectionHash`, the model and the token usage. The operation is chosen from a fixed enum; there is no free-text instruction field. `selectionHash` is the SHA-256 of `text` and is rejected on mismatch, so a stale preview can never overwrite a different selection. Nothing is persisted: the client replaces the selection and saves through the normal journal entry endpoint with `version`.
+ * @summary Rewrite a text selection with one of the closed instructions
+ */
+export const rewriteAiSelection = async (
+  workspaceId: string,
+  rewriteAiSelectionBody: RewriteAiSelectionBody,
+  options?: RequestInit,
+): Promise<rewriteAiSelectionResponse> => {
+  const res = await fetch(getRewriteAiSelectionUrl(workspaceId), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(rewriteAiSelectionBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: rewriteAiSelectionResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as rewriteAiSelectionResponse;
+};
+
+export const getRewriteAiSelectionMutationKey = () => ["rewriteAiSelection"] as const;
+
+export const getRewriteAiSelectionMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rewriteAiSelection>>,
+    TError,
+    RewriteAiSelectionMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rewriteAiSelection>>,
+  TError,
+  RewriteAiSelectionMutationVariables,
+  TContext
+> => {
+  const mutationKey = getRewriteAiSelectionMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rewriteAiSelection>>,
+    RewriteAiSelectionMutationVariables
+  > = (props) => {
+    const { workspaceId, data } = props ?? {};
+
+    return rewriteAiSelection(workspaceId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RewriteAiSelectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rewriteAiSelection>>
+>;
+export type RewriteAiSelectionMutationBody = RewriteAiSelectionBody;
+export type RewriteAiSelectionMutationError = ProblemDetails;
+export type RewriteAiSelectionMutationVariables = {
+  workspaceId: string;
+  data: RewriteAiSelectionBody;
+};
+
+/**
+ * Rewrites the submitted selection and returns the new text plus the echoed `selectionHash`, the model and the token usage. The operation is chosen from a fixed enum; there is no free-text instruction field. `selectionHash` is the SHA-256 of `text` and is rejected on mismatch, so a stale preview can never overwrite a different selection. Nothing is persisted: the client replaces the selection and saves through the normal journal entry endpoint with `version`.
+ * @summary Rewrite a text selection with one of the closed instructions
+ */
+export const useRewriteAiSelection = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof rewriteAiSelection>>,
+      TError,
+      RewriteAiSelectionMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof rewriteAiSelection>>,
+  TError,
+  RewriteAiSelectionMutationVariables,
+  TContext
+> => {
+  return useMutation(getRewriteAiSelectionMutationOptions(options), queryClient);
 };

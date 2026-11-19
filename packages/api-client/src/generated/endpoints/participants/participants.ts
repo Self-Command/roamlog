@@ -27,6 +27,7 @@ import type {
   ProblemDetails,
   TripParticipant,
   TripParticipantListResponse,
+  UpdateTripParticipantBody,
 } from "../../schemas";
 
 const getHeaders = (
@@ -550,4 +551,151 @@ export const useRemoveTripParticipant = <TError = ProblemDetails, TContext = unk
   TContext
 > => {
   return useMutation(getRemoveTripParticipantMutationOptions(options), queryClient);
+};
+export type updateTripParticipantResponse200 = {
+  data: TripParticipant;
+  status: 200;
+};
+
+export type updateTripParticipantResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type updateTripParticipantResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type updateTripParticipantResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateTripParticipantResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type updateTripParticipantResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type updateTripParticipantResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type updateTripParticipantResponseSuccess = updateTripParticipantResponse200 & {
+  headers: Headers;
+};
+export type updateTripParticipantResponseError = (
+  | updateTripParticipantResponse400
+  | updateTripParticipantResponse401
+  | updateTripParticipantResponse403
+  | updateTripParticipantResponse404
+  | updateTripParticipantResponse429
+  | updateTripParticipantResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateTripParticipantResponse =
+  updateTripParticipantResponseSuccess | updateTripParticipantResponseError;
+
+export const getUpdateTripParticipantUrl = (tripId: string, userId: string) => {
+  return `/v1/trips/${tripId}/participants/${userId}`;
+};
+
+/**
+ * @summary Change a participant's role or invitation status
+ */
+export const updateTripParticipant = async (
+  tripId: string,
+  userId: string,
+  updateTripParticipantBody: UpdateTripParticipantBody,
+  options?: RequestInit,
+): Promise<updateTripParticipantResponse> => {
+  const res = await fetch(getUpdateTripParticipantUrl(tripId, userId), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateTripParticipantBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateTripParticipantResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateTripParticipantResponse;
+};
+
+export const getUpdateTripParticipantMutationKey = () => ["updateTripParticipant"] as const;
+
+export const getUpdateTripParticipantMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTripParticipant>>,
+    TError,
+    UpdateTripParticipantMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTripParticipant>>,
+  TError,
+  UpdateTripParticipantMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateTripParticipantMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTripParticipant>>,
+    UpdateTripParticipantMutationVariables
+  > = (props) => {
+    const { tripId, userId, data } = props ?? {};
+
+    return updateTripParticipant(tripId, userId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTripParticipantMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTripParticipant>>
+>;
+export type UpdateTripParticipantMutationBody = UpdateTripParticipantBody;
+export type UpdateTripParticipantMutationError = ProblemDetails;
+export type UpdateTripParticipantMutationVariables = {
+  tripId: string;
+  userId: string;
+  data: UpdateTripParticipantBody;
+};
+
+/** @summary Change a participant's role or invitation status */
+export const useUpdateTripParticipant = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateTripParticipant>>,
+      TError,
+      UpdateTripParticipantMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateTripParticipant>>,
+  TError,
+  UpdateTripParticipantMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateTripParticipantMutationOptions(options), queryClient);
 };

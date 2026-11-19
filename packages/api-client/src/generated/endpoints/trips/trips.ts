@@ -24,10 +24,13 @@ import type {
 import type {
   CreateTripRequest,
   DuplicateTripBody,
+  ListTripAccessGrants200,
   ListTripActivityParams,
   ListTripsParams,
   MessageResponse,
   ProblemDetails,
+  SetTripAccessGrants200,
+  SetTripAccessGrantsBody,
   Trip,
   TripActivityPage,
   TripPage,
@@ -999,6 +1002,344 @@ export const useDuplicateTrip = <TError = ProblemDetails, TContext = unknown>(
   TContext
 > => {
   return useMutation(getDuplicateTripMutationOptions(options), queryClient);
+};
+export type listTripAccessGrantsResponse200 = {
+  data: ListTripAccessGrants200;
+  status: 200;
+};
+
+export type listTripAccessGrantsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type listTripAccessGrantsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type listTripAccessGrantsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type listTripAccessGrantsResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type listTripAccessGrantsResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type listTripAccessGrantsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type listTripAccessGrantsResponseSuccess = listTripAccessGrantsResponse200 & {
+  headers: Headers;
+};
+export type listTripAccessGrantsResponseError = (
+  | listTripAccessGrantsResponse400
+  | listTripAccessGrantsResponse401
+  | listTripAccessGrantsResponse403
+  | listTripAccessGrantsResponse404
+  | listTripAccessGrantsResponse429
+  | listTripAccessGrantsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listTripAccessGrantsResponse =
+  listTripAccessGrantsResponseSuccess | listTripAccessGrantsResponseError;
+
+export const getListTripAccessGrantsUrl = (tripId: string) => {
+  return `/v1/trips/${tripId}/access-grants`;
+};
+
+/**
+ * @summary List a trip's explicit access grants
+ */
+export const listTripAccessGrants = async (
+  tripId: string,
+  options?: RequestInit,
+): Promise<listTripAccessGrantsResponse> => {
+  const res = await fetch(getListTripAccessGrantsUrl(tripId), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTripAccessGrantsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as listTripAccessGrantsResponse;
+};
+
+export const getListTripAccessGrantsQueryKey = (tripId: string) => {
+  return [`/v1/trips/${tripId}/access-grants`] as const;
+};
+
+export const getListTripAccessGrantsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTripAccessGrants>>,
+  TError = ProblemDetails,
+>(
+  tripId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listTripAccessGrants>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTripAccessGrantsQueryKey(tripId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listTripAccessGrants>>> = ({ signal }) =>
+    listTripAccessGrants(tripId, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: tripId !== null && tripId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof listTripAccessGrants>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type ListTripAccessGrantsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTripAccessGrants>>
+>;
+export type ListTripAccessGrantsQueryError = ProblemDetails;
+
+/** @summary List a trip's explicit access grants */
+export function useListTripAccessGrants<
+  TData = Awaited<ReturnType<typeof listTripAccessGrants>>,
+  TError = ProblemDetails,
+>(
+  tripId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listTripAccessGrants>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTripAccessGrants>>,
+          TError,
+          Awaited<ReturnType<typeof listTripAccessGrants>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary List a trip's explicit access grants */
+export function useListTripAccessGrants<
+  TData = Awaited<ReturnType<typeof listTripAccessGrants>>,
+  TError = ProblemDetails,
+>(
+  tripId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listTripAccessGrants>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTripAccessGrants>>,
+          TError,
+          Awaited<ReturnType<typeof listTripAccessGrants>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary List a trip's explicit access grants */
+export function useListTripAccessGrants<
+  TData = Awaited<ReturnType<typeof listTripAccessGrants>>,
+  TError = ProblemDetails,
+>(
+  tripId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listTripAccessGrants>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary List a trip's explicit access grants */
+export function useListTripAccessGrants<
+  TData = Awaited<ReturnType<typeof listTripAccessGrants>>,
+  TError = ProblemDetails,
+>(
+  tripId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listTripAccessGrants>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListTripAccessGrantsQueryOptions(tripId, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type setTripAccessGrantsResponse200 = {
+  data: SetTripAccessGrants200;
+  status: 200;
+};
+
+export type setTripAccessGrantsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type setTripAccessGrantsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type setTripAccessGrantsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type setTripAccessGrantsResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type setTripAccessGrantsResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type setTripAccessGrantsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type setTripAccessGrantsResponseSuccess = setTripAccessGrantsResponse200 & {
+  headers: Headers;
+};
+export type setTripAccessGrantsResponseError = (
+  | setTripAccessGrantsResponse400
+  | setTripAccessGrantsResponse401
+  | setTripAccessGrantsResponse403
+  | setTripAccessGrantsResponse404
+  | setTripAccessGrantsResponse429
+  | setTripAccessGrantsResponse500
+) & {
+  headers: Headers;
+};
+
+export type setTripAccessGrantsResponse =
+  setTripAccessGrantsResponseSuccess | setTripAccessGrantsResponseError;
+
+export const getSetTripAccessGrantsUrl = (tripId: string) => {
+  return `/v1/trips/${tripId}/access-grants`;
+};
+
+/**
+ * @summary Replace a trip's explicit access grants
+ */
+export const setTripAccessGrants = async (
+  tripId: string,
+  setTripAccessGrantsBody: SetTripAccessGrantsBody,
+  options?: RequestInit,
+): Promise<setTripAccessGrantsResponse> => {
+  const res = await fetch(getSetTripAccessGrantsUrl(tripId), {
+    ...options,
+    method: "PUT",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(setTripAccessGrantsBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTripAccessGrantsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as setTripAccessGrantsResponse;
+};
+
+export const getSetTripAccessGrantsMutationKey = () => ["setTripAccessGrants"] as const;
+
+export const getSetTripAccessGrantsMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setTripAccessGrants>>,
+    TError,
+    SetTripAccessGrantsMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setTripAccessGrants>>,
+  TError,
+  SetTripAccessGrantsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getSetTripAccessGrantsMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setTripAccessGrants>>,
+    SetTripAccessGrantsMutationVariables
+  > = (props) => {
+    const { tripId, data } = props ?? {};
+
+    return setTripAccessGrants(tripId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetTripAccessGrantsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setTripAccessGrants>>
+>;
+export type SetTripAccessGrantsMutationBody = SetTripAccessGrantsBody;
+export type SetTripAccessGrantsMutationError = ProblemDetails;
+export type SetTripAccessGrantsMutationVariables = {
+  tripId: string;
+  data: SetTripAccessGrantsBody;
+};
+
+/** @summary Replace a trip's explicit access grants */
+export const useSetTripAccessGrants = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof setTripAccessGrants>>,
+      TError,
+      SetTripAccessGrantsMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof setTripAccessGrants>>,
+  TError,
+  SetTripAccessGrantsMutationVariables,
+  TContext
+> => {
+  return useMutation(getSetTripAccessGrantsMutationOptions(options), queryClient);
 };
 export type listTripActivityResponse200 = {
   data: TripActivityPage;
