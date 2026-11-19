@@ -2,31 +2,39 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { setWorkerUrl, type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
+import { setWorkerUrl } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Map, {
-  Layer,
-  NavigationControl,
-  Source,
-  type MapLayerMouseEvent,
-  type MapRef,
-} from "react-map-gl/maplibre";
+import Map, { NavigationControl, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
 
 import { Button } from "@roamlog/ui";
 
 import { useReducedMotion } from "../charts/use-reduced-motion";
+import {
+  ClusterPointsSource,
+  clusterInteractiveLayerIds,
+  expandClusterIfAny,
+  GLOBE_CLUSTER_SPEC,
+  PHOTO_CLUSTER_SPEC,
+  pointsToGeoJson,
+} from "./cluster-points-source";
+import { moveCamera } from "./map-camera";
+import { photoFocus, photoGroupKey, photosToGeoJson, type PhotoPoint } from "./photo-points";
 import { PlacesAttribution } from "./places-attribution";
 
 /**
- * Globe projection, cluster layer and flyTo usage are ported from the official
- * MapLibre examples, not designed here:
+ * The cluster stack (source + cluster/cluster-count/unclustered-point layers)
+ * now lives in ./cluster-points-source.tsx so the photo layer plots through the
+ * exact same implementation instead of a second one. Projection and flyTo usage
+ * stay here:
  * - projection: test/examples/display-a-globe-with-a-vector-map.html
- * - clusters + cluster-count + unclustered-point layers: test/examples/create-and-style-clusters.html
  * - flyTo({center, zoom, essential}) : test/examples/fly-to-a-location.html
  * Repo: github.com/maplibre/maplibre-gl-js @ b8a71bd487e97c811da1acc5f4eff707df2da5f8
  * The only project-specific glue is the data adapter, the accessible list and
  * the "进入地图" hand-off to the existing 2D atlas view.
  */
+
+// Re-exported so existing importers keep one entry point for the GeoJSON shape.
+export { pointsToGeoJson } from "./cluster-points-source";
 
 // Same OpenFreeMap Liberty style as components/map/map-canvas.tsx:31.
 const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
@@ -53,31 +61,19 @@ export interface GlobePoint {
 
 export interface GlobeViewProps {
   points: GlobePoint[];
+  /** Photos that carry GPS; plotted as a second cluster stack when enabled. */
+  photos?: PhotoPoint[];
+  /** The photo-layer switch lives in the atlas toolbar, not on the canvas. */
+  showPhotos?: boolean;
+  /** Incremented by "缩放到照片"; each change re-frames the photo extent. */
+  focusPhotosToken?: number;
+  /** Opens/closes the thumbnail panel for one photo place (`null` clears it). */
+  onSelectPhotoGroup?: (key: string | null) => void;
   /** Switches the atlas page to its existing 2D view, keeping the selection. */
   onEnterMap?: (point: GlobePoint) => void;
   /** Lets the parent fall back to the flat map when the globe cannot render. */
   onError?: () => void;
   className?: string;
-}
-
-/** GeoJSON for the cluster source; only points carrying coordinates exist upstream. */
-export function pointsToGeoJson(points: GlobePoint[]) {
-  return {
-    type: "FeatureCollection" as const,
-    features: points.map((point) => ({
-      type: "Feature" as const,
-      geometry: {
-        type: "Point" as const,
-        coordinates: [point.lng, point.lat] as [number, number],
-      },
-      properties: {
-        id: point.id,
-        label: point.label,
-        sublabel: point.sublabel ?? "",
-        tripId: point.tripId ?? "",
-      },
-    })),
-  };
 }
 
 function initialView(points: GlobePoint[]) {
@@ -98,6 +94,10 @@ function initialView(points: GlobePoint[]) {
  */
 export default function GlobeView({
   points,
+  photos = [],
+  showPhotos = false,
+  focusPhotosToken = 0,
+  onSelectPhotoGroup,
   onEnterMap,
   onError,
   className,
@@ -110,8 +110,23 @@ export default function GlobeView({
 
   const styleUrl = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || DEFAULT_STYLE_URL;
   const geojson = useMemo(() => pointsToGeoJson(points), [points]);
+  const photoGeoJson = useMemo(() => photosToGeoJson(showPhotos ? photos : []), [photos, showPhotos]);
   const viewState = useMemo(() => initialView(points), [points]);
   const selected = points.find((point) => point.id === selectedId) ?? null;
+
+  // "缩放到照片" is keyed by a token so the effect fires once per request and
+  // never re-frames the camera just because the photo list refreshed.
+  const photosRef = useRef(photos);
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
+
+  useEffect(() => {
+    if (!focusPhotosToken) return;
+    const focus = photoFocus(photosRef.current);
+    if (!focus) return;
+    moveCamera(mapRef.current?.getMap(), focus.center, focus.zoom, reducedMotion);
+  }, [focusPhotosToken, reducedMotion]);
 
   // Rotating is opt-in and is never started for a user who asked for reduced
   // motion: the globe research requires the rotation switch to be off under
@@ -146,25 +161,15 @@ export default function GlobeView({
   }, []);
 
   /**
-   * Camera moves here are always user-initiated. `essential: true` is
-   * MapLibre's marker for "the motion is requested, not decorative" (the
-   * official fly-to-a-location example uses it for the same reason). When the
-   * user asked for reduced motion the flight is skipped entirely and the camera
-   * is placed instead, which is the `duration: 0` behaviour the globe research
-   * requires.
+   * Moves go through ./map-camera.ts's single `moveCamera()` contract: user
+   * requests fly, `prefers-reduced-motion` places the camera instead. The
+   * function is user-initiated, so `essential: true` is MapLibre's marker for
+   * "requested, not decorative" (the official fly-to-a-location example uses it
+   * for the same reason).
    */
-  function moveCamera(map: MapLibreMap | null | undefined, center: [number, number], zoom: number) {
-    if (!map) return;
-    if (reducedMotion) {
-      map.jumpTo({ center, zoom });
-      return;
-    }
-    map.flyTo({ center, zoom, essential: true });
-  }
-
   function focusPoint(point: GlobePoint) {
     setSelectedId(point.id);
-    moveCamera(mapRef.current?.getMap(), [point.lng, point.lat], CITY_ZOOM);
+    moveCamera(mapRef.current?.getMap(), [point.lng, point.lat], CITY_ZOOM, reducedMotion);
   }
 
   async function handleClick(event: MapLayerMouseEvent) {
@@ -174,12 +179,25 @@ export default function GlobeView({
     const geometry = feature.geometry as { coordinates?: [number, number] };
     if (!geometry.coordinates) return;
 
-    if (properties.cluster_id !== undefined) {
+    const layerId = (feature.layer as { id?: string } | undefined)?.id;
+    const photoLayers = clusterInteractiveLayerIds(PHOTO_CLUSTER_SPEC);
+    const isPhotoHit = showPhotos && layerId !== undefined && photoLayers.includes(layerId);
+
+    if (isPhotoHit) {
       setSelectedId(null);
-      const source = event.target.getSource("globe-points") as GeoJSONSource | undefined;
-      if (!source) return;
-      const zoom = await source.getClusterExpansionZoom(Number(properties.cluster_id));
-      event.target.easeTo({ center: geometry.coordinates, zoom });
+      if (await expandClusterIfAny(event.target, PHOTO_CLUSTER_SPEC, properties, geometry.coordinates)) {
+        onSelectPhotoGroup?.(null);
+        return;
+      }
+      const photo = photos.find((item) => item.id === properties.id);
+      if (!photo) return;
+      onSelectPhotoGroup?.(photoGroupKey(photo));
+      moveCamera(event.target, geometry.coordinates, CITY_ZOOM, reducedMotion);
+      return;
+    }
+
+    if (await expandClusterIfAny(event.target, GLOBE_CLUSTER_SPEC, properties, geometry.coordinates)) {
+      setSelectedId(null);
       return;
     }
 
@@ -187,7 +205,7 @@ export default function GlobeView({
     const point = points.find((item) => item.id === id);
     if (!point) return;
     setSelectedId(point.id);
-    moveCamera(event.target, geometry.coordinates, CITY_ZOOM);
+    moveCamera(event.target, geometry.coordinates, CITY_ZOOM, reducedMotion);
   }
 
   return (
@@ -207,7 +225,10 @@ export default function GlobeView({
           attributionControl={{ compact: true }}
           renderWorldCopies={false}
           cooperativeGestures={narrow}
-          interactiveLayerIds={["globe-clusters", "globe-point"]}
+          interactiveLayerIds={[
+            ...clusterInteractiveLayerIds(GLOBE_CLUSTER_SPEC),
+            ...(showPhotos ? clusterInteractiveLayerIds(PHOTO_CLUSTER_SPEC) : []),
+          ]}
           onClick={(event) => {
             void handleClick(event);
           }}
@@ -228,57 +249,10 @@ export default function GlobeView({
           <NavigationControl position="top-right" showCompass={false} />
 
           {/* Ported from the official "Create and style clusters" example. */}
-          <Source
-            id="globe-points"
-            type="geojson"
-            data={geojson}
-            cluster
-            clusterMaxZoom={14}
-            clusterRadius={50}
-          >
-            <Layer
-              id="globe-clusters"
-              type="circle"
-              filter={["has", "point_count"] as never}
-              paint={{
-                "circle-color": "#ff801f",
-                "circle-opacity": 0.92,
-                "circle-radius": [
-                  "step",
-                  ["get", "point_count"],
-                  20,
-                  10,
-                  25,
-                  30,
-                  30,
-                ] as never,
-                "circle-stroke-width": 1,
-                "circle-stroke-color": "rgba(0, 0, 0, 0.85)",
-              }}
-            />
-            <Layer
-              id="globe-cluster-count"
-              type="symbol"
-              filter={["has", "point_count"] as never}
-              layout={{
-                "text-field": "{point_count_abbreviated}",
-                "text-font": ["Noto Sans Regular"],
-                "text-size": 12,
-              }}
-              paint={{ "text-color": "#ffffff" }}
-            />
-            <Layer
-              id="globe-point"
-              type="circle"
-              filter={["!", ["has", "point_count"]] as never}
-              paint={{
-                "circle-color": "#ff801f",
-                "circle-radius": 4,
-                "circle-stroke-width": 1,
-                "circle-stroke-color": "#ffffff",
-              }}
-            />
-          </Source>
+          <ClusterPointsSource spec={GLOBE_CLUSTER_SPEC} data={geojson} />
+          {showPhotos ? (
+            <ClusterPointsSource spec={PHOTO_CLUSTER_SPEC} data={photoGeoJson} />
+          ) : null}
         </Map>
 
         {reducedMotion ? null : (

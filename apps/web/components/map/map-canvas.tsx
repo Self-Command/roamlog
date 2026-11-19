@@ -3,18 +3,28 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { setWorkerUrl } from "maplibre-gl";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import Map, {
   Layer,
   Marker,
   NavigationControl,
   Source,
+  type MapLayerMouseEvent,
   type MapRef,
 } from "react-map-gl/maplibre";
 
 import type { PlacesProvider } from "@/lib/places-attribution";
 
+import { useReducedMotion } from "../charts/use-reduced-motion";
+import {
+  ClusterPointsSource,
+  clusterInteractiveLayerIds,
+  expandClusterIfAny,
+  PHOTO_CLUSTER_SPEC,
+} from "./cluster-points-source";
+import { moveCamera } from "./map-camera";
 import type { MapPoint } from "./map-types";
+import { photoFocus, photoGroupKey, photosToGeoJson, type PhotoPoint } from "./photo-points";
 import { PlacesAttribution } from "./places-attribution";
 
 export interface MapCanvasProps {
@@ -24,6 +34,14 @@ export interface MapCanvasProps {
   onSelect?: (id: string) => void;
   onError?: () => void;
   onReady?: () => void;
+  /** Photos that carry GPS; plotted as a cluster stack on the flat map too. */
+  photos?: PhotoPoint[];
+  /** The photo-layer switch lives in the atlas toolbar, not on the canvas. */
+  showPhotos?: boolean;
+  /** Incremented by "缩放到照片"; each change re-frames the photo extent. */
+  focusPhotosToken?: number;
+  /** Opens/closes the thumbnail panel for one photo place (`null` clears it). */
+  onSelectPhotoGroup?: (key: string | null) => void;
   /** Source of the city search shown alongside the map, when known. */
   placesProvider?: PlacesProvider;
 }
@@ -43,11 +61,56 @@ export default function MapCanvas({
   onSelect,
   onError,
   onReady,
+  photos = [],
+  showPhotos = false,
+  focusPhotosToken = 0,
+  onSelectPhotoGroup,
   placesProvider = null,
 }: MapCanvasProps) {
   const mapRef = useRef<MapRef | null>(null);
   const styleUrl = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || DEFAULT_STYLE_URL;
+  const reducedMotion = useReducedMotion();
   const initialViewState = useMemo(() => initialView(points), [points]);
+  const photoGeoJson = useMemo(() => photosToGeoJson(showPhotos ? photos : []), [photos, showPhotos]);
+
+  // Mirrors globe-view.tsx: the token marks a user request, so the camera re-frames
+  // once per click and not on every photo-list refresh.
+  const photosRef = useRef(photos);
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
+
+  useEffect(() => {
+    if (!focusPhotosToken) return;
+    const focus = photoFocus(photosRef.current);
+    if (!focus) return;
+    moveCamera(mapRef.current?.getMap(), focus.center, focus.zoom, reducedMotion);
+  }, [focusPhotosToken, reducedMotion]);
+
+  async function handleClick(event: MapLayerMouseEvent) {
+    const feature = event.features?.[0];
+    if (!feature) return;
+    const properties = (feature.properties ?? {}) as Record<string, unknown>;
+    const geometry = feature.geometry as { coordinates?: [number, number] };
+    if (!geometry.coordinates) return;
+
+    const layerId = (feature.layer as { id?: string } | undefined)?.id;
+    if (
+      !showPhotos ||
+      layerId === undefined ||
+      !clusterInteractiveLayerIds(PHOTO_CLUSTER_SPEC).includes(layerId)
+    ) {
+      return;
+    }
+
+    if (await expandClusterIfAny(event.target, PHOTO_CLUSTER_SPEC, properties, geometry.coordinates)) {
+      onSelectPhotoGroup?.(null);
+      return;
+    }
+    const photo = photos.find((item) => item.id === properties.id);
+    if (!photo) return;
+    onSelectPhotoGroup?.(photoGroupKey(photo));
+  }
   const routeGeoJson = useMemo<{
     type: "Feature";
     properties: Record<string, never>;
@@ -69,6 +132,12 @@ export default function MapCanvas({
         mapStyle={styleUrl}
         attributionControl={{ compact: false }}
         reuseMaps
+        interactiveLayerIds={
+          showPhotos ? clusterInteractiveLayerIds(PHOTO_CLUSTER_SPEC) : []
+        }
+        onClick={(event) => {
+          void handleClick(event);
+        }}
         onLoad={() => {
           onReady?.();
           const map = mapRef.current;
@@ -108,6 +177,8 @@ export default function MapCanvas({
             />
           </Source>
         ) : null}
+
+        {showPhotos ? <ClusterPointsSource spec={PHOTO_CLUSTER_SPEC} data={photoGeoJson} /> : null}
 
         {points.map((point) => {
           const selected = point.id === selectedId;

@@ -4,6 +4,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 
 import { SchematicRouteMap } from "./map-fallback";
 import type { MapPoint } from "./map-types";
+import type { PhotoPoint } from "./photo-points";
 import { PlacesAttribution } from "./places-attribution";
 
 const MapCanvas = lazy(() => import("./map-canvas"));
@@ -17,11 +18,20 @@ export function AtlasMap({
   selectedTripId,
   onSelectTrip,
   forceFallback = false,
+  photos = [],
+  showPhotos = false,
+  focusPhotosToken = 0,
+  onSelectPhotoGroup,
 }: {
   points: AtlasPoint[];
   selectedTripId?: string;
   onSelectTrip?: (tripId: string) => void;
   forceFallback?: boolean;
+  /** Photo layer state, forwarded unchanged to the live canvas. */
+  photos?: PhotoPoint[];
+  showPhotos?: boolean;
+  focusPhotosToken?: number;
+  onSelectPhotoGroup?: (key: string | null) => void;
 }) {
   const [mapFailed, setMapFailed] = useState(false);
   const [webglAvailable, setWebglAvailable] = useState(false);
@@ -93,6 +103,10 @@ export function AtlasMap({
         onSelect={selectPoint}
         onError={() => setMapFailed(true)}
         placesProvider={null}
+        photos={photos}
+        showPhotos={showPhotos}
+        focusPhotosToken={focusPhotosToken}
+        onSelectPhotoGroup={onSelectPhotoGroup}
       />
     </Suspense>
   );

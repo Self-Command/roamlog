@@ -33,6 +33,8 @@ import {
 import { useAtlasData } from "./atlas-data";
 import { AtlasMap, type AtlasPoint } from "./atlas-map";
 import type { GlobePoint } from "./globe-view";
+import { PhotoLayerToggle, PhotoLocationsPanel } from "./photo-layer";
+import { groupPhotos } from "./photo-points";
 
 /**
  * The globe is map code plus MapLibre's globe projection, so it is only
@@ -80,6 +82,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
     trips,
     tripsTruncated,
     stopsByTrip,
+    photos,
     isLoading,
     error,
     retry,
@@ -92,6 +95,15 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
   const [weakDevice, setWeakDevice] = useState(false);
   const [globeFailed, setGlobeFailed] = useState(false);
   const [selectedId, setSelectedId] = useState("");
+  // The photo layer is on by default — the user asked for the photos to be on
+  // the map — and the switch itself only exists when a photo carries GPS.
+  const [photoLayer, setPhotoLayer] = useState(true);
+  const [activePhotoKey, setActivePhotoKey] = useState<string | null>(null);
+  const [focusPhotosToken, setFocusPhotosToken] = useState(0);
+
+  const hasPhotoLocations = photos.length > 0;
+  const showPhotos = photoLayer && hasPhotoLocations;
+  const photoGroups = useMemo(() => groupPhotos(photos), [photos]);
 
   // The globe is offered as the overview only when the device can carry it.
   // Weak devices stay on the existing 2D map (see the hint above the map).
@@ -302,6 +314,22 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
                 地球
               </Button>
             </div>
+
+            {/* Only rendered when the workspace really has a photo with GPS, so
+                the switch never advertises an empty layer. */}
+            {hasPhotoLocations ? (
+              <div
+                role="group"
+                aria-label="地图图层"
+                className="flex items-center gap-1 rounded-control border border-hairline-strong bg-surface-1 p-1"
+              >
+                <PhotoLayerToggle
+                  enabled={photoLayer}
+                  photoCount={photos.length}
+                  onToggle={() => setPhotoLayer((current) => !current)}
+                />
+              </div>
+            ) : null}
           </div>
 
           {view === "map" ? (
@@ -326,6 +354,10 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
                 mapProjection === "globe" ? (
                   <GlobeView
                     points={points}
+                    photos={photos}
+                    showPhotos={showPhotos}
+                    focusPhotosToken={focusPhotosToken}
+                    onSelectPhotoGroup={setActivePhotoKey}
                     onEnterMap={enterFlatMap}
                     onError={() => {
                       setGlobeFailed(true);
@@ -337,6 +369,10 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
                     points={points}
                     selectedTripId={selected?.id}
                     onSelectTrip={setSelectedId}
+                    photos={photos}
+                    showPhotos={showPhotos}
+                    focusPhotosToken={focusPhotosToken}
+                    onSelectPhotoGroup={setActivePhotoKey}
                   />
                 )
               ) : (
@@ -393,6 +429,16 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
               )}
             </div>
           )}
+
+          {view === "map" && showPhotos && photoGroups.length > 0 ? (
+            <PhotoLocationsPanel
+              groups={photoGroups}
+              photoCount={photos.length}
+              activeKey={activePhotoKey}
+              onSelect={setActivePhotoKey}
+              onZoomToPhotos={() => setFocusPhotosToken((current) => current + 1)}
+            />
+          ) : null}
 
           <div className="flex h-10 items-center justify-between gap-3 border-t border-hairline px-4">
             <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-muted">
