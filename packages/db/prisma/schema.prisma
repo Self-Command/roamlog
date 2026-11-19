@@ -172,6 +172,31 @@ enum ActorType {
   system
 }
 
+/// Lifecycle of an AI conversation: `archived` is a user-chosen archive (still
+/// readable and restorable); deletion is the `deletedAt` soft delete and does
+/// not use this status.
+enum AiConversationStatus {
+  regular
+  archived
+}
+
+/// assistant-ui `ThreadMessageLike` role; tool calls/results are parts inside
+/// assistant `content`, not separate roles. Mirrors S2 `Message_v2.role`.
+enum AiMessageRole {
+  user
+  assistant
+  system
+}
+
+/// Status of an AI streaming reply. Event buffering lives in Redis; the
+/// database only keeps lifecycle metadata.
+enum AiStreamStatus {
+  active
+  completed
+  aborted
+  failed
+}
+
 model User {
   id                String                   @id @default(uuid(7)) @db.Uuid
   email             String                   @unique
@@ -224,6 +249,7 @@ model User {
   featureFlags      FeatureFlag[]            @relation("FeatureFlagUpdater")
   emails            EmailLog[]
   exports           Export[]
+  aiConversations   AiConversation[]
 
   @@index([platformRole, status])
   @@index([status, createdAt])
@@ -330,6 +356,7 @@ model Workspace {
   notifications       Notification[]
   auditLogs           AuditLog[]
   exports             Export[]
+  aiConversations     AiConversation[]
 
   @@index([ownerId])
   @@index([status, createdAt])
@@ -1071,4 +1098,89 @@ model ModerationAction {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([reportId])
+}
+
+/// AI conversation: one chat thread owned by a user inside a workspace.
+/// Mirrors vercel/chatbot's `Chat` (lib/db/schema.ts L28-L40), with the
+/// Roamlog additions `status` and `deletedAt` for archiving/soft delete.
+model AiConversation {
+  id            String               @id @default(uuid(7)) @db.Uuid
+  workspaceId   String               @db.Uuid
+  userId        String               @db.Uuid
+  /// First-user-message placeholder truncated to 24 chars; replaced once the
+  /// model summary succeeds. NULL means the thread has no messages yet.
+  title         String?              @db.VarChar(120)
+  /// placeholder | model | manual. A `manual` title must not be overwritten by
+  /// the background summariser.
+  titleSource   String               @default("placeholder") @db.VarChar(16)
+  status        AiConversationStatus @default(regular)
+  lastMessageAt DateTime?            @db.Timestamptz(3)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime             @updatedAt @db.Timestamptz(3)
+  deletedAt     DateTime?            @db.Timestamptz(3)
+  workspace     Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      AiMessage[]
+  streams       AiStream[]
+
+  @@index([workspaceId, userId, status, lastMessageAt])
+  @@index([workspaceId, lastMessageAt])
+  @@index([userId, lastMessageAt])
+}
+
+/// One message in an `AiConversation`. The entire assistant-ui
+/// `ThreadMessageLike.content` (text, tool calls/results, reasoning) lives in
+/// the single `content` JSONB column so history replay needs no conversion.
+/// `parentId` adds regeneration/editing branches on top of S2's `Message_v2`.
+model AiMessage {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  conversationId String         @db.Uuid
+  /// Branch parent; a regenerated/edited turn points back at the same user
+  /// message. NULL marks a branch root.
+  parentId       String?        @db.Uuid
+  role           AiMessageRole
+  content        Json           @db.JsonB
+  /// assistant-ui `MessageStatus`:
+  /// { type: "running" | "complete" | "incomplete" | "requires-action", ... }.
+  status         Json?          @db.JsonB
+  /// Client-side assistant-ui message id (7-char nanoid), used for idempotent
+  /// upserts and history replay mapping.
+  clientId       String?        @db.VarChar(64)
+  /// Planned run id (`ai:run:*` in Redis), diagnostics only — not a foreign key.
+  runId          String?        @db.VarChar(32)
+  /// Normalised `AiConversationMessage[]` actually sent to the model for this
+  /// turn (including real tool call/result and entityId).
+  modelContext   Json?          @db.JsonB
+  /// Non-rendered metadata: { provider, usage, timing, finishReason }.
+  metadata       Json?          @db.JsonB
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent         AiMessage?     @relation("AiMessageBranch", fields: [parentId], references: [id], onDelete: SetNull)
+  children       AiMessage[]    @relation("AiMessageBranch")
+  streams        AiStream[]
+
+  @@unique([conversationId, clientId])
+  @@index([conversationId, createdAt])
+  @@index([conversationId, parentId])
+  @@index([conversationId, role, createdAt])
+}
+
+/// Metadata for one streamed assistant turn. Event buffering stays in Redis
+/// (resumable stream context); this table only tracks lifecycle/status.
+model AiStream {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  conversationId String         @db.Uuid
+  messageId      String?        @db.Uuid
+  status         AiStreamStatus @default(active)
+  /// Last event sequence written; powers `Last-Event-ID` resume in P1.
+  lastEventId    Int            @default(0)
+  errorCode      String?        @db.VarChar(60)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  finishedAt     DateTime?      @db.Timestamptz(3)
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        AiMessage?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@index([status, createdAt])
 }
