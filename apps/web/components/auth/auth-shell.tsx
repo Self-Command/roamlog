@@ -1,5 +1,5 @@
 import { Badge, PageGlow } from "@roamlog/ui";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 interface AuthShellProps {
   children: ReactNode;
@@ -8,7 +8,13 @@ interface AuthShellProps {
 export function AuthShell({ children }: AuthShellProps) {
   return (
     <main className="relative min-h-dvh overflow-hidden bg-canvas">
-      <PageGlow accent="orange" className="opacity-70" />
+      {/* Follow the runtime accent written on <html>; the default (white)
+          accent keeps the existing orange atmosphere. */}
+      <PageGlow
+        accent="orange"
+        className="opacity-70"
+        style={{ "--page-glow-color": "var(--accent-primary-glow)" } as CSSProperties}
+      />
       <div className="relative grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(420px,520px)]">
         <section className="hidden flex-col justify-between border-r border-hairline px-10 py-8 lg:flex xl:px-16">
           <a

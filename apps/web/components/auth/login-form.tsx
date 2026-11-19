@@ -19,17 +19,23 @@ interface LoginErrors {
   password?: string;
 }
 
+const DEFAULT_LOGIN_TAGLINE =
+  "登录后会进入 Workspace 总览。会话由 Better Auth 的 httpOnly cookie 维护。";
+
 type LoginStep = "credentials" | "challenge";
 type ChallengeFactor = "totp" | "backup-code";
 
 interface LoginFormViewProps {
   auth?: TwoFactorAuthTransport;
   onAuthenticated?: () => void;
+  /** Runtime `theme.loginTagline`; blank falls back to the built-in copy. */
+  tagline?: string;
 }
 
 export function LoginFormView({
   auth = twoFactorAuthTransport,
   onAuthenticated,
+  tagline,
 }: LoginFormViewProps) {
   const [step, setStep] = useState<LoginStep>("credentials");
   const [email, setEmail] = useState("");
@@ -278,7 +284,7 @@ export function LoginFormView({
           回到你的旅行档案
         </h1>
         <p className="mt-4 text-sm leading-6 text-muted">
-          登录后会进入 Workspace 总览。会话由 Better Auth 的 httpOnly cookie 维护。
+          {tagline?.trim() ? tagline : DEFAULT_LOGIN_TAGLINE}
         </p>
       </div>
 
