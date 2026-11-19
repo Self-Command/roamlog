@@ -3,6 +3,7 @@
 - 任务 ID: `B1C_WEB_RUNTIME_CONFIG`
 - 角色: `web_frontend`
 - 日期: 2026-11-19
+- 提交: `a32ee47 feat(web): read public runtime settings for metadata, copy and theme`
 - 状态: **DONE（本任务范围）** — 本任务所有改动、测试、构建、真实页面验证均通过；交付时工作区存在**并行任务未完成的文件**（`apps/web/lib/image/**`、`apps/web/components/media/use-cover-upload.ts`、`packages/contracts/**` 等）导致当前全量 typecheck/test/lint 变红，与本任务文件无关，详见“并行污染说明”。
 
 ## 1. 变更文件（仅本任务）
