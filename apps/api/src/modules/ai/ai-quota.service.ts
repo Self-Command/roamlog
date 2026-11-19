@@ -3,7 +3,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { withTimeout } from "../../common/utils/with-timeout.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { RedisService } from "../redis/redis.service.js";
-import { AI_SETTINGS, type AiSettings } from "./ai.settings.js";
+import { AI_SETTINGS_SOURCE, type AiSettingsSource } from "./ai.settings.js";
 
 const QUOTA_KEY_PREFIX = "ai:quota:";
 const WARN_THROTTLE_MS = 10_000;
@@ -15,26 +15,19 @@ export interface AiQuotaDecision {
   readonly retryAfterSeconds: number;
 }
 
-/** Seconds until UTC midnight; the daily plan-run counter resets with it. */
-export function secondsUntilUtcMidnight(now: Date): number {
-  const nextMidnight = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate() + 1,
-    0,
-    0,
-    0,
-    0,
-  );
-  return Math.max(1, Math.ceil((nextMidnight - now.getTime()) / 1_000));
+function secondsUntilUtcMidnight(now: Date): number {
+  const next = new Date(now);
+  next.setUTCHours(24, 0, 0, 0);
+  return Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 1_000));
 }
 
 /**
- * Per-user daily cap on AI plan runs (`AI_DAILY_QUOTA`, default 20).
+ * Per-user daily cap on AI plan runs.
  *
- * Redis-backed fixed window keyed by user + UTC date, consumed before the model
- * is called. `0` disables the cap. Redis is best-effort: a cache outage must not
- * take AI planning down, so it fails open (and logs once per 10s).
+ * The cap comes from `ai.dailyQuota` (admin) with `AI_DAILY_QUOTA` as the
+ * environment fallback and 20 as the code default, resolved on every call so a
+ * saved change applies to the next request. `0` disables the cap. Redis
+ * failures are fail-open with a throttled warning.
  */
 @Injectable()
 export class AiQuotaService {
@@ -43,11 +36,12 @@ export class AiQuotaService {
   constructor(
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
-    @Inject(AI_SETTINGS) private readonly settings: AiSettings,
+    @Inject(AI_SETTINGS_SOURCE) private readonly settingsSource: AiSettingsSource,
   ) {}
 
   async consume(userId: string, now: Date = new Date()): Promise<AiQuotaDecision> {
-    const limit = this.settings.dailyQuota;
+    const settings = await this.settingsSource.resolve();
+    const limit = settings.dailyQuota;
     const retryAfterSeconds = secondsUntilUtcMidnight(now);
     if (limit <= 0) {
       return { allowed: true, limit, remaining: Number.MAX_SAFE_INTEGER, retryAfterSeconds };

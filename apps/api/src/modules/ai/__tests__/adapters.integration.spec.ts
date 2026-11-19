@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { adapterFor } from "../adapters/index.js";
 import type { AiProtocolAdapter, AiToolSpec } from "../adapters/adapter.js";
 import { AiPlanService } from "../ai-plan.service.js";
+import { staticAiSettingsSource } from "../ai.settings.js";
 import { AiToolbox } from "../ai-tools.js";
 import {
   actorStub,
@@ -175,13 +176,21 @@ describe.skipIf(!hasGateway)("AI plan loop against a real gateway", () => {
           mocks.itinerary as never,
           mocks.packing as never,
         );
+        const resolved = aiSettings({
+          protocol,
+          baseUrl,
+          apiKey,
+          model,
+          timeoutMs: 90_000,
+        });
         const service = new AiPlanService(
-          aiSettings({ protocol, baseUrl, apiKey, model, timeoutMs: 90_000 }),
-          adapterFor(protocol, aiSettings({ protocol, baseUrl, apiKey, model, timeoutMs: 90_000 })),
+          staticAiSettingsSource(resolved),
+          () => adapterFor(protocol, resolved),
           toolbox,
           quotaStub() as never,
           runStoreStub() as never,
           loggerStub() as never,
+          () => new Date(),
         );
 
         const response = await service.chat(actorStub(), membershipStub(), {

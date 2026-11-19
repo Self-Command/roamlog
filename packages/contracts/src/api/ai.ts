@@ -99,6 +99,21 @@ export const AiProviderSchema = z
   .strict();
 export type AiProvider = z.infer<typeof AiProviderSchema>;
 
+/**
+ * A non-fatal note about a call the server refused to queue. Additive to the
+ * chat envelope: the wire shape stays valid for older clients because the whole
+ * `warnings` array is optional, and a warning never changes `plannedCalls`.
+ */
+export const AiPlanWarningSchema = z
+  .object({
+    code: z.string().min(1).max(60),
+    message: z.string().min(1).max(300),
+    /** The tool (or argument) the warning is about, for example `trips.create`. */
+    subject: z.string().min(1).max(80),
+  })
+  .strict();
+export type AiPlanWarning = z.infer<typeof AiPlanWarningSchema>;
+
 export const AiChatResponseSchema = z
   .object({
     runId: AiRunIdSchema,
@@ -107,6 +122,12 @@ export const AiChatResponseSchema = z
     plannedCalls: z.array(AiToolCallSchema).max(20),
     /** Read-only calls the server actually executed while planning. */
     readOnlyTrace: z.array(AiToolCallSchema).max(40),
+    /**
+     * Calls the server dropped instead of queueing them (for example a past
+     * date the model repeated after one retry). Absent when nothing was
+     * rejected, so clients that only read `plannedCalls` keep working.
+     */
+    warnings: z.array(AiPlanWarningSchema).max(20).optional(),
     usage: AiUsageSchema,
     provider: AiProviderSchema,
     expiresAt: IsoTimestampSchema,

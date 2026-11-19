@@ -15,12 +15,13 @@ import { AiController } from "../ai.controller.js";
 import { AiExecuteService } from "../ai-execute.service.js";
 import { AiPlanService } from "../ai-plan.service.js";
 import { AiToolbox } from "../ai-tools.js";
-import { AI_ADAPTER } from "../adapters/index.js";
-import { AI_SETTINGS } from "../ai.settings.js";
+import { AI_ADAPTER_FACTORY } from "../adapters/index.js";
+import { AI_CLOCK, AI_SETTINGS_SOURCE, staticAiSettingsSource } from "../ai.settings.js";
 import { PinoLoggerService } from "../../observability/pino-logger.service.js";
 import {
   actorStub,
   aiSettings,
+  fixedClock,
   loggerStub,
   membershipStub,
   quotaStub,
@@ -60,11 +61,16 @@ async function createApp(options: {
   );
 
   const settings = options.settings ?? aiSettings();
+  const clock = fixedClock();
   const moduleRef = await Test.createTestingModule({
     controllers: [AiController],
     providers: [
-      { provide: AI_SETTINGS, useValue: settings },
-      { provide: AI_ADAPTER, useValue: settings.configured ? adapter : undefined },
+      { provide: AI_SETTINGS_SOURCE, useValue: staticAiSettingsSource(settings) },
+      {
+        provide: AI_ADAPTER_FACTORY,
+        useValue: () => (settings.configured ? adapter : undefined),
+      },
+      { provide: AI_CLOCK, useValue: clock },
       { provide: PinoLoggerService, useValue: logger },
       PermissionService,
       RolesGuard,
@@ -77,14 +83,15 @@ async function createApp(options: {
         provide: AiPlanService,
         useFactory: () =>
           new AiPlanService(
-            settings,
-            settings.configured ? adapter : undefined,
+            staticAiSettingsSource(settings),
+            () => (settings.configured ? adapter : undefined),
             toolbox,
             quotaStub(
               options.quotaAllowed === false ? { allowed: false, remaining: 0 } : {},
             ) as never,
             runStoreStub() as never,
             logger as never,
+            clock,
           ),
       },
       { provide: AiExecuteService, useValue: { execute: vi.fn() } },

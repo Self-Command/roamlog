@@ -6,14 +6,15 @@ import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { ItineraryModule } from "../itinerary/itinerary.module.js";
 import { PackingModule } from "../packing/packing.module.js";
 import { PlacesModule } from "../places/places.module.js";
+import { SettingsModule } from "../settings/settings.module.js";
 import { TripsModule } from "../trips/trips.module.js";
-import { AI_ADAPTER, createAiAdapter } from "./adapters/index.js";
+import { AI_ADAPTER_FACTORY, createAiAdapter } from "./adapters/index.js";
 import { AiController } from "./ai.controller.js";
 import { AiExecuteService } from "./ai-execute.service.js";
 import { AiPlanService } from "./ai-plan.service.js";
 import { AiQuotaService } from "./ai-quota.service.js";
 import { AiRunStore } from "./ai-run.store.js";
-import { AI_SETTINGS, resolveAiSettings } from "./ai.settings.js";
+import { AI_CLOCK, AI_SETTINGS_SOURCE, AiSettingsResolver } from "./ai.settings.js";
 import { AiToolbox } from "./ai-tools.js";
 
 @Module({
@@ -25,15 +26,16 @@ import { AiToolbox } from "./ai-tools.js";
     ItineraryModule,
     PackingModule,
     PlacesModule,
+    SettingsModule,
   ],
   controllers: [AiController],
   providers: [
-    { provide: AI_SETTINGS, useFactory: () => resolveAiSettings() },
-    {
-      provide: AI_ADAPTER,
-      useFactory: (settings: ReturnType<typeof resolveAiSettings>) => createAiAdapter(settings),
-      inject: [AI_SETTINGS],
-    },
+    AiSettingsResolver,
+    // A token, not a snapshot: every request resolves `ai.*` from the settings
+    // service (DB > env > default) before the adapter and the quota are used.
+    { provide: AI_SETTINGS_SOURCE, useExisting: AiSettingsResolver },
+    { provide: AI_ADAPTER_FACTORY, useValue: createAiAdapter },
+    { provide: AI_CLOCK, useValue: () => new Date() },
     AiToolbox,
     AiQuotaService,
     AiRunStore,

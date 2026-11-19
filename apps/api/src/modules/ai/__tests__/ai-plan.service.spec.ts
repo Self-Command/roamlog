@@ -1,12 +1,16 @@
 import { HttpException } from "@nestjs/common";
-import type { AiChatResponse } from "@roamlog/contracts";
+import { AiChatResponseSchema, type AiChatResponse } from "@roamlog/contracts";
 import { describe, expect, it, vi } from "vitest";
 
-import { AiPlanService } from "../ai-plan.service.js";
+import { AiPlanService, systemPrompt } from "../ai-plan.service.js";
+import { formatDateOnly } from "../ai-dates.js";
+import { staticAiSettingsSource, type AiSettings } from "../ai.settings.js";
 import { AiToolbox } from "../ai-tools.js";
 import {
   actorStub,
   aiSettings,
+  fixedClock,
+  FIXED_NOW_ISO,
   ITEM_ID,
   KINKAKUJI,
   loggerStub,
@@ -27,11 +31,13 @@ interface Harness {
   runStore: ReturnType<typeof runStoreStub>;
   adapter: ReturnType<typeof scriptedAdapter>;
   quota: ReturnType<typeof quotaStub>;
+  settings: ReturnType<typeof aiSettings>;
 }
 
 function harness(
   turns: Parameters<typeof scriptedAdapter>[0],
   settings = aiSettings(),
+  clock = fixedClock(),
 ): Harness {
   const tools = toolServiceMocks();
   const toolbox = new AiToolbox(
@@ -45,14 +51,15 @@ function harness(
   const quota = quotaStub();
   const runStore = runStoreStub();
   const service = new AiPlanService(
-    settings,
-    adapter,
+    staticAiSettingsSource(settings),
+    () => (settings.configured ? adapter : undefined),
     toolbox,
     quota as never,
     runStore as never,
     loggerStub() as never,
+    clock,
   );
-  return { service, tools, toolbox, runStore, adapter, quota };
+  return { service, tools, toolbox, runStore, adapter, quota, settings };
 }
 
 function toolTurn(
@@ -217,8 +224,8 @@ describe("AiPlanService plan phase", () => {
     const { service, adapter } = harness([], aiSettings());
     const quota = quotaStub({ allowed: false, remaining: 0 });
     const rebuilt = new AiPlanService(
-      aiSettings(),
-      scriptedAdapter([]),
+      staticAiSettingsSource(aiSettings()),
+      () => scriptedAdapter([]),
       new AiToolbox(
         toolServiceMocks().places as never,
         toolServiceMocks().trips as never,
@@ -229,6 +236,7 @@ describe("AiPlanService plan phase", () => {
       quota as never,
       runStoreStub() as never,
       loggerStub() as never,
+      fixedClock(),
     );
 
     await expectHttp(
@@ -254,12 +262,13 @@ describe("AiPlanService plan phase", () => {
       step: vi.fn().mockRejectedValue(new Error("boom")),
     };
     const service = new AiPlanService(
-      aiSettings(),
-      adapter,
+      staticAiSettingsSource(aiSettings()),
+      () => adapter,
       toolbox,
       quotaStub() as never,
       runStoreStub() as never,
       loggerStub() as never,
+      fixedClock(),
     );
 
     await expectHttp(
@@ -311,5 +320,187 @@ describe("AiPlanService plan phase", () => {
     expect(ITEM_ID).toBeTruthy();
     expect(PACKING_ID).toBeTruthy();
     expect(STOP_ID).toBeTruthy();
+  });
+
+  it("passes the admin timeout and output cap to the adapter", async () => {
+    const { service, adapter } = harness(
+      [{ text: "ok", toolCalls: [] }],
+      aiSettings({ timeoutMs: 12_345, maxOutputTokens: 777 }),
+    );
+
+    await service.chat(actorStub(), membershipStub(), { message: "Kyoto" });
+
+    expect(adapter.inputs[0]?.timeoutMs).toBe(12_345);
+    expect(adapter.inputs[0]?.maxTokens).toBe(777);
+  });
+
+  it("selects the adapter from the resolved settings on every request", async () => {
+    const tools = toolServiceMocks();
+    const toolbox = new AiToolbox(
+      tools.places as never,
+      tools.trips as never,
+      tools.stops as never,
+      tools.itinerary as never,
+      tools.packing as never,
+    );
+    const adapter = scriptedAdapter([{ text: "ok", toolCalls: [] }]);
+    const factory = vi.fn((_settings: AiSettings) => adapter);
+    const service = new AiPlanService(
+      staticAiSettingsSource(aiSettings({ protocol: "anthropic-messages" })),
+      factory,
+      toolbox,
+      quotaStub() as never,
+      runStoreStub() as never,
+      loggerStub() as never,
+      fixedClock(),
+    );
+
+    const response = await service.chat(actorStub(), membershipStub(), { message: "Kyoto" });
+
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(factory.mock.calls[0]?.[0]).toMatchObject({ protocol: "anthropic-messages" });
+    expect(response.provider.protocol).toBe("anthropic-messages");
+  });
+
+  it("injects today and the no-past-date rule into the system prompt", async () => {
+    const { service, adapter } = harness([{ text: "ok", toolCalls: [] }]);
+    const today = formatDateOnly(new Date(FIXED_NOW_ISO));
+
+    await service.chat(actorStub(), membershipStub(), { message: "Kyoto" });
+
+    const system = adapter.inputs[0]?.system ?? "";
+    expect(system).toContain(`Today is ${today}`);
+    expect(system).toContain(`on or after ${today}`);
+    expect(system).toContain("never propose a past date");
+    expect(system).toContain("nearest future dates");
+
+    // Deterministic render, so the rule is asserted on exact strings too.
+    const rendered = systemPrompt("2030-01-02", "Asia/Shanghai");
+    expect(rendered).toContain("Today is 2030-01-02 (Asia/Shanghai)");
+    expect(rendered).toContain("must be on or after 2030-01-02");
+  });
+
+  it("rejects a write call dated in the past and reports a PAST_DATE warning", async () => {
+    const { service, tools, adapter } = harness([
+      toolTurn([
+        {
+          id: "c1",
+          name: "trips.create",
+          input: { title: "Kyoto 2020", startDate: "2020-04-05", endDate: "2020-04-11" },
+        },
+      ]),
+      { text: "Those dates are in the past. Which week should I plan?", toolCalls: [] },
+    ]);
+
+    const response: AiChatResponse = await service.chat(actorStub(), membershipStub(), {
+      message: "我要 2020 年去京都",
+    });
+
+    expect(response.plannedCalls).toEqual([]);
+    expect(response.warnings).toEqual([
+      {
+        code: "PAST_DATE",
+        message: "计划日期早于今天，已忽略该调用",
+        subject: "trips.create",
+      },
+    ]);
+    // The rejected call never reaches a write service.
+    expect(tools.trips.create).not.toHaveBeenCalled();
+    // The first rejection is fed back as invalid arguments so the model retries.
+    const feedback = adapter.inputs[1]!.messages.at(-1) as unknown as {
+      results: Array<{ content: string }>;
+    };
+    expect(JSON.parse(feedback.results[0]!.content)).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_ARGUMENTS" },
+    });
+    // The additive warnings field is part of the chat envelope contract.
+    expect(AiChatResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it("accepts the model's second attempt when the retry uses a future date", async () => {
+    const { service } = harness([
+      toolTurn([
+        {
+          id: "c1",
+          name: "trips.create",
+          input: { title: "Kyoto", startDate: "2020-04-05", endDate: "2020-04-11" },
+        },
+      ]),
+      toolTurn([
+        {
+          id: "c2",
+          name: "trips.create",
+          input: { title: "Kyoto", startDate: "2026-12-01", endDate: "2026-12-07" },
+        },
+      ]),
+      { text: "Planned for December.", toolCalls: [] },
+    ]);
+
+    const response = await service.chat(actorStub(), membershipStub(), {
+      message: "Kyoto for a week",
+    });
+
+    expect(response.plannedCalls).toEqual([
+      {
+        tool: "trips.create",
+        args: { title: "Kyoto", startDate: "2026-12-01", endDate: "2026-12-07" },
+      },
+    ]);
+    expect(response.warnings).toBeUndefined();
+    expect(AiChatResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it("stops after the retry when the model keeps insisting on past dates", async () => {
+    const past = toolTurn([
+      {
+        id: "c1",
+        name: "itinerary.addDay",
+        input: { tripId: TRIP_ID, date: "2020-04-05", items: [{ title: "Kinkaku-ji" }] },
+      },
+    ]);
+    const { service, adapter, tools, runStore } = harness([past, past]);
+
+    const response = await service.chat(actorStub(), membershipStub(), {
+      message: "plan 2020 Kyoto",
+    });
+
+    expect(adapter.inputs).toHaveLength(2);
+    expect(response.plannedCalls).toEqual([]);
+    expect(response.warnings).toEqual([
+      {
+        code: "PAST_DATE",
+        message: "计划日期早于今天，已忽略该调用",
+        subject: "itinerary.addDay",
+      },
+    ]);
+    expect(response.message).toContain(formatDateOnly(new Date(FIXED_NOW_ISO)));
+    expect(tools.itinerary.create).not.toHaveBeenCalled();
+    expect(runStore.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects past stops.add dates as well, without touching the write service", async () => {
+    const { service, tools } = harness([
+      toolTurn([{ id: "c1", name: "places.search", input: { q: "Kyoto" } }]),
+      toolTurn([
+        {
+          id: "c2",
+          name: "stops.add",
+          input: {
+            tripId: TRIP_ID,
+            providerPlaceId: KINKAKUJI.providerPlaceId,
+            startDate: "2021-01-01",
+            endDate: "2021-01-03",
+          },
+        },
+      ]),
+      { text: "Dates must be in the future.", toolCalls: [] },
+    ]);
+
+    const response = await service.chat(actorStub(), membershipStub(), { message: "Kyoto" });
+
+    expect(response.plannedCalls).toEqual([]);
+    expect(response.warnings?.[0]).toMatchObject({ code: "PAST_DATE", subject: "stops.add" });
+    expect(tools.stops.create).not.toHaveBeenCalled();
   });
 });

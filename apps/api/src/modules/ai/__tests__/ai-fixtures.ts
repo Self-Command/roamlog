@@ -28,6 +28,14 @@ export function aiSettings(overrides: Partial<AiSettings> = {}): AiSettings {
   };
 }
 
+/** Frozen "now" for the planner tests: 2026-11-19 in Asia/Shanghai. */
+export const FIXED_NOW_ISO = "2026-11-19T03:00:00.000Z";
+
+export function fixedClock(iso: string = FIXED_NOW_ISO): () => Date {
+  const value = new Date(iso);
+  return () => value;
+}
+
 export const KINKAKUJI: AiPlaceCandidate = {
   providerPlaceId: "N:1234",
   provider: "photon",
