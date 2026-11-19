@@ -137,3 +137,47 @@
 ### 迁移台账（共享库已应用 14 条）
 
 0012 visibility_and_participants · 0013 stop_provider_tencent · **0014 media_exif**（Media.exif/lat/lng + Trip.showExactPhotoLocation + 2 索引 + CHECK lat/lng 成对）
+
+---
+
+## 状态快照（2026-11-19 20:41，用户要求暂停派单、等待在跑任务完成）
+
+**硬指标**：130 commits（rc.4 后） · 迁移 14（0014_media_exif） · 契约 103 端点 · 全量 API 测试 129 文件 / 1054 通过
+**HEAD**：`c74fe7c feat(media): show the EXIF summary in the photo grid and wire the exact-location switch`
+**服务**：web:3000 ✅ · api:4000 ✅（已用最新代码重启） · PG 55444 ✅ · magpie:3425 ✅ · Redis/MinIO 未起
+
+### 在跑（3 个，等它们完成，不再派新任务）
+
+| Agent | 任务 | 内容 | 备注 |
+|---|---|---|---|
+| `17cec915` | PHOTO_MAP | 照片 GPS 上地图（复用已有 map 组件） | **必须修掉它引入的 `components/map/photo-layer.test.tsx:238` TS2345**，否则 `next build` 失败 |
+| `84c986ee` | VIS_ADVERSARIAL | 穷举是否还有第 7 处可见性旁路（只读 + 只写测试） | 它已写过 `visibility-audit.spec.ts`，当前有 1 个 TS6133 + 6 条红测试（属它的在途状态，等它收尾） |
+| `de3a52b0` | AI_SETTINGS | 后台注册 `ai.baseUrl`/`ai.model`/`ai.apiKey` + 修 `PLACE_PROVIDERS` 漂移 | 前两次因 cwd 与过界约束失败；已放宽允许改 `packages/db/src/settings-defaults.ts`，并给了精确插入点 |
+
+### 换模型后要立刻做的顺序
+
+1. **收齐 3 个 Agent 的交付** → 我逐条验收
+2. `AI_SETTINGS` 落地 → **重派 `AI_E2E_VERIFY`**（配 magpie 真跑"真模型→计划卡→确认→执行→数据库验行数"）
+3. `EXIF_WIRING` 已完成并 **开关已决定迁移到「行程设置」**（用户拍板，尚未实施——需派一个迁移任务）
+4. `EXIF_WIRING` 释放 `trips` 模块后 → **派 `VIS_P2`（可见性 API）**
+5. `VIS_P3`（可见性 UI）
+6. `AI_WRITING`（编辑器内选中改写，方案 A：原位预览+接受）
+7. 集成验收 → 准备 rc.5
+
+### 已定但未实施的产品决策（换模型后不要重复问用户）
+
+| 决策 | 内容 |
+|---|---|
+| 精确位置开关 | **放在行程设置界面**（用户 2026-11-19 20:41 选「行程设置（推荐）」，当前代码在照片标签页，待迁移） |
+| 地址方案 | 腾讯主（中国门牌级）+ Geoapify 全球 + Photon 仅非汉字兜底 + 地图点选兜底 |
+| 地球视图 | 矢量 3D 地球（非照片级卫星） |
+| 公开分享 GPS | 默认显示精确位置，Owner 可关 |
+| EXIF 深度 | 精选约 40 字段，不存原图 |
+| AI 聊天页 | assistant-ui 骨架 + vercel/chatbot 渲染 + LibreChat 审批语义；不买付费包 |
+| AI 改写 | 方案 A：原位 diff 预览 + 接受/拒绝，写入前校验 `baseVersion` + `selectionHash` |
+
+### 关键密钥（只在 `.env.local`，已确认未泄漏到任何被跟踪文件）
+
+- `TENCENT_MAPS_KEY` = 腾讯 WebService（中国主源）
+- `GEOAPIFY_API_KEY` = 全球源（已在 `.env.local`，本机验证已用）
+- 高德 key 用户**尚未提供**
