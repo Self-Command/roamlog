@@ -34,6 +34,7 @@ describe("0005_platform_role_override migration", () => {
       "0003_w0_trip_stop_place_metadata",
       "0004_system_setting",
       migrationName,
+      "0006_trip_stop_address_bbox",
     ]);
   });
 

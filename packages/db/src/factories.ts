@@ -98,6 +98,8 @@ export function makeTrip(overrides: Partial<Trip> = {}): Trip {
     originLat: null,
     originLng: null,
     originCountryCode: null,
+    originAddress: null,
+    originBbox: null,
     timeZone: null,
     destinations: [],
     countryCodes: [],

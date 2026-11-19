@@ -366,6 +366,8 @@ model Trip {
   originLat         Float?
   originLng         Float?
   originCountryCode String?           @db.Char(2)
+  originAddress     String?           @db.VarChar(400)
+  originBbox        Json?             @db.JsonB
   timeZone          String?
   destinations      String[]          @default([])
   countryCodes      String[]          @default([])
@@ -429,6 +431,8 @@ model Stop {
   provider        String?
   providerPlaceId String?
   timeZone        String?
+  address         String?   @db.VarChar(400)
+  bbox            Json?     @db.JsonB
   startDate       DateTime  @db.Date
   endDate         DateTime  @db.Date
   notes           String
