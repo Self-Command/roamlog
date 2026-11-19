@@ -46,7 +46,11 @@ import {
   TripCoverService,
   type CoverMediaSource,
 } from "../media/trip-cover.service.js";
-import { canonicalTripOrigin } from "../trips/content-values.js";
+import {
+  assertTripVisible,
+  canonicalTripOrigin,
+  type TripVisibilityRecord,
+} from "../trips/content-values.js";
 import {
   ShareLinksRepository,
   type PublicTripBundle,
@@ -80,11 +84,7 @@ export class ShareLinksService {
   ): Promise<ShareLinkCreated> {
     this.permissions.assertCan(membership.role, "share-link:create", "share_link");
     const input = parseRequest(CreateShareLinkRequestSchema, rawInput);
-    const trip = await this.repository.findTrip(membership.workspaceId, tripId);
-    if (!trip) {
-      throw this.tripNotFound();
-    }
-    const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+    await this.requireVisibleTrip(actor, membership, tripId);    const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
     if (expiresAt && expiresAt.getTime() <= Date.now()) {
       throw new BadRequestException({
         code: "SHARE_EXPIRY_INVALID",
@@ -130,15 +130,12 @@ export class ShareLinksService {
   }
 
   async list(
-    _actor: AuthenticatedActor,
+    actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
     tripId: string,
   ): Promise<ShareLinkListResponse> {
     this.permissions.assertCan(membership.role, "share-link:read", "share_link");
-    const trip = await this.repository.findTrip(membership.workspaceId, tripId);
-    if (!trip) {
-      throw this.tripNotFound();
-    }
+    await this.requireVisibleTrip(actor, membership, tripId);
     const links = await this.repository.listShareLinks(membership.workspaceId, tripId);
     return links.map((link) => this.present(link));
   }
@@ -153,6 +150,13 @@ export class ShareLinksService {
     if (!link || link.workspaceId !== membership.workspaceId) {
       throw this.linkNotFound();
     }
+    // Revoking is a write on somebody else's trip: an editor who cannot read the
+    // trip must not be able to enumerate or tear down its links either.
+    const revokedTrip = await this.repository.findTrip(link.workspaceId, link.tripId);
+    if (!revokedTrip) {
+      throw this.linkNotFound();
+    }
+    this.requireTripReadAccess(actor, membership, revokedTrip);
     await this.repository.transaction(async (tx) => {
       await this.repository.revokeShareLink(tx, {
         workspaceId: membership.workspaceId,
@@ -415,6 +419,45 @@ export class ShareLinksService {
       accessCount: record.accessCount,
       createdAt: record.createdAt.toISOString(),
     });
+  }
+
+  /**
+   * Resolves a trip inside the caller's Workspace and applies the single
+   * access rule (`trip-access.ts`, the same one `TripsService` uses).
+   *
+   * A share link is not just a read of the trip: `create` hands back a token
+   * that `readPublic` exchanges for the full public payload (title, summary,
+   * destinations, journal entries, media). `share-link:create` is granted to
+   * every editor, so without this check an editor could mint an anonymous read
+   * of another member's `private` trip. `list` and `revoke` are the same
+   * surface from the other side: they expose and destroy other people's links.
+   *
+   * The repository loads the trip's participant rows and grants alongside the
+   * trip so `assertTripVisible` can decide without a second query.
+   */
+  private async requireVisibleTrip(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    tripId: string,
+  ): Promise<Record<string, unknown>> {
+    const trip = await this.repository.findTrip(membership.workspaceId, tripId);
+    if (!trip) {
+      throw this.tripNotFound();
+    }
+    this.requireTripReadAccess(actor, membership, trip);
+    return trip;
+  }
+
+  private requireTripReadAccess(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    trip: Record<string, unknown>,
+  ): void {
+    assertTripVisible(
+      membership,
+      trip as unknown as TripVisibilityRecord,
+      { platformRole: actor.user.platformRole },
+    );
   }
 
   private tripNotFound(): NotFoundException {

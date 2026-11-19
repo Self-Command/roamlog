@@ -50,6 +50,15 @@ export class ShareLinksRepository {
   async findTrip(workspaceId: string, tripId: string): Promise<Record<string, unknown> | null> {
     return this.prisma.client.trip.findFirst({
       where: { id: tripId, workspaceId, deletedAt: null },
+      // The caller must be able to hand the row to `assertTripVisible` without
+      // a second round trip: the in-memory rule reads the actor's participant
+      // row and the trip's grants. Loading all participant rows is fine — the
+      // rule keys on `membership.userId`, so the unfiltered include is not a
+      // leak; the decision still only looks at the caller's own row.
+      include: {
+        participants: { select: { userId: true, status: true } },
+        accessGrants: { select: { workspaceId: true, userId: true } },
+      },
     });
   }
 
