@@ -1,0 +1,612 @@
+import { Inject, Injectable } from "@nestjs/common";
+import {
+  CreateItineraryItemRequestSchema,
+  CreatePackingItemRequestSchema,
+  CreateStopRequestSchema,
+  CreateTripRequestSchema,
+  isReadOnlyAiTool,
+  type AiToolCall,
+  type AiToolError,
+  type AiToolName,
+  type Place,
+} from "@roamlog/contracts";
+import { z } from "zod";
+
+import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
+import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
+import { ItineraryService } from "../itinerary/itinerary.service.js";
+import { PackingService } from "../packing/packing.service.js";
+import { PlacesService } from "../places/places.service.js";
+import { StopsService } from "../trips/stops.service.js";
+import { TripsService } from "../trips/trips.service.js";
+import type { AiToolSpec } from "./adapters/adapter.js";
+
+/** A place the model may reference by id. Coordinates never come from the model. */
+export interface AiPlaceCandidate {
+  readonly providerPlaceId: string;
+  readonly provider: "photon" | "local" | null;
+  readonly name: string;
+  readonly country: string;
+  readonly countryCode: string;
+  readonly lat: number;
+  readonly lng: number;
+  readonly timeZone: string | null;
+}
+
+export interface AiToolContext {
+  readonly actor: AuthenticatedActor;
+  readonly membership: WorkspaceMembershipAccess;
+  readonly runId: string;
+  /** Places returned by `places.search` during this run, keyed by provider id. */
+  readonly candidates: Map<string, AiPlaceCandidate>;
+  readonly today?: string;
+}
+
+export interface AiToolOutcome {
+  readonly ok: boolean;
+  readonly payload: unknown;
+  readonly entityId?: string | null;
+  readonly error?: AiToolError;
+}
+
+const MAX_CANDIDATES = 12;
+
+const dateOnly = z.iso.date();
+const uuid = z.uuid({ version: "v7" });
+const nonEmpty = (max: number) => z.string().trim().min(1).max(max);
+
+/**
+ * Argument whitelists. Deliberately **not** `.strict()`: unknown keys (including
+ * an attempted `workspaceId`/`userId`) are stripped, never treated as input.
+ */
+const ArgsSchemas: Record<AiToolName, z.ZodType> = {
+  "places.search": z.object({
+    q: nonEmpty(200),
+    limit: z.number().int().min(1).max(MAX_CANDIDATES).optional(),
+  }),
+  "trips.create": z.object({
+    title: nonEmpty(160),
+    summary: z.string().max(1000).optional(),
+    startDate: dateOnly.optional(),
+    endDate: dateOnly.optional(),
+    budgetAmountMinor: z.number().int().nonnegative().optional(),
+    budgetCurrency: z.string().regex(/^[A-Z]{3}$/u).optional(),
+    tags: z.array(nonEmpty(40)).max(20).optional(),
+    destinations: z.array(nonEmpty(120)).max(30).optional(),
+    // Never `public_link`: sharing is a user decision, not a model one.
+    visibility: z.enum(["private", "workspace"]).optional(),
+  }),
+  "trips.get": z.object({ tripId: uuid }),
+  "stops.add": z.object({
+    tripId: uuid,
+    providerPlaceId: nonEmpty(200),
+    startDate: dateOnly.optional(),
+    endDate: dateOnly.optional(),
+    notes: z.string().max(4000).optional(),
+  }),
+  "stops.list": z.object({ tripId: uuid }),
+  "itinerary.addDay": z.object({
+    tripId: uuid,
+    date: dateOnly,
+    title: nonEmpty(180).optional(),
+    items: z
+      .array(
+        z.object({
+          title: nonEmpty(180),
+          time: z
+            .string()
+            .regex(/^([01]\d|2[0-3]):[0-5]\d$/u)
+            .optional(),
+          location: nonEmpty(200).optional(),
+          notes: z.string().max(4000).optional(),
+          type: z.enum(["transit", "food", "activity", "stay", "note"]).optional(),
+        }),
+      )
+      .min(1)
+      .max(8),
+  }),
+  "packing.add": z.object({
+    tripId: uuid,
+    name: nonEmpty(160),
+    category: z.enum(["documents", "clothing", "gear", "health", "other"]).optional(),
+    quantity: z.number().int().min(1).max(999).optional(),
+  }),
+  "budget.setSummary": z.object({
+    tripId: uuid,
+    amountMinor: z.number().int().nonnegative(),
+    currency: z.string().regex(/^[A-Z]{3}$/u),
+  }),
+};
+
+export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
+  {
+    name: "places.search",
+    description:
+      "Search the place database and return candidates with providerPlaceId, country and coordinates. Read-only, no side effects. Always search before adding a stop.",
+    parameters: {
+      type: "object",
+      properties: {
+        q: { type: "string", description: "City, landmark or address to search." },
+        limit: { type: "integer", minimum: 1, maximum: MAX_CANDIDATES },
+      },
+      required: ["q"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "trips.create",
+    description:
+      "Create a trip in the current workspace. WRITES DATA. It is only queued while planning and is executed after the user confirms.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", maxLength: 160 },
+        summary: { type: "string", maxLength: 1000 },
+        startDate: { type: "string", description: "YYYY-MM-DD" },
+        endDate: { type: "string", description: "YYYY-MM-DD" },
+        budgetAmountMinor: { type: "integer", minimum: 0 },
+        budgetCurrency: { type: "string", description: "ISO 4217, for example CNY" },
+        tags: { type: "array", items: { type: "string" }, maxItems: 20 },
+        destinations: { type: "array", items: { type: "string" }, maxItems: 30 },
+        visibility: { type: "string", enum: ["private", "workspace"] },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "trips.get",
+    description:
+      "Read one trip in the current workspace, including its dates, budget and version. Read-only, no side effects.",
+    parameters: {
+      type: "object",
+      properties: { tripId: { type: "string", description: "Trip UUID" } },
+      required: ["tripId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "stops.add",
+    description:
+      "Add a city stop to a trip. WRITES DATA. providerPlaceId must come from places.search in this same run.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string" },
+        providerPlaceId: { type: "string" },
+        startDate: { type: "string", description: "YYYY-MM-DD; defaults to the trip start" },
+        endDate: { type: "string", description: "YYYY-MM-DD; defaults to startDate" },
+        notes: { type: "string", maxLength: 4000 },
+      },
+      required: ["tripId", "providerPlaceId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "stops.list",
+    description: "List the stops of a trip. Read-only, no side effects.",
+    parameters: {
+      type: "object",
+      properties: { tripId: { type: "string" } },
+      required: ["tripId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "itinerary.addDay",
+    description:
+      "Add one day of itinerary items to a trip. WRITES DATA. Items are created in the order given.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string" },
+        date: { type: "string", description: "YYYY-MM-DD, within the trip dates" },
+        title: { type: "string", maxLength: 180 },
+        items: {
+          type: "array",
+          minItems: 1,
+          maxItems: 8,
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", maxLength: 180 },
+              time: { type: "string", description: "HH:MM 24h" },
+              location: { type: "string", maxLength: 200 },
+              notes: { type: "string", maxLength: 4000 },
+              type: {
+                type: "string",
+                enum: ["transit", "food", "activity", "stay", "note"],
+              },
+            },
+            required: ["title"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["tripId", "date", "items"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "packing.add",
+    description:
+      "Add one packing item to a trip. WRITES DATA. Use the existing categories; do not invent new ones.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string" },
+        name: { type: "string", maxLength: 160 },
+        category: {
+          type: "string",
+          enum: ["documents", "clothing", "gear", "health", "other"],
+        },
+        quantity: { type: "integer", minimum: 1, maximum: 999 },
+      },
+      required: ["tripId", "name"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "budget.setSummary",
+    description:
+      "Set the trip budget total. WRITES DATA. Amounts are integer minor units of the currency.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string" },
+        amountMinor: { type: "integer", minimum: 0 },
+        currency: { type: "string", description: "ISO 4217 uppercase" },
+      },
+      required: ["tripId", "amountMinor", "currency"],
+      additionalProperties: false,
+    },
+  },
+];
+
+function invalid(message: string): AiToolOutcome {
+  return { ok: false, payload: { error: "INVALID_ARGUMENTS" }, error: { code: "INVALID_ARGUMENTS", message } };
+}
+
+function issueMessage(error: z.ZodError): string {
+  const first = error.issues[0];
+  const path = first?.path.map(String).join(".") || "args";
+  return `${path}: ${first?.message ?? "invalid arguments"}`.slice(0, 300);
+}
+
+/**
+ * Executes one tool call **as the calling user**.
+ *
+ * Every write delegates to the existing Nest services, so workspace membership,
+ * role checks, trip visibility, date bounds and version conflicts are all the
+ * real product rules — the AI has no privileged path and never touches Prisma.
+ */
+@Injectable()
+export class AiToolbox {
+  constructor(
+    @Inject(PlacesService) private readonly places: PlacesService,
+    @Inject(TripsService) private readonly trips: TripsService,
+    @Inject(StopsService) private readonly stops: StopsService,
+    @Inject(ItineraryService) private readonly itinerary: ItineraryService,
+    @Inject(PackingService) private readonly packing: PackingService,
+  ) {}
+
+  definitions(): AiToolSpec[] {
+    return [...AI_TOOL_SPECS];
+  }
+
+  isReadOnly(name: AiToolName): boolean {
+    return isReadOnlyAiTool(name);
+  }
+
+  /**
+   * Validates a call **without executing it**, so the planning phase can reject
+   * an unusable write (bad arguments, or a place id never resolved in this run)
+   * before it ever reaches `plannedCalls`.
+   */
+  preview(call: AiToolCall, context: AiToolContext): AiToolError | null {
+    const schema = ArgsSchemas[call.tool];
+    if (!schema) {
+      return { code: "UNKNOWN_TOOL", message: `Unknown tool ${call.tool}.` };
+    }
+    const parsed = schema.safeParse(call.args);
+    if (!parsed.success) {
+      return { code: "INVALID_ARGUMENTS", message: issueMessage(parsed.error) };
+    }
+    if (call.tool === "stops.add") {
+      const { providerPlaceId } = parsed.data as { providerPlaceId: string };
+      if (!context.candidates.has(providerPlaceId)) {
+        return {
+          code: "UNRESOLVED_PLACE",
+          message: "providerPlaceId was not returned by places.search in this run.",
+        };
+      }
+    }
+    return null;
+  }
+
+  async execute(call: AiToolCall, context: AiToolContext): Promise<AiToolOutcome> {
+    const schema = ArgsSchemas[call.tool];
+    if (!schema) {
+      return {
+        ok: false,
+        payload: { error: "UNKNOWN_TOOL" },
+        error: { code: "UNKNOWN_TOOL", message: `Unknown tool ${call.tool}.` },
+      };
+    }
+    const parsed = schema.safeParse(call.args);
+    if (!parsed.success) {
+      return invalid(issueMessage(parsed.error));
+    }
+
+    switch (call.tool) {
+      case "places.search":
+        return this.searchPlaces(parsed.data as { q: string; limit?: number }, context);
+      case "trips.get":
+        return this.getTrip((parsed.data as { tripId: string }).tripId, context);
+      case "stops.list":
+        return this.listStops((parsed.data as { tripId: string }).tripId, context);
+      case "trips.create":
+        return this.createTrip(parsed.data as Record<string, unknown>, context);
+      case "stops.add":
+        return this.addStop(parsed.data as Record<string, unknown>, context);
+      case "itinerary.addDay":
+        return this.addDay(parsed.data as Record<string, unknown>, context);
+      case "packing.add":
+        return this.addPacking(parsed.data as Record<string, unknown>, context);
+      case "budget.setSummary":
+        return this.setBudget(parsed.data as Record<string, unknown>, context);
+    }
+  }
+
+  private async searchPlaces(
+    args: { q: string; limit?: number },
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const response = await this.places.search({
+      q: args.q,
+      limit: Math.min(args.limit ?? 6, MAX_CANDIDATES),
+    });
+    const candidates = response.items
+      .flatMap(toCandidate)
+      .slice(0, MAX_CANDIDATES);
+    for (const candidate of candidates) {
+      context.candidates.set(candidate.providerPlaceId, candidate);
+    }
+    return {
+      ok: true,
+      payload: {
+        candidates: candidates.map((candidate) => ({
+          providerPlaceId: candidate.providerPlaceId,
+          name: candidate.name,
+          country: candidate.country,
+          countryCode: candidate.countryCode,
+          lat: candidate.lat,
+          lng: candidate.lng,
+          timeZone: candidate.timeZone,
+        })),
+      },
+    };
+  }
+
+  private async getTrip(tripId: string, context: AiToolContext): Promise<AiToolOutcome> {
+    const trip = await this.trips.get(context.actor, context.membership, tripId);
+    return {
+      ok: true,
+      entityId: trip.id,
+      payload: {
+        tripId: trip.id,
+        title: trip.title,
+        summary: trip.summary,
+        status: trip.status,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        budgetAmountMinor: trip.budgetAmountMinor,
+        budgetCurrency: trip.budgetCurrency,
+        tags: trip.tags,
+        destinations: trip.destinations,
+        visibility: trip.visibility,
+        version: trip.version,
+      },
+    };
+  }
+
+  private async listStops(tripId: string, context: AiToolContext): Promise<AiToolOutcome> {
+    const stops = await this.stops.list(context.actor, context.membership, tripId);
+    return {
+      ok: true,
+      payload: {
+        stops: stops.map((stop) => ({
+          stopId: stop.id,
+          city: stop.city,
+          country: stop.country,
+          startDate: stop.startDate,
+          endDate: stop.endDate,
+          providerPlaceId: stop.providerPlaceId,
+        })),
+      },
+    };
+  }
+
+  private async createTrip(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const today = context.today ?? new Date().toISOString().slice(0, 10);
+    const request = {
+      title: args.title,
+      status: "planning",
+      startDate: (args.startDate as string | undefined) ?? today,
+      endDate: (args.endDate as string | undefined) ?? (args.startDate as string | undefined) ?? today,
+      visibility: (args.visibility as string | undefined) ?? "private",
+      ...(args.summary === undefined ? {} : { summary: args.summary }),
+      ...(args.budgetAmountMinor === undefined
+        ? {}
+        : {
+            budgetAmountMinor: args.budgetAmountMinor,
+            budgetCurrency: args.budgetCurrency ?? "CNY",
+          }),
+      ...(args.tags === undefined ? {} : { tags: args.tags }),
+      ...(args.destinations === undefined ? {} : { destinations: args.destinations }),
+    };
+    const parsed = CreateTripRequestSchema.safeParse(request);
+    if (!parsed.success) {
+      return invalid(issueMessage(parsed.error));
+    }
+    const trip = await this.trips.create(context.actor, context.membership, parsed.data);
+    return {
+      ok: true,
+      entityId: trip.id,
+      payload: { tripId: trip.id, title: trip.title, startDate: trip.startDate, endDate: trip.endDate },
+    };
+  }
+
+  private async addStop(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const placeId = args.providerPlaceId as string;
+    const candidate = context.candidates.get(placeId);
+    if (!candidate) {
+      // The model tried to reference a place it never resolved in this run.
+      return {
+        ok: false,
+        payload: { error: "UNRESOLVED_PLACE" },
+        error: {
+          code: "UNRESOLVED_PLACE",
+          message: "providerPlaceId was not returned by places.search in this run.",
+        },
+      };
+    }
+
+    const tripId = args.tripId as string;
+    const trip = await this.trips.get(context.actor, context.membership, tripId);
+    const startDate = (args.startDate as string | undefined) ?? trip.startDate;
+    const endDate = (args.endDate as string | undefined) ?? startDate;
+
+    const parsed = CreateStopRequestSchema.safeParse({
+      city: candidate.name,
+      country: candidate.country,
+      countryCode: candidate.countryCode,
+      lat: candidate.lat,
+      lng: candidate.lng,
+      provider: candidate.provider,
+      providerPlaceId: candidate.providerPlaceId,
+      timeZone: candidate.timeZone,
+      startDate,
+      endDate,
+      ...(args.notes === undefined ? {} : { notes: args.notes }),
+    });
+    if (!parsed.success) {
+      return invalid(issueMessage(parsed.error));
+    }
+
+    const stop = await this.stops.create(context.actor, context.membership, tripId, parsed.data);
+    return {
+      ok: true,
+      entityId: stop.id,
+      payload: { stopId: stop.id, city: stop.city, startDate: stop.startDate, endDate: stop.endDate },
+    };
+  }
+
+  private async addDay(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const date = args.date as string;
+    const items = (args.items as Array<Record<string, unknown>>) ?? [];
+    const created: string[] = [];
+
+    for (const item of items) {
+      const parsed = CreateItineraryItemRequestSchema.safeParse({
+        date,
+        title: item.title,
+        type: (item.type as string | undefined) ?? "activity",
+        location: (item.location as string | undefined) ?? (args.title as string | undefined) ?? item.title,
+        ...(item.time === undefined ? {} : { startTime: item.time }),
+        ...(item.notes === undefined ? {} : { notes: item.notes }),
+      });
+      if (!parsed.success) {
+        return invalid(issueMessage(parsed.error));
+      }
+      const record = await this.itinerary.create(
+        context.actor,
+        context.membership,
+        tripId,
+        parsed.data,
+      );
+      created.push(record.id);
+    }
+
+    return {
+      ok: true,
+      entityId: created[0] ?? null,
+      payload: { createdCount: created.length, itemIds: created },
+    };
+  }
+
+  private async addPacking(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const parsed = CreatePackingItemRequestSchema.safeParse({
+      name: args.name,
+      category: (args.category as string | undefined) ?? "other",
+      ...(args.quantity === undefined ? {} : { quantity: args.quantity }),
+    });
+    if (!parsed.success) {
+      return invalid(issueMessage(parsed.error));
+    }
+    // `tripId` is a path segment, not part of CreatePackingItemRequest.
+    const item = await this.packing.create(
+      context.actor,
+      context.membership,
+      args.tripId as string,
+      parsed.data,
+    );
+    return { ok: true, entityId: item.id, payload: { packingItemId: item.id, name: item.name } };
+  }
+
+  private async setBudget(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const current = await this.trips.get(context.actor, context.membership, tripId);
+    const trip = await this.trips.update(context.actor, context.membership, tripId, {
+      version: current.version,
+      budgetAmountMinor: args.amountMinor,
+      budgetCurrency: args.currency,
+    });
+    return {
+      ok: true,
+      entityId: trip.id,
+      payload: {
+        tripId: trip.id,
+        budgetAmountMinor: trip.budgetAmountMinor,
+        budgetCurrency: trip.budgetCurrency,
+      },
+    };
+  }
+}
+
+function toCandidate(place: Place): AiPlaceCandidate[] {
+  if (!place.providerPlaceId) {
+    return [];
+  }
+  // `Stop.provider` only accepts the stored source enum; geoapify results are
+  // stored without a provider rather than mislabelled.
+  const provider = place.provider === "photon" ? "photon" : place.provider === "local" ? "local" : null;
+  return [
+    {
+      providerPlaceId: place.providerPlaceId,
+      provider,
+      name: place.name,
+      country: place.country,
+      countryCode: place.countryCode,
+      lat: place.lat,
+      lng: place.lng,
+      timeZone: place.timeZone,
+    },
+  ];
+}

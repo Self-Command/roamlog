@@ -280,8 +280,39 @@ const EnvironmentSchema = z
     EMAIL_FROM: z.string().min(1).default("Roamlog <hello@roamlog.local>"),
     EXPORT_SIGNED_URL_TTL: z.coerce.number().int().min(60).max(604_800).default(900),
     BOOTSTRAP_SUPER_ADMIN_EMAIL: optionalString,
+    /**
+     * AI planner gateway (protocol-agnostic: chat completions, responses or
+     * Anthropic messages). Optional as a group: an unconfigured deployment keeps
+     * booting and the AI endpoints answer 503 AI_NOT_CONFIGURED.
+     */
+    AI_PROTOCOL: z
+      .preprocess(emptyStringToUndefined, z.enum(["openai-chat", "openai-responses", "anthropic-messages"]).optional()),
+    AI_BASE_URL: z.preprocess(emptyStringToUndefined, z.url().optional()),
+    AI_API_KEY: optionalString,
+    AI_MODEL: z.preprocess(emptyStringToUndefined, z.string().min(1).max(200).optional()),
+    AI_TIMEOUT_MS: z.coerce.number().int().min(5_000).max(120_000).default(60_000),
+    AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(256).max(32_000).default(6_000),
+    /** Per-user daily plan runs; 0 disables the cap. */
+    AI_DAILY_QUOTA: z.coerce.number().int().min(0).max(100_000).default(20),
   })
   .superRefine((environment, context) => {
+    // The AI gateway is optional, but a configured one must point at plain
+    // http(s): other schemes would silently fail at the first tool call.
+    if (environment.AI_BASE_URL && !/^https?:\/\//u.test(environment.AI_BASE_URL)) {
+      context.addIssue({
+        code: "custom",
+        path: ["AI_BASE_URL"],
+        message: "AI_BASE_URL must be an http(s) URL",
+      });
+    }
+    if (environment.AI_BASE_URL && !environment.AI_MODEL) {
+      context.addIssue({
+        code: "custom",
+        path: ["AI_MODEL"],
+        message: "AI_MODEL is required when AI_BASE_URL is set",
+      });
+    }
+
     // Validate the encryption key ring whenever it is present, in every
     // environment: a mistyped key would only surface on the first secret save.
     // Errors name the variable and never echo the key material.

@@ -5,6 +5,7 @@ import { AppConfigModule } from "./config/app-config.module.js";
 import { SanitizeModule } from "./common/services/sanitize.module.js";
 import { ActivitiesModule } from "./modules/activities/activities.module.js";
 import { AdminModule } from "./modules/admin/admin.module.js";
+import { AiModule } from "./modules/ai/ai.module.js";
 import { AuditModule } from "./modules/audit/audit.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { CommentsModule } from "./modules/comments/comments.module.js";
@@ -49,6 +50,7 @@ import { WorkspacesModule } from "./modules/workspaces/workspaces.module.js";
     NotificationsModule,
     RealtimeModule,
     TripsModule,
+    AiModule,
     EntriesModule,
     ItineraryModule,
     MediaModule,
