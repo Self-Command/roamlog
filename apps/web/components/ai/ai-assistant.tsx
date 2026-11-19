@@ -4,7 +4,7 @@ import { Button, ErrorState, PageHeader, Skeleton } from "@roamlog/ui";
 
 import { useWorkspaceBySlug } from "@/lib/query";
 
-import { AiConsole } from "./ai-console";
+import { AiChat } from "./ai-chat";
 
 /**
  * Resolves the workspace for `/w/{slug}/ai` and renders the assistant body.
@@ -25,10 +25,7 @@ export function AiAssistant({ workspaceSlug }: { workspaceSlug: string }) {
       />
 
       {workspacesQuery.isLoading ? (
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]">
-          <Skeleton className="h-[440px] rounded-card" />
-          <Skeleton className="h-[320px] rounded-card" />
-        </div>
+        <Skeleton className="h-[560px] rounded-card" />
       ) : !workspace ? (
         <ErrorState
           title="无法载入 Workspace"
@@ -40,7 +37,7 @@ export function AiAssistant({ workspaceSlug }: { workspaceSlug: string }) {
           }
         />
       ) : (
-        <AiConsole
+        <AiChat
           workspaceId={workspace.id}
           workspaceSlug={workspaceSlug}
           role={workspace.role}
