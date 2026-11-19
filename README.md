@@ -463,7 +463,7 @@ pnpm admin:bootstrap -- --force
 | 图片压缩   | `MEDIA_MAX_EDGE`, `MEDIA_QUALITY`, `MEDIA_TARGET_BYTES`, `MEDIA_KEEP_ORIGINAL`                                                  | **仅 `check:env` 预检/文档占位，API 与 web 不读取**；实际参数是后台 `media.*` 设置 |
 | 设置加密   | `CONFIG_ENCRYPTION_KEY`, `CONFIG_ENCRYPTION_KEYS`                                                                               | 后台 secret 设置的 AES-256-GCM key 与轮转 ring |
 | 地点搜索   | `PLACES_PROVIDER`, `GEOAPIFY_API_KEY`, `PLACES_FALLBACK_TO_PHOTON`, `GEOAPIFY_DAILY_LIMIT`, `PLACES_*`                           | Geoapify 主源、Photon 兜底、每日额度与高级超时/缓存/限流参数 |
-| AI 规划    | `AI_ENABLED`, `AI_PROTOCOL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_OUTPUT_TOKENS`, `AI_DAILY_QUOTA` | 可选 AI planner：三协议、超时、输出上限与配额  |
+| AI 规划    | `AI_PROTOCOL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_OUTPUT_TOKENS`, `AI_DAILY_QUOTA` | 可选 AI planner：三协议、超时、输出上限与配额；`AI_BASE_URL` + `AI_MODEL` 同时存在即视为启用 |
 | MinIO 镜像 | `MINIO_IMAGE`, `MINIO_MC_IMAGE`                                                                                                 | 固定、可验证的镜像来源                         |
 | 邮件       | `EMAIL_PROVIDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `RESEND_API_KEY`, `EMAIL_FROM`                        | Mailpit / SMTP relay / Resend                  |
 | 地图       | `NEXT_PUBLIC_MAP_STYLE_URL`, `NEXT_PUBLIC_GEOCODER_URL`                                                                         | 瓦片样式与城市搜索                             |
@@ -483,10 +483,11 @@ pnpm admin:bootstrap -- --force
 > 所有 secret 并确认没有行仍用旧 key 后再移除。详见
 > [settings-encryption.md](docs/operations/settings-encryption.md)。
 >
-> AI 整组可选：未配置 `AI_BASE_URL`/`AI_MODEL` 时端点返回 `503 AI_NOT_CONFIGURED`，不是启动失败；
-> `AI_ENABLED` 是预检开关，API 本身不读它（API 以 `AI_BASE_URL && AI_MODEL` 判定已配置），
-> 因此关闭 AI 时必须同时清空端点变量。只有 `AI_ENABLED=true` 才要求
-> `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`。地点搜索默认
+> AI 整组可选，且**没有独立开关**：API 以 `AI_BASE_URL && AI_MODEL` 判定是否已配置，
+> 未配置时端点返回 `503 AI_NOT_CONFIGURED`，不是启动失败。**关闭 AI 的方法就是清空
+> `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`**；三者全空时 `pnpm check:env` 只 WARN。
+> 反向则失败：`AI_BASE_URL` 存在但缺 `AI_MODEL` 会让预检以退出码 1 拒绝，避免
+> “预检说过、运行期照打”的漂移。地点搜索默认
 > Geoapify（免费额度 3000/天），Photon 兜底；地图与搜索结果必须展示
 > “© OpenStreetMap contributors / Powered by Geoapify”。详见
 > [ai-provider.md](docs/operations/ai-provider.md) 与 [places.md](docs/operations/places.md)。

@@ -27,8 +27,8 @@ Related files:
 | `general` (5) | `site.title`, `site.description`, `general.defaultLanguage`, `general.defaultTimeZone`, `general.registrationEnabled` | **frontend** for title/description/language/time zone; `general.registrationEnabled` **未接入** |
 | `seo` (5) | `seo.titleTemplate`, `seo.descriptionTemplate`, `seo.ogImageUrl`, `seo.robots`, `seo.sitemapEnabled` | **frontend** for the first four; `seo.sitemapEnabled` **未接入** |
 | `theme` (3) | `theme.accent`, `theme.defaultMode`, `theme.loginTagline` | **frontend** |
-| `mail` (7) | `mail.provider`, `mail.from`, `mail.resendApiKey`, `mail.smtpHost`, `mail.smtpPort`, `mail.smtpUser`, `mail.smtpPassword` | **API 已消费**; **worker 未接入** (still reads `EMAIL_*`/`SMTP_*`); Admin badge lags and still says “未接入” |
-| `storage` (7) | `storage.endpoint`, `storage.publicEndpoint`, `storage.bucket`, `storage.region`, `storage.accessKey`, `storage.secretKey`, `storage.forcePathStyle` | **API 已消费** (`StorageSettingsConsumer` in `storage.module`); **worker 未接入** (still reads `S3_*`) |
+| `mail` (7) | `mail.provider`, `mail.from`, `mail.resendApiKey`, `mail.smtpHost`, `mail.smtpPort`, `mail.smtpUser`, `mail.smtpPassword` | **backend**: all seven keys are resolved by `MailSettingsConsumer` in the API; **worker 未接入** (still reads `EMAIL_*`/`SMTP_*`, so `mail.*` does not affect worker-sent export notifications) |
+| `storage` (7) | `storage.endpoint`, `storage.publicEndpoint`, `storage.bucket`, `storage.region`, `storage.accessKey`, `storage.secretKey`, `storage.forcePathStyle` | **backend**: resolved by `StorageSettingsConsumer` in the API; a save runs a connectivity probe before it persists; **worker 未接入** (still reads `S3_*`) |
 | `media` (6) | `media.maxEdge`, `media.quality`, `media.targetBytes`, `media.maxUploadBytes`, `media.keepOriginal`, `media.livePhotoEnabled` | **frontend 4/6**; `keepOriginal` and `livePhotoEnabled` **未接入（不生效）** |
 | `ai` (4) | `ai.defaultProvider`, `ai.timeoutMs`, `ai.maxOutputTokens`, `ai.dailyQuota` | **backend** (resolved per request by `AiModule`) |
 | `places` (6) | `places.provider`, `places.apiKey`, `places.lang`, `places.limit`, `places.cacheTtlSeconds`, `places.dailyQuota` | **backend** (resolved per request by `PlacesModule`) |
@@ -36,9 +36,11 @@ Related files:
 
 Notes:
 
-- The Admin UI shows a group badge plus field-level exceptions. Where the badge
-  and the runtime disagree (mail/storage), this document follows the runtime
-  and the badge is a known UI-lag bug, not the truth.
+- The Admin UI shows a group badge plus field-level exceptions. `mail` and
+  `storage` badges are `backend` because `SettingsService` really is read at
+  runtime; the badge label carries the remaining limit instead of hiding it
+  (“worker 仍读环境变量” for mail, “保存前会跑连通性探测” for storage), and all
+  seven `mail.*` fields say the worker export path is not wired.
 - `ai.*` and `places.*` have no API keys/endpoints in the registry: provider
   URL, protocol, API key and model stay environment-only by design. Only the
   four tuning values and the six places values are editable at runtime.
@@ -168,14 +170,15 @@ and, for a reveal, `admin.settings.revealed`.
 
 ## 7. Known limits
 
-- 9 keys are stored but not consumed: `general.registrationEnabled`,
+- 5 keys are stored but not consumed: `general.registrationEnabled`,
   `seo.sitemapEnabled`, `media.keepOriginal`, `media.livePhotoEnabled`,
-  `limits.uploadPerMinute` (plus `mail.*` and `storage.*` reaching the API but
-  not the worker). Do not present these as working switches.
+  `limits.uploadPerMinute`. Do not present these as working switches.
+  `mail.*` and `storage.*` reach the API but not the worker; that split is
+  spelled out in the Admin labels and in §1.
 - No per-key history/rollback: the audit log records the event, not the previous
   value.
 - No secret deletion; rotating to a new value overwrites the old one.
 - The 5-second in-process cache and the 30-second public cache mean “instant”
   changes are not instant across all surfaces.
-- `mail`/`storage` group badges in the Admin console are stale (see §1); fix is
-  tracked separately and is a UI-only change.
+- `mail`/`storage` group badges now mirror the runtime; the worker gap is part
+  of the label rather than a separate stale-badge bug.

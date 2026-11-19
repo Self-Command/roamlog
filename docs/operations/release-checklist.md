@@ -60,9 +60,10 @@ Rules the preflight enforces (all must hold, they are named in any error line):
   backed up outside the database. Losing it makes every Admin settings secret
   permanently undecryptable; never regenerate or rotate it during a release.
   See [settings-encryption.md](./settings-encryption.md).
-- AI and Places are optional features: `AI_ENABLED=false` must not block the
-  release, and an empty `GEOAPIFY_API_KEY` is acceptable only while Photon
-  fallback stays enabled.
+- AI and Places are optional features: an empty `AI_BASE_URL`/`AI_API_KEY`/
+  `AI_MODEL` triple (AI off, endpoints answer `503 AI_NOT_CONFIGURED`) must not
+  block the release, and an empty `GEOAPIFY_API_KEY` is acceptable only while
+  Photon fallback stays enabled.
 
 Copy the `ERROR:` lines verbatim into the ticket if this step fails. They name
 the variable and the rule; they never contain the value.

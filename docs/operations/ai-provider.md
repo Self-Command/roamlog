@@ -16,28 +16,26 @@ Related files:
 
 ## 1. Variables
 
-| Variable               | Required                   | Default       | Accepted values / range                                 |
-| ---------------------- | -------------------------- | ------------- | ------------------------------------------------------- |
-| `AI_ENABLED`           | no                         | `false`       | `true` / `false`                                        |
-| `AI_PROTOCOL`          | no                         | `openai-chat` | `openai-chat`, `openai-responses`, `anthropic-messages` |
-| `AI_BASE_URL`          | yes when `AI_ENABLED=true` | empty         | Absolute API root, no path after `/v1`                  |
-| `AI_API_KEY`           | yes when `AI_ENABLED=true` | empty         | Provider key or gateway token, server-side              |
-| `AI_MODEL`             | yes when `AI_ENABLED=true` | empty         | Exact model id from the provider                        |
-| `AI_TIMEOUT_MS`        | no                         | `60000`       | Integer `5000`–`120000`                                 |
-| `AI_MAX_OUTPUT_TOKENS` | no                         | `6000`        | Integer `256`–`32000`                                   |
-| `AI_DAILY_QUOTA`       | no                         | `20`          | Integer `0`–`100000`; `0` disables the cap              |
+| Variable               | Required                | Default       | Accepted values / range                                 |
+| ---------------------- | ----------------------- | ------------- | ------------------------------------------------------- |
+| `AI_PROTOCOL`          | no                      | `openai-chat` | `openai-chat`, `openai-responses`, `anthropic-messages` |
+| `AI_BASE_URL`          | to enable AI            | empty         | Absolute API root, no path after `/v1`                  |
+| `AI_API_KEY`           | no (provider-dependent) | empty         | Provider key or gateway token, server-side              |
+| `AI_MODEL`             | yes when `AI_BASE_URL` is set | empty   | Exact model id from the provider                        |
+| `AI_TIMEOUT_MS`        | no                      | `60000`       | Integer `5000`–`120000`                                 |
+| `AI_MAX_OUTPUT_TOKENS` | no                      | `6000`        | Integer `256`–`32000`                                   |
+| `AI_DAILY_QUOTA`       | no                      | `20`          | Integer `0`–`100000`; `0` disables the cap              |
 
-`pnpm check:env` only requires the three endpoint values when
-`AI_ENABLED=true`. With AI disabled it never turns a missing provider into a
-startup failure.
+There is **no AI on/off switch**. The runtime definition of “configured” is
+`AI_BASE_URL && AI_MODEL`; that pair is what makes the AI endpoints callable,
+and an empty pair makes them answer `503 AI_NOT_CONFIGURED`. To turn AI off,
+empty `AI_BASE_URL`, `AI_API_KEY` and `AI_MODEL` — nothing else is needed.
 
-`AI_ENABLED` is the **deployment switch used by the preflight**; the API does
-not read it. `resolveAiSettings().configured` is `AI_BASE_URL && AI_MODEL`, so
-the API will call the provider whenever those two are set. Keep the two in
-sync: to turn AI off, set `AI_ENABLED=false` **and** empty `AI_BASE_URL`,
-`AI_API_KEY` and `AI_MODEL`. If the preflight sees endpoint values while
-`AI_ENABLED` is false it prints a warning, because the API would still be
-active and billing.
+`pnpm check:env` validates the same pair instead of inventing a second switch:
+`AI_BASE_URL` set without `AI_MODEL` fails the preflight (exit 1), and an empty
+triple only produces a warning, because a deployment without AI is valid. This
+keeps the preflight and the runtime in agreement: no value can say “off” while
+the API still calls and bills the provider.
 
 Use a secret store for `AI_API_KEY`, never a committed file, and never a
 `NEXT_PUBLIC_*` variable. The preflight rejects placeholder fragments such as
@@ -102,7 +100,6 @@ planning by a date gate, not left to the model's prompt compliance.
 ### OpenAI
 
 ```dotenv
-AI_ENABLED=true
 AI_PROTOCOL=openai-chat          # or openai-responses
 AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=<from the secret store>
@@ -115,7 +112,6 @@ AI_DAILY_QUOTA=20
 ### Anthropic
 
 ```dotenv
-AI_ENABLED=true
 AI_PROTOCOL=anthropic-messages
 AI_BASE_URL=https://api.anthropic.com/v1
 AI_API_KEY=<from the secret store>
@@ -134,7 +130,6 @@ base URL, and a local token. No real provider key is needed.
 
 ```dotenv
 # Local development only. The API container must be able to reach this URL.
-AI_ENABLED=true
 AI_PROTOCOL=openai-chat
 AI_BASE_URL=http://127.0.0.1:3425/v1
 AI_API_KEY=local-gateway-token
@@ -151,8 +146,8 @@ AI_DAILY_QUOTA=10
   point production at `127.0.0.1` unless the gateway runs in the same container
   namespace as the API, and never expose an unauthenticated gateway to the
   ingress.
-- `AI_API_KEY` may be a gateway token. It must still be non-empty when
-  `AI_ENABLED=true`, per the preflight rule.
+- `AI_API_KEY` may be a gateway token. It is only meaningful together with
+  `AI_BASE_URL` and `AI_MODEL`: empty all three to keep the planner off.
 
 ## 4. Timeout and quota
 
@@ -232,16 +227,16 @@ invoice after the first week instead of trusting this estimate.
 4. Cap the tool loop (`AI_LOOP_LIMIT`) and never retry `AI_UPSTREAM` in an
    unbounded loop; retries amplify both cost and outage duration.
 5. During an incident, disable the feature instead of debugging in production:
-   set `AI_ENABLED=false` and empty `AI_BASE_URL`/`AI_MODEL`, restart the API;
-   endpoints answer `503 AI_NOT_CONFIGURED`. Keep the secret key until the
-   feature is re-enabled.
+   empty `AI_BASE_URL`, `AI_API_KEY` and `AI_MODEL`, restart the API; endpoints
+   answer `503 AI_NOT_CONFIGURED`. Keep the secret key until the feature is
+   re-enabled.
 
 ## 7. Troubleshooting
 
 | Symptom                                  | Check                                                                                   |
 | ---------------------------------------- | --------------------------------------------------------------------------------------- |
 | Endpoints always `503 AI_NOT_CONFIGURED` | `AI_BASE_URL` and `AI_MODEL` are non-empty in the API environment; restart after change |
-| Preflight fails with `AI_* is required`  | `AI_ENABLED=true` with empty endpoint values; fill all three or set `AI_ENABLED=false`  |
+| Preflight fails with `AI_MODEL is required` | `AI_BASE_URL` is set without `AI_MODEL`; add the model id or empty `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL` to turn AI off |
 | `AI_UPSTREAM` on every request           | Container DNS/egress, TLS interception, gateway on loopback only, wrong protocol path   |
 | Immediate auth errors from the provider  | Wrong auth scheme for the protocol (`Bearer` vs `x-api-key`) or a revoked key           |
 | `AI_SCHEMA_INVALID` frequently           | Model does not support tools/JSON reliably; switch model or `AI_PROTOCOL`               |

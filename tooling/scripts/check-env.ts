@@ -33,9 +33,11 @@ Additional checks
   * CONFIG_ENCRYPTION_KEY is mandatory when APP_ENV=production, and every
     CONFIG_ENCRYPTION_KEY / CONFIG_ENCRYPTION_KEYS entry must decode to exactly
     32 bytes. The error includes the generation command.
-  * AI_* is optional: AI_BASE_URL/AI_API_KEY/AI_MODEL are required only when
-    AI_ENABLED=true. With AI disabled the API answers 503 AI_NOT_CONFIGURED,
-    which is not a startup failure.
+  * AI_* is optional and has no separate on/off switch: the API derives
+    "configured" from AI_BASE_URL + AI_MODEL. All three endpoint values empty
+    means AI stays off (the endpoints answer 503 AI_NOT_CONFIGURED, which is
+    not a startup failure); AI_BASE_URL set without AI_MODEL fails the
+    preflight so the runtime cannot silently disagree with it.
   * PLACES_*, GEOAPIFY_* and MEDIA_* are optional; invalid values are reported.
     Errors name the variable and never print its value.
 
@@ -494,39 +496,44 @@ const checkEncryptionKey = (): void => {
 };
 
 /**
- * AI is opt-in. A disabled planner is a supported deployment and must answer
- * 503 AI_NOT_CONFIGURED at request time, never block `pnpm check:env` or API
- * startup. Only AI_ENABLED=true makes the endpoint triple mandatory.
+ * AI is opt-in and the runtime has exactly one definition of “configured”:
+ * `AI_BASE_URL && AI_MODEL`, which is also what turns the endpoints into 503
+ * AI_NOT_CONFIGURED. There is deliberately no preflight-only switch — a flag
+ * the API does not read can say “off” while the API keeps calling and billing
+ * the provider. The preflight validates the same pair:
+ *
+ * - all three endpoint values empty: AI stays off, warn only (supported);
+ * - AI_BASE_URL set: AI_MODEL becomes mandatory, otherwise exit 1;
+ * - AI_BASE_URL empty with a leftover key/model: inert, warn only.
  */
 const checkAiSettings = (): void => {
-  const enabledRaw = env.AI_ENABLED?.trim();
-  if (enabledRaw && !isBooleanFlag(enabledRaw)) {
-    errors.push("AI_ENABLED must be true or false.");
-  }
+  const baseUrl = env.AI_BASE_URL?.trim() ?? "";
+  const apiKey = env.AI_API_KEY?.trim() ?? "";
+  const model = env.AI_MODEL?.trim() ?? "";
 
   const protocol = env.AI_PROTOCOL?.trim().toLowerCase();
   if (protocol && !(VALID_AI_PROTOCOLS as readonly string[]).includes(protocol)) {
     errors.push(`AI_PROTOCOL must be one of ${VALID_AI_PROTOCOLS.join(", ")}.`);
   }
 
-  if (!isFlagEnabled(enabledRaw)) {
-    // The API does not read AI_ENABLED: it considers AI configured as soon as
-    // AI_BASE_URL and AI_MODEL are set. Endpoint values left behind while the
-    // switch says "off" would still call and bill the provider.
-    if (env.AI_BASE_URL?.trim() || env.AI_API_KEY?.trim() || env.AI_MODEL?.trim()) {
-      warnings.push(
-        "AI_BASE_URL/AI_API_KEY/AI_MODEL are set while AI_ENABLED=false. The API derives `configured` from AI_BASE_URL+AI_MODEL and does not read AI_ENABLED, so AI would still be active; empty the endpoint values to keep it off, or set AI_ENABLED=true and provide all three.",
-      );
-    }
+  if (!baseUrl && !apiKey && !model) {
+    warnings.push(
+      "AI is not configured (AI_BASE_URL/AI_API_KEY/AI_MODEL are all empty). The AI endpoints answer 503 AI_NOT_CONFIGURED; this is a supported deployment.",
+    );
     return;
   }
 
-  for (const key of ["AI_BASE_URL", "AI_API_KEY", "AI_MODEL"] as const) {
-    if (!env[key]?.trim()) {
-      errors.push(
-        `${key} is required when AI_ENABLED=true. Set AI_ENABLED=false to keep the planner off and let the endpoints answer 503 AI_NOT_CONFIGURED.`,
-      );
-    }
+  if (!baseUrl) {
+    warnings.push(
+      "AI_BASE_URL is empty, so the API treats AI as unconfigured and ignores AI_API_KEY/AI_MODEL. Empty them too, or set AI_BASE_URL and AI_MODEL together.",
+    );
+    return;
+  }
+
+  if (!model) {
+    errors.push(
+      "AI_MODEL is required when AI_BASE_URL is set: the API derives `configured` from AI_BASE_URL+AI_MODEL, so this deployment would answer 503 AI_NOT_CONFIGURED while a provider endpoint stays configured. Set the model id, or empty AI_BASE_URL/AI_API_KEY/AI_MODEL to turn AI off.",
+    );
   }
 
   checkUrls(["AI_BASE_URL"]);
