@@ -80,12 +80,10 @@
 ```text
 $ pnpm --filter @roamlog/api typecheck
 $ tsc --noEmit
-src/modules/media/media.presenter.ts(81,22): error TS2551: Property 'location' does not exist on type 'MediaRecord'. Did you mean 'caption'?
-src/modules/media/media.presenter.ts(89,11): error TS2322: Type 'string' is not assignable to type '"video/quicktime" | "video/mp4"'.
-[ELIFECYCLE] Command failed with exit code 2.
+(无输出，exit 0)
 ```
 
-（前一次运行时错误在 `apps/api/src/modules/ai/**` 与 `reports/**`；并行 Agent 修复后转移到正在编辑的 `modules/media/media.presenter.ts`。本任务从未修改这些文件。）
+（过程中曾因并行 Agent 在 `modules/ai/**`、`reports/**`、`media/media.presenter.ts` 的在途编辑出现过编译错误；这些文件本任务从未修改。并行 Agent 完成后最终一次运行 **全绿**。）
 
 本任务文件（`modules/email`、`modules/auth`、`modules/settings/mail-settings.consumer.ts`）的过滤结果为空：
 
@@ -114,11 +112,11 @@ $ pnpm --filter @roamlog/api exec vitest run src/modules/email src/modules/auth 
  ✓ src/modules/auth/__tests__/bootstrap-two-factor.spec.ts (4 tests)
  ✓ src/modules/auth/__tests__/email-delivery.service.spec.ts (2 tests)
 
- Test Files  12 passed (12)
-      Tests  104 passed (104)
+ Test Files  14 passed (14)
+      Tests  118 passed (118)
 ```
 
-另：`mail-test-rate-limit.guard.spec.ts` 3 passed（单独运行）。
+说明：最终一次运行包含 14 个文件 / 118 个测试（比首次 12/104 多出的 `limits-settings.consumer.spec.ts` 由并行 Agent 新增在 settings 目录，不属于本任务）。`mail-test-rate-limit.guard.spec.ts` 的 3 个用例包含在其中。
 
 ### 3.3 `pnpm --filter @roamlog/api test`（全量）
 
