@@ -54,7 +54,7 @@ describe("MediaUrlService", () => {
   it("returns no storage coordinates or variant map in the projected result", async () => {
     const { storage } = storageStub();
     const urls = await new MediaUrlService(storage).sign(readyMedia());
-    expect(Object.keys(urls).sort()).toEqual(["expiresAt", "thumbUrl", "url"]);
+    expect(Object.keys(urls).sort()).toEqual(["expiresAt", "motionUrl", "thumbUrl", "url"]);
     expect(JSON.stringify(urls)).not.toMatch(/bucket|variants|"key"/);
   });
 
@@ -73,7 +73,7 @@ describe("MediaUrlService", () => {
       readyMedia({ status: "processing" }),
     );
 
-    expect(urls).toEqual({ url: null, thumbUrl: null, expiresAt: null });
+    expect(urls).toEqual({ url: null, thumbUrl: null, motionUrl: null, expiresAt: null });
     expect(calls).toEqual([]);
   });
 
@@ -81,7 +81,7 @@ describe("MediaUrlService", () => {
     const { storage, calls } = storageStub();
     const urls = await new MediaUrlService(storage).sign(readyMedia({ key: "" }));
 
-    expect(urls).toEqual({ url: null, thumbUrl: null, expiresAt: null });
+    expect(urls).toEqual({ url: null, thumbUrl: null, motionUrl: null, expiresAt: null });
     expect(calls).toEqual([]);
   });
 
