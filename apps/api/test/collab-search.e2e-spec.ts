@@ -4,6 +4,7 @@ import { PermissionService } from "../src/common/services/permission.service.js"
 import { SearchService } from "../src/modules/search/search.service.js";
 import {
   USER_EDITOR_ID,
+  USER_OWNER_ID,
   WORKSPACE_A_ID,
   WORKSPACE_B_ID,
   makeActor,
@@ -22,7 +23,7 @@ describe("SearchService", () => {
     return { repository, service };
   }
 
-  it("forces Workspace scope and applies private-trip visibility for Editors", async () => {
+  it("forces Workspace scope and asks the shared visibility rule for Editors", async () => {
     const { repository, service } = setup();
 
     await service.search(makeActor(USER_EDITOR_ID), membership("editor"), {
@@ -41,10 +42,34 @@ describe("SearchService", () => {
         expect.objectContaining({
           workspaceId: WORKSPACE_A_ID,
           userId: USER_EDITOR_ID,
-          canSeePrivate: false,
+          // Search no longer derives its own `canSeePrivate` switch (the
+          // owner/admin bypass); it hands the shared rule the platform role.
+          platformRole: "user",
         }),
       );
     }
+  });
+
+  it("gives a Workspace owner no private-trip bypass of its own", async () => {
+    const { repository, service } = setup();
+
+    await service.search(makeActor(USER_OWNER_ID), membership("owner"), {
+      q: "seoul",
+      type: "trip",
+      limit: 10,
+    });
+
+    // Byte-identical actor args to the Editor case: the Workspace role is not a
+    // visibility input any more, so search agrees with the detail read. The old
+    // bypass flag must not reappear under any name.
+    expect(repository.searchTrips).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: WORKSPACE_A_ID,
+        userId: USER_OWNER_ID,
+        platformRole: "user",
+      }),
+    );
+    expect(repository.searchTrips.mock.calls[0]?.[0]).not.toHaveProperty("canSeePrivate");
   });
 
   it("returns plain-text snippets with safe highlights, never stored HTML", async () => {

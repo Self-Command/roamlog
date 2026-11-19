@@ -397,7 +397,13 @@ describe("entity contracts", () => {
     expect([...PlaceProviderSchema.options].sort()).toEqual(
       [...PlaceSearchProviderSchema.options].sort(),
     );
-    expect(PlaceSearchProviderSchema.options).toEqual(["geoapify", "photon", "local"]);
+    expect(PlaceSearchProviderSchema.options).toEqual([
+      "geoapify",
+      "photon",
+      "tencent",
+      "local",
+      "map_pin",
+    ]);
   });
 
   it("keeps the stop address/bbox nullable and rejects inverted or short boxes", () => {
