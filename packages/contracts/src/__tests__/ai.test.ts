@@ -1,0 +1,145 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  AI_TOOL_NAMES,
+  AiChatRequestSchema,
+  AiChatResponseSchema,
+  AiRunExecuteRequestSchema,
+  AiRunExecuteResponseSchema,
+  AiToolCallSchema,
+  AiToolResultSchema,
+  isReadOnlyAiTool,
+} from "../api/ai";
+
+const RUN_ID = "0".repeat(32);
+const TRIP_ID = "01942f30-1200-7000-8000-000000000201";
+
+describe("AI planning contracts", () => {
+  it("locks the tool set to additive/read-only capabilities", () => {
+    expect(AI_TOOL_NAMES).toEqual([
+      "places.search",
+      "trips.create",
+      "trips.get",
+      "stops.add",
+      "stops.list",
+      "itinerary.addDay",
+      "packing.add",
+      "budget.setSummary",
+    ]);
+    // No destructive or privilege-escalating tool may ever appear.
+    for (const forbidden of ["delete", "update", "permission", "settings"]) {
+      expect(AI_TOOL_NAMES.some((name) => name.includes(forbidden))).toBe(false);
+    }
+    expect(isReadOnlyAiTool("places.search")).toBe(true);
+    expect(isReadOnlyAiTool("trips.create")).toBe(false);
+  });
+
+  it("rejects unknown tools and non-object arguments", () => {
+    expect(AiToolCallSchema.safeParse({ tool: "trips.delete", args: {} }).success).toBe(false);
+    expect(AiToolCallSchema.safeParse({ tool: "trips.create", args: [] }).success).toBe(false);
+    expect(
+      AiToolCallSchema.safeParse({ tool: "trips.create", args: { title: "Kyoto" } }).success,
+    ).toBe(true);
+    // Extra envelope fields are rejected (strict).
+    expect(
+      AiToolCallSchema.safeParse({ tool: "trips.create", args: {}, workspaceId: "x" }).success,
+    ).toBe(false);
+  });
+
+  it("parses a plan response and keeps proposed calls separate from executed reads", () => {
+    const parsed = AiChatResponseSchema.parse({
+      runId: RUN_ID,
+      message: "Here is my plan.",
+      plannedCalls: [{ tool: "trips.create", args: { title: "Kyoto" } }],
+      readOnlyTrace: [{ tool: "places.search", args: { q: "Kyoto" } }],
+      usage: { inputTokens: 120, outputTokens: 40 },
+      provider: { protocol: "openai-chat", model: "auto/deepseek-v4.1-flash" },
+      expiresAt: "2026-11-19T14:00:00+08:00",
+    });
+
+    expect(parsed.plannedCalls).toHaveLength(1);
+    expect(parsed.readOnlyTrace[0]?.tool).toBe("places.search");
+  });
+
+  it("does not accept model-authored coordinates, timezones or visibility in the plan envelope", () => {
+    const base = {
+      runId: RUN_ID,
+      message: "ok",
+      readOnlyTrace: [],
+      usage: {},
+      provider: { protocol: "openai-chat", model: "m" },
+      expiresAt: "2026-11-19T14:00:00+08:00",
+    } as const;
+
+    for (const injected of [
+      { lat: 35.0, lng: 135.7 },
+      { timeZone: "Asia/Tokyo" },
+      { visibility: "public_link" },
+    ]) {
+      expect(
+        AiChatResponseSchema.safeParse({
+          ...base,
+          plannedCalls: [{ tool: "trips.create", args: injected }],
+        }).success,
+      ).toBe(true); // args stay an open object on purpose...
+
+      // ...but no *top-level draft* field exists where a model could smuggle them.
+      expect(
+        AiChatResponseSchema.safeParse({
+          ...base,
+          plannedCalls: [],
+          draft: { trip: injected, stops: [] },
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("requires an idempotency key and at least one call to execute a run", () => {
+    expect(
+      AiRunExecuteRequestSchema.safeParse({ calls: [], idempotencyKey: "abcdefgh" }).success,
+    ).toBe(false);
+    expect(
+      AiRunExecuteRequestSchema.safeParse({
+        calls: [{ tool: "trips.create", args: {} }],
+        idempotencyKey: "short",
+      }).success,
+    ).toBe(false);
+    expect(
+      AiRunExecuteRequestSchema.safeParse({
+        calls: [{ tool: "trips.create", args: {} }],
+        idempotencyKey: "ai-run-1-abcdefgh",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("parses partial-failure execute results with per-call errors", () => {
+    const response = AiRunExecuteResponseSchema.parse({
+      results: [
+        { tool: "trips.create", ok: true, entityId: TRIP_ID },
+        {
+          tool: "stops.add",
+          ok: false,
+          error: { code: "UNRESOLVED_PLACE", message: "Unknown place." },
+        },
+      ],
+      partialFailure: true,
+      summary: "1 of 2 calls succeeded.",
+    });
+
+    expect(response.partialFailure).toBe(true);
+    expect(response.results[1]?.error?.code).toBe("UNRESOLVED_PLACE");
+    expect(AiToolResultSchema.safeParse({ tool: "trips.get", ok: true }).success).toBe(true);
+    expect(AiToolResultSchema.safeParse({ tool: "trips.get", ok: "yes" }).success).toBe(false);
+  });
+
+  it("rejects a chat request with an empty message or unbounded hints", () => {
+    expect(AiChatRequestSchema.safeParse({ message: "" }).success).toBe(false);
+    expect(AiChatRequestSchema.safeParse({ message: "x".repeat(2001) }).success).toBe(false);
+    expect(
+      AiChatRequestSchema.safeParse({
+        message: "Kyoto",
+        hints: { destinations: Array.from({ length: 11 }, (_, i) => `city-${i}`) },
+      }).success,
+    ).toBe(false);
+  });
+});
