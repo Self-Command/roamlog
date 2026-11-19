@@ -250,7 +250,8 @@ function completionExif(read: PhotoExifRead | null): {
     : { exif: read.exif };
 }
 
-function wait(ms: number, signal: AbortSignal): Promise<void> {  return new Promise<void>((resolve, reject) => {
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     if (signal.aborted) {
       reject(new UploadAborted());
       return;

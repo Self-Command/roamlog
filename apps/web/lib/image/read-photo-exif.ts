@@ -140,7 +140,10 @@ export async function readPhotoExif(
     ExposureTime: exposureTime(source.ExposureTime),
     ISO: integer(source.ISO, 1_000_000),
     FocalLength: positive(source.FocalLength, 2_000),
-    FocalLengthIn35mmFormat: positive(source.FocalLengthIn35mmFormat ?? source.FocalLengthIn35mmFilm, 2_000),
+    FocalLengthIn35mmFormat: positive(
+      source.FocalLengthIn35mmFormat ?? source.FocalLengthIn35mmFilm,
+      2_000,
+    ),
     ExposureCompensation: bounded(source.ExposureCompensation, -20, 20),
     ExposureProgram: label(source.ExposureProgram),
     ExposureMode: label(source.ExposureMode),
@@ -237,7 +240,10 @@ function text(value: unknown): string | null {
     return null;
   }
   // eslint-disable-next-line no-control-regex
-  const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  const cleaned = value
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return cleaned.length > 0 ? cleaned : null;
 }
 

@@ -184,12 +184,7 @@ export interface MediaExifSummaryProps {
  * the card at "date + camera" on a phone and adds the exposure signature only
  * where there is room.
  */
-export function MediaExifSummary({
-  exif,
-  date,
-  hasLocation,
-  className,
-}: MediaExifSummaryProps) {
+export function MediaExifSummary({ exif, date, hasLocation, className }: MediaExifSummaryProps) {
   const captureDate = formatCaptureDate(date, exif);
   const camera = formatCameraName(exif);
   const exposure = formatExposureSummary(exif);

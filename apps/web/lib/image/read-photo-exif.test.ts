@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  PHOTO_EXIF_MAX_BYTES,
-  readPhotoExif,
-  type PhotoExifParser,
-} from "./read-photo-exif";
+import { PHOTO_EXIF_MAX_BYTES, readPhotoExif, type PhotoExifParser } from "./read-photo-exif";
 
 function makeFile(size = 1024, name = "IMG_0001.HEIC"): File {
   const file = new File(["exif-bytes"], name, { type: "image/heic" });
@@ -120,9 +116,7 @@ describe("readPhotoExif", () => {
 
   it("gives up at the deadline without failing the upload", async () => {
     const hanging: PhotoExifParser = () => new Promise(() => {});
-    await expect(
-      readPhotoExif(makeFile(), { parse: hanging, timeoutMs: 5 }),
-    ).resolves.toBeNull();
+    await expect(readPhotoExif(makeFile(), { parse: hanging, timeoutMs: 5 })).resolves.toBeNull();
   });
 
   it("strips unknown keys and control characters from text tags", async () => {

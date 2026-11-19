@@ -31,9 +31,7 @@ const CAMERA_PHOTO = exif({
 
 describe("EXIF formatting", () => {
   it("de-duplicates the maker instead of printing 'Apple Apple iPhone 15 Pro'", () => {
-    expect(formatCameraName(exif({ Make: "Apple", Model: "iPhone 15 Pro" }))).toBe(
-      "iPhone 15 Pro",
-    );
+    expect(formatCameraName(exif({ Make: "Apple", Model: "iPhone 15 Pro" }))).toBe("iPhone 15 Pro");
     expect(formatCameraName(exif({ Make: "SONY", Model: "Sony A7 IV" }))).toBe("Sony A7 IV");
     expect(formatCameraName(exif({ Make: "Canon", Model: "EOS R6" }))).toBe("Canon EOS R6");
     expect(formatCameraName(exif({ Make: "Apple" }))).toBe("Apple");
@@ -93,9 +91,7 @@ describe("MediaExifDetail (L2 detail)", () => {
   it("groups the camera/lens block, the exposure chips and the capture time", () => {
     render(<MediaExifDetail exif={CAMERA_PHOTO} date="2026-11-02" />);
     expect(screen.getByText("iPhone 15 Pro")).toBeTruthy();
-    expect(
-      screen.getByText("iPhone 15 Pro back triple camera 6.765mm f/1.78"),
-    ).toBeTruthy();
+    expect(screen.getByText("iPhone 15 Pro back triple camera 6.765mm f/1.78")).toBeTruthy();
     expect(screen.getByText("ISO 200")).toBeTruthy();
     expect(screen.getByText("24mm")).toBeTruthy();
     expect(screen.getByText("ƒ/1.8")).toBeTruthy();

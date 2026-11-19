@@ -86,7 +86,9 @@ describe("0014_media_exif migration", () => {
     expect(sql).toContain(
       'CREATE INDEX "Media_workspaceId_lat_lng_idx" ON "Media"("workspaceId", "lat", "lng")',
     );
-    expect(sql).toContain('CREATE INDEX "Media_tripId_lat_lng_idx" ON "Media"("tripId", "lat", "lng")');
+    expect(sql).toContain(
+      'CREATE INDEX "Media_tripId_lat_lng_idx" ON "Media"("tripId", "lat", "lng")',
+    );
   });
 
   it("is additive: nothing existing is rewritten or dropped", () => {
@@ -98,9 +100,7 @@ describe("0014_media_exif migration", () => {
     expect(sql).not.toMatch(/\bDELETE\s+FROM\b/i);
     expect(sql).not.toMatch(/\bINSERT\s+INTO\b/i);
     expect(sql).not.toMatch(/\bUPDATE\s+"/i);
-    const alteredTables = [...sql.matchAll(/ALTER\s+TABLE\s+"([^"]+)"/g)].map(
-      (match) => match[1],
-    );
+    const alteredTables = [...sql.matchAll(/ALTER\s+TABLE\s+"([^"]+)"/g)].map((match) => match[1]);
     expect(new Set(alteredTables)).toEqual(new Set(["Media", "Trip"]));
   });
 
