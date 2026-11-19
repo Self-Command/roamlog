@@ -5,7 +5,7 @@ import type { AdminSettingsResponse, PublicSettingsResponse } from "@roamlog/con
 import { PLATFORM_ROLE_ACTIONS } from "@roamlog/contracts";
 import { randomBytes } from "node:crypto";
 import request from "supertest";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthenticatedRequest } from "../../../common/guards/actor-context.js";
 import { SessionGuard } from "../../../common/guards/session.guard.js";
@@ -22,6 +22,7 @@ import { PlatformTwoFactorGuard } from "../../admin/platform-two-factor.guard.js
 import { AdminSettingsController } from "../admin-settings.controller.js";
 import { PublicSettingsController } from "../public-settings.controller.js";
 import { SecretBox } from "../secret-box.js";
+import { SettingsSaveProbeService } from "../settings-save-probe.service.js";
 import { SettingsService, type SystemSettingRow } from "../settings.service.js";
 import { SETTINGS_REGISTRY, SETTINGS_REGISTRY_TOKEN } from "../settings.registry.js";
 
@@ -147,12 +148,23 @@ async function createApp(options: { user?: AuthenticatedActorUser }) {
     adminTwoFactorEnforced: false,
     configEncryptionKey: encryptionKey,
     configEncryptionKeys: undefined,
+    storageSettings: {
+      endpoint: "http://127.0.0.1:19999",
+      publicEndpoint: "http://127.0.0.1:19999",
+      bucket: "roamlog-probe",
+      region: "us-east-1",
+      accessKey: "test-access-key",
+      secretKey: "test-secret-key",
+      forcePathStyle: true,
+      signedUrlTtlSeconds: 900,
+    },
   };
 
   const builder = Test.createTestingModule({
     controllers: [AdminSettingsController, PublicSettingsController],
     providers: [
       SettingsService,
+      SettingsSaveProbeService,
       { provide: SETTINGS_REGISTRY_TOKEN, useValue: SETTINGS_REGISTRY },
       { provide: PrismaService, useValue: prisma },
       { provide: RedisService, useValue: redis },
@@ -192,7 +204,35 @@ async function createApp(options: { user?: AuthenticatedActorUser }) {
 
 type AuthenticatedActorUser = ReturnType<typeof makeActor>["user"];
 
+type ProbeInternals = Record<
+  "executeStorageProbe" | "executeMailProbe",
+  (input: unknown) => Promise<unknown>
+>;
+
+function probeInternals(app: INestApplication): ProbeInternals {
+  return app.get(SettingsSaveProbeService) as unknown as ProbeInternals;
+}
+
+const MAIL_ENV_KEYS = [
+  "EMAIL_PROVIDER",
+  "EMAIL_FROM",
+  "RESEND_API_KEY",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USER",
+  "SMTP_PASSWORD",
+] as const;
+
+beforeEach(() => {
+  // The merge step reads environment fallbacks; keep these tests deterministic
+  // regardless of the developer's shell.
+  for (const key of MAIL_ENV_KEYS) {
+    vi.stubEnv(key, "");
+  }
+});
+
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
@@ -392,6 +432,180 @@ describe("admin settings routes", () => {
       key: "mail.smtpPassword",
       value: STORED_PASSWORD,
     });
+  });
+});
+
+describe("admin settings save probe gate", () => {
+  it("does not probe a PATCH that only touches non-connectivity keys", async () => {
+    const { app } = await createApp({ user: superAdmin });
+    const internals = probeInternals(app);
+    const storageProbe = vi.spyOn(internals, "executeStorageProbe").mockResolvedValue({ ok: true, checks: [] });
+    const mailProbe = vi.spyOn(internals, "executeMailProbe").mockResolvedValue({ ok: true, checks: [] });
+
+    await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .send({ updates: [{ key: "site.title", value: "Roamlog probe gate" }] })
+      .expect(200);
+
+    expect(storageProbe).not.toHaveBeenCalled();
+    expect(mailProbe).not.toHaveBeenCalled();
+  });
+
+  it("rejects a storage change whose probe fails without writing or auditing", async () => {
+    const { app, prisma, audit } = await createApp({ user: superAdmin });
+    vi.spyOn(probeInternals(app), "executeStorageProbe").mockResolvedValue({
+      ok: false,
+      code: "STORAGE_ENDPOINT_UNREACHABLE",
+      message: "The endpoint could not be reached (ECONNREFUSED).",
+      checks: [{ name: "HeadBucket", ok: false, ms: 4 }],
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .send({ updates: [{ key: "storage.endpoint", value: "http://127.0.0.1:19999" }] })
+      .expect(422);
+
+    expect(response.body).toEqual({
+      type: "https://roamlog.app/errors/settings-probe-failed",
+      title: "Configuration rejected",
+      status: 422,
+      code: "SETTINGS_PROBE_FAILED",
+      detail: "The endpoint could not be reached (ECONNREFUSED).",
+      probe: {
+        target: "storage",
+        code: "STORAGE_ENDPOINT_UNREACHABLE",
+        checks: [{ name: "HeadBucket", ok: false, ms: 4 }],
+      },
+    });
+    // The critical invariant: a rejected probe must not leave any trace.
+    expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it("rejects a mail change whose probe fails without writing or auditing", async () => {
+    const { app, prisma, audit } = await createApp({ user: superAdmin });
+    vi.spyOn(probeInternals(app), "executeMailProbe").mockResolvedValue({
+      ok: false,
+      code: "CONNECTION_FAILED",
+      message: "Could not reach the mail relay. Check the SMTP host and port.",
+      checks: [],
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .send({ updates: [{ key: "mail.smtpHost", value: "127.0.0.1" }] })
+      .expect(422);
+
+    expect(response.body).toMatchObject({
+      type: "https://roamlog.app/errors/settings-probe-failed",
+      title: "Configuration rejected",
+      status: 422,
+      code: "SETTINGS_PROBE_FAILED",
+      probe: { target: "mail", code: "CONNECTION_FAILED", checks: [] },
+    });
+    expect(JSON.stringify(response.body)).not.toContain(STORED_PASSWORD);
+    expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it("accepts a storage change after a successful probe and keeps the write semantics", async () => {
+    const { app, prisma, audit } = await createApp({ user: superAdmin });
+    vi.spyOn(probeInternals(app), "executeStorageProbe").mockResolvedValue({
+      ok: true,
+      checks: [{ name: "HeadBucket", ok: true, ms: 3 }],
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .send({ updates: [{ key: "storage.endpoint", value: "http://127.0.0.1:19998" }] })
+      .expect(200);
+
+    expect(response.body).toMatchObject({ version: 1 });
+    expect(prisma.client.systemSetting.upsert).toHaveBeenCalledTimes(1);
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.settings.updated",
+        metadata: { keys: ["storage.endpoint"], secrets: [false] },
+      }),
+    );
+  });
+
+  it("probes with the stored decrypted secret when the request does not replace it", async () => {
+    const { app, prisma } = await createApp({ user: superAdmin });
+    prisma.store.set("mail.smtpUser", settingRow("mail.smtpUser", "mail", "roamlog"));
+    let captured: { password?: string } | undefined;
+    vi.spyOn(probeInternals(app), "executeMailProbe").mockImplementation(async (runtime) => {
+      captured = runtime as { password?: string };
+      return { ok: true, checks: [] };
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .send({ updates: [{ key: "mail.smtpHost", value: "127.0.0.1" }] })
+      .expect(200);
+
+    expect(captured?.password).toBe(STORED_PASSWORD);
+    expect(JSON.stringify(response.body)).not.toContain(STORED_PASSWORD);
+  });
+
+  it("fails closed with 422 SETTINGS_PROBE_FAILED when the probe throws", async () => {
+    const { app, prisma, audit } = await createApp({ user: superAdmin });
+    vi.spyOn(probeInternals(app), "executeMailProbe").mockRejectedValue(new Error("socket hang up"));
+
+    const response = await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .send({ updates: [{ key: "mail.smtpHost", value: "127.0.0.1" }] })
+      .expect(422);
+
+    expect(response.body).toMatchObject({
+      status: 422,
+      code: "SETTINGS_PROBE_FAILED",
+      probe: { target: "mail", code: "PROBE_UNAVAILABLE" },
+    });
+    expect(JSON.stringify(response.body)).not.toContain("socket hang up");
+    expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it("lets a super_admin skip the probe and records the bypass", async () => {
+    const { app, prisma, audit } = await createApp({ user: superAdmin });
+    const mailProbe = vi.spyOn(probeInternals(app), "executeMailProbe").mockResolvedValue({
+      ok: true,
+      checks: [],
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .set("x-skip-settings-probe", "true")
+      .send({ updates: [{ key: "mail.smtpHost", value: "127.0.0.1" }] })
+      .expect(200);
+
+    expect(response.body).toMatchObject({ version: 1 });
+    expect(mailProbe).not.toHaveBeenCalled();
+    expect(prisma.client.systemSetting.upsert).toHaveBeenCalledTimes(1);
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.settings.probe_skipped",
+        targetType: "system_setting",
+        metadata: { keys: ["mail.smtpHost"] },
+      }),
+    );
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "admin.settings.updated" }),
+    );
+  });
+
+  it("rejects the skip header for a platform admin below super_admin", async () => {
+    const { app, prisma, audit } = await createApp({ user: platformAdmin });
+
+    await request(app.getHttpServer())
+      .patch("/v1/admin/settings")
+      .set("x-skip-settings-probe", "true")
+      .send({ updates: [{ key: "mail.smtpHost", value: "127.0.0.1" }] })
+      .expect(403);
+
+    expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
   });
 });
 
