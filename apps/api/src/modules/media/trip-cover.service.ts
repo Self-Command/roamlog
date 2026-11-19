@@ -3,7 +3,7 @@ import type { TripCover } from "@roamlog/contracts";
 
 import { MediaUrlService, type MediaUrlSource } from "./media-url.service.js";
 
-/** Media row fields the cover projection needs; `bucket` is deliberately absent. */
+/** Media row fields the cover projection needs; `bucket` comes from `MediaUrlSource`. */
 export interface CoverMediaSource extends MediaUrlSource {
   tripId?: string | null;
   width?: number | null;

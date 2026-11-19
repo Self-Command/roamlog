@@ -121,7 +121,6 @@ function build(media: MediaRecord | null) {
     { enqueue } as never,
     new PermissionService(),
     { record: async () => ({ id: "activity" }) } as never,
-    {} as never,
     urls,
   );
   return { service, repository, storage, enqueue, upsertMotion };
@@ -154,7 +153,12 @@ describe("Live Photo motion API", () => {
       method: "PUT",
       headers: { "Content-Type": "video/quicktime" },
     });
-    expect(storage.createPresignedUpload).toHaveBeenCalledWith(MOTION_KEY, "video/quicktime");
+    expect(storage.createPresignedUpload).toHaveBeenCalledWith(
+      MOTION_KEY,
+      "video/quicktime",
+      undefined,
+      "roamlog-test",
+    );
   });
 
   it("rejects a motion clip over 50 MB before any storage call", async () => {

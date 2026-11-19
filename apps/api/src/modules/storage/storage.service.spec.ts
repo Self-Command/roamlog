@@ -1,4 +1,4 @@
-import { S3Client } from "@aws-sdk/client-s3";
+import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PinoLoggerService } from "../observability/pino-logger.service.js";
@@ -266,5 +266,85 @@ describe("StorageService settings-driven clients", () => {
     expect(new URL(read.url).host).toBe("current-media.example.com");
     expect(new URL(read.url).pathname.startsWith("/factory-bucket/")).toBe(true);
     expect(factory.get).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("StorageService per-object bucket", () => {
+  it("signs a read URL against the explicit bucket override", async () => {
+    const service = createService({ publicEndpoint: PUBLIC_ENDPOINT });
+
+    const read = await service.createSignedReadUrl(
+      "ws/2026/11/media/original.jpg",
+      undefined,
+      "roamlog-bucket-a",
+    );
+
+    expect(new URL(read.url).pathname.startsWith("/roamlog-bucket-a/")).toBe(true);
+    expect(new URL(read.url).host).toBe("media.example.com");
+  });
+
+  it("presigns an upload against the explicit bucket override", async () => {
+    const service = createService({ publicEndpoint: PUBLIC_ENDPOINT });
+
+    const upload = await service.createPresignedUpload(
+      "ws/2026/11/media/original.jpg",
+      "image/jpeg",
+      undefined,
+      "roamlog-bucket-a",
+    );
+
+    expect(new URL(upload.url).pathname.startsWith("/roamlog-bucket-a/")).toBe(true);
+    expect(new URL(upload.url).host).toBe("media.example.com");
+  });
+
+  it("HEADs the explicit bucket on completion", async () => {
+    const send = vi.fn().mockResolvedValue({ ContentLength: 1, ContentType: "image/png" });
+    const service = new StorageService(settings(), createLogger(), {
+      send,
+    } as unknown as S3Client);
+
+    await service.completeUpload("ws/2026/11/media/original.png", "roamlog-bucket-a");
+
+    const command = send.mock.calls[0]?.[0] as HeadObjectCommand;
+    expect(command).toBeInstanceOf(HeadObjectCommand);
+    expect(command.input.Bucket).toBe("roamlog-bucket-a");
+  });
+
+  it("falls back to the configured bucket for blank overrides", async () => {
+    const service = createService({ bucket: "roamlog-current", publicEndpoint: PUBLIC_ENDPOINT });
+
+    for (const bucket of [undefined, "", "   "]) {
+      const read = await service.createSignedReadUrl("ws/2026/11/media/original.jpg", undefined, bucket);
+      expect(new URL(read.url).pathname.startsWith("/roamlog-current/")).toBe(true);
+    }
+  });
+
+  it("reports the current bucket from the injected provider", async () => {
+    const factory = {
+      signingEndpoint: "https://current-media.example.com",
+      get: vi.fn(async () => ({
+        version: "v2",
+        internal: { send: vi.fn() } as unknown as S3Client,
+        public: new S3Client({
+          region: "us-east-1",
+          endpoint: "https://current-media.example.com",
+          forcePathStyle: true,
+          credentials: { accessKeyId: "access", secretAccessKey: "secret" },
+        }),
+        bucket: "factory-bucket",
+        forcePathStyle: true,
+        signingEndpoint: "https://current-media.example.com",
+        settings: settings({ publicEndpoint: "https://current-media.example.com" }),
+      })),
+    };
+
+    const service = new StorageService(settings(), createLogger(), undefined, undefined, factory);
+
+    await expect(service.currentBucket()).resolves.toBe("factory-bucket");
+  });
+
+  it("reports the static settings bucket without a provider", async () => {
+    const service = createService({ bucket: "static-bucket" });
+    await expect(service.currentBucket()).resolves.toBe("static-bucket");
   });
 });

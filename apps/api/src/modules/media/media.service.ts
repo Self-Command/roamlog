@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from "@nestjs/common";
 import {
@@ -29,10 +30,10 @@ import { cursorId } from "../../common/services/cursor-page.js";
 import { PermissionService } from "../../common/services/permission.service.js";
 import { parseRequest } from "../../common/services/request-validation.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
-import { AppConfigService } from "../../config/app-config.service.js";
 import { ActivitiesService } from "../activities/activities.service.js";
 import { generateUuidV7 } from "../auth/uuid.js";
 import { JobQueueService, deterministicJobId } from "../exports/job-queue.service.js";
+import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { StorageService } from "../storage/storage.service.js";
 import {
   assertSafeMediaKey,
@@ -61,6 +62,8 @@ import { presentTrip } from "../trips/content-presenters.js";
 import { TripsRepository } from "../trips/trips.repository.js";
 
 const DELETE_DELAY_MS = 24 * 60 * 60 * 1000;
+/** At most one `media.bucket_missing` warning per process per window. */
+const BUCKET_MISSING_WARN_INTERVAL_MS = 60_000;
 
 @Injectable()
 export class MediaService {
@@ -71,11 +74,13 @@ export class MediaService {
     @Inject(JobQueueService) private readonly queue: JobQueueService,
     @Inject(PermissionService) private readonly permissions: PermissionService,
     @Inject(ActivitiesService) private readonly activities: ActivitiesService,
-    @Inject(AppConfigService) private readonly config: AppConfigService,
     // Optional for hand-built instances only; `MediaModule` always injects both.
     @Inject(MediaUrlService) private readonly mediaUrls?: MediaUrlService,
     @Inject(TripCoverService) private readonly covers?: TripCoverService,
+    @Optional() @Inject(PinoLoggerService) private readonly logger?: PinoLoggerService,
   ) {}
+
+  private lastMissingBucketWarningAt = 0;
 
   async presign(
     actor: AuthenticatedActor,
@@ -107,7 +112,11 @@ export class MediaService {
       variant: "original",
       ...(capturedAt ? { capturedAt } : {}),
     });
-    const bucket = this.config.storageSettings.bucket;
+    // The row records where the object is *actually* put. The bucket is read
+    // from the resolved storage settings (not `process.env.S3_BUCKET`) and then
+    // passed to the signer explicitly, so a settings change between the two
+    // calls cannot make the row and the signed PUT disagree.
+    const bucket = await this.storage.currentBucket();
 
     await this.repository.transaction(async (tx) => {
       await this.repository.createMedia({
@@ -138,7 +147,7 @@ export class MediaService {
       });
     });
 
-    const upload = await this.storage.createPresignedUpload(key, mime);
+    const upload = await this.storage.createPresignedUpload(key, mime, undefined, bucket);
     return {
       mediaId,
       uploadUrl: upload.url,
@@ -165,7 +174,7 @@ export class MediaService {
       // Allow an explicit retry from a failed upload.
     }
 
-    const uploaded = await this.storage.completeUpload(media.key);
+    const uploaded = await this.storage.completeUpload(media.key, this.bucketOf(media));
     const mime = assertSupportedImage(
       uploaded.contentType || media.mimeType,
       uploaded.size || media.size,
@@ -244,7 +253,14 @@ export class MediaService {
     assertSafeMediaKey(media.key);
 
     const storageKey = buildMotionKey({ mediaKey: media.key, mimeType: mime });
-    const upload = await this.storage.createPresignedUpload(storageKey, mime);
+    // The motion asset is part of the same still: it must live in the bucket the
+    // still row recorded, even if the configured bucket changed since then.
+    const upload = await this.storage.createPresignedUpload(
+      storageKey,
+      mime,
+      undefined,
+      this.bucketOf(media),
+    );
     await this.repository.transaction(async (tx) => {
       await this.activities.record(tx, {
         workspaceId: membership.workspaceId,
@@ -301,7 +317,7 @@ export class MediaService {
       });
     }
 
-    const uploaded = await this.storage.completeUpload(expectedKey);
+    const uploaded = await this.storage.completeUpload(expectedKey, this.bucketOf(media));
     if (uploaded.size <= 0) {
       throw new BadRequestException({
         code: "MEDIA_MOTION_EMPTY_UPLOAD",
@@ -558,6 +574,29 @@ export class MediaService {
     return presentTrip(updated as never, covers.get(tripId) ?? null);
   }
 
+  /**
+   * Bucket recorded on the row, if any.
+   *
+   * A legacy row without a bucket is completed/read against the current
+   * configuration and emits one throttled warning, mirroring
+   * `MediaUrlService`'s read-side fallback.
+   */
+  private bucketOf(media: MediaRecord): string | undefined {
+    const bucket = typeof media.bucket === "string" ? media.bucket.trim() : "";
+    if (bucket) {
+      return bucket;
+    }
+    const now = Date.now();
+    if (now - this.lastMissingBucketWarningAt >= BUCKET_MISSING_WARN_INTERVAL_MS) {
+      this.lastMissingBucketWarningAt = now;
+      this.logger?.warn(
+        { code: "MEDIA_BUCKET_MISSING", mediaId: media.id },
+        "media.bucket_missing",
+      );
+    }
+    return undefined;
+  }
+
   private signer(): MediaUrlService {
     return this.mediaUrls ?? new MediaUrlService(this.storage);
   }
@@ -610,12 +649,16 @@ export class MediaService {
   }
 
   private async presentWithUrls(record: MediaRecord): Promise<Media> {
+    const motion = liveMotion(record);
     const keys = [...new Set([record.key, ...variantKeys(record)])];
-    const signed = await Promise.all(
-      keys.map((key) => this.storage.createSignedReadUrl(assertStorageKey(key))),
-    );
+    if (motion) {
+      keys.push(motion.storageKey);
+    }
+    // Every key is signed against this row's own bucket, so old objects stay
+    // reachable after the configured bucket changes.
+    const signed = await this.signer().signKeys(record, keys);
     const byKey = new Map(
-      signed.map((value) => [
+      [...signed.values()].map((value) => [
         value.key,
         { key: value.key, url: value.url, expiresAt: value.expiresAt } satisfies MediaVariantView,
       ]),
@@ -635,10 +678,9 @@ export class MediaService {
         }
       }
     }
-    const motion = liveMotion(record);
     const motionView = motion
       ? {
-          url: (await this.storage.createSignedReadUrl(assertStorageKey(motion.storageKey))).url,
+          url: byKey.get(motion.storageKey)?.url ?? null,
         }
       : null;
     return presentMedia(record, views, motionView);
@@ -704,11 +746,6 @@ function parseOptionalCompletion(rawInput: unknown): {
   }
   const result = parseRequest(CompleteMediaRequestSchema, rawInput);
   return result;
-}
-
-function assertStorageKey(key: string): string {
-  assertSafeMediaKey(key);
-  return key;
 }
 
 /** Object keys the delayed cleanup job must purge for a deleted Live Photo. */

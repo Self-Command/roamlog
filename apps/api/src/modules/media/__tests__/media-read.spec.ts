@@ -126,7 +126,6 @@ function build(media: MediaRecord | null, trip: Record<string, unknown> | null =
     {} as never,
     new PermissionService(),
     activities as never,
-    {} as never,
     urls,
     new TripCoverService(urls),
   );

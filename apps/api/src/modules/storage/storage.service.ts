@@ -95,6 +95,17 @@ function normalizedTtl(requested: number | undefined, fallback: number): number 
 }
 
 /**
+ * A per-object bucket override wins over the current settings bucket.
+ *
+ * Empty/blank values mean "use the current bucket", which is the historical
+ * behaviour and the fallback for `Media` rows that predate this column.
+ */
+function normalizedBucket(bucket: string | undefined): string | undefined {
+  const value = bucket?.trim();
+  return value ? value : undefined;
+}
+
+/**
  * Thin wrapper over the S3 SDK with two clients on purpose.
  *
  * SigV4 presigned URLs sign the `Host` header, so an URL signed for
@@ -113,6 +124,13 @@ function normalizedTtl(requested: number | undefined, fallback: number): number 
  * from the current settings version on every operation, so an admin change to
  * `storage.*` takes effect without a restart. Direct construction keeps the
  * original static behaviour (tests, scripts).
+ *
+ * Read, upload, completion and signing calls accept an optional `bucket`
+ * argument. Media rows carry the bucket their object was actually written to,
+ * so after an admin switches the configured bucket the old objects keep signing
+ * against their own bucket instead of 404ing against the new one. The endpoint
+ * is *not* per-row: every signed URL still uses the current signing endpoint
+ * (see the assumption in `.audit/media-bucket-report.md`).
  */
 @Injectable()
 export class StorageService {
@@ -157,6 +175,17 @@ export class StorageService {
     return resolveSigningEndpoint(this.settings);
   }
 
+  /**
+   * Bucket the current settings resolve to.
+   *
+   * Callers that persist an object's location (`Media.bucket`) must capture this
+   * *before* signing and pass it back as the explicit bucket, so a settings change
+   * between the two calls cannot make the row and the signed URL disagree.
+   */
+  async currentBucket(): Promise<string> {
+    return (await this.bundle()).bucket;
+  }
+
   /** Default lifetime for media URLs (`MEDIA_SIGNED_URL_TTL_SECONDS` first). */
   private get defaultTtlSeconds(): number {
     const settings = this.factory ? undefined : this.settings;
@@ -197,18 +226,20 @@ export class StorageService {
     key: string,
     contentType: string,
     expiresInSeconds?: number,
+    bucket?: string,
   ): Promise<PresignedUpload> {
     assertStorageKey(key);
     const bundle = await this.bundle();
+    const targetBucket = normalizedBucket(bucket) ?? bundle.bucket;
     const expiresIn = this.ttlFor(bundle, expiresInSeconds);
     const command = new PutObjectCommand({
-      Bucket: bundle.bucket,
+      Bucket: targetBucket,
       Key: key,
       ContentType: contentType,
     });
     const url = await getSignedUrl(bundle.signing, command, { expiresIn });
     this.logger.debug(
-      { bucket: bundle.bucket, key, signingEndpoint: this.signingEndpoint },
+      { bucket: targetBucket, key, signingEndpoint: this.signingEndpoint },
       "storage.upload_url_created",
     );
 
@@ -223,12 +254,13 @@ export class StorageService {
     };
   }
 
-  async completeUpload(key: string): Promise<CompletedUpload> {
+  async completeUpload(key: string, bucket?: string): Promise<CompletedUpload> {
     assertStorageKey(key);
     const bundle = await this.bundle();
+    const targetBucket = normalizedBucket(bucket) ?? bundle.bucket;
     const result = await bundle.internal.send(
       new HeadObjectCommand({
-        Bucket: bundle.bucket,
+        Bucket: targetBucket,
         Key: key,
       }),
     );
@@ -241,14 +273,19 @@ export class StorageService {
     };
   }
 
-  async createSignedReadUrl(key: string, expiresInSeconds?: number): Promise<SignedReadUrl> {
+  async createSignedReadUrl(
+    key: string,
+    expiresInSeconds?: number,
+    bucket?: string,
+  ): Promise<SignedReadUrl> {
     assertStorageKey(key);
     const bundle = await this.bundle();
+    const targetBucket = normalizedBucket(bucket) ?? bundle.bucket;
     const expiresIn = this.ttlFor(bundle, expiresInSeconds);
     const url = await getSignedUrl(
       bundle.signing,
       new GetObjectCommand({
-        Bucket: bundle.bucket,
+        Bucket: targetBucket,
         Key: key,
       }),
       { expiresIn },

@@ -1,5 +1,6 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 
+import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import type { SignedReadUrl } from "../storage/storage.service.js";
 import { StorageService } from "../storage/storage.service.js";
 import { jsonObject } from "./media.presenter.js";
@@ -17,6 +18,12 @@ export interface MediaUrlMotionSource {
 export interface MediaUrlSource {
   id: string;
   key: string;
+  /**
+   * Bucket the object was written to. Empty/absent marks a row created before
+   * the bucket column was populated: signing falls back to the current bucket
+   * and emits one throttled `media.bucket_missing` warning.
+   */
+  bucket?: string | null;
   status: string;
   variants: unknown;
   motion?: MediaUrlMotionSource | null;
@@ -43,17 +50,36 @@ const DISPLAY_VARIANTS = ["large", "original"] as const;
 const THUMB_VARIANTS = ["thumb", "large", "original"] as const;
 const READY_STATUS = "ready";
 
+/** At most one `media.bucket_missing` warning per process per window. */
+const BUCKET_MISSING_WARN_INTERVAL_MS = 60_000;
+
+/** Which bucket a row's objects are signed against; `null` means "current". */
+interface BucketPlan {
+  readonly bucket: string | null;
+  readonly displayKey: string;
+  readonly thumbKey: string;
+}
+
 /**
  * Signs display URLs for media reads.
  *
  * Reuses {@link StorageService} (the project's single S3 client + signed-URL
- * configuration) instead of creating another presigner. The result deliberately
- * carries no bucket, object key or raw variant map: storage coordinates must not
- * leak through API responses.
+ * configuration) instead of creating another presigner. Every row is signed
+ * against **its own** `bucket`, so changing the configured storage bucket in
+ * the admin UI keeps old objects reachable; only rows without a recorded bucket
+ * fall back to the current configuration. The result deliberately carries no
+ * bucket, object key or raw variant map: storage coordinates must not leak
+ * through API responses.
  */
 @Injectable()
 export class MediaUrlService {
-  constructor(@Inject(StorageService) private readonly storage: StorageService) {}
+  private lastMissingBucketWarningAt = 0;
+  private missingBucketCount = 0;
+
+  constructor(
+    @Inject(StorageService) private readonly storage: StorageService,
+    @Optional() @Inject(PinoLoggerService) private readonly logger?: PinoLoggerService,
+  ) {}
 
   /**
    * Signed read URLs for one media row.
@@ -74,40 +100,48 @@ export class MediaUrlService {
    * signed once.
    */
   async signMany(records: readonly MediaUrlSource[]): Promise<Map<string, SignedMediaUrls>> {
-    const plans = new Map<string, { displayKey: string; thumbKey: string }>();
-    const motionPlans = new Map<string, string>();
-    const requestedKeys = new Set<string>();
+    const plans = new Map<string, BucketPlan>();
+    const motionPlans = new Map<string, { bucket: string | null; key: string }>();
+    const requested = new Map<string, { bucket: string | null; key: string }>();
     for (const record of records) {
-      if (record.status === READY_STATUS && record.key) {
+      const hasStill = record.status === READY_STATUS && Boolean(record.key);
+      const motionKey = liveMotionKey(record.motion);
+      // Only resolve (and possibly warn about) the bucket for rows that will
+      // actually be signed: an unprocessed row must not produce a warning.
+      const bucket = hasStill || motionKey ? this.bucketFor(record) : null;
+      if (hasStill) {
         const variants = variantKeys(record.variants);
         const displayKey = preferredKey(variants, DISPLAY_VARIANTS) ?? record.key;
         const thumbKey = preferredKey(variants, THUMB_VARIANTS) ?? displayKey;
-        plans.set(record.id, { displayKey, thumbKey });
-        requestedKeys.add(displayKey);
-        requestedKeys.add(thumbKey);
+        plans.set(record.id, { bucket, displayKey, thumbKey });
+        requested.set(objectIdentity(bucket, displayKey), { bucket, key: displayKey });
+        requested.set(objectIdentity(bucket, thumbKey), { bucket, key: thumbKey });
       }
-      const motionKey = liveMotionKey(record.motion);
       if (motionKey) {
-        motionPlans.set(record.id, motionKey);
-        requestedKeys.add(motionKey);
+        motionPlans.set(record.id, { bucket, key: motionKey });
+        requested.set(objectIdentity(bucket, motionKey), { bucket, key: motionKey });
       }
     }
 
     const signed = new Map<string, Pick<SignedReadUrl, "url" | "expiresAt">>();
     await Promise.all(
-      [...requestedKeys].map(async (key) => {
-        const view = await this.signedReadUrl(key);
-        signed.set(key, { url: view.url, expiresAt: view.expiresAt });
+      [...requested].map(async ([identity, entry]) => {
+        const view = await this.signedReadUrl(entry.key, entry.bucket);
+        signed.set(identity, { url: view.url, expiresAt: view.expiresAt });
       }),
     );
 
     const result = new Map<string, SignedMediaUrls>();
     for (const record of records) {
       const plan = plans.get(record.id);
-      const display = plan ? signed.get(plan.displayKey) : undefined;
-      const thumb = plan ? (signed.get(plan.thumbKey) ?? display) : undefined;
-      const motionKey = motionPlans.get(record.id);
-      const motion = motionKey ? signed.get(motionKey) : undefined;
+      const display = plan ? signed.get(objectIdentity(plan.bucket, plan.displayKey)) : undefined;
+      const thumb = plan
+        ? (signed.get(objectIdentity(plan.bucket, plan.thumbKey)) ?? display)
+        : undefined;
+      const motionPlan = motionPlans.get(record.id);
+      const motion = motionPlan
+        ? signed.get(objectIdentity(motionPlan.bucket, motionPlan.key))
+        : undefined;
 
       const url = display?.url ?? null;
       const thumbUrl = thumb?.url ?? null;
@@ -130,10 +164,64 @@ export class MediaUrlService {
     return result;
   }
 
-  private async signedReadUrl(key: string): Promise<SignedReadUrl> {
-    assertSafeMediaKey(key);
-    return this.storage.createSignedReadUrl(key);
+  /**
+   * Signs an arbitrary set of keys (`original`, `large`, `thumb`, the motion
+   * object) for one row, all against that row's bucket.
+   *
+   * The media presenters need every processed variant, which is more than the
+   * display/thumb pair {@link signMany} resolves; routing them through this
+   * method keeps the bucket decision in one place.
+   */
+  async signKeys(
+    media: MediaUrlSource,
+    keys: readonly string[],
+  ): Promise<Map<string, SignedReadUrl>> {
+    const unique = [...new Set(keys.filter((key) => key.trim().length > 0))];
+    if (unique.length === 0) {
+      return new Map();
+    }
+    const bucket = this.bucketFor(media);
+    const signed = await Promise.all(unique.map((key) => this.signedReadUrl(key, bucket)));
+    return new Map(signed.map((value) => [value.key, value]));
   }
+
+  private bucketFor(media: MediaUrlSource): string | null {
+    const bucket = typeof media.bucket === "string" ? media.bucket.trim() : "";
+    if (bucket) {
+      return bucket;
+    }
+    this.noteMissingBucket(media);
+    return null;
+  }
+
+  private noteMissingBucket(media: MediaUrlSource): void {
+    this.missingBucketCount += 1;
+    const now = Date.now();
+    if (now - this.lastMissingBucketWarningAt < BUCKET_MISSING_WARN_INTERVAL_MS) {
+      return;
+    }
+    this.lastMissingBucketWarningAt = now;
+    const count = this.missingBucketCount;
+    this.missingBucketCount = 0;
+    this.logger?.warn(
+      { code: "MEDIA_BUCKET_MISSING", count, sampleMediaId: media.id },
+      "media.bucket_missing",
+    );
+  }
+
+  private async signedReadUrl(key: string, bucket: string | null): Promise<SignedReadUrl> {
+    assertSafeMediaKey(key);
+    // `bucket === null` lets StorageService use the *current* bucket, which is
+    // both the legacy-row fallback and the historical signature behaviour.
+    return bucket === null
+      ? this.storage.createSignedReadUrl(key)
+      : this.storage.createSignedReadUrl(key, undefined, bucket);
+  }
+}
+
+/** Identity of one object: the same key in two buckets is two signatures. */
+function objectIdentity(bucket: string | null, key: string): string {
+  return `${bucket ?? "\u0000current"}\u0000${key}`;
 }
 
 function liveMotionKey(motion: MediaUrlMotionSource | null | undefined): string | null {

@@ -48,7 +48,6 @@ describe("media upload rules", () => {
       {} as never,
       new PermissionService(),
       {} as never,
-      {} as never,
     );
     await expect(
       service.presign(
