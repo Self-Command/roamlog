@@ -27,6 +27,23 @@ import { canonicalTripOrigin, iso, nullableIso, presentDate, toBbox } from "./co
  * out: once Prisma exposes them they flow through untouched, and until then the
  * presenter reports `null` instead of inventing a location.
  */
+export interface PresentTripDestinationInput {
+  id: string;
+  name: string;
+  provider?: string | null;
+  providerPlaceId?: string | null;
+  address?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  timeZone?: string | null;
+  /** Raw `JSONB`; normalized with {@link toBbox} so legacy rows report `null`. */
+  bbox?: unknown;
+  order: number;
+  deletedAt?: Date | string | null;
+}
+
 export interface PresentTripInput {
   id: string;
   workspaceId: string;
@@ -44,7 +61,14 @@ export interface PresentTripInput {
   /** Raw `JSONB`; normalized with {@link toBbox} so legacy rows report `null`. */
   originBbox?: unknown;
   timeZone?: string | null;
+  /** @deprecated Names-only mirror; see {@link PresentTripInput.destinationsV2}. */
   destinations: string[];
+  /**
+   * Active structured destination rows. Presenter sorts by `order` and filters
+   * `deletedAt` defensively, then derives `destinations` from the same rows so
+   * the deprecated array and the structured rows can never disagree on a read.
+   */
+  destinationsV2?: PresentTripDestinationInput[];
   countryCodes: string[];
   tags: string[];
   guestNames: string[];
@@ -72,6 +96,35 @@ export interface PresentTripInput {
 export function presentTrip(record: PresentTripInput, cover: TripCover | null = null): Trip {
   const startDate = presentDate(record.startDate);
   const endDate = presentDate(record.endDate);
+  // V2 rows are the source of truth once they exist. The relation include
+  // already filters/sorts, but the presenter does it again: a caller that hands
+  // us a raw paginated row (or a stub without the include) must still produce a
+  // deterministic, soft-delete-free list. The deprecated `destinations` array is
+  // then derived from the same rows, so the two fields cannot disagree after a
+  // structured write.
+  const structuredDestinations = (record.destinationsV2 ?? [])
+    .filter((destination) => destination.deletedAt === null || destination.deletedAt === undefined)
+    .slice()
+    .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+    .map((destination) => ({
+      id: destination.id,
+      name: destination.name,
+      provider: destination.provider ?? null,
+      providerPlaceId: destination.providerPlaceId ?? null,
+      address: destination.address ?? null,
+      country: destination.country ?? null,
+      countryCode: destination.countryCode ?? null,
+      lat: destination.lat ?? null,
+      lng: destination.lng ?? null,
+      timeZone: destination.timeZone ?? null,
+      bbox: toBbox(destination.bbox),
+      order: destination.order,
+    }));
+  const destinationNames =
+    structuredDestinations.length > 0
+      ? structuredDestinations.map((destination) => destination.name)
+      : record.destinations;
+
   // Fields are listed explicitly: the row also carries operator-only columns
   // (`moderatedAt`, `moderatedById`) and future schema additions, and the
   // `.strict()` contract must never receive a column it does not declare.
@@ -93,7 +146,8 @@ export function presentTrip(record: PresentTripInput, cover: TripCover | null = 
     originAddress: record.originAddress ?? null,
     originBbox: toBbox(record.originBbox),
     timeZone: record.timeZone ?? null,
-    destinations: record.destinations,
+    destinations: destinationNames,
+    destinationsV2: structuredDestinations,
     countryCodes: record.countryCodes,
     tags: record.tags,
     guestNames: record.guestNames,

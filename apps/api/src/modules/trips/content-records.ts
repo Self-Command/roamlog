@@ -6,6 +6,31 @@ import type {
   Weather,
 } from "@roamlog/contracts";
 
+/**
+ * Raw `TripDestination` row (0010).
+ *
+ * `bbox` stays `unknown` on purpose: it is a `JSONB` column, and the presenter
+ * normalizes it with `toBbox` so a malformed stored box degrades to `null`
+ * instead of making the whole trip unreadable.
+ */
+export interface TripDestinationRecord {
+  id: string;
+  tripId: string;
+  name: string;
+  provider: string | null;
+  providerPlaceId: string | null;
+  address: string | null;
+  country: string | null;
+  countryCode: string | null;
+  lat: number | null;
+  lng: number | null;
+  timeZone: string | null;
+  bbox: unknown;
+  order: number;
+  createdAt: Date;
+  deletedAt: Date | null;
+}
+
 export interface TripRecord {
   id: string;
   workspaceId: string;
@@ -28,7 +53,18 @@ export interface TripRecord {
   originAddress: string | null;
   originBbox: unknown;
   timeZone: string | null;
+  /**
+   * @deprecated Names-only mirror. Reads derive names from {@link destinationsV2}
+   * when it has active rows; this column is kept for older clients until the
+   * deprecation window ends (0010_trip_destinations).
+   */
   destinations: string[];
+  /**
+   * Active structured destination rows (relation include). Optional because a
+   * query that does not include it (or an unmigrated row shape) must still be
+   * projected by the presenter instead of failing.
+   */
+  destinationsV2?: TripDestinationRecord[];
   countryCodes: string[];
   tags: string[];
   guestNames: string[];

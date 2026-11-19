@@ -13,6 +13,7 @@ import {
   UpdateTripRequestSchema,
   type Trip,
   type TripCover,
+  type TripDestinationInput,
   type TripPage,
   type TripParticipant,
 } from "@roamlog/contracts";
@@ -43,10 +44,63 @@ import {
   presentTrip,
 } from "./content-presenters.js";
 import type { ContentTransaction } from "./content-transaction.js";
-import { TripsRepository, type TripCreateData, type TripUpdateData } from "./trips.repository.js";
+import {
+  TripsRepository,
+  type TripCreateData,
+  type TripDestinationWriteData,
+  type TripUpdateData,
+} from "./trips.repository.js";
 import { VersionConflictException } from "./version-conflict.exception.js";
 
 type TripRecord = Awaited<ReturnType<TripsRepository["findTrip"]>> & object;
+
+/**
+ * Maps request destinations to rows, assigning `order` from the array position.
+ *
+ * The payload owns the order (the form sends what the person sees); ids are
+ * generated on insert, so an edit does not try to reuse ids that were just
+ * soft-deleted.
+ */
+function destinationWriteData(
+  tripId: string,
+  inputs: readonly TripDestinationInput[],
+): TripDestinationWriteData[] {
+  return inputs.map((input, index) => ({
+    tripId,
+    name: input.name,
+    provider: input.provider ?? null,
+    providerPlaceId: input.providerPlaceId ?? null,
+    address: input.address ?? null,
+    country: input.country ?? null,
+    countryCode: input.countryCode ?? null,
+    lat: input.lat ?? null,
+    lng: input.lng ?? null,
+    timeZone: input.timeZone ?? null,
+    bbox: input.bbox ?? null,
+    order: index,
+  }));
+}
+
+/** Maps stored active rows (duplicate) to insert rows for the copy. */
+function destinationCopyData(
+  tripId: string,
+  rows: NonNullable<TripRecord["destinationsV2"]>,
+): TripDestinationWriteData[] {
+  return rows.map((row) => ({
+    tripId,
+    name: row.name,
+    provider: row.provider,
+    providerPlaceId: row.providerPlaceId,
+    address: row.address,
+    country: row.country,
+    countryCode: row.countryCode,
+    lat: row.lat,
+    lng: row.lng,
+    timeZone: row.timeZone,
+    bbox: toBbox(row.bbox),
+    order: row.order,
+  }));
+}
 
 @Injectable()
 export class TripsService {
@@ -147,6 +201,7 @@ export class TripsService {
     assertDateRange(startDate, endDate);
     assertBudgetPair(budgetAmountMinor, budgetCurrency);
     assertOriginCoordinatePair(originLat, originLng);
+    const destinationInputs = input.destinationsV2 ?? [];
 
     const created = await this.repository.transaction(async (tx) => {
       await this.assertMedia(tx, membership.workspaceId, input.coverMediaId ?? null);
@@ -165,7 +220,13 @@ export class TripsService {
         originAddress: input.originAddress ?? null,
         originBbox: input.originBbox ?? null,
         timeZone: input.timeZone ?? null,
-        destinations: input.destinations ?? [],
+        // Write-through: the deprecated names array mirrors the structured
+        // group so search (`destinations: { has }`) and old readers keep
+        // working. `destinationsV2` (when sent) is authoritative.
+        destinations:
+          destinationInputs.length > 0
+            ? destinationInputs.map((destination) => destination.name)
+            : (input.destinations ?? []),
         countryCodes: input.countryCodes ?? [],
         tags: input.tags ?? [],
         guestNames: input.guestNames ?? [],
@@ -177,6 +238,10 @@ export class TripsService {
         updatedById: actor.user.id,
       };
       const record = await this.repository.createTrip(tx, data);
+      await this.repository.createDestinations(
+        tx,
+        destinationWriteData(record.id, destinationInputs),
+      );
       await this.repository.createParticipant(tx, {
         workspaceId: membership.workspaceId,
         tripId: record.id,
@@ -191,7 +256,10 @@ export class TripsService {
         entityId: record.id,
         metadata: { status: record.status, visibility: record.visibility },
       });
-      return record;
+      // Re-read inside the same transaction so the create response carries the
+      // rows that were just inserted (the row from `createTrip` has no relation
+      // include, and a create that reports `destinationsV2: []` would look lost).
+      return (await this.repository.findTrip(membership.workspaceId, record.id, tx)) ?? record;
     });
 
     return this.presentWithCover(membership.workspaceId, created);
@@ -250,6 +318,11 @@ export class TripsService {
       ...(input.originBbox !== undefined ? { originBbox: input.originBbox } : {}),
       ...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
       ...(input.destinations !== undefined ? { destinations: input.destinations } : {}),
+      // A structured write is authoritative for both representations: the
+      // deprecated names array mirrors the rows the same request replaces.
+      ...(input.destinationsV2 !== undefined
+        ? { destinations: input.destinationsV2.map((destination) => destination.name) }
+        : {}),
       ...(input.countryCodes !== undefined ? { countryCodes: input.countryCodes } : {}),
       ...(input.tags !== undefined ? { tags: input.tags } : {}),
       ...(input.guestNames !== undefined ? { guestNames: input.guestNames } : {}),
@@ -276,6 +349,14 @@ export class TripsService {
       });
       if (count === 0) {
         throw await this.conflict(tx, membership.workspaceId, tripId);
+      }
+      if (input.destinationsV2 !== undefined) {
+        // Whole-group replacement in the same transaction as the version bump:
+        // either the trip and its route both change, or neither does.
+        await this.repository.replaceDestinations(tx, {
+          tripId,
+          destinations: destinationWriteData(tripId, input.destinationsV2),
+        });
       }
       const updated = await this.repository.findTrip(membership.workspaceId, tripId, tx);
       if (!updated) {
@@ -313,6 +394,9 @@ export class TripsService {
       if (count === 0) {
         throw this.notFound();
       }
+      // The author's delete cascades to the route so a deleted trip never keeps
+      // active destination rows behind.
+      await this.repository.softDeleteDestinations(tx, tripId);
       await this.activities.record(tx, {
         workspaceId: membership.workspaceId,
         tripId,
@@ -366,6 +450,13 @@ export class TripsService {
         createdById: actor.user.id,
         updatedById: actor.user.id,
       });
+      // The copy keeps the full route, not just the deprecated names: a
+      // duplicated trip must still be mappable. `findTrip` already filtered
+      // soft-deleted rows and ordered the group.
+      await this.repository.createDestinations(
+        tx,
+        destinationCopyData(created.id, source.destinationsV2 ?? []),
+      );
       const children = await this.repository.listDuplicateChildren(
         tx,
         membership.workspaceId,
@@ -392,7 +483,7 @@ export class TripsService {
         entityId: created.id,
         metadata: { sourceTripId: tripId },
       });
-      return created;
+      return (await this.repository.findTrip(membership.workspaceId, created.id, tx)) ?? created;
     });
 
     // The copy keeps the source `coverMediaId`, but that asset belongs to the

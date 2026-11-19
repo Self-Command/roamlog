@@ -80,6 +80,9 @@ function build(options: { row?: TripRecord } = {}) {
       return 1;
     }),
     createParticipant: vi.fn(async () => ({})),
+    createDestinations: vi.fn(async () => undefined),
+    replaceDestinations: vi.fn(async () => undefined),
+    softDeleteDestinations: vi.fn(async () => undefined),
     findMedia: vi.fn(async () => null),
     findMediaForCover: vi.fn(async () => []),
     listDuplicateChildren: vi.fn(async () => ({

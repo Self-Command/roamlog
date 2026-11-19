@@ -66,14 +66,21 @@ function membership(role: WorkspaceMembershipAccess["role"] = "owner"): Workspac
 const actor = { user: { id: USER_ID } } as never;
 
 function build() {
+  // `create` re-reads the row inside the transaction so the response carries
+  // the inserted destinations; keep the fake consistent with that contract.
+  let stored = tripRow();
   const repository = {
     transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback({})),
-    findTrip: vi.fn(async () => tripRow()),
-    createTrip: vi.fn(async (_tx: unknown, data: Record<string, unknown>) =>
-      tripRow({ ...data, id: TRIP_ID } as Partial<TripRecord>),
-    ),
+    findTrip: vi.fn(async () => stored),
+    createTrip: vi.fn(async (_tx: unknown, data: Record<string, unknown>) => {
+      stored = tripRow({ ...data, id: TRIP_ID } as Partial<TripRecord>);
+      return stored;
+    }),
     updateTrip: vi.fn(async (_tx: unknown, _args: unknown) => 1),
     createParticipant: vi.fn(async () => ({})),
+    createDestinations: vi.fn(async () => undefined),
+    replaceDestinations: vi.fn(async () => undefined),
+    softDeleteDestinations: vi.fn(async () => undefined),
     findMedia: vi.fn(async () => null),
     findMediaForCover: vi.fn(async () => []),
   };
