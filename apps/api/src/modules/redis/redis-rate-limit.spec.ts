@@ -1,3 +1,5 @@
+import { once } from "node:events";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { startRedisStub } from "../../../../../e2e/live-support/redis-stub.js";
@@ -37,6 +39,12 @@ describe("RedisService fixed-window rate limiting", () => {
     );
 
     try {
+      // The client connects eagerly and `enableOfflineQueue` is off (by design:
+      // a down Redis must fail fast), so wait for the handshake before asserting
+      // that a healthy Redis produces non-degraded counters.
+      if (redis.client.status !== "ready") {
+        await once(redis.client, "ready");
+      }
       for (let count = 1; count <= 10; count += 1) {
         await expect(rateLimits.consume("authMutation", "127.0.0.1")).resolves.toMatchObject({
           allowed: true,

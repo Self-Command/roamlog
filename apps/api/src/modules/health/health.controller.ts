@@ -19,7 +19,9 @@ export class HealthController {
   @Get("ready")
   async ready(@Res({ passthrough: true }) response: Response): Promise<ReadinessResult> {
     const result = await this.readiness.check();
-    response.status(result.status === "ok" ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
+    // Only a hard dependency outage is 503. A Redis outage is `degraded` + 200:
+    // the API still serves, so the instance must stay in the load balancer.
+    response.status(result.status === "unavailable" ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.OK);
     return result;
   }
 }

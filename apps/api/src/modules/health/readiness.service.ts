@@ -14,11 +14,16 @@ export type DependencyStatus = "up" | "down";
 export interface DependencyCheck {
   status: DependencyStatus;
   latencyMs: number;
-  error?: string;
 }
 
 export interface ReadinessResult {
-  status: "ok" | "unavailable";
+  /**
+   * - `ok`          all dependencies up
+   * - `degraded`    only Redis is down: cache/rate-limit/quota/idempotency lose
+   *                 their shared backend, but the API still serves traffic
+   * - `unavailable` database or object storage down: the instance cannot serve
+   */
+  status: "ok" | "degraded" | "unavailable";
   checks: {
     database: DependencyCheck;
     redis: DependencyCheck;
@@ -57,7 +62,8 @@ export class ReadinessService {
       return {
         status: "down",
         latencyMs: Math.round(performance.now() - startedAt),
-        error: "dependency check failed",
+        // No error text: `DependencyHealthSchema` is strict, and provider error
+        // messages must not leak through an unauthenticated endpoint.
       };
     }
   }
@@ -69,10 +75,18 @@ export class ReadinessService {
       this.probe("storage", this.storage.checkHealth()),
     ]);
 
-    const ready = database.status === "up" && redis.status === "up" && storage.status === "up";
+    // Redis is a cache/rate-limit/quota dependency, not a source of truth:
+    // losing it degrades the instance but must keep it in the load balancer.
+    // Database and object storage are hard dependencies, so they stay 503.
+    const hardDependencyDown = database.status === "down" || storage.status === "down";
+    const status: ReadinessResult["status"] = hardDependencyDown
+      ? "unavailable"
+      : redis.status === "up"
+        ? "ok"
+        : "degraded";
 
     return {
-      status: ready ? "ok" : "unavailable",
+      status,
       checks: {
         database,
         redis,

@@ -18,7 +18,11 @@ export const DependencyHealthSchema = z
 
 export const ReadyResponseSchema = z
   .object({
-    status: z.enum(["ok", "degraded"]),
+    // `ok`: every dependency answers. `degraded`: only Redis is down, the API
+    // still serves (HTTP 200). `unavailable`: database or object storage down
+    // (HTTP 503). The API already answered `unavailable`; it is part of the
+    // contract so clients no longer receive an undeclared value.
+    status: z.enum(["ok", "degraded", "unavailable"]),
     checks: z
       .object({
         database: DependencyHealthSchema,

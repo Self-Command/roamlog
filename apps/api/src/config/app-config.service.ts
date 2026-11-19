@@ -76,6 +76,14 @@ export class AppConfigService {
     return this.required("REDIS_PREFIX");
   }
 
+  /**
+   * `REDIS_REQUIRED` (default `false`). Only changes boot behaviour: when true a
+   * deployment refuses to start without Redis. Runtime calls stay fail-open.
+   */
+  get redisRequired(): boolean {
+    return this.required("REDIS_REQUIRED");
+  }
+
   get rateLimitWindowSeconds(): number {
     return this.required("RATE_LIMIT_WINDOW_SECONDS");
   }

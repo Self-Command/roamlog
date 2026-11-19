@@ -223,6 +223,18 @@ const EnvironmentSchema = z
     DATABASE_URL: z.string().min(1),
     REDIS_URL: z.url(),
     REDIS_PREFIX: z.string().min(1).default("roamlog"),
+    /**
+     * Master switch for the Redis failure policy.
+     *
+     * - `false` (default): Redis is treated as best-effort. Cache, rate limit,
+     *   idempotency and quota calls fail open, the API boots and serves degraded
+     *   traffic when Redis is down.
+     * - `true`: the deployment declares Redis part of its baseline; the API
+     *   refuses to boot when Redis is unreachable (`RedisService.onModuleInit`).
+     *   Runtime behaviour stays fail-open on purpose: an outage after boot must
+     *   still not take the API down.
+     */
+    REDIS_REQUIRED: booleanFromEnvironment.default(false),
     RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).max(86_400).default(60),
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(10),
     PUBLIC_SHARE_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(60),

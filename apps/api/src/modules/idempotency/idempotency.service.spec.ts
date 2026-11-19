@@ -27,6 +27,10 @@ class MemoryRedis {
     return true;
   }
 
+  async tryAcquire(key: string, value: string, ttlSeconds: number): Promise<"acquired" | "taken" | "unavailable"> {
+    return (await this.setIfAbsent(key, value, ttlSeconds)) ? "acquired" : "taken";
+  }
+
   async delete(key: string): Promise<void> {
     this.values.delete(key);
     this.ttls.delete(key);
@@ -36,6 +40,7 @@ class MemoryRedis {
 function createLogger(): PinoLoggerService {
   return {
     error: vi.fn(),
+    warn: vi.fn(),
   } as unknown as PinoLoggerService;
 }
 
@@ -70,5 +75,30 @@ describe("IdempotencyService", () => {
     await expect(service.run("exports", "request-1", async () => "retried")).resolves.toBe(
       "retried",
     );
+  });
+
+  it("runs the operation and warns when Redis cannot answer (fail-open, no 500)", async () => {
+    const log = createLogger();
+    // Shape of a Redis outage as seen by the service: reads return "nothing
+    // stored" and the NX acquisition reports that it could not ask Redis.
+    const redis = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+      tryAcquire: vi.fn().mockResolvedValue("unavailable"),
+    };
+    const service = new IdempotencyService(redis as unknown as RedisService, log);
+    const operation = vi.fn().mockResolvedValue({ accepted: true });
+
+    await expect(service.run("exports", "request-1", operation)).resolves.toEqual({
+      accepted: true,
+    });
+    expect(operation).toHaveBeenCalledOnce();
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "idempotency.redis_unavailable", policy: "fail-open" }),
+      "idempotency.degraded",
+    );
+    // The degraded path never invents a conflict.
+    expect(redis.tryAcquire).toHaveBeenCalledOnce();
   });
 });

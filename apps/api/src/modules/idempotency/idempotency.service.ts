@@ -7,9 +7,28 @@ import { RedisService } from "../redis/redis.service.js";
 
 export const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 const PENDING = "__ROAMLOG_IDEMPOTENCY_PENDING__";
+const REDIS_DEGRADED_WARN_THROTTLE_MS = 60_000;
 
+/**
+ * Idempotency keys live in Redis and are **fail-open**.
+ *
+ * Semantics chosen for a Redis outage:
+ * - a read that cannot reach Redis behaves like "no stored result" (operation runs);
+ * - an acquisition that cannot reach Redis is `"unavailable"`, so the operation
+ *   runs once and a warn is logged — we never invent a `409 IN_PROGRESS` for a
+ *   request that is not actually in flight, and never return a 500;
+ * - marker cleanup after a failed operation is best-effort, so a Redis failure
+ *   cannot mask the original error.
+ *
+ * The tradeoff is explicit: during an outage a retried request may execute
+ * twice. That is preferable to taking those endpoints down (exports, admin
+ * operations, AI confirm) for a cache outage, and the duplicate is still
+ * guarded by the database's own constraints.
+ */
 @Injectable()
 export class IdempotencyService {
+  private lastDegradedWarnAt = 0;
+
   constructor(
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
@@ -24,6 +43,7 @@ export class IdempotencyService {
   }
 
   private async read<T>(redisKey: string): Promise<T | undefined> {
+    // `RedisService.get` is fail-open: an outage reads as "nothing stored".
     const stored = await this.redis.get(redisKey);
     if (stored === null) {
       return undefined;
@@ -65,8 +85,16 @@ export class IdempotencyService {
       return existing;
     }
 
-    const acquired = await this.redis.setIfAbsent(redisKey, PENDING, IDEMPOTENCY_TTL_SECONDS);
-    if (!acquired) {
+    const acquisition = await this.redis.tryAcquire(redisKey, PENDING, IDEMPOTENCY_TTL_SECONDS);
+
+    if (acquisition === "unavailable") {
+      // Fail-open: Redis cannot tell us whether this key is in flight. Running
+      // the operation is safer than a phantom conflict or a 500.
+      this.warnDegraded(scope);
+      return operation();
+    }
+
+    if (acquisition === "taken") {
       const concurrentResult = await this.read<T>(redisKey);
       if (concurrentResult !== undefined) {
         return concurrentResult;
@@ -83,11 +111,25 @@ export class IdempotencyService {
       if (serialized === undefined) {
         throw new BadRequestException("Idempotent results must be JSON serializable");
       }
+      // Fail-open write: losing the cached result only allows a replay later.
       await this.redis.set(redisKey, serialized, IDEMPOTENCY_TTL_SECONDS);
       return result;
     } catch (error) {
+      // Best-effort cleanup; `delete` never throws, so the real error surfaces.
       await this.redis.delete(redisKey);
       throw error;
     }
+  }
+
+  private warnDegraded(scope: string): void {
+    const now = Date.now();
+    if (now - this.lastDegradedWarnAt < REDIS_DEGRADED_WARN_THROTTLE_MS) {
+      return;
+    }
+    this.lastDegradedWarnAt = now;
+    this.logger.warn(
+      { event: "idempotency.redis_unavailable", policy: "fail-open", scope },
+      "idempotency.degraded",
+    );
   }
 }

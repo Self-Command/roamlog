@@ -57,6 +57,26 @@ describe("health and readiness", () => {
     expect(JSON.stringify(response.body)).not.toContain("S3 unavailable");
   });
 
+  it("reports degraded, not unavailable, and stays 200 when only Redis is down", async () => {
+    // Redis is a cache/rate-limit/quota backend: the API keeps serving, so the
+    // instance must not be pulled out of the load balancer (R1_REDIS_RESILIENCE).
+    mocks.redis.ping.mockRejectedValueOnce(new Error("Redis connection is closed"));
+
+    const response = await request(app.getHttpServer()).get("/v1/ready").expect(200);
+
+    expect(response.body).toMatchObject({
+      status: "degraded",
+      checks: {
+        database: { status: "up" },
+        redis: { status: "down" },
+        storage: { status: "up" },
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toContain("Redis connection is closed");
+    // The process is still alive and serving liveness.
+    await request(app.getHttpServer()).get("/v1/health").expect(200);
+  });
+
   it("exposes process and HTTP metrics without accepting them as routes", async () => {
     await request(app.getHttpServer()).get("/v1/health").expect(200);
     const response = await request(app.getHttpServer()).get("/v1/metrics").expect(200);
