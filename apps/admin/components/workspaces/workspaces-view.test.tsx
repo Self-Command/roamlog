@@ -10,6 +10,23 @@ import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { sampleUsers } from "../../test/admin-sample-data";
 import { WorkspacesView } from "./workspaces-view";
 
+/**
+ * The view derives capability from the role, so a delete-only operator cannot be
+ * expressed with a real platform role once transfer has its own action. Override
+ * `canPlatform` for the decoupling assertions only; everything else delegates to
+ * the real compiled matrix.
+ */
+const permissionOverrides = vi.hoisted(() => new Map<string, boolean>());
+
+vi.mock("@roamlog/contracts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@roamlog/contracts")>();
+  return {
+    ...actual,
+    canPlatform: (role: string, action: string) =>
+      permissionOverrides.get(action) ?? actual.canPlatform(role, action),
+  };
+});
+
 function renderWithClient(ui: ReactElement) {
   const client = new QueryClient({
     defaultOptions: {
@@ -122,6 +139,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  permissionOverrides.clear();
 });
 
 describe("WorkspacesView", () => {
@@ -267,6 +285,36 @@ describe("WorkspacesView", () => {
     await waitFor(() => {
       expect(updateWorkspace).toHaveBeenCalledWith(workspaceId, { ownerId: editor.id });
     });
+  });
+
+  it("disables ownership transfer for an operator that only has delete", async () => {
+    stubWorkspacePages();
+    permissionOverrides.set("admin:workspaces:delete", true);
+    permissionOverrides.set("admin:workspaces:transfer", false);
+    const user = userEvent.setup();
+
+    renderWithClient(<WorkspacesView role="admin" />);
+    const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
+    await user.click(within(row).getByRole("button", { name: "工作区详情" }));
+    await screen.findByText(editor.name);
+
+    expect(screen.getByRole("button", { name: "转移所有权" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "变更套餐" })).toBeEnabled();
+  });
+
+  it("enables ownership transfer with transfer even when delete is missing", async () => {
+    stubWorkspacePages();
+    permissionOverrides.set("admin:workspaces:delete", false);
+    permissionOverrides.set("admin:workspaces:transfer", true);
+    const user = userEvent.setup();
+
+    renderWithClient(<WorkspacesView role="admin" />);
+    const row = await screen.findByRole("row", { name: /Roamlog Crew/ });
+    await user.click(within(row).getByRole("button", { name: "工作区详情" }));
+    await screen.findByText(editor.name);
+
+    expect(screen.getByRole("button", { name: "转移所有权" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "变更套餐" })).toBeDisabled();
   });
 
   it("exports with active filters and has no disabled export placeholder", async () => {

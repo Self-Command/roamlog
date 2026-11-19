@@ -222,6 +222,7 @@ export function WorkspacesView({
   const canSuspend = canPlatform(role, "admin:workspaces:suspend");
   const canRestore = canPlatform(role, "admin:workspaces:restore");
   const canDelete = canPlatform(role, "admin:workspaces:delete");
+  const canTransfer = canPlatform(role, "admin:workspaces:transfer");
   const canManageContract = canDelete;
   const canExport = canDelete;
   const debouncedQuery = useDebouncedValue(query, 250);
@@ -1151,10 +1152,10 @@ export function WorkspacesView({
                   </Button>
                   <Button
                     variant="ghost"
-                    disabled={!canManageContract || !transferCandidates?.length}
+                    disabled={!canTransfer || !transferCandidates?.length}
                     title={
-                      !canManageContract
-                        ? "仅 admin 及以上可转移所有权（后端动作 admin:workspaces:delete）"
+                      !canTransfer
+                        ? "仅 admin 及以上可转移所有权（后端动作 admin:workspaces:transfer）"
                         : transferCandidates?.length
                           ? "转移给活跃成员"
                           : "需要成员详情中存在其他活跃成员"
