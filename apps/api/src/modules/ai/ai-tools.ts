@@ -24,13 +24,18 @@ import type { AiToolSpec } from "./adapters/adapter.js";
 /** A place the model may reference by id. Coordinates never come from the model. */
 export interface AiPlaceCandidate {
   readonly providerPlaceId: string;
-  readonly provider: "photon" | "local" | null;
+  /** Storable source enum; every search source is now accepted by `Stop`. */
+  readonly provider: Place["provider"];
   readonly name: string;
   readonly country: string;
   readonly countryCode: string;
   readonly lat: number;
   readonly lng: number;
   readonly timeZone: string | null;
+  /** Provider-formatted address, persisted on `Stop.address`. */
+  readonly address: string | null;
+  /** `[west, south, east, north]`, persisted on `Stop.bbox`. */
+  readonly bbox: Place["bbox"];
 }
 
 export interface AiToolContext {
@@ -50,6 +55,8 @@ export interface AiToolOutcome {
 }
 
 const MAX_CANDIDATES = 12;
+/** Mirrors `Stop.address` (`z.string().max(400)`, `VARCHAR(400)`). */
+const MAX_STOP_ADDRESS_LENGTH = 400;
 
 const dateOnly = z.iso.date();
 const uuid = z.uuid({ version: "v7" });
@@ -492,6 +499,8 @@ export class AiToolbox {
       provider: candidate.provider,
       providerPlaceId: candidate.providerPlaceId,
       timeZone: candidate.timeZone,
+      address: storableStopAddress(candidate.address),
+      bbox: candidate.bbox,
       startDate,
       endDate,
       ...(args.notes === undefined ? {} : { notes: args.notes }),
@@ -594,19 +603,29 @@ function toCandidate(place: Place): AiPlaceCandidate[] {
   if (!place.providerPlaceId) {
     return [];
   }
-  // `Stop.provider` only accepts the stored source enum; geoapify results are
-  // stored without a provider rather than mislabelled.
-  const provider = place.provider === "photon" ? "photon" : place.provider === "local" ? "local" : null;
+  // Every search source (`geoapify` included) is storable since 0007, so the
+  // candidate keeps the place's provider verbatim instead of dropping it.
   return [
     {
       providerPlaceId: place.providerPlaceId,
-      provider,
+      provider: place.provider,
       name: place.name,
       country: place.country,
       countryCode: place.countryCode,
       lat: place.lat,
       lng: place.lng,
       timeZone: place.timeZone,
+      address: place.address,
+      bbox: place.bbox,
     },
   ];
+}
+
+/**
+ * `Place.address` allows 500 characters, the `Stop.address` contract and column
+ * 400. An over-long provider address is dropped rather than failing the whole
+ * stop write: the stop still lands with coordinates and the other metadata.
+ */
+function storableStopAddress(address: string | null): string | null {
+  return address !== null && address.length <= MAX_STOP_ADDRESS_LENGTH ? address : null;
 }

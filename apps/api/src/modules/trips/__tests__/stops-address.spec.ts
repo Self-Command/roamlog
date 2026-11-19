@@ -239,3 +239,86 @@ describe("StopsService address and bbox persistence", () => {
     expect(repository.updateStop).not.toHaveBeenCalled();
   });
 });
+
+describe("StopsService provider persistence", () => {
+  it("stores a geoapify provider on create and returns it", async () => {
+    const { service, repository } = build();
+
+    const stop = await service.create(
+      actor,
+      membership(),
+      TRIP_ID,
+      createInput({
+        provider: "geoapify",
+        providerPlaceId: "51e1bdfea47461405994da8b683bb64140f00103f9",
+        address: KYOTO_ADDRESS,
+        bbox: KYOTO_BBOX,
+        timeZone: "Asia/Tokyo",
+      }),
+    );
+
+    const data = repository.createStop.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(data.provider).toBe("geoapify");
+    expect(data.providerPlaceId).toBe("51e1bdfea47461405994da8b683bb64140f00103f9");
+    expect(data.address).toBe(KYOTO_ADDRESS);
+    expect(data.bbox).toEqual(KYOTO_BBOX);
+    expect(stop.provider).toBe("geoapify");
+    expect(stop.providerPlaceId).toBe("51e1bdfea47461405994da8b683bb64140f00103f9");
+  });
+
+  it("stores a geoapify provider on update", async () => {
+    const { service, repository } = build({ row: stopRow({ provider: null }) });
+
+    const stop = await service.update(actor, membership(), STOP_ID, {
+      version: 1,
+      provider: "geoapify",
+    });
+
+    const data = repository.updateStop.mock.calls[0]?.[1].data as Record<string, unknown>;
+    expect(data.provider).toBe("geoapify");
+    expect(stop.provider).toBe("geoapify");
+  });
+
+  it("rejects an unknown provider on create with 422 INVALID_PROVIDER", async () => {
+    const { service, repository } = build();
+
+    const failure = await rejection(
+      service.create(actor, membership(), TRIP_ID, createInput({ provider: "unknown" })),
+    );
+
+    expect(failure.status).toBe(422);
+    expect(failure.body).toMatchObject({
+      code: "INVALID_PROVIDER",
+      errors: [{ field: "provider", code: "INVALID_PROVIDER" }],
+    });
+    expect(repository.createStop).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown provider on update with 422 INVALID_PROVIDER", async () => {
+    const { service, repository } = build();
+
+    const failure = await rejection(
+      service.update(actor, membership(), STOP_ID, { version: 1, provider: "mapbox" }),
+    );
+
+    expect(failure.status).toBe(422);
+    expect(failure.body).toMatchObject({ code: "INVALID_PROVIDER" });
+    expect(repository.updateStop).not.toHaveBeenCalled();
+  });
+
+  it("accepts an explicit null provider as a clear, and omission as unchanged", async () => {
+    const { service, repository } = build();
+
+    await service.update(actor, membership(), STOP_ID, { version: 1, provider: null });
+    const data = repository.updateStop.mock.calls[0]?.[1].data as Record<string, unknown>;
+    expect(data).toHaveProperty("provider", null);
+
+    const second = build();
+    await second.service.update(actor, membership(), STOP_ID, { version: 1, notes: "改备注" });
+    const untouched = second.repository.updateStop.mock.calls[0]?.[1].data as Record<
+      string,
+      unknown
+    >;
+    expect(untouched).not.toHaveProperty("provider");
+  });
+});

@@ -20,6 +20,7 @@ import {
   assertDateRange,
   assertDateWithinTrip,
   assertRawBbox,
+  assertRawProvider,
   assertTripVisible,
   dateOnlyToDate,
 } from "./content-values.js";
@@ -54,9 +55,10 @@ export class StopsService {
     rawInput: unknown,
   ): Promise<Stop> {
     this.permissions.assertCan(membership.role, "stop:create", "stop");
-    // The box is checked on the raw body so a bad one is `422 INVALID_BBOX`
+    // The box and source are checked on the raw body so a bad value is `422`
     // instead of the schema's generic 400.
     assertRawBbox(rawInput, "bbox");
+    assertRawProvider(rawInput, "provider");
     const input = parseRequest(CreateStopRequestSchema, rawInput);
     const startDate = dateOnlyToDate(input.startDate);
     const endDate = dateOnlyToDate(input.endDate);
@@ -108,6 +110,7 @@ export class StopsService {
   ): Promise<Stop> {
     this.permissions.assertCan(membership.role, "stop:update", "stop");
     assertRawBbox(rawInput, "bbox");
+    assertRawProvider(rawInput, "provider");
     const input = parseRequest(UpdateStopRequestSchema, rawInput);
     const current = await this.repository.findStop(membership.workspaceId, stopId);
     if (!current) {

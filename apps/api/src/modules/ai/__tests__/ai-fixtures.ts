@@ -37,21 +37,37 @@ export const KINKAKUJI: AiPlaceCandidate = {
   lat: 35.0394,
   lng: 135.7292,
   timeZone: null,
+  address: "金閣寺, 京都府, 日本",
+  bbox: [135.72, 35.03, 135.74, 35.05],
+};
+
+/** A Geoapify search hit, the source that used to be unstorable on a stop. */
+export const GEOAPIFY_KYOTO: AiPlaceCandidate = {
+  providerPlaceId: "51e1bdfea47461405994da8b683bb64140f00103f9",
+  provider: "geoapify",
+  name: "京都市",
+  country: "日本",
+  countryCode: "JP",
+  lat: 35.0115754,
+  lng: 135.7681441,
+  timeZone: "Asia/Tokyo",
+  address: "京都市, 京都府, 日本",
+  bbox: [135.6081441, 34.8515754, 135.9281441, 35.1715754],
 };
 
 export function placeSearchItems(candidate: AiPlaceCandidate = KINKAKUJI) {
   return [
     {
-      provider: "photon" as const,
+      provider: candidate.provider,
       providerPlaceId: candidate.providerPlaceId,
       name: candidate.name,
-      address: null,
+      address: candidate.address,
       country: candidate.country,
       countryCode: candidate.countryCode,
       lat: candidate.lat,
       lng: candidate.lng,
       timeZone: candidate.timeZone,
-      bbox: null,
+      bbox: candidate.bbox,
       importance: null,
       type: "attraction" as const,
     },

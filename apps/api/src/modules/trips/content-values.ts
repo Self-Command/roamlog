@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { GeoBboxSchema, UuidV7Schema, type GeoBbox, type WorkspaceRole } from "@roamlog/contracts";
+import { GeoBboxSchema, PlaceProviderSchema, UuidV7Schema, type GeoBbox, type WorkspaceRole } from "@roamlog/contracts";
 
 export const UNSPECIFIED_TRIP_ORIGIN = "未填写";
 
@@ -189,6 +189,41 @@ export function assertRawBbox(rawInput: unknown, field = "bbox"): void {
   if (raw.present) {
     assertBbox(raw.value, field);
   }
+}
+
+/**
+ * Rejects a `provider` value outside the stored `PlaceProviderSchema`.
+ *
+ * The enum lives in the contract, but the generic parse mapping reports it as
+ * `400`; a place source the contract does not admit is a business-validation
+ * failure, so it is checked on the raw body first and reported as
+ * `422 INVALID_PROVIDER` for the same reason as `assertBbox`. An absent key
+ * passes (an update keeps the stored provider) and `null` is accepted because
+ * it clears the source.
+ */
+export function assertRawProvider(rawInput: unknown, field = "provider"): void {
+  if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) {
+    return;
+  }
+  const body = rawInput as Record<string, unknown>;
+  if (!(field in body) || body[field] === undefined) {
+    return;
+  }
+  const parsed = PlaceProviderSchema.nullable().safeParse(body[field]);
+  if (parsed.success) {
+    return;
+  }
+  throw new UnprocessableEntityException({
+    code: "INVALID_PROVIDER",
+    message: `provider must be one of ${PlaceProviderSchema.options.join(", ")} or null.`,
+    errors: [
+      {
+        field,
+        code: "INVALID_PROVIDER",
+        message: parsed.error.issues[0]?.message ?? "Unsupported place provider.",
+      },
+    ],
+  });
 }
 
 /**
