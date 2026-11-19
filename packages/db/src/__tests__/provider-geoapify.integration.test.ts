@@ -179,6 +179,9 @@ integration("0007_stop_provider_geoapify against PostgreSQL", () => {
     await applyMigrations(admin, migrationSchema, before);
     await insertLegacyRows(admin);
     await applyMigrations(admin, migrationSchema, ["0007_stop_provider_geoapify"]);
+    // Prisma's generated client knows every column, so bring the schema to
+    // HEAD before reading the legacy row through it.
+    await applyMigrations(admin, migrationSchema, ["0008_report_moderation"]);
     await admin.query(`SET search_path TO "${migrationSchema}"`);
 
     // Existing rows are not rewritten by a constraint-only migration.

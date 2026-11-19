@@ -3,9 +3,11 @@ import type {
   ExpenseParticipant,
   JournalEntry,
   Media,
+  ModerationAction,
   PackingItem,
   PlatformRoleOverride,
   Prisma,
+  Report,
   Trip,
   User,
   Workspace,
@@ -115,6 +117,8 @@ export function makeTrip(overrides: Partial<Trip> = {}): Trip {
     createdAt: fixedNow,
     updatedAt: fixedNow,
     deletedAt: null,
+    moderatedAt: null,
+    moderatedById: null,
     ...overrides,
   };
 }
@@ -148,6 +152,8 @@ export function makeEntry(
     createdAt: fixedNow,
     updatedAt: fixedNow,
     deletedAt: null,
+    moderatedAt: null,
+    moderatedById: null,
     ...overrides,
   };
 }
@@ -275,6 +281,8 @@ export function makeMedia(overrides: Partial<Media> = {}): Media {
     createdAt: fixedNow,
     updatedAt: fixedNow,
     deletedAt: null,
+    moderatedAt: null,
+    moderatedById: null,
     ...overrides,
   };
 }
@@ -288,6 +296,38 @@ export function makePlatformRoleOverride(
     granted: overrides.granted ?? false,
     updatedById: overrides.updatedById ?? nextId("user"),
     updatedAt: fixedNow,
+    createdAt: fixedNow,
+    ...overrides,
+  };
+}
+
+export function makeReport(overrides: Partial<Report> = {}): Report {
+  return {
+    id: overrides.id ?? nextId("report"),
+    workspaceId: overrides.workspaceId ?? nextId("workspace"),
+    targetType: "trip",
+    targetId: overrides.targetId ?? nextId("trip"),
+    reason: "spam",
+    detail: null,
+    reporterId: overrides.reporterId ?? nextId("user"),
+    status: "open",
+    resolvedById: null,
+    resolvedAt: null,
+    resolutionNote: null,
+    createdAt: fixedNow,
+    ...overrides,
+  };
+}
+
+export function makeModerationAction(
+  overrides: Partial<ModerationAction> = {},
+): ModerationAction {
+  return {
+    id: overrides.id ?? nextId("moderation-action"),
+    reportId: overrides.reportId ?? nextId("report"),
+    actorId: overrides.actorId ?? nextId("user"),
+    action: "dismiss",
+    note: null,
     createdAt: fixedNow,
     ...overrides,
   };

@@ -27,16 +27,13 @@ function modelBody(model: string): string {
 }
 
 describe("0005_platform_role_override migration", () => {
-  it("sorts after every existing migration", () => {
-    expect(migrations).toEqual([
-      "0001_init",
-      "0002_two_factor_state",
-      "0003_w0_trip_stop_place_metadata",
-      "0004_system_setting",
-      migrationName,
-      "0006_trip_stop_address_bbox",
-      "0007_stop_provider_geoapify",
-    ]);
+  it("sorts after the migrations it builds on", () => {
+    const index = migrations.indexOf(migrationName);
+    expect(index).toBeGreaterThan(0);
+    for (const earlier of ["0001_init", "0002_two_factor_state", "0003_w0_trip_stop_place_metadata", "0004_system_setting"]) {
+      expect(migrations.indexOf(earlier), earlier).toBeGreaterThanOrEqual(0);
+      expect(migrations.indexOf(earlier), earlier).toBeLessThan(index);
+    }
   });
 
   it("declares the PlatformRoleOverride model as a role/action diff table", () => {

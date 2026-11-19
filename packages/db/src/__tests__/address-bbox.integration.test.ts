@@ -209,6 +209,9 @@ integration("0006_trip_stop_address_bbox against PostgreSQL", () => {
     await applyMigrations(admin, migrationSchema, before);
     await insertLegacyRows(admin);
     await applyMigrations(admin, migrationSchema, ["0006_trip_stop_address_bbox"]);
+    // Prisma's generated client knows every column, so bring the schema to
+    // HEAD before reading the legacy row through it.
+    await applyMigrations(admin, migrationSchema, ["0008_report_moderation"]);
 
     const trip = await admin.query(
       `SELECT "origin", "originAddress", "originBbox" FROM "${migrationSchema}"."Trip" WHERE "id" = $1`,
