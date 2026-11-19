@@ -9,6 +9,7 @@ import type {
   Prisma,
   Report,
   Trip,
+  TripDestination,
   User,
   Workspace,
   WorkspaceMember,
@@ -119,6 +120,29 @@ export function makeTrip(overrides: Partial<Trip> = {}): Trip {
     deletedAt: null,
     moderatedAt: null,
     moderatedById: null,
+    ...overrides,
+  };
+}
+
+export function makeTripDestination(
+  overrides: Partial<TripDestination> = {},
+): TripDestination {
+  return {
+    id: overrides.id ?? nextId("trip-destination"),
+    tripId: overrides.tripId ?? nextId("trip"),
+    name: "Factory Destination",
+    provider: null,
+    providerPlaceId: null,
+    address: null,
+    country: null,
+    countryCode: null,
+    lat: null,
+    lng: null,
+    timeZone: null,
+    bbox: null,
+    order: 0,
+    createdAt: fixedNow,
+    deletedAt: null,
     ...overrides,
   };
 }

@@ -22,6 +22,7 @@ const requiredModels = [
   "WorkspaceMember",
   "Invitation",
   "Trip",
+  "TripDestination",
   "TripParticipant",
   "Stop",
   "JournalEntry",
@@ -161,6 +162,28 @@ describe("Prisma schema", () => {
         /workspace\s+Workspace\s+@relation/,
       );
     }
+  });
+
+  it("stores structured trip destinations as ordered soft-deletable rows", () => {
+    const body = modelBody("TripDestination");
+    expect(body).toMatch(/tripId\s+String\s+@db\.Uuid/);
+    expect(body).toMatch(/name\s+String\s+@db\.VarChar\(160\)/);
+    expect(body).toMatch(/address\s+String\?\s+@db\.VarChar\(400\)/);
+    expect(body).toMatch(/countryCode\s+String\?\s+@db\.VarChar\(2\)/);
+    expect(body).toMatch(/bbox\s+Json\?\s+@db\.JsonB/);
+    expect(body).toMatch(/order\s+Int/);
+    expect(body).toMatch(/deletedAt\s+DateTime\?/);
+    expect(body).toMatch(/@@index\(\[tripId,\s*order\]\)/);
+    // The active-order uniqueness is a partial index (migration-only); a plain
+    // `@@unique([tripId, order])` would block replacing a soft-deleted row.
+    expect(schema).not.toMatch(/@@unique\(\[tripId,\s*order\]\)/);
+    expect(
+      readFileSync(
+        fileURLToPath(new URL("../../prisma/migrations/0010_trip_destinations/migration.sql", import.meta.url)),
+        "utf8",
+      ),
+    ).toMatch(/CREATE UNIQUE INDEX[\s\S]*WHERE "deletedAt" IS NULL/);
+    expect(modelBody("Trip")).toMatch(/destinationsV2\s+TripDestination\[\]/);
   });
 
   it("declares workspace, ordering, token, and compound uniqueness constraints", () => {

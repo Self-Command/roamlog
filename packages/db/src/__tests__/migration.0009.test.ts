@@ -17,8 +17,8 @@ const sql = rawSql
 const schema = readFileSync(fileURLToPath(new URL("../../prisma/schema.prisma", import.meta.url)), "utf8");
 
 describe("0009_media_motion migration", () => {
-  it("sorts after 0008 and is the newest migration", () => {
-    expect(migrations.at(-1)).toBe(migrationName);
+  it("sorts after 0008 (0010 superseded it as the newest migration)", () => {
+    expect(migrations.indexOf(migrationName)).toBe(8);
     expect(migrations.slice(0, 8)).toEqual([
       "0001_init",
       "0002_two_factor_state",

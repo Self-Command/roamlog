@@ -369,6 +369,9 @@ model Trip {
   originAddress     String?           @db.VarChar(400)
   originBbox        Json?             @db.JsonB
   timeZone          String?
+  /// @deprecated Structured destinations live in `TripDestination` since 0010;
+  /// this names-only array is kept for older clients and is mirrored by the API
+  /// on every structured write. Read paths prefer `destinationsV2`.
   destinations      String[]          @default([])
   countryCodes      String[]          @default([])
   tags              String[]          @default([])
@@ -393,6 +396,9 @@ model Trip {
   updatedBy         User              @relation("TripUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
   participants      TripParticipant[]
   stops             Stop[]
+  /// Structured destinations, ordered by `order`; soft-deleted rows stay for
+  /// history and are filtered out by readers.
+  destinationsV2    TripDestination[]
   entries           JournalEntry[]
   itineraryItems    ItineraryItem[]
   comments          Comment[]
@@ -407,6 +413,31 @@ model Trip {
   @@index([workspaceId, status, startDate])
   @@index([workspaceId, createdAt])
   @@index([workspaceId, visibility])
+}
+
+model TripDestination {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  tripId          String    @db.Uuid
+  name            String    @db.VarChar(160)
+  provider        String?
+  providerPlaceId String?
+  address         String?   @db.VarChar(400)
+  country         String?
+  countryCode     String?   @db.VarChar(2)
+  lat             Float?
+  lng             Float?
+  timeZone        String?
+  bbox            Json?     @db.JsonB
+  order           Int
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  deletedAt       DateTime? @db.Timestamptz(3)
+  trip            Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  /// Active-order uniqueness is a *partial* unique index
+  /// (`WHERE "deletedAt" IS NULL`, migration 0010): a plain `@@unique([tripId,
+  /// order])` would let a soft-deleted row block the replacement row that the
+  /// "whole group replace" write inserts at the same position.
+  @@index([tripId, order])
 }
 
 model TripParticipant {
