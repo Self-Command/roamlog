@@ -223,7 +223,7 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
             </h2>
           </div>
           <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-            live API
+            {members.length} 位成员
           </span>
         </div>
 
