@@ -30,6 +30,38 @@ export const SETTING_FIELD_CONSUMPTION: Readonly<Record<string, SettingFieldCons
     "media.livePhotoEnabled": { status: "unwired", label: "未接入（不生效）" },
     "general.registrationEnabled": { status: "unwired", label: "未接入（不生效）" },
     "seo.sitemapEnabled": { status: "unwired", label: "未接入（不生效）" },
+    // All seven mail keys are read by `MailSettingsConsumer` in the API. The
+    // worker still builds its transport from `EMAIL_*`/`SMTP_*`, so a stored
+    // value never reaches worker-sent mail (export notifications). Each key
+    // carries that limit instead of letting a green group badge imply it.
+    "mail.provider": {
+      status: "backend",
+      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+    },
+    "mail.from": {
+      status: "backend",
+      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+    },
+    "mail.resendApiKey": {
+      status: "backend",
+      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+    },
+    "mail.smtpHost": {
+      status: "backend",
+      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+    },
+    "mail.smtpPort": {
+      status: "backend",
+      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+    },
+    "mail.smtpUser": {
+      status: "backend",
+      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+    },
+    "mail.smtpPassword": {
+      status: "backend",
+      label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+    },
     "places.provider": { status: "backend", label: "后端已消费" },
     "places.apiKey": { status: "backend", label: "后端已消费" },
     "places.lang": { status: "backend", label: "后端已消费" },

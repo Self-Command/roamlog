@@ -348,16 +348,24 @@ describe("SettingsConsole", () => {
     ).toBeInTheDocument();
   });
 
-  it("marks an unwired group as a warning and never as consumed", async () => {
+  it("marks the wired mail group as backend and keeps the worker limit visible", async () => {
     const user = userEvent.setup();
     await renderConsole("mail");
 
     expect(screen.getByRole("heading", { name: "Mail" })).toBeInTheDocument();
-    const status = screen.getByText("未接入（不生效，仍读环境变量）");
-    expect(status).toHaveAttribute("data-consumption-status", "unwired");
-    expect(status.className).toContain("text-accent-yellow");
-    expect(status.className).not.toContain("text-accent-green");
-    expect(status.textContent).toContain("不生效");
+    const status = screen.getByText("后端已消费，worker 仍读环境变量");
+    expect(status).toHaveAttribute("data-consumption-status", "backend");
+    expect(status.className).toContain("text-accent-blue");
+    expect(status.className).not.toContain("text-accent-yellow");
+    expect(status.textContent).not.toContain("不生效，仍读环境变量");
+
+    for (const label of ["Mail provider", "SMTP port", "Resend API key", "SMTP password"]) {
+      const field = screen.getByRole("article", { name: `设置项 ${label}` });
+      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
+        "后端已消费",
+      );
+      expect(within(field).getByText(/worker 导出通知不生效/)).toBeInTheDocument();
+    }
     expect(screen.getByLabelText("SMTP port")).toHaveValue(587);
 
     await user.click(screen.getByRole("link", { name: /General/ }));

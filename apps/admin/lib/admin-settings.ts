@@ -44,18 +44,26 @@ export interface SettingsConsumption {
  * - `unwired`: stored in the database only; changing it does not change
  *   behavior, because the runtime still reads an environment variable.
  *
- * `mail` and `storage` are `unwired` until their runtime owners actually
- * consume `SettingsService`. `limits` is partially wired: the search allowance
- * is enforced by the place-search limiter, while the presign allowance is still
- * read from the environment, so its group badge stays yellow with the split
- * spelled out; see `settings-consumption.ts` for field-level exceptions.
+ * `mail` and `storage` are `backend`: `MailSettingsConsumer` and
+ * `StorageSettingsConsumer` read `SettingsService.getGroup(...)` at runtime,
+ * so a stored value wins over the environment in the API. Both labels carry
+ * their limits instead of hiding them: the worker still reads `EMAIL_*` / `S3_*`
+ * (so `mail.*` does not reach worker-sent messages), and a storage save runs a
+ * connectivity probe before it persists. `limits` is partially wired: the
+ * search allowance is enforced by the place-search limiter, while the presign
+ * allowance is still read from the environment, so its group badge stays
+ * yellow with the split spelled out; see `settings-consumption.ts` for
+ * field-level exceptions.
  */
 export const SETTINGS_CONSUMPTION: Record<SystemSettingGroup, SettingsConsumption> = {
   general: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
   seo: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
   theme: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
-  mail: { status: "unwired", label: "未接入（不生效，仍读环境变量）" },
-  storage: { status: "unwired", label: "未接入（不生效，仍读环境变量）" },
+  mail: { status: "backend", label: "后端已消费，worker 仍读环境变量" },
+  storage: {
+    status: "backend",
+    label: "后端已消费（API 运行期读取；保存前会跑连通性探测）",
+  },
   media: {
     status: "frontend",
     label:

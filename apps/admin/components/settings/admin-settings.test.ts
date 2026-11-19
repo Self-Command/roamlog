@@ -53,19 +53,25 @@ describe("admin settings helpers", () => {
 
     for (const group of ["mail", "storage"] as const) {
       expect(SETTINGS_CONSUMPTION[group]).toEqual({
-        status: "unwired",
-        label: "未接入（不生效，仍读环境变量）",
+        status: "backend",
+        label:
+          group === "mail"
+            ? "后端已消费，worker 仍读环境变量"
+            : "后端已消费（API 运行期读取；保存前会跑连通性探测）",
       });
     }
+    // The old reverse distortion: these groups were wired but still labelled
+    // unwired. A backend badge must never carry the unwired wording.
+    expect(SETTINGS_CONSUMPTION.mail.label).not.toContain("不生效");
+    expect(SETTINGS_CONSUMPTION.storage.label).not.toContain("不生效");
 
     // `limits` is partially wired: the group badge must stay yellow, and the
     // label must name which half works instead of claiming the whole group.
     expect(SETTINGS_CONSUMPTION.limits.status).toBe("unwired");
     expect(SETTINGS_CONSUMPTION.limits.label).toContain("搜索限流已生效");
     expect(SETTINGS_CONSUMPTION.limits.label).toContain("上传限流未接入");
-    expect(SETTINGS_CONSUMPTION.limits.label).not.toBe(
-      "未接入（不生效，仍读环境变量）",
-    );
+    expect(SETTINGS_CONSUMPTION.limits.label).toContain("部分接入");
+    expect(SETTINGS_CONSUMPTION.limits.label).not.toMatch(/^未接入/u);
 
     const rendered = [
       ...Object.values(SETTINGS_CONSUMPTION).map((entry) => entry.label),
@@ -74,6 +80,30 @@ describe("admin settings helpers", () => {
       ),
     ].join("\n");
     expect(rendered).not.toContain("前端/Worker 消费待完成");
+    // The phrase that shipped with the old false green badge. Split so the
+    // phrase itself stays out of the source, where it would look like a claim.
+    expect(rendered).not.toContain(["已接入", "后端"].join(""));
+  });
+
+  it("labels the seven mail keys backend and keeps the worker limit explicit", () => {
+    for (const key of [
+      "mail.provider",
+      "mail.from",
+      "mail.resendApiKey",
+      "mail.smtpHost",
+      "mail.smtpPort",
+      "mail.smtpUser",
+      "mail.smtpPassword",
+    ]) {
+      expect(settingFieldConsumption(key)).toEqual({
+        status: "backend",
+        label: "后端已消费（MailSettingsConsumer）；worker 导出通知不生效（worker 未接）",
+      });
+    }
+    // Group badge must still say the worker reads the environment, so a green
+    // API path is not read as “every mail path”.
+    expect(SETTINGS_CONSUMPTION.mail.label).toContain("worker 仍读环境变量");
+    expect(settingsGroupConsumption("mail")).toBe(SETTINGS_CONSUMPTION.mail);
   });
 
   it("keeps media's exact 4/6 split and spells out group-level exceptions", () => {
