@@ -341,10 +341,14 @@ export class AdminWorkspacesService {
       assertAdminAction(actor, "admin:workspaces:delete");
     }
 
-    if (body.plan !== undefined || body.ownerId !== undefined) {
-      // Contracts expose no dedicated plan/ownership action for platform admins.
-      // These operations are therefore gated by the operator-level Workspace action.
+    if (body.plan !== undefined) {
       assertAdminAction(actor, "admin:workspaces:delete");
+    }
+
+    if (body.ownerId !== undefined) {
+      // Ownership transfer is a distinct, higher-risk operation: it must not be
+      // reachable with the delete capability alone.
+      assertAdminAction(actor, "admin:workspaces:transfer");
     }
   }
 

@@ -5,6 +5,7 @@ import { AdminWorkspacesService } from "../admin-workspaces.service.js";
 import {
   NOW,
   USER_ADMIN_ID,
+  USER_EDITOR_ID,
   USER_OWNER_ID,
   WORKSPACE_A_ID,
   makeActor,
@@ -187,6 +188,98 @@ describe("AdminWorkspacesService", () => {
 
     expect(result.ownerId).toBe(USER_ADMIN_ID);
     expect(tx.workspaceMember.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows an actor with the transfer action but without delete to transfer ownership", async () => {
+    const { prisma, service } = setup();
+    prisma.client.workspace.findUnique.mockResolvedValue(workspaceRecord());
+    const tx = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: USER_EDITOR_ID,
+          status: "active",
+          deletedAt: null,
+        }),
+      },
+      workspaceMember: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValueOnce({ id: "member-owner", role: "owner" })
+          .mockResolvedValueOnce({ id: "member-target", role: "editor" }),
+        update: vi.fn(),
+      },
+      workspace: {
+        update: vi.fn().mockResolvedValue(workspaceRecord({ ownerId: USER_EDITOR_ID })),
+      },
+    };
+    prisma.client.$transaction.mockImplementation(async (callback: (value: unknown) => unknown) =>
+      callback(tx),
+    );
+    prisma.client.workspaceMember.count.mockResolvedValue(2);
+    prisma.client.trip.count.mockResolvedValue(0);
+    prisma.client.journalEntry.count.mockResolvedValue(0);
+    prisma.client.user.findUnique.mockResolvedValue({
+      id: USER_EDITOR_ID,
+      name: "Editor",
+      email: "editor@roamlog.test",
+      image: null,
+    });
+
+    const result = await service.update(
+      {
+        ...makeActor(USER_ADMIN_ID, { platformRole: "admin" }),
+        // Effective set after an override revoked delete for this actor.
+        platformActions: new Set(["admin:workspaces:read", "admin:workspaces:transfer"]),
+      },
+      WORKSPACE_A_ID,
+      { ownerId: USER_EDITOR_ID },
+    );
+
+    expect(result.ownerId).toBe(USER_EDITOR_ID);
+    expect(tx.workspaceMember.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects ownership transfer from an actor that only has the delete action", async () => {
+    const { prisma, service } = setup();
+    prisma.client.workspace.findUnique.mockResolvedValue(workspaceRecord());
+
+    await expect(
+      service.update(
+        {
+          ...makeActor(USER_ADMIN_ID, { platformRole: "support" }),
+          // Simulates the permission matrix granting delete but not transfer.
+          platformActions: new Set(["admin:workspaces:read", "admin:workspaces:delete"]),
+        },
+        WORKSPACE_A_ID,
+        { ownerId: USER_EDITOR_ID },
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: { code: "ADMIN_ACTION_FORBIDDEN" },
+    });
+
+    expect(prisma.client.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps plan changes on the delete action rather than transfer", async () => {
+    const { prisma, service } = setup();
+    prisma.client.workspace.findUnique.mockResolvedValue(workspaceRecord());
+
+    await expect(
+      service.update(
+        {
+          ...makeActor(USER_ADMIN_ID, { platformRole: "admin" }),
+          platformActions: new Set(["admin:workspaces:read", "admin:workspaces:transfer"]),
+        },
+        WORKSPACE_A_ID,
+        { plan: "pro" },
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: { code: "ADMIN_ACTION_FORBIDDEN" },
+    });
+
+    expect(prisma.client.$transaction).not.toHaveBeenCalled();
   });
 
   it("returns 404 for a missing Workspace", async () => {

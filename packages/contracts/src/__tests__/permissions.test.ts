@@ -6,6 +6,7 @@ import {
   PLATFORM_ROLE_ACTIONS,
   can,
   canPlatform,
+  isGrantableAdminAction,
 } from "../permissions";
 
 describe("workspace permission matrix", () => {
@@ -93,6 +94,21 @@ describe("platform permission matrix", () => {
       expect(canPlatform("support", action)).toBe(false);
       expect(canPlatform("analyst", action)).toBe(false);
       expect(canPlatform("user", action)).toBe(false);
+    }
+  });
+
+  it("separates ownership transfer from workspace deletion without changing who can do it", () => {
+    // The action exists and is real, but its semantics are split from delete.
+    expect(ADMIN_ACTIONS).toContain("admin:workspaces:transfer");
+    expect(isGrantableAdminAction("admin:workspaces:transfer")).toBe(false);
+    expect(NON_GRANTABLE_ADMIN_ACTIONS).toContain("admin:workspaces:transfer");
+
+    // Deliberate temporary invariant: the same role set keeps both capabilities,
+    // so this change separates the checks without widening or narrowing access.
+    for (const role of ["user", "support", "analyst", "admin", "super_admin"] as const) {
+      expect(canPlatform(role, "admin:workspaces:transfer")).toBe(
+        canPlatform(role, "admin:workspaces:delete"),
+      );
     }
   });
 
