@@ -23,6 +23,8 @@ const tripDefaults = {
   originLat: null,
   originLng: null,
   originCountryCode: null,
+  originAddress: null,
+  originBbox: null,
   timeZone: null,
   visibility: "workspace" as const,
   favorite: false,
