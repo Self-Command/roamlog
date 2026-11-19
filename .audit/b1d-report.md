@@ -17,8 +17,7 @@
 - `apps/web/app/layout.tsx`
 - `apps/web/lib/settings.test.ts`
 - `apps/web/lib/layout-theme.test.ts`
-- `.audit/b1d-report.md`（本文件）
-- `.audit/b1d-public-settings.json`（真实接口响应证据，仅公开值）
+- `.audit/b1d-report.md`（本文件，内嵌真实接口响应，仅公开值）
 
 未触碰其它 Agent 的并行目录（admin/settings、users、places、admin API、permissions、db、media/image/trip-form）。
 
@@ -175,8 +174,7 @@ $ eslint -c ../../eslint.config.mjs .
 
 ### 5) 真实生效验证（API 4000 / web dev 3000 均在运行）
 
-`curl http://127.0.0.1:4000/v1/public/settings` 原始响应（已保存到
-`.audit/b1d-public-settings.json`）：
+`curl http://127.0.0.1:4000/v1/public/settings` 原始响应：
 
 ```json
 {"settings":{"site.title":"Roamlog 验收","site.description":"A collaborative travel journal for the trips you take together.","general.defaultLanguage":"zh-CN","general.defaultTimeZone":"Asia/Shanghai","seo.titleTemplate":"%s · Roamlog","seo.descriptionTemplate":"Plan trips, keep a journal, and remember every stop together.","seo.ogImageUrl":null,"seo.robots":"index,follow","theme.accent":"white","theme.defaultMode":"system","theme.loginTagline":"Every trip deserves a memory."},"generatedAt":"2026-11-19T05:31:22.203Z"}
@@ -254,8 +252,8 @@ absent  general.registrationEnabled
 2. 站点级 Open Graph title 在默认配置下是 `Roamlog · Roamlog`（`site.title="Roamlog"` 套
    `%s · Roamlog`）。这是 title 模板语义的直接结果，不是 bug，但视觉上重复；可以在后续把
    首页改为 `title.absolute` 或让运营把模板改成 `%s`。
-3. 运行中的 4000/3000 属于并行环境，若被其它任务重启，真实生效验证需重跑；证据已落盘
-   `.audit/b1d-public-settings.json`（只含公开值）。
+3. 运行中的 4000/3000 属于并行环境，若被其它任务重启，真实生效验证需重跑；原始响应与
+   HTML 摘要已内嵌在上文（只含公开值）。
 
 ## 未覆盖项
 
