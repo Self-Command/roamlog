@@ -1,4 +1,5 @@
 import type { INestApplication } from "@nestjs/common";
+import { HealthResponseSchema } from "@roamlog/contracts";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -19,7 +20,19 @@ describe("health and readiness", () => {
   it("returns liveness without touching dependencies", async () => {
     const response = await request(app.getHttpServer()).get("/v1/health").expect(200);
 
-    expect(response.body).toEqual({ status: "ok" });
+    // The contract validates the implementation, not the other way round:
+    // `HealthResponseSchema` is `.strict()` and requires version/uptimeSeconds.
+    const parsed = HealthResponseSchema.safeParse(response.body);
+    if (!parsed.success) {
+      throw new Error(
+        `/v1/health does not match HealthResponseSchema: ${JSON.stringify(parsed.error.issues)}`,
+      );
+    }
+    expect(parsed.data).toEqual(response.body);
+    expect(response.body).toMatchObject({ status: "ok" });
+    expect(response.body.version).toBeTypeOf("string");
+    expect(response.body.uptimeSeconds).toBeGreaterThanOrEqual(0);
+
     expect(mocks.prisma.healthCheck).not.toHaveBeenCalled();
     expect(mocks.redis.ping).not.toHaveBeenCalled();
     expect(mocks.storage.checkHealth).not.toHaveBeenCalled();

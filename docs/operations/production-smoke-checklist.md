@@ -30,7 +30,11 @@ reason.
 - [ ] `GET /admin` and `/admin/login` return the Admin app.
 - [ ] An Admin static asset under `/admin-assets/_next/...` returns `200` with
       the expected CSS/JS content type.
-- [ ] `GET /v1/health` returns `{"status":"ok"}`.
+- [ ] `GET /v1/health` returns `200` with
+      `{"status":"ok","version":"<semver>","uptimeSeconds":<int>}`. It must
+      parse as `HealthResponseSchema` (`.strict()`, all three fields required);
+      a bare `{"status":"ok"}` means the deployed build is older than the
+      contract.
 - [ ] `GET /v1/ready` returns `200` with database, Redis, and storage `up`.
 - [ ] `GET /v1/metrics` returns `404` at the public ingress.
 - [ ] `/v1/ws` completes an authenticated Socket.IO/WebSocket upgrade; a

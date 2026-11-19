@@ -250,3 +250,162 @@ NODE_OPTIONS="--require $(cygpath -w /tmp/roamlog-hardening/signal-probe.cjs)" \
 NODE_OPTIONS="--require $(cygpath -w /tmp/roamlog-hardening/rejection-probe.cjs)" \
   PROBE_DELAY_MS=8000 PROBE_COUNT=10 API_PORT=4104 node --import tsx src/main.ts
 ```
+
+---
+
+# 第二轮追加任务：health 契约闭合 + guard→metrics + 平台限制入档
+
+状态: **DONE**（4000 端口复验受并行 Agent 进行中改动阻塞，已记录并给出替代证据）
+授权: `apps/api/src/modules/health/**`、metrics 模块、`packages/contracts/src/api/health.ts`（必要时）、对应测试。
+
+## 授权路径与实际路径差异
+
+父 Agent 授权的是 `apps/api/src/modules/metrics/**`；本仓指标模块实际位于
+`apps/api/src/modules/observability/**`（`metrics.service.ts` / `metrics.controller.ts` /
+`observability.module.ts`）。按同一意图修改 observability 下的文件，未新建重复模块。
+
+## A. `/v1/health` 契约与实现对齐（选择 (a)）
+
+**判断：选 (a)，实现追上契约，而非放松契约。** 理由：
+
+1. liveness 报版本与运行时长是运维刚需（发布核对、重启检测）；
+2. `HealthResponseSchema` 已 `.strict()` 且三字段必填，放松成只含 `status` 会让
+   `packages/api-client` 的生成类型、OpenAPI 和所有按契约解析的客户端一起退化；
+3. 改实现只动一个 controller，且类型用 `HealthResponse` 后编译期就能阻止再次漂移；
+4. 放松契约属于“为了让测试变绿而改标准”，本仓 R1 报告已明确反对这种处理方式。
+
+实现（`apps/api/src/modules/health/health.controller.ts`）：
+
+- `health(): HealthResponse` 返回 `{ status: "ok", version, uptimeSeconds }`；
+- `version` 运行时读 `apps/api/package.json`：`new URL("../../../package.json", import.meta.url)`，
+  `src` 与 `dist` 的目录深度一致都成立；读取/解析失败回落 `"0.0.0"`，liveness 不依赖文件系统；
+- `uptimeSeconds = Math.floor(process.uptime())`（schema 要求 int ≥ 0）。
+
+**没有修改 `packages/contracts/src/api/health.ts`，因此不需要 `contracts:generate`。**
+如果后续要改该文件，请由根 Agent 串行执行生成。
+
+测试：`apps/api/test/health.e2e-spec.ts` 第一个用例改为契约自校验
+（`HealthResponseSchema.safeParse(response.body)`，并断言 `parsed.data` 与 body 全等）。
+
+### 契约自校验 curl 原始输出（新代码真实进程）
+
+```text
+$ curl -s http://127.0.0.1:4106/v1/health
+{"status":"ok","version":"0.0.0","uptimeSeconds":29}
+
+$ curl -s -o /tmp/roamlog-hardening/health.json -w "HTTP %{http_code}\n" http://127.0.0.1:4106/v1/health
+HTTP 200
+
+$ node --import tsx /tmp/roamlog-hardening/validate-health.mjs /tmp/roamlog-hardening/health.json
+body = {"status":"ok","version":"0.0.0","uptimeSeconds":29}
+HealthResponseSchema.safeParse.success = true
+validator-exit:0
+```
+
+校验脚本导入的是**契约源文件本身**（`packages/contracts/src/api/health.ts` 的
+`HealthResponseSchema`），不是手写字段检查。
+
+### 端口 4000 复验的状态（重要）
+
+本轮 `15:06` 与 `15:0x` 两次在 4000 启动新代码时，`startup.stage modules` 失败：
+
+```text
+SyntaxError: The requested module './ai.settings.js' does not provide an export named 'AI_SETTINGS'
+{"event":"startup.stage","stage":"modules","status":"failed","durationMs":424,...}
+{"event":"startup.failed","stage":"modules","startupMs":436,...}
+EXIT:1
+```
+
+`apps/api/src/modules/ai/{ai.settings.ts,ai-quota.service.ts}` 此刻正被并行 AI Agent 修改
+（mtime 15:07:37；`ai.settings.ts` 已改为 `AI_SETTINGS_SOURCE`，`ai-quota.service.ts` 仍导入
+`AI_SETTINGS`）。这是**进行中改动的模块加载错误**，不是 health/metrics 变更；进程按设计在
+`modules` 阶段 fatal + exit 1。等该 Agent 落地后，同一命令即可在 4000 复验；本报告若再次运行
+到新代码，请看最后一节“4000 复验结果”是否已补上。
+
+## B. guard 计数接 Prometheus
+
+- `ProcessGuardSnapshot` 增加 `uncaughtExceptions`；`handleUncaughtException` 累加。
+- `process-guards.ts` 增加 active 注册：`install()` 设置、`uninstall()` 清理；
+  指标侧通过 `activeProcessGuardSnapshot()` 拉取。guard 不依赖 Nest DI，Nest 侧不反向导入
+  run-api。
+- `MetricsService` 新增 3 个 Gauge（`modules/observability/metrics.service.ts`）：
+  - `roamlog_unhandled_rejections_total`
+  - `roamlog_uncaught_exceptions_total`
+  - `roamlog_process_degraded`（0/1）
+  在 `render()` 时刷新；没有安装 guard 的进程（e2e 的 Nest app）报 0。
+- 新测试 `apps/api/src/modules/observability/__tests__/metrics-process-guards.spec.ts`（3 个用例）：
+  未装 guard → 0；触发一次 rejection → 1/0/1；触发 uncaughtException → 1。
+
+真实进程 `/v1/metrics`（4106，探针已触发 1 次未捕获拒绝）：
+
+```text
+$ curl -s http://127.0.0.1:4106/v1/metrics | grep -E "roamlog_(unhandled_rejections|uncaught_exceptions|process_degraded)"
+# HELP roamlog_unhandled_rejections_total Unhandled promise rejections recorded by the process guard
+# TYPE roamlog_unhandled_rejections_total gauge
+roamlog_unhandled_rejections_total 1
+# HELP roamlog_uncaught_exceptions_total Uncaught exceptions recorded by the process guard
+# TYPE roamlog_uncaught_exceptions_total gauge
+roamlog_uncaught_exceptions_total 0
+# HELP roamlog_process_degraded 1 when the process guard recorded an unhandled rejection or uncaught exception
+# TYPE roamlog_process_degraded gauge
+roamlog_process_degraded 1
+```
+
+## C. 平台限制入档（避免 CI 误判）
+
+- **Windows / MSYS**：`kill -TERM` / `kill -INT` 对原生 Node 进程是**硬终止**，不会触发
+  `process.on("SIGTERM"/"SIGINT")`。实测：
+  - `kill -INT` → `EXIT:130`（128+2），无 `shutdown.*` 日志；
+  - `kill -TERM` → `EXIT:143`（128+15），无 `shutdown.*` 日志（本轮 4106 停止时再次复现）。
+  因此优雅退出的证据用**进程内** `process.emit("SIGTERM", "SIGTERM")` 探针
+  （`%TEMP%\roamlog-hardening\signal-probe.cjs`，仓库外，`NODE_OPTIONS=--require` 注入）。
+- **Linux / 容器**：预期真实信号 → `shutdown.start` → `shutdown.complete` → `exit 0`。
+  CI 若在 Windows 上看到 130/143，那是**平台行为**，不应判为优雅退出回归；只有在 Linux
+  runner 上看到非 0 才是回归。
+- 对应文档同步：`docs/operations/production-smoke-checklist.md` 的 liveness 期望值已更新为
+  `{"status":"ok","version":"<semver>","uptimeSeconds":<int>}`，并注明裸 `{"status":"ok"}`
+  代表部署的是旧构建。
+
+## 本轮验证
+
+```text
+$ pnpm --filter @roamlog/api exec vitest run src/common src/bootstrap src/main src/modules/observability test/health
+ ✓ test/health.e2e-spec.ts (6 tests)
+ ✓ src/bootstrap/__tests__/shutdown.spec.ts (10)
+ ✓ src/common/__tests__/process-guards.spec.ts (12)
+ ✓ src/modules/observability/__tests__/metrics-process-guards.spec.ts (3)
+ ✓ （其余 common 5 个文件）
+ Test Files  10 passed (10)      Tests  73 passed (73)
+
+$ npx tsc --noEmit 2>&1 | grep -E "src/(bootstrap|common|modules/health|modules/observability)|test/health"
+NO ERRORS IN CHANGED FILES
+```
+
+未覆盖：`/v1/metrics` 的 guard Gauge 只在单测 + 4106 真实进程验证；4000 的最终复验见下一节。
+
+## 4000 复验结果（父 Agent 指定端口）
+
+4000 由并行 Agent 的 live E2E harness 重启（`e2e/live-support/start-api.ts`，它直接
+`import("../../apps/api/src/main.js")`），因此自动带上本轮新代码；未杀该进程，直接在其上复验：
+
+```text
+$ curl -s http://127.0.0.1:4000/v1/health
+HTTP 200
+{"status":"ok","version":"0.0.0","uptimeSeconds":97}
+
+$ node --import tsx /tmp/roamlog-hardening/validate-health.mjs /tmp/roamlog-hardening/health-4000.json
+body = {"status":"ok","version":"0.0.0","uptimeSeconds":97}
+HealthResponseSchema.safeParse.success = true
+validator-exit:0
+
+$ curl -s http://127.0.0.1:4000/v1/metrics | grep -E "^roamlog_(unhandled_rejections|uncaught_exceptions|process_degraded)"
+roamlog_unhandled_rejections_total 0
+roamlog_uncaught_exceptions_total 0
+roamlog_process_degraded 0
+```
+
+上文两次 `modules` 阶段失败发生在该 harness 重启之前的窗口（AI Agent 正在改
+`ai.settings.ts`/`ai-quota.service.ts`）；harness 重启后同一命令通过。
+
+结论：`/v1/health` 已与 `HealthResponseSchema` 一致，且用契约自身校验通过；guard 计数可在
+`/v1/metrics` 观测；Windows 信号硬终止的限制已入档。

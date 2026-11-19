@@ -51,12 +51,25 @@ export interface ProcessGuardRecent extends ProcessErrorSummary {
 export interface ProcessGuardSnapshot {
   degraded: boolean;
   unhandledRejections: number;
+  uncaughtExceptions: number;
   rejectionsInWindow: number;
   windowMs: number;
   threshold: number;
   recent: ProcessGuardRecent[];
   lastAt?: number;
   exiting: boolean;
+}
+
+let activeGuards: ProcessGuards | undefined;
+
+/**
+ * Snapshot of the guard instance installed by the production entry point.
+ *
+ * Metrics reads this at scrape time. `undefined` means the current process has
+ * no guards (Nest apps built by tests, for example); gauges then report zero.
+ */
+export function activeProcessGuardSnapshot(): ProcessGuardSnapshot | undefined {
+  return activeGuards?.snapshot();
 }
 
 export interface ProcessGuardsOptions {
@@ -218,6 +231,7 @@ export function createProcessGuards(options: ProcessGuardsOptions): ProcessGuard
   let rejectionTimes: number[] = [];
   let recent: ProcessGuardRecent[] = [];
   let unhandledRejections = 0;
+  let uncaughtExceptions = 0;
   let degraded = false;
   let lastAt: number | undefined;
   let exiting = false;
@@ -325,6 +339,7 @@ export function createProcessGuards(options: ProcessGuardsOptions): ProcessGuard
     const summary = describeProcessError(error);
     recent = [...recent, { at, ...summary }].slice(-recentLimit);
     degraded = true;
+    uncaughtExceptions += 1;
     lastAt = at;
 
     log(
@@ -335,6 +350,7 @@ export function createProcessGuards(options: ProcessGuardsOptions): ProcessGuard
         verdict: "exit",
         ...summary,
         count: unhandledRejections,
+        uncaughtExceptions,
         windowCount: rejectionTimes.filter((timestamp) => at - timestamp < windowMs).length,
         threshold,
         windowMs,
@@ -346,12 +362,13 @@ export function createProcessGuards(options: ProcessGuardsOptions): ProcessGuard
     await exitFatal("uncaughtException");
   };
 
-  return {
+  const guards: ProcessGuards = {
     install(): void {
       if (installed) {
         return;
       }
       installed = true;
+      activeGuards = guards;
 
       rejectionListener = (reason: unknown) => {
         void handleUnhandledRejection(reason);
@@ -378,6 +395,9 @@ export function createProcessGuards(options: ProcessGuardsOptions): ProcessGuard
       }
       rejectionListener = undefined;
       exceptionListener = undefined;
+      if (activeGuards === guards) {
+        activeGuards = undefined;
+      }
     },
 
     handleUnhandledRejection,
@@ -388,6 +408,7 @@ export function createProcessGuards(options: ProcessGuardsOptions): ProcessGuard
       return {
         degraded,
         unhandledRejections,
+        uncaughtExceptions,
         rejectionsInWindow: rejectionTimes.filter((timestamp) => at - timestamp < windowMs).length,
         windowMs,
         threshold,
@@ -401,4 +422,6 @@ export function createProcessGuards(options: ProcessGuardsOptions): ProcessGuard
       return installed;
     },
   };
+
+  return guards;
 }

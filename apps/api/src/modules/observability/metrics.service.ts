@@ -1,6 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { collectDefaultMetrics, Counter, Gauge, Histogram, Registry } from "prom-client";
 
+import { activeProcessGuardSnapshot } from "../../common/process-guards.js";
+
 @Injectable()
 export class MetricsService {
   private readonly registry = new Registry();
@@ -21,6 +23,27 @@ export class MetricsService {
     name: "roamlog_dependency_up",
     help: "Whether a critical platform dependency is available",
     labelNames: ["dependency"],
+    registers: [this.registry],
+  });
+  /**
+   * Process-guard counters. The guard instance belongs to the process entry
+   * point (not to Nest DI), so values are pulled from its snapshot at scrape
+   * time instead of being incremented by DI callers. A process without installed
+   * guards — an e2e Nest app, for example — reports zeros.
+   */
+  private readonly unhandledRejections = new Gauge({
+    name: "roamlog_unhandled_rejections_total",
+    help: "Unhandled promise rejections recorded by the process guard",
+    registers: [this.registry],
+  });
+  private readonly uncaughtExceptions = new Gauge({
+    name: "roamlog_uncaught_exceptions_total",
+    help: "Uncaught exceptions recorded by the process guard",
+    registers: [this.registry],
+  });
+  private readonly processDegraded = new Gauge({
+    name: "roamlog_process_degraded",
+    help: "1 when the process guard recorded an unhandled rejection or uncaught exception",
     registers: [this.registry],
   });
 
@@ -52,6 +75,14 @@ export class MetricsService {
   }
 
   async render(): Promise<string> {
+    this.refreshProcessGuardMetrics();
     return this.registry.metrics();
+  }
+
+  private refreshProcessGuardMetrics(): void {
+    const snapshot = activeProcessGuardSnapshot();
+    this.unhandledRejections.set(snapshot?.unhandledRejections ?? 0);
+    this.uncaughtExceptions.set(snapshot?.uncaughtExceptions ?? 0);
+    this.processDegraded.set(snapshot?.degraded ? 1 : 0);
   }
 }

@@ -204,6 +204,11 @@ describe("process guards", () => {
     expect(onFatal).toHaveBeenCalledWith("uncaughtException");
     expect(flush).toHaveBeenCalledTimes(1);
     expect(exit).toHaveBeenCalledWith(1);
+    expect(guards.snapshot()).toMatchObject({
+      degraded: true,
+      uncaughtExceptions: 1,
+      unhandledRejections: 0,
+    });
   });
 
   it("forces the exit when flushing the logger hangs past 2s", async () => {
