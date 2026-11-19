@@ -49,6 +49,16 @@ export type PublicEntryMediaItem = {
    * @nullable
    */
   location: string | null;
+  /**
+   * @minimum -90
+   * @maximum 90
+   */
+  lat?: number;
+  /**
+   * @minimum -180
+   * @maximum 180
+   */
+  lng?: number;
   livePhoto?: boolean;
   /** @nullable */
   motion?: PublicEntryMediaItemMotion;

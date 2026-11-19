@@ -120,6 +120,8 @@ export type AdminTripPageItemsItem = {
   budgetCurrency: string | null;
   visibility: AdminTripPageItemsItemVisibility;
   favorite: boolean;
+  /** Owner switch: expose exact photo GPS on the public share page. */
+  showExactPhotoLocation?: boolean;
   /** @minimum 1 */
   version: number;
   /** Sortable UUIDv7 identifier. */

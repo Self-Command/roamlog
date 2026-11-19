@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { CompleteMediaRequestExif } from "./completeMediaRequestExif";
 
 export interface CompleteMediaRequest {
   /**
@@ -24,4 +25,18 @@ export interface CompleteMediaRequest {
   height?: number;
   /** @maxLength 200 */
   blurhash?: string;
+  /** Curated photo EXIF (~45 tags), using the exifr tag names. */
+  exif?: CompleteMediaRequestExif;
+  /**
+   * WGS-84 latitude lifted from the EXIF GPS pair.
+   * @minimum -90
+   * @maximum 90
+   */
+  lat?: number;
+  /**
+   * WGS-84 longitude lifted from the EXIF GPS pair.
+   * @minimum -180
+   * @maximum 180
+   */
+  lng?: number;
 }

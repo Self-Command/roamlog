@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminMediaPageItemsItemExif } from "./adminMediaPageItemsItemExif";
 import type { AdminMediaPageItemsItemMotion } from "./adminMediaPageItemsItemMotion";
 import type { AdminMediaPageItemsItemStatus } from "./adminMediaPageItemsItemStatus";
 import type { AdminMediaPageItemsItemVariants } from "./adminMediaPageItemsItemVariants";
@@ -75,6 +76,23 @@ export type AdminMediaPageItemsItem = {
    * @nullable
    */
   location: string | null;
+  /**
+   * Curated photo EXIF (~45 tags), using the exifr tag names.
+   * @nullable
+   */
+  exif?: AdminMediaPageItemsItemExif;
+  /**
+   * @minimum -90
+   * @maximum 90
+   * @nullable
+   */
+  lat?: number | null;
+  /**
+   * @minimum -180
+   * @maximum 180
+   * @nullable
+   */
+  lng?: number | null;
   /** ISO 8601 timestamp with an explicit UTC offset. */
   createdAt: string;
   /** ISO 8601 timestamp with an explicit UTC offset. */

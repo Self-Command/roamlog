@@ -120,6 +120,8 @@ export interface Trip {
   budgetCurrency: string | null;
   visibility: TripVisibility;
   favorite: boolean;
+  /** Owner switch: expose exact photo GPS on the public share page. */
+  showExactPhotoLocation?: boolean;
   /** @minimum 1 */
   version: number;
   /** Sortable UUIDv7 identifier. */

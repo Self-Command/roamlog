@@ -1338,6 +1338,402 @@
                   ],
                   "maxLength": 200
                 },
+                "exif": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "Make": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "Model": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "LensMake": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "LensModel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "Software": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "Artist": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "Copyright": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "OwnerName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "BodySerialNumber": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "LensSerialNumber": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "FNumber": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 128
+                    },
+                    "ExposureTime": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 32
+                    },
+                    "ISO": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000
+                    },
+                    "FocalLength": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 2000
+                    },
+                    "FocalLengthIn35mmFormat": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 2000
+                    },
+                    "ExposureCompensation": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -20,
+                      "maximum": 20
+                    },
+                    "ExposureProgram": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "ExposureMode": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "Flash": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "WhiteBalance": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 32
+                    },
+                    "MeteringMode": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "LightSource": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "SceneCaptureType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "DigitalZoomRatio": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "SubjectDistance": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "DateTimeOriginal": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "CreateDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "ModifyDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "OffsetTimeOriginal": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[+-]\\d{2}:\\d{2}$"
+                    },
+                    "OffsetTime": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[+-]\\d{2}:\\d{2}$"
+                    },
+                    "SubSecTimeOriginal": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 16
+                    },
+                    "GPSDateTime": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "Orientation": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 1,
+                      "maximum": 8
+                    },
+                    "ColorSpace": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "ExifImageWidth": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 20000
+                    },
+                    "ExifImageHeight": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 20000
+                    },
+                    "XResolution": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "YResolution": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "ResolutionUnit": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 32
+                    },
+                    "BitsPerSample": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 64
+                    },
+                    "latitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "longitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "GPSLatitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "GPSLongitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "GPSAltitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -1000,
+                      "maximum": 20000
+                    },
+                    "GPSAltitudeRef": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 32
+                    },
+                    "GPSImgDirection": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 360
+                    },
+                    "GPSImgDirectionRef": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 8
+                    },
+                    "GPSHPositioningError": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    "GPSProcessingMethod": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    }
+                  },
+                  "description": "Curated photo EXIF (~45 tags), using the exifr tag names."
+                },
+                "lat": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lng": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -180,
+                  "maximum": 180
+                },
                 "createdAt": {
                   "type": "string",
                   "format": "date-time",
@@ -3122,6 +3518,10 @@
                 },
                 "favorite": {
                   "type": "boolean"
+                },
+                "showExactPhotoLocation": {
+                  "type": "boolean",
+                  "description": "Owner switch: expose exact photo GPS on the public share page."
                 },
                 "version": {
                   "type": "integer",
@@ -5288,6 +5688,395 @@
           "blurhash": {
             "type": "string",
             "maxLength": 200
+          },
+          "exif": {
+            "type": "object",
+            "properties": {
+              "Make": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "Model": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensMake": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensModel": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Software": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Artist": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Copyright": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "OwnerName": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "BodySerialNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensSerialNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "FNumber": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 128
+              },
+              "ExposureTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "ISO": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 1000000
+              },
+              "FocalLength": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 2000
+              },
+              "FocalLengthIn35mmFormat": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 2000
+              },
+              "ExposureCompensation": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -20,
+                "maximum": 20
+              },
+              "ExposureProgram": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "ExposureMode": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "Flash": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "WhiteBalance": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "MeteringMode": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "LightSource": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "SceneCaptureType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "DigitalZoomRatio": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 100
+              },
+              "SubjectDistance": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 100000
+              },
+              "DateTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "CreateDate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "ModifyDate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "OffsetTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[+-]\\d{2}:\\d{2}$"
+              },
+              "OffsetTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[+-]\\d{2}:\\d{2}$"
+              },
+              "SubSecTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 16
+              },
+              "GPSDateTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "Orientation": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1,
+                "maximum": 8
+              },
+              "ColorSpace": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "ExifImageWidth": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 20000
+              },
+              "ExifImageHeight": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 20000
+              },
+              "XResolution": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "YResolution": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "ResolutionUnit": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "BitsPerSample": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 64
+              },
+              "latitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -90,
+                "maximum": 90
+              },
+              "longitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -180,
+                "maximum": 180
+              },
+              "GPSLatitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -90,
+                "maximum": 90
+              },
+              "GPSLongitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -180,
+                "maximum": 180
+              },
+              "GPSAltitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -1000,
+                "maximum": 20000
+              },
+              "GPSAltitudeRef": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "GPSImgDirection": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 360
+              },
+              "GPSImgDirectionRef": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 8
+              },
+              "GPSHPositioningError": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "GPSProcessingMethod": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              }
+            },
+            "description": "Curated photo EXIF (~45 tags), using the exifr tag names."
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "description": "WGS-84 latitude lifted from the EXIF GPS pair."
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "description": "WGS-84 longitude lifted from the EXIF GPS pair."
           }
         },
         "additionalProperties": false
@@ -7976,6 +8765,402 @@
             ],
             "maxLength": 200
           },
+          "exif": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "Make": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "Model": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensMake": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensModel": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Software": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Artist": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Copyright": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "OwnerName": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "BodySerialNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensSerialNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "FNumber": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 128
+              },
+              "ExposureTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "ISO": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 1000000
+              },
+              "FocalLength": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 2000
+              },
+              "FocalLengthIn35mmFormat": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 2000
+              },
+              "ExposureCompensation": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -20,
+                "maximum": 20
+              },
+              "ExposureProgram": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "ExposureMode": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "Flash": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "WhiteBalance": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "MeteringMode": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "LightSource": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "SceneCaptureType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "DigitalZoomRatio": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 100
+              },
+              "SubjectDistance": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 100000
+              },
+              "DateTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "CreateDate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "ModifyDate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "OffsetTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[+-]\\d{2}:\\d{2}$"
+              },
+              "OffsetTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[+-]\\d{2}:\\d{2}$"
+              },
+              "SubSecTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 16
+              },
+              "GPSDateTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "Orientation": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1,
+                "maximum": 8
+              },
+              "ColorSpace": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "ExifImageWidth": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 20000
+              },
+              "ExifImageHeight": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 20000
+              },
+              "XResolution": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "YResolution": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "ResolutionUnit": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "BitsPerSample": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 64
+              },
+              "latitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -90,
+                "maximum": 90
+              },
+              "longitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -180,
+                "maximum": 180
+              },
+              "GPSLatitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -90,
+                "maximum": 90
+              },
+              "GPSLongitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -180,
+                "maximum": 180
+              },
+              "GPSAltitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -1000,
+                "maximum": 20000
+              },
+              "GPSAltitudeRef": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "GPSImgDirection": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 360
+              },
+              "GPSImgDirectionRef": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 8
+              },
+              "GPSHPositioningError": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "GPSProcessingMethod": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              }
+            },
+            "description": "Curated photo EXIF (~45 tags), using the exifr tag names."
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -180,
+            "maximum": 180
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -8927,6 +10112,402 @@
             ],
             "maxLength": 200
           },
+          "exif": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "Make": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "Model": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensMake": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensModel": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Software": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Artist": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "Copyright": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "OwnerName": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 200
+              },
+              "BodySerialNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "LensSerialNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              },
+              "FNumber": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 128
+              },
+              "ExposureTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "ISO": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 1000000
+              },
+              "FocalLength": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 2000
+              },
+              "FocalLengthIn35mmFormat": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 2000
+              },
+              "ExposureCompensation": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -20,
+                "maximum": 20
+              },
+              "ExposureProgram": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "ExposureMode": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "Flash": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "WhiteBalance": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "MeteringMode": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "LightSource": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "SceneCaptureType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "DigitalZoomRatio": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 100
+              },
+              "SubjectDistance": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 100000
+              },
+              "DateTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "CreateDate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "ModifyDate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "OffsetTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[+-]\\d{2}:\\d{2}$"
+              },
+              "OffsetTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[+-]\\d{2}:\\d{2}$"
+              },
+              "SubSecTimeOriginal": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 16
+              },
+              "GPSDateTime": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "Orientation": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1,
+                "maximum": 8
+              },
+              "ColorSpace": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "ExifImageWidth": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 20000
+              },
+              "ExifImageHeight": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 20000
+              },
+              "XResolution": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "YResolution": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "ResolutionUnit": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "BitsPerSample": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "maximum": 64
+              },
+              "latitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -90,
+                "maximum": 90
+              },
+              "longitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -180,
+                "maximum": 180
+              },
+              "GPSLatitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -90,
+                "maximum": 90
+              },
+              "GPSLongitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -180,
+                "maximum": 180
+              },
+              "GPSAltitude": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": -1000,
+                "maximum": 20000
+              },
+              "GPSAltitudeRef": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 32
+              },
+              "GPSImgDirection": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 360
+              },
+              "GPSImgDirectionRef": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 8
+              },
+              "GPSHPositioningError": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "GPSProcessingMethod": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 120
+              }
+            },
+            "description": "Curated photo EXIF (~45 tags), using the exifr tag names."
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -180,
+            "maximum": 180
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -9174,6 +10755,402 @@
                     "null"
                   ],
                   "maxLength": 200
+                },
+                "exif": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "Make": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "Model": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "LensMake": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "LensModel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "Software": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "Artist": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "Copyright": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "OwnerName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 200
+                    },
+                    "BodySerialNumber": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "LensSerialNumber": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "FNumber": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 128
+                    },
+                    "ExposureTime": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 32
+                    },
+                    "ISO": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000
+                    },
+                    "FocalLength": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 2000
+                    },
+                    "FocalLengthIn35mmFormat": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 2000
+                    },
+                    "ExposureCompensation": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -20,
+                      "maximum": 20
+                    },
+                    "ExposureProgram": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "ExposureMode": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "Flash": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "WhiteBalance": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 32
+                    },
+                    "MeteringMode": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "LightSource": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "SceneCaptureType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "DigitalZoomRatio": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "SubjectDistance": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "DateTimeOriginal": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "CreateDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "ModifyDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "OffsetTimeOriginal": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[+-]\\d{2}:\\d{2}$"
+                    },
+                    "OffsetTime": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[+-]\\d{2}:\\d{2}$"
+                    },
+                    "SubSecTimeOriginal": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 16
+                    },
+                    "GPSDateTime": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "Orientation": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 1,
+                      "maximum": 8
+                    },
+                    "ColorSpace": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 64
+                    },
+                    "ExifImageWidth": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 20000
+                    },
+                    "ExifImageHeight": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 20000
+                    },
+                    "XResolution": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "YResolution": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0
+                    },
+                    "ResolutionUnit": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 32
+                    },
+                    "BitsPerSample": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "exclusiveMinimum": 0,
+                      "maximum": 64
+                    },
+                    "latitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "longitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "GPSLatitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "GPSLongitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "GPSAltitude": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": -1000,
+                      "maximum": 20000
+                    },
+                    "GPSAltitudeRef": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 32
+                    },
+                    "GPSImgDirection": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 360
+                    },
+                    "GPSImgDirectionRef": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 8
+                    },
+                    "GPSHPositioningError": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    "GPSProcessingMethod": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    }
+                  },
+                  "description": "Curated photo EXIF (~45 tags), using the exifr tag names."
+                },
+                "lat": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lng": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -180,
+                  "maximum": 180
                 },
                 "createdAt": {
                   "type": "string",
@@ -10932,6 +12909,16 @@
                   ],
                   "maxLength": 200
                 },
+                "lat": {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lng": {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180
+                },
                 "livePhoto": {
                   "type": "boolean"
                 },
@@ -11072,6 +13059,16 @@
               "null"
             ],
             "maxLength": 200
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
           },
           "livePhoto": {
             "type": "boolean"
@@ -11921,6 +13918,16 @@
                         ],
                         "maxLength": 200
                       },
+                      "lat": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "lng": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      },
                       "livePhoto": {
                         "type": "boolean"
                       },
@@ -12064,6 +14071,16 @@
                     "null"
                   ],
                   "maxLength": 200
+                },
+                "lat": {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lng": {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180
                 },
                 "livePhoto": {
                   "type": "boolean"
@@ -15736,6 +17753,10 @@
           "favorite": {
             "type": "boolean"
           },
+          "showExactPhotoLocation": {
+            "type": "boolean",
+            "description": "Owner switch: expose exact photo GPS on the public share page."
+          },
           "version": {
             "type": "integer",
             "minimum": 1
@@ -16568,6 +18589,10 @@
                 },
                 "favorite": {
                   "type": "boolean"
+                },
+                "showExactPhotoLocation": {
+                  "type": "boolean",
+                  "description": "Owner switch: expose exact photo GPS on the public share page."
                 },
                 "version": {
                   "type": "integer",
