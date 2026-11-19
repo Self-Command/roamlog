@@ -28,7 +28,7 @@ export async function submitReport(
   });
 
   const text = await response.text();
-  let body: unknown = null;
+  let body: unknown;
   try {
     body = text ? (JSON.parse(text) as unknown) : null;
   } catch {

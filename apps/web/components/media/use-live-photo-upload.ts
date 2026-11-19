@@ -314,7 +314,7 @@ async function validateMotion(
   pair: LivePhotoPair,
 ): Promise<MotionValidation> {
   const probe = options.probeDuration ?? probeMotionDuration;
-  let durationMs: number | null = null;
+  let durationMs: number | null;
   try {
     durationMs = await probe(pair.motion);
   } catch {
