@@ -23,7 +23,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { ExecutionContext } from "@nestjs/common";
+import type { CanActivate, ExecutionContext } from "@nestjs/common";
 import { createPrismaClient } from "@roamlog/db";
 import type { ResourceKind, User, WorkspaceAction } from "@roamlog/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,15 +36,28 @@ import { TripParticipantRoleGuard } from "../../../common/guards/trip-participan
 import { VerifiedEmailGuard } from "../../../common/guards/verified-email.guard.js";
 import { PERMISSION_METADATA } from "../../../common/guards/require-permission.decorator.js";
 import { PermissionService } from "../../../common/services/permission.service.js";
+import { SanitizeService } from "../../../common/services/sanitize.service.js";
 import { WorkspaceAccessService } from "../../../common/services/workspace-access.service.js";
 import type { WorkspaceMembershipAccess } from "../../../common/services/workspace-access.service.js";
 import type { ActivitiesService } from "../../activities/activities.service.js";
+import { EntriesRepository } from "../../entries/entries.repository.js";
+import { EntriesService } from "../../entries/entries.service.js";
+import { ExpenseTenantGuard } from "../../expenses/expense-tenant.guard.js";
+import { ExpensesRepository } from "../../expenses/expenses.repository.js";
+import { ExpensesService } from "../../expenses/expenses.service.js";
+import { ItineraryRepository } from "../../itinerary/itinerary.repository.js";
+import { ItineraryService } from "../../itinerary/itinerary.service.js";
+import { MediaTenantGuard } from "../../media/media-tenant.guard.js";
+import { PackingTenantGuard } from "../../packing/packing-tenant.guard.js";
 import { PackingRepository } from "../../packing/packing.repository.js";
 import { PackingService } from "../../packing/packing.service.js";
 import type { PrismaService } from "../../prisma/prisma.service.js";
 import { WorkspacesService } from "../../workspaces/workspaces.service.js";
 import { ContentTenantGuard } from "../content-tenant.guard.js";
-import { CONTENT_TENANT_RESOURCE } from "../content-tenant.decorator.js";
+import {
+  CONTENT_TENANT_RESOURCE,
+  type ContentTenantResource,
+} from "../content-tenant.decorator.js";
 import { StopsRepository } from "../stops.repository.js";
 import { StopsService } from "../stops.service.js";
 import { TripsRepository } from "../trips.repository.js";
@@ -83,6 +96,39 @@ const TRIP = {
   other: fixtureId(102),
   foreign: fixtureId(103),
 } as const;
+
+const STOP = {
+  main: fixtureId(301),
+  other: fixtureId(302),
+  foreign: fixtureId(303),
+} as const;
+
+const PACKING = {
+  main: fixtureId(311),
+  other: fixtureId(312),
+} as const;
+
+const ENTRY = {
+  main: fixtureId(321),
+  other: fixtureId(322),
+} as const;
+
+const EXPENSE = {
+  main: fixtureId(331),
+  other: fixtureId(332),
+} as const;
+
+const ITINERARY = {
+  main: fixtureId(341),
+  other: fixtureId(342),
+} as const;
+
+const MEDIA = {
+  main: fixtureId(351),
+  workspace: fixtureId(352),
+} as const;
+
+const DATE_ON_TRIP = new Date("2026-05-02T00:00:00.000Z");
 
 const USER = {
   owner: fixtureId(201),
@@ -163,6 +209,7 @@ interface TestRequest {
   params: Record<string, string | undefined>;
   headers: Record<string, string>;
   ip: string;
+  path?: string;
   user?: User;
   workspaceMembership?: WorkspaceMembershipAccess;
 }
@@ -170,11 +217,12 @@ interface TestRequest {
 function contextFor(
   request: TestRequest,
   permission?: { action: WorkspaceAction; resource: ResourceKind },
+  contentResource: ContentTenantResource = "trip",
 ): ExecutionContext {
   const handler = function protectedHandler(): void {};
-  // Every trip-content controller declares `@ContentTenant("trip")` on the
+  // Every trip-content controller declares `@ContentTenant("<resource>")` on the
   // handler; this reproduces the metadata the real guard reads at runtime.
-  Reflect.defineMetadata(CONTENT_TENANT_RESOURCE, "trip", handler);
+  Reflect.defineMetadata(CONTENT_TENANT_RESOURCE, contentResource, handler);
   if (permission) {
     Reflect.defineMetadata(PERMISSION_METADATA, permission, handler);
   }
@@ -194,11 +242,17 @@ let prisma: ReturnType<typeof createPrismaClient> | undefined;
 let prismaService: PrismaService;
 let accessService: WorkspaceAccessService;
 let contentGuard: ContentTenantGuard;
+let packingTenantGuard: PackingTenantGuard;
+let expenseTenantGuard: ExpenseTenantGuard;
+let mediaTenantGuard: MediaTenantGuard;
 let rolesGuard: RolesGuard;
 let tripParticipantRoleGuard: TripParticipantRoleGuard;
 let tripsService: TripsService;
 let stopsService: StopsService;
 let packingService: PackingService;
+let entriesService: EntriesService;
+let expensesService: ExpensesService;
+let itineraryService: ItineraryService;
 let workspacesService: WorkspacesService;
 
 function requiredClient(): ReturnType<typeof createPrismaClient> {
@@ -353,6 +407,59 @@ async function expectForbidden(
   });
 }
 
+/**
+ * Runs a real tenant guard (`ContentTenantGuard`, `PackingTenantGuard`, …) and
+ * the real `RolesGuard` for a sub-resource route that has no `:tripId`.
+ */
+async function enterSubresource(
+  guard: CanActivate,
+  userId: string,
+  params: Record<string, string>,
+  action: WorkspaceAction,
+  resource: ResourceKind,
+  contentResource: ContentTenantResource = "trip",
+): Promise<{
+  request: TestRequest;
+  membership: WorkspaceMembershipAccess;
+  actor: AuthenticatedActor;
+}> {
+  const request: TestRequest = {
+    params,
+    headers: {},
+    ip: "127.0.0.1",
+    user: userFor(userId),
+  };
+  const context = contextFor(request, { action, resource }, contentResource);
+  await guard.canActivate(context);
+  rolesGuard.canActivate(context);
+
+  if (!request.workspaceMembership) {
+    throw new Error("The guard chain did not resolve a Workspace membership.");
+  }
+  return { request, membership: request.workspaceMembership, actor: actorFor(userId) };
+}
+
+/** A missing sub-resource must be a 404 from its tenant guard, before RolesGuard. */
+async function expectSubresourceNotFound(
+  guard: CanActivate,
+  params: Record<string, string>,
+  contentResource: ContentTenantResource,
+  code: string,
+): Promise<void> {
+  const request: TestRequest = {
+    params,
+    headers: {},
+    ip: "127.0.0.1",
+    user: userFor(USER.viewerEditor),
+  };
+  await expect(
+    guard.canActivate(contextFor(request, undefined, contentResource)),
+  ).rejects.toMatchObject({
+    status: 404,
+    response: { code },
+  });
+}
+
 integration("trip participant role authorization on real PostgreSQL", () => {
   beforeAll(async () => {
     if (!databaseUrl) {
@@ -406,6 +513,27 @@ integration("trip participant role authorization on real PostgreSQL", () => {
       tenantGuard,
       tripParticipantRoleGuard,
     );
+    packingTenantGuard = new PackingTenantGuard(
+      prismaService,
+      sessionGuard,
+      verifiedEmailGuard,
+      tenantGuard,
+      tripParticipantRoleGuard,
+    );
+    expenseTenantGuard = new ExpenseTenantGuard(
+      prismaService,
+      sessionGuard,
+      verifiedEmailGuard,
+      tenantGuard,
+      tripParticipantRoleGuard,
+    );
+    mediaTenantGuard = new MediaTenantGuard(
+      prismaService,
+      sessionGuard,
+      verifiedEmailGuard,
+      tenantGuard,
+      tripParticipantRoleGuard,
+    );
     rolesGuard = new RolesGuard();
 
     const activities = { record: async () => ({ id: "activity-record" }) } as unknown as ActivitiesService;
@@ -421,6 +549,25 @@ integration("trip participant role authorization on real PostgreSQL", () => {
     stopsService = new StopsService(new StopsRepository(prismaService), new PermissionService(), activities);
     packingService = new PackingService(
       new PackingRepository(prismaService),
+      tripsRepository,
+      new PermissionService(),
+      activities,
+    );
+    entriesService = new EntriesService(
+      new EntriesRepository(prismaService),
+      tripsRepository,
+      new PermissionService(),
+      activities,
+      new SanitizeService(),
+    );
+    expensesService = new ExpensesService(
+      new ExpensesRepository(prismaService),
+      tripsRepository,
+      new PermissionService(),
+      activities,
+    );
+    itineraryService = new ItineraryService(
+      new ItineraryRepository(prismaService),
       tripsRepository,
       new PermissionService(),
       activities,
@@ -447,12 +594,155 @@ integration("trip participant role authorization on real PostgreSQL", () => {
 
   beforeEach(async () => {
     const client = requiredClient();
-    await client.stop.deleteMany({ where: { tripId: { in: [TRIP.main, TRIP.other, TRIP.foreign] } } });
+    // Child rows first (FK order), then participants are rebuilt per test.
+    await client.expense.deleteMany({
+      where: { tripId: { in: [TRIP.main, TRIP.other, TRIP.foreign] } },
+    });
+    await client.journalEntry.deleteMany({
+      where: { tripId: { in: [TRIP.main, TRIP.other, TRIP.foreign] } },
+    });
+    await client.media.deleteMany({ where: { id: { in: [MEDIA.main, MEDIA.workspace] } } });
+    await client.itineraryItem.deleteMany({
+      where: { tripId: { in: [TRIP.main, TRIP.other, TRIP.foreign] } },
+    });
     await client.packingItem.deleteMany({
       where: { tripId: { in: [TRIP.main, TRIP.other, TRIP.foreign] } },
     });
+    await client.stop.deleteMany({ where: { tripId: { in: [TRIP.main, TRIP.other, TRIP.foreign] } } });
     await client.tripParticipant.deleteMany({
       where: { tripId: { in: [TRIP.main, TRIP.other, TRIP.foreign] } },
+    });
+    await client.stop.createMany({
+      data: [
+        {
+          id: STOP.main,
+          tripId: TRIP.main,
+          workspaceId: WORKSPACE.home,
+          city: "Kyoto",
+          country: "Japan",
+          countryCode: "JP",
+          startDate: DATE_ON_TRIP,
+          endDate: DATE_ON_TRIP,
+          notes: "",
+          createdById: USER.owner,
+          updatedById: USER.owner,
+        },
+        {
+          id: STOP.other,
+          tripId: TRIP.other,
+          workspaceId: WORKSPACE.home,
+          city: "Osaka",
+          country: "Japan",
+          countryCode: "JP",
+          startDate: DATE_ON_TRIP,
+          endDate: DATE_ON_TRIP,
+          notes: "",
+          createdById: USER.owner,
+          updatedById: USER.owner,
+        },
+        {
+          id: STOP.foreign,
+          tripId: TRIP.foreign,
+          workspaceId: WORKSPACE.other,
+          city: "Sapporo",
+          country: "Japan",
+          countryCode: "JP",
+          startDate: DATE_ON_TRIP,
+          endDate: DATE_ON_TRIP,
+          notes: "",
+          createdById: USER.otherOwner,
+          updatedById: USER.otherOwner,
+        },
+      ],
+    });
+    await client.packingItem.createMany({
+      data: [PACKING.main, PACKING.other].map((id, index) => ({
+        id,
+        tripId: index === 0 ? TRIP.main : TRIP.other,
+        workspaceId: WORKSPACE.home,
+        category: "documents" as const,
+        name: index === 0 ? "Passport" : "Charger",
+        quantity: 1,
+        createdById: USER.owner,
+        updatedById: USER.owner,
+      })),
+    });
+    await client.journalEntry.createMany({
+      data: [ENTRY.main, ENTRY.other].map((id, index) => ({
+        id,
+        tripId: index === 0 ? TRIP.main : TRIP.other,
+        workspaceId: WORKSPACE.home,
+        title: index === 0 ? "Main entry" : "Other entry",
+        date: DATE_ON_TRIP,
+        location: "Kyoto",
+        contentJson: {},
+        contentHtml: "<p>Body</p>",
+        excerpt: "Body",
+        createdById: USER.owner,
+        updatedById: USER.owner,
+      })),
+    });
+    await client.expense.createMany({
+      data: [EXPENSE.main, EXPENSE.other].map((id, index) => ({
+        id,
+        tripId: index === 0 ? TRIP.main : TRIP.other,
+        workspaceId: WORKSPACE.home,
+        date: DATE_ON_TRIP,
+        category: "food" as const,
+        note: index === 0 ? "Lunch" : "Dinner",
+        amountMinor: 1200,
+        currency: "JPY",
+        paidById: USER.owner,
+        createdById: USER.owner,
+      })),
+    });
+    await client.expenseParticipant.createMany({
+      data: [EXPENSE.main, EXPENSE.other].map((expenseId) => ({
+        workspaceId: WORKSPACE.home,
+        expenseId,
+        userId: USER.owner,
+        shareAmountMinor: 1200,
+      })),
+    });
+    await client.itineraryItem.createMany({
+      data: [ITINERARY.main, ITINERARY.other].map((id, index) => ({
+        id,
+        tripId: index === 0 ? TRIP.main : TRIP.other,
+        workspaceId: WORKSPACE.home,
+        date: DATE_ON_TRIP,
+        title: index === 0 ? "Temple visit" : "Museum visit",
+        type: "activity" as const,
+        location: "Kyoto",
+        notes: "",
+        createdById: USER.owner,
+        updatedById: USER.owner,
+      })),
+    });
+    await client.media.createMany({
+      data: [
+        {
+          id: MEDIA.main,
+          workspaceId: WORKSPACE.home,
+          tripId: TRIP.main,
+          uploaderId: USER.owner,
+          bucket: "roamlog-test",
+          key: `media/${MEDIA.main}.jpg`,
+          mimeType: "image/jpeg",
+          size: 1024,
+          status: "ready" as const,
+        },
+        {
+          id: MEDIA.workspace,
+          workspaceId: WORKSPACE.home,
+          tripId: null,
+          uploaderId: USER.owner,
+          bucket: "roamlog-test",
+          key: `media/${MEDIA.workspace}.jpg`,
+          mimeType: "image/jpeg",
+          size: 1024,
+          status: "ready" as const,
+        },
+      ],
     });
     await client.tripParticipant.createMany({
       data: [
@@ -679,6 +969,257 @@ integration("trip participant role authorization on real PostgreSQL", () => {
     await tripParticipantRoleGuard.canActivate(contextFor(request));
     expect(request.workspaceMembership).toBe(membership);
     expect(request.workspaceMembership?.role).toBe("viewer");
+  });
+
+  // -------------------------------------------------------------------------
+  // Sub-resource routes: the trip is resolved from the child row, not :tripId.
+  // -------------------------------------------------------------------------
+
+  it("lets a Workspace viewer who is a trip editor PATCH a stop and bumps Stop.version", async () => {
+    const { request, membership, actor } = await enterSubresource(
+      contentGuard,
+      USER.viewerEditor,
+      { stopId: STOP.main },
+      "stop:update",
+      "stop",
+      "stop",
+    );
+
+    expect(request.workspaceMembership?.role).toBe("editor");
+    expect(membership.role).toBe("editor");
+
+    const updated = await stopsService.update(actor, membership, STOP.main, {
+      city: "Nara",
+      version: 1,
+    });
+    expect(updated.city).toBe("Nara");
+    expect(updated.version).toBe(2);
+
+    const row = await requiredClient().stop.findUniqueOrThrow({
+      where: { id: STOP.main },
+      select: { city: true, version: true, updatedById: true },
+    });
+    expect(row).toEqual({ city: "Nara", version: 2, updatedById: USER.viewerEditor });
+  });
+
+  it("lets a Workspace viewer who is a trip editor PATCH a packing item and bumps PackingItem.version", async () => {
+    const { membership, actor } = await enterSubresource(
+      packingTenantGuard,
+      USER.viewerEditor,
+      { itemId: PACKING.main },
+      "packing:update",
+      "packing",
+    );
+
+    expect(membership.role).toBe("editor");
+
+    const updated = await packingService.update(actor, membership, PACKING.main, {
+      name: "Passport holder",
+      version: 1,
+    });
+    expect(updated.version).toBe(2);
+
+    const row = await requiredClient().packingItem.findUniqueOrThrow({
+      where: { id: PACKING.main },
+      select: { name: true, version: true, updatedById: true },
+    });
+    expect(row).toEqual({ name: "Passport holder", version: 2, updatedById: USER.viewerEditor });
+  });
+
+  it("lets a Workspace viewer who is a trip editor PATCH a journal entry", async () => {
+    const { membership, actor } = await enterSubresource(
+      contentGuard,
+      USER.viewerEditor,
+      { entryId: ENTRY.main },
+      "entry:update",
+      "journal_entry",
+      "entry",
+    );
+
+    expect(membership.role).toBe("editor");
+
+    const updated = await entriesService.update(actor, membership, ENTRY.main, {
+      title: "Updated entry",
+      version: 1,
+    });
+    expect(updated.version).toBe(2);
+
+    const row = await requiredClient().journalEntry.findUniqueOrThrow({
+      where: { id: ENTRY.main },
+      select: { title: true, version: true, updatedById: true },
+    });
+    expect(row).toEqual({ title: "Updated entry", version: 2, updatedById: USER.viewerEditor });
+  });
+
+  it("resolves expense, itinerary and trip media sub-resources to their trip", async () => {
+    const expense = await enterSubresource(
+      expenseTenantGuard,
+      USER.viewerEditor,
+      { expenseId: EXPENSE.main },
+      "expense:update",
+      "expense",
+    );
+    expect(expense.membership.role).toBe("editor");
+    const updatedExpense = await expensesService.update(
+      expense.actor,
+      expense.membership,
+      EXPENSE.main,
+      {
+        note: "Updated lunch",
+        version: 1,
+      },
+    );
+    expect(updatedExpense.version).toBe(2);
+
+    const itinerary = await enterSubresource(
+      contentGuard,
+      USER.viewerEditor,
+      { itemId: ITINERARY.main },
+      "itinerary:update",
+      "itinerary",
+      "itinerary",
+    );
+    expect(itinerary.membership.role).toBe("editor");
+    const updatedItem = await itineraryService.update(
+      itinerary.actor,
+      itinerary.membership,
+      ITINERARY.main,
+      { title: "Updated temple visit", version: 1 },
+    );
+    expect(updatedItem.version).toBe(2);
+
+    // `Media.tripId` is nullable: only media attached to a trip is promoted.
+    const tripMedia = await enterSubresource(
+      mediaTenantGuard,
+      USER.viewerEditor,
+      { mediaId: MEDIA.main },
+      "media:read",
+      "media",
+    );
+    expect(tripMedia.membership.role).toBe("editor");
+
+    const workspaceMedia = await enterSubresource(
+      mediaTenantGuard,
+      USER.viewerEditor,
+      { mediaId: MEDIA.workspace },
+      "media:read",
+      "media",
+    );
+    expect(workspaceMedia.membership.role).toBe("viewer");
+  });
+
+  it("does not let a trip editor of another trip PATCH this trip's stop (no cross-trip escalation)", async () => {
+    await expect(
+      enterSubresource(
+        contentGuard,
+        USER.viewerEditor,
+        { stopId: STOP.other },
+        "stop:update",
+        "stop",
+        "stop",
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: { code: "WORKSPACE_ROLE_FORBIDDEN" },
+    });
+
+    const row = await requiredClient().stop.findUniqueOrThrow({
+      where: { id: STOP.other },
+      select: { version: true },
+    });
+    expect(row.version).toBe(1);
+  });
+
+  it("returns 404 for a stop in another Workspace (no existence leak)", async () => {
+    await expect(
+      enterSubresource(
+        contentGuard,
+        USER.viewerEditor,
+        { stopId: STOP.foreign },
+        "stop:update",
+        "stop",
+        "stop",
+      ),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: { code: "WORKSPACE_NOT_FOUND" },
+    });
+  });
+
+  it("does not upgrade an invited trip editor (status invited -> 403)", async () => {
+    await requiredClient().tripParticipant.updateMany({
+      where: { tripId: TRIP.main, userId: USER.viewerEditor },
+      data: { status: "invited" },
+    });
+
+    await expect(
+      enterSubresource(
+        contentGuard,
+        USER.viewerEditor,
+        { stopId: STOP.main },
+        "stop:update",
+        "stop",
+        "stop",
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: { code: "WORKSPACE_ROLE_FORBIDDEN" },
+    });
+  });
+
+  it("keeps a viewer-role trip participant at 403 on sub-resource updates", async () => {
+    await expect(
+      enterSubresource(
+        contentGuard,
+        USER.viewerViewer,
+        { stopId: STOP.main },
+        "stop:update",
+        "stop",
+        "stop",
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: { code: "WORKSPACE_ROLE_FORBIDDEN" },
+    });
+  });
+
+  it("returns 404 for a missing row in every trip sub-resource family", async () => {
+    await expectSubresourceNotFound(
+      contentGuard,
+      { stopId: fixtureId(901) },
+      "stop",
+      "STOP_NOT_FOUND",
+    );
+    await expectSubresourceNotFound(
+      contentGuard,
+      { entryId: fixtureId(902) },
+      "entry",
+      "ENTRY_NOT_FOUND",
+    );
+    await expectSubresourceNotFound(
+      contentGuard,
+      { itemId: fixtureId(903) },
+      "itinerary",
+      "ITINERARY_ITEM_NOT_FOUND",
+    );
+    await expectSubresourceNotFound(
+      packingTenantGuard,
+      { itemId: fixtureId(904) },
+      "trip",
+      "PACKING_ITEM_NOT_FOUND",
+    );
+    await expectSubresourceNotFound(
+      expenseTenantGuard,
+      { expenseId: fixtureId(905) },
+      "trip",
+      "EXPENSE_NOT_FOUND",
+    );
+    await expectSubresourceNotFound(
+      mediaTenantGuard,
+      { mediaId: fixtureId(906) },
+      "trip",
+      "MEDIA_NOT_FOUND",
+    );
   });
 
   // -------------------------------------------------------------------------

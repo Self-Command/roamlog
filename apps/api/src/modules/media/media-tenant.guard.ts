@@ -5,6 +5,7 @@ import { UuidV7Schema } from "@roamlog/contracts";
 import type { AuthenticatedRequest } from "../../common/guards/actor-context.js";
 import { SessionGuard } from "../../common/guards/session.guard.js";
 import { TenantGuard } from "../../common/guards/tenant.guard.js";
+import { TripParticipantRoleGuard } from "../../common/guards/trip-participant-role.guard.js";
 import { VerifiedEmailGuard } from "../../common/guards/verified-email.guard.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 
@@ -15,6 +16,8 @@ export class MediaTenantGuard implements CanActivate {
     @Inject(SessionGuard) private readonly sessionGuard: SessionGuard,
     @Inject(VerifiedEmailGuard) private readonly verifiedEmailGuard: VerifiedEmailGuard,
     @Inject(TenantGuard) private readonly tenantGuard: TenantGuard,
+    @Inject(TripParticipantRoleGuard)
+    private readonly tripParticipantRoleGuard: TripParticipantRoleGuard,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -42,6 +45,11 @@ export class MediaTenantGuard implements CanActivate {
     }
 
     request.params.workspaceId = media.workspaceId;
-    return this.tenantGuard.canActivate(context);
+    await this.tenantGuard.canActivate(context);
+    // `PATCH|DELETE /media/:mediaId` carries no `:tripId`; the role guard
+    // resolves the owning trip from the media row (and does nothing for
+    // workspace-level media whose `tripId` is null) before `RolesGuard` runs.
+    await this.tripParticipantRoleGuard.canActivate(context);
+    return true;
   }
 }
