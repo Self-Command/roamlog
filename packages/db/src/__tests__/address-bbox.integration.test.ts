@@ -208,9 +208,6 @@ integration("0006_trip_stop_address_bbox against PostgreSQL", () => {
     await applyMigrations(admin, migrationSchema, before);
     await insertLegacyRows(admin);
     await applyMigrations(admin, migrationSchema, ["0006_trip_stop_address_bbox"]);
-    // Prisma's generated client knows every column, so bring the schema to
-    // HEAD before reading the legacy row through it.
-    await applyMigrations(admin, migrationSchema, ["0008_report_moderation"]);
 
     const trip = await admin.query(
       `SELECT "origin", "originAddress", "originBbox" FROM "${migrationSchema}"."Trip" WHERE "id" = $1`,
@@ -223,6 +220,17 @@ integration("0006_trip_stop_address_bbox against PostgreSQL", () => {
       [LEGACY_STOP_ID],
     );
     expect(stop.rows).toEqual([{ city: "Kyoto", address: null, bbox: null }]);
+
+    // Prisma's generated client selects every column of the model, so the
+    // schema must be at HEAD before the next two tests use it. Replay *every*
+    // remaining migration instead of a hand-picked subset: pinning a single
+    // file (the old `0008` line) starts failing with "column does not exist"
+    // as soon as any later migration adds a field, which is exactly how 0014's
+    // `Trip.showExactPhotoLocation` was missed. This also proves the rest of
+    // the series applies on top of pre-0006 rows.
+    const afterBbox = migrations.filter((name) => name > "0006_trip_stop_address_bbox");
+    expect([...before, "0006_trip_stop_address_bbox", ...afterBbox]).toEqual(migrations);
+    await applyMigrations(admin, migrationSchema, afterBbox);
   });
 
   it("rejects malformed bbox values with the shape CHECK constraints", async () => {
