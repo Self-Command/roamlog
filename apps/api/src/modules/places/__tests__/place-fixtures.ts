@@ -33,6 +33,12 @@ export function testSettings(overrides: Partial<PlacesSettings> = {}): PlacesSet
     geoapifyTimeoutMs: 1_200,
     geoapifyDailyLimit: 3_000,
     fallbackToPhoton: true,
+    tencentBaseUrl: "https://tencent.example.test/ws",
+    // A dummy key keeps the China route reachable; no test performs real I/O.
+    tencentApiKey: "test-key",
+    tencentTimeoutMs: 1_500,
+    tencentCacheTtlSeconds: 300,
+    tencentDailyLimit: 10_000,
     cacheTtlSeconds: 900,
     emptyCacheTtlSeconds: 30,
     rateLimitMax: 30,
@@ -40,7 +46,13 @@ export function testSettings(overrides: Partial<PlacesSettings> = {}): PlacesSet
     rateLimitTimeoutMs: 750,
     redisTimeoutMs: 500,
     defaultLimit: 6,
-    defaultLang: "zh",
+    /**
+     * `en` keeps the shared fixture on the global route: since the Tencent
+     * routing landed, `lang: "zh"` (the production default) routes every query to
+     * mainland China. Tests that exercise that route set `lang: "zh"`, send a
+     * Han keyword or pass `defaultLang: "zh"` explicitly.
+     */
+    defaultLang: "en",
     ...overrides,
   };
 }
@@ -252,4 +264,109 @@ export function geoapifyFeature(overrides: GeoapifyFeatureOverrides = {}) {
 
 export function geoapifyPayload(features: unknown[] = [geoapifyFeature()]) {
   return { type: "FeatureCollection", features };
+}
+
+/**
+ * A trimmed `place/v1/suggestion` hit (北京SKP, `建国路87号`) built from the
+ * documented response fields. The coordinate is GCJ-02, exactly as Tencent
+ * returns it; `gcoord` converts it to WGS-84 inside the normalizer.
+ */
+export interface TencentSuggestItemOverrides {
+  id?: unknown;
+  title?: unknown;
+  address?: unknown;
+  category?: unknown;
+  type?: unknown;
+  location?: unknown;
+  ad_info?: unknown;
+  province?: unknown;
+  city?: unknown;
+  district?: unknown;
+}
+
+export const TENCENT_SKP_GCJ02 = { lat: 39.908619, lng: 116.463658 };
+export const TENCENT_SKP_WGS84 = { lat: 39.90728075553551, lng: 116.4575016135038 };
+
+export function tencentSuggestItem(overrides: TencentSuggestItemOverrides = {}) {
+  const item: Record<string, unknown> = {
+    id: "10233345183344841920",
+    title: "北京SKP",
+    address: "建国路87号",
+    category: "购物:商场",
+    type: 0,
+    location: { ...TENCENT_SKP_GCJ02 },
+    ad_info: { adcode: 110105, province: "北京市", city: "北京市", district: "朝阳区" },
+  };
+
+  for (const key of [
+    "id",
+    "title",
+    "address",
+    "category",
+    "type",
+    "location",
+    "ad_info",
+    "province",
+    "city",
+    "district",
+  ] as const) {
+    if (key in overrides) {
+      item[key] = overrides[key];
+    }
+  }
+
+  return item;
+}
+
+export function tencentSuggestionPayload(items: unknown[] = [tencentSuggestItem()]) {
+  return { status: 0, message: "query ok", count: items.length, data: items };
+}
+
+/** A Tencent error body: `status: 0` is the only success code. */
+export function tencentErrorPayload(status: number, message = "error") {
+  return { status, message };
+}
+
+export function tencentGeocodePayload(result: Record<string, unknown>) {
+  return { status: 0, message: "query ok", request_id: "req-1", result };
+}
+
+/** `geocoder/v1?address=` result for 北京市海淀区彩和坊路海淀西大街74号. */
+export function tencentGeocodeResult(overrides: Record<string, unknown> = {}) {
+  return {
+    title: "北京市海淀区彩和坊路海淀西大街74号",
+    location: { lat: 39.984154, lng: 116.30749 },
+    address_components: {
+      province: "北京市",
+      city: "北京市",
+      district: "海淀区",
+      street: "彩和坊路海淀西大街",
+      street_number: "74号",
+    },
+    ad_info: { adcode: "110108" },
+    reliability: 7,
+    level: 9,
+    ...overrides,
+  };
+}
+
+/** `geocoder/v1?location=` result for 深圳市南山区腾讯滨海大厦. */
+export function tencentReverseResult(overrides: Record<string, unknown> = {}) {
+  return {
+    address: "广东省深圳市南山区深南大道10000号",
+    formatted_addresses: {
+      recommend: "腾讯滨海大厦(滨海大道辅路)",
+      rough: "南山区 腾讯滨海大厦",
+    },
+    address_component: {
+      nation: "中国",
+      province: "广东省",
+      city: "深圳市",
+      district: "南山区",
+      street: "深南大道",
+      street_number: "10000号",
+    },
+    location: { lat: 22.539878, lng: 113.934528 },
+    ...overrides,
+  };
 }

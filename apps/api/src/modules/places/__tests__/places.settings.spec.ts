@@ -6,8 +6,10 @@ import { PhotonClient } from "../photon.client.js";
 import { PlacesCacheService } from "../places-cache.service.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesService } from "../places.service.js";
+import { TencentClient } from "../tencent.client.js";
 import {
   PlacesSettingsResolver,
+  resolvePlacesSettings,
   resolvePlacesSettingsFromStored,
 } from "../places.settings.js";
 import { RedisService } from "../../redis/redis.service.js";
@@ -33,7 +35,9 @@ function storedPlaces(
   return {
     "places.provider": "geoapify",
     "places.apiKey": null,
-    "places.lang": "zh",
+    // `en` keeps these stored-settings tests on the global route: since the
+    // Chinese route landed, `places.lang=zh` sends every query to Tencent.
+    "places.lang": "en",
     "places.limit": 6,
     "places.cacheTtlSeconds": 900,
     "places.dailyQuota": 3_000,
@@ -60,6 +64,9 @@ function harness(stored: Record<string, unknown> | Error, logger: LoggerMock = m
   vi.stubEnv("GEOAPIFY_URL", "https://geoapify.example.test/v1/geocode/autocomplete");
   vi.stubEnv("PHOTON_URL", "https://photon.example.test/api");
   vi.stubEnv("GEOAPIFY_API_KEY", "");
+  // The mainland-China route is environment-only as well; an empty key keeps
+  // these tests off Tencent and off the real network.
+  vi.stubEnv("TENCENT_MAPS_KEY", "");
   const redis = fakeRedis();
   const resolver = new PlacesSettingsResolver(settingsService(stored), asLogger(logger));
   const geoapify = new GeoapifyClient(resolver);
@@ -68,6 +75,7 @@ function harness(stored: Record<string, unknown> | Error, logger: LoggerMock = m
     new PlacesCacheService(redis as unknown as RedisService, asLogger(logger), resolver),
     geoapify,
     photon,
+    new TencentClient(resolver),
     new PlacesQuotaService(redis as unknown as RedisService, asLogger(logger), resolver),
     asLogger(logger),
     resolver,
@@ -146,7 +154,9 @@ describe("PlacesSettingsResolver", () => {
     const { service, resolver } = harness(new Error("db down"), logger);
 
     const settings = await resolver.resolve();
-    const response = await service.search({ q: "Kyoto" });
+    // `lang: "en"` keeps this on the global route; the environment fallback this
+    // test exercises is about the provider, not about the language default.
+    const response = await service.search({ q: "Kyoto", lang: "en" });
 
     expect(settings.provider).toBe("photon");
     expect(response.provider).toBe("photon");
@@ -212,5 +222,22 @@ describe("PlacesSettingsResolver", () => {
       }),
       "places.setting_value_ignored",
     );
+  });
+
+  it("reads the Tencent key, URL and budgets from the environment", () => {
+    const configured = resolvePlacesSettings({
+      TENCENT_MAPS_KEY: "test-key",
+    } as NodeJS.ProcessEnv);
+
+    expect(configured.tencentApiKey).toBe("test-key");
+    expect(configured.tencentBaseUrl).toBe("https://apis.map.qq.com/ws");
+    expect(configured.tencentTimeoutMs).toBe(1_500);
+    expect(configured.tencentCacheTtlSeconds).toBe(300);
+    expect(configured.tencentDailyLimit).toBe(10_000);
+
+    // An empty key means "mainland China is not configured", never "ask another
+    // source for a Chinese address".
+    const empty = resolvePlacesSettings({ TENCENT_MAPS_KEY: "" } as NodeJS.ProcessEnv);
+    expect(empty.tencentApiKey).toBeNull();
   });
 });

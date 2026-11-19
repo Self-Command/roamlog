@@ -15,6 +15,7 @@ import { PlacesRateLimiter } from "./places-rate-limiter.service.js";
 import { PlacesController } from "./places.controller.js";
 import { PlacesService } from "./places.service.js";
 import { PLACES_SETTINGS, PlacesSettingsResolver } from "./places.settings.js";
+import { TencentClient } from "./tencent.client.js";
 
 /**
  * `places.*` rows are read through `SettingsService` on each request, so the
@@ -33,6 +34,7 @@ import { PLACES_SETTINGS, PlacesSettingsResolver } from "./places.settings.js";
     { provide: LIMITS_SETTINGS, useExisting: LimitsSettingsResolver },
     GeoapifyClient,
     PhotonClient,
+    TencentClient,
     PlacesCacheService,
     PlacesQuotaService,
     PlacesRateLimiter,

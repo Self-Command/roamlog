@@ -5,7 +5,10 @@ import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { RedisService } from "../redis/redis.service.js";
 import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
 
-const QUOTA_KEY_PREFIX = "places:quota:geoapify:";
+const GEOAPIFY_QUOTA_KEY_PREFIX = "places:quota:geoapify:";
+const TENCENT_QUOTA_KEY_PREFIX = "places:quota:tencent:";
+const GEOAPIFY_QUOTA_POLICY = "geoapifyDaily";
+const TENCENT_QUOTA_POLICY = "tencentDaily";
 const QUOTA_WARN_THROTTLE_MS = 10_000;
 
 export interface PlacesQuotaDecision {
@@ -53,29 +56,59 @@ export class PlacesQuotaService {
 
   async consume(now: Date = new Date()): Promise<PlacesQuotaDecision> {
     const settings = await this.settings.resolve();
-    const limit = settings.geoapifyDailyLimit;
+    return this.consumeFor(
+      GEOAPIFY_QUOTA_KEY_PREFIX,
+      settings.geoapifyDailyLimit,
+      settings.redisTimeoutMs,
+      GEOAPIFY_QUOTA_POLICY,
+      now,
+    );
+  }
+
+  /**
+   * Same fixed window for the Tencent key (`TENCENT_MAPS_DAILY_LIMIT`). The
+   * China route degrades instead of spending a call once the cap is reached.
+   */
+  async consumeTencent(now: Date = new Date()): Promise<PlacesQuotaDecision> {
+    const settings = await this.settings.resolve();
+    return this.consumeFor(
+      TENCENT_QUOTA_KEY_PREFIX,
+      settings.tencentDailyLimit,
+      settings.redisTimeoutMs,
+      TENCENT_QUOTA_POLICY,
+      now,
+    );
+  }
+
+  private async consumeFor(
+    prefix: string,
+    limit: number,
+    redisTimeoutMs: number,
+    policy: string,
+    now: Date,
+  ): Promise<PlacesQuotaDecision> {
     if (limit <= 0) {
       return { allowed: true, limit, remaining: Number.MAX_SAFE_INTEGER };
     }
 
     const dateKey = now.toISOString().slice(0, 10);
-    const key = `${QUOTA_KEY_PREFIX}${dateKey}`;
+    const key = `${prefix}${dateKey}`;
 
     try {
       const counter = await withTimeout(
         this.redis.incrementFixedWindow(key, secondsUntilUtcMidnight(now)),
-        settings.redisTimeoutMs,
+        redisTimeoutMs,
         "Places daily quota counter timed out",
       );
       const remaining = Math.max(0, limit - counter.count);
       return { allowed: counter.count <= limit, limit, remaining };
     } catch (error) {
-      this.warnFailOpen(error);
+      this.warnFailOpen(error, policy);
       return { allowed: true, limit, remaining: limit };
     }
   }
 
-  private warnFailOpen(error: unknown): void {
+  private warnFailOpen(error: unknown, policy: string): void {
     const now = Date.now();
     if (now - this.lastWarnAt < QUOTA_WARN_THROTTLE_MS) {
       return;
@@ -84,7 +117,7 @@ export class PlacesQuotaService {
     this.logger.warn(
       {
         event: "places.quota_unavailable",
-        policy: "geoapifyDaily",
+        policy,
         ...(error instanceof Error ? { reason: error.name } : {}),
       },
       "places.quota_fail_open",

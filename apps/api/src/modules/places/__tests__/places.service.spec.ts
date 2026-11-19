@@ -5,10 +5,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RedisService } from "../../redis/redis.service.js";
 import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
-import { staticPlacesSettingsSource, type PlacesSettings } from "../places.settings.js";
+import {
+  resolvePlacesSettings,
+  staticPlacesSettingsSource,
+  type PlacesSettings,
+} from "../places.settings.js";
 import { PlacesCacheService } from "../places-cache.service.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesService } from "../places.service.js";
+import { TencentClient } from "../tencent.client.js";
 import {
   abortAwareFetch,
   asLogger,
@@ -18,20 +23,30 @@ import {
   makeLogger,
   photonFeature,
   photonPayload,
+  TENCENT_SKP_WGS84,
+  tencentErrorPayload,
+  tencentSuggestionPayload,
   testSettings,
   type FakeRedis,
 } from "./place-fixtures.js";
 
 function setup(
-  options: { settings?: Partial<PlacesSettings>; redis?: FakeRedis } = {},
+  options: {
+    settings?: Partial<PlacesSettings>;
+    /** Full settings snapshot, for tests that resolve them from an environment. */
+    resolved?: PlacesSettings;
+    redis?: FakeRedis;
+  } = {},
 ): {
   settings: PlacesSettings;
   logger: ReturnType<typeof makeLogger>;
   redis: FakeRedis;
   cache: PlacesCacheService;
   service: PlacesService;
+  photon: PhotonClient;
+  tencent: TencentClient;
 } {
-  const settings = testSettings(options.settings);
+  const settings = options.resolved ?? testSettings(options.settings);
   const source = staticPlacesSettingsSource(settings);
   const logger = makeLogger();
   const redis = options.redis ?? fakeRedis();
@@ -40,15 +55,18 @@ function setup(
     asLogger(logger),
     source,
   );
+  const photon = new PhotonClient(source);
+  const tencent = new TencentClient(source);
   const service = new PlacesService(
     cache,
     new GeoapifyClient(source),
-    new PhotonClient(source),
+    photon,
+    tencent,
     new PlacesQuotaService(redis as unknown as RedisService, asLogger(logger), source),
     asLogger(logger),
     source,
   );
-  return { settings, logger, redis, cache, service };
+  return { settings, logger, redis, cache, service, photon, tencent };
 }
 
 /** Dispatches by upstream host so a fallback test can fail only the primary. */
@@ -123,7 +141,7 @@ describe("PlacesService", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { service } = setup({ settings: { provider: "geoapify" } });
 
-    const response = await service.search({ q: "京都", limit: 3, lang: "zh" });
+    const response = await service.search({ q: "Kyoto", limit: 3, lang: "en" });
 
     expect(response).toEqual({
       items: [
@@ -394,16 +412,30 @@ describe("PlacesService", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it("keys the cache by the requested language even when it is not forwarded", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(photonPayload()));
+  it("keeps the Chinese and global routes in separate cache namespaces", async () => {
+    const fetchMock = vi.fn((url: URL) =>
+      Promise.resolve(
+        url.hostname.startsWith("tencent")
+          ? jsonResponse(tencentErrorPayload(500))
+          : jsonResponse(photonPayload()),
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
-    const { service } = setup();
+    const { service, redis } = setup();
 
+    // `lang: "zh"` is a China query and only ever reaches Tencent; `lang: "en"`
+    // keeps the global route, whose second call is served from cache.
     await service.search({ q: "Paris", limit: 6, lang: "zh" });
     await service.search({ q: "Paris", limit: 6, lang: "en" });
-    await service.search({ q: "Paris", limit: 6, lang: "zh" });
+    await service.search({ q: "Paris", limit: 6, lang: "en" });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    const hosts = (fetchMock.mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
+    expect(hosts).toEqual(["tencent.example.test", "photon.example.test"]);
+
+    const keys = [...redis.store.keys()];
+    expect(keys.some((key) => key.startsWith("places:v3:tencent:"))).toBe(true);
+    expect(keys.some((key) => key.startsWith("places:v3:photon:"))).toBe(true);
   });
 
   it("rejects invalid queries with the shared VALIDATION_ERROR problem", async () => {
@@ -488,5 +520,189 @@ describe("PlacesService", () => {
     const response = await service.search({ q: "France", limit: 2 });
 
     expect(response.items).toHaveLength(2);
+  });
+});
+
+/**
+ * The mainland-China route. The governing rule is that a Chinese address must
+ * never be answered by Photon, whose same-street house numbers are wrong; a
+ * failure degrades to `map_pick` instead.
+ */
+describe("PlacesService China route", () => {
+  it("routes a Han keyword to Tencent, converts GCJ-02 to WGS-84 and never calls Photon", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload()));
+    vi.stubGlobal("fetch", fetchMock);
+    const { service, photon } = setup();
+    const photonSearch = vi.spyOn(photon, "search");
+
+    const response = await service.search({ q: "北京市朝阳区建国路87号", limit: 3 });
+
+    expect(response.provider).toBe("tencent");
+    expect(response.degraded).toBe(false);
+    expect(response.fallback).toBeUndefined();
+    expect(response.items[0]).toMatchObject({
+      provider: "tencent",
+      providerPlaceId: "10233345183344841920",
+      name: "北京SKP",
+      address: "北京市朝阳区建国路87号",
+      country: "中国",
+      countryCode: "CN",
+      timeZone: null,
+      bbox: null,
+      importance: null,
+      type: "poi",
+    });
+    expect(response.items[0]?.lat).toBeCloseTo(TENCENT_SKP_WGS84.lat, 9);
+    expect(response.items[0]?.lng).toBeCloseTo(TENCENT_SKP_WGS84.lng, 9);
+    expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
+
+    const url = (fetchMock.mock.calls[0] as unknown as [URL])[0];
+    expect(url.hostname).toBe("tencent.example.test");
+    expect(url.pathname).toBe("/ws/place/v1/suggestion");
+    expect(url.searchParams.get("keyword")).toBe("北京市朝阳区建国路87号");
+    expect(url.searchParams.get("page_size")).toBe("3");
+    expect(url.searchParams.get("key")).toBe("test-key");
+    expect(photonSearch).not.toHaveBeenCalled();
+  });
+
+  it("caches a Chinese result in the Tencent namespace for 300 seconds", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload()));
+    vi.stubGlobal("fetch", fetchMock);
+    const { service, redis } = setup();
+
+    const first = await service.search({ q: "建国路87号", limit: 3 });
+    const second = await service.search({ q: "建国路87号", limit: 3 });
+
+    expect(first.cached).toBe(false);
+    expect(second.cached).toBe(true);
+    expect(second.items).toEqual(first.items);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [key, , ttl] = redis.set.mock.calls[0] as [string, string, number];
+    expect(key.startsWith("places:v3:tencent:")).toBe(true);
+    expect(ttl).toBe(300);
+  });
+
+  it("routes country=CN even when the keyword is romanized", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
+    const { service, photon } = setup();
+    const photonSearch = vi.spyOn(photon, "search");
+
+    const response = await service.search({ q: "Shenzhen", limit: 3, country: "CN" });
+
+    expect(response.provider).toBe("tencent");
+    expect(response.items).toHaveLength(1);
+    expect(photonSearch).not.toHaveBeenCalled();
+  });
+
+  it("never sends a non-Chinese query to Tencent", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(photonPayload())));
+    const { service } = setup();
+
+    const response = await service.search({ q: "Paris", limit: 3, lang: "en" });
+
+    expect(response.provider).toBe("photon");
+    const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
+    expect(hosts).toEqual(["photon.example.test"]);
+  });
+
+  it("degrades to map_pick when Tencent fails, without ever calling Photon", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentErrorPayload(520)));
+    vi.stubGlobal("fetch", fetchMock);
+    const { service, photon, logger } = setup();
+    const photonSearch = vi.spyOn(photon, "search");
+
+    const response = await service.search({ q: "建国路87号", limit: 3 });
+
+    expect(response).toEqual({
+      items: [],
+      provider: "tencent",
+      degraded: true,
+      cached: false,
+      fallback: "map_pick",
+    });
+    expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(photonSearch).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "places.upstream_failed",
+        provider: "tencent",
+        route: "china",
+        reason: "upstream_error",
+        code: "UPSTREAM_ERROR",
+        upstreamStatus: 520,
+        fallback: "map_pick",
+      }),
+      "places.search_degraded",
+    );
+  });
+
+  it("degrades to map_pick on status 121 (QUOTA_EXCEEDED) without retrying", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(tencentErrorPayload(121, "此key每日调用量已达到上限")));
+    vi.stubGlobal("fetch", fetchMock);
+    const { service, photon, logger } = setup();
+    const photonSearch = vi.spyOn(photon, "search");
+
+    const response = await service.search({ q: "建国路87号", limit: 3 });
+
+    expect(response).toMatchObject({ items: [], degraded: true, fallback: "map_pick" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(photonSearch).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "quota_exceeded",
+        code: "QUOTA_EXCEEDED",
+        upstreamStatus: 121,
+        fallback: "map_pick",
+      }),
+      "places.search_degraded",
+    );
+  });
+
+  it("degrades to map_pick when TENCENT_MAPS_KEY is empty, without any upstream call", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const settings = resolvePlacesSettings({ TENCENT_MAPS_KEY: "" } as NodeJS.ProcessEnv);
+    const { service, photon } = setup({ resolved: settings });
+    const photonSearch = vi.spyOn(photon, "search");
+
+    const response = await service.search({ q: "深圳市南山区深南大道10000号", limit: 3 });
+
+    expect(settings.tencentApiKey).toBeNull();
+    expect(response).toEqual({
+      items: [],
+      provider: "tencent",
+      degraded: true,
+      cached: false,
+      fallback: "map_pick",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(photonSearch).not.toHaveBeenCalled();
+  });
+
+  it("degrades to map_pick once the Tencent daily cap is exhausted", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload()));
+    vi.stubGlobal("fetch", fetchMock);
+    const { service, logger } = setup({ settings: { tencentDailyLimit: 1 } });
+
+    const first = await service.search({ q: "建国路87号", limit: 3 });
+    const second = await service.search({ q: "深南大道10000号", limit: 3 });
+
+    expect(first.degraded).toBe(false);
+    expect(second).toEqual({
+      items: [],
+      provider: "tencent",
+      degraded: true,
+      cached: false,
+      fallback: "map_pick",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "quota_exceeded", fallback: "map_pick" }),
+      "places.search_degraded",
+    );
   });
 });

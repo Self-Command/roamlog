@@ -21,6 +21,7 @@ import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesRateLimiter } from "../places-rate-limiter.service.js";
 import { PlacesController } from "../places.controller.js";
 import { PlacesService } from "../places.service.js";
+import { TencentClient } from "../tencent.client.js";
 import { PLACES_SETTINGS, staticPlacesSettingsSource } from "../places.settings.js";
 import { LIMITS_SETTINGS } from "../../settings/limits-settings.consumer.js";
 import {
@@ -30,6 +31,7 @@ import {
   jsonResponse,
   makeLogger,
   photonPayload,
+  tencentSuggestionPayload,
   testSettings,
   type FakeRedis,
 } from "./place-fixtures.js";
@@ -64,6 +66,7 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
       },
       GeoapifyClient,
       PhotonClient,
+      TencentClient,
       PlacesCacheService,
       PlacesQuotaService,
       PlacesRateLimiter,
@@ -140,26 +143,36 @@ describe("GET /v1/places/search", () => {
   });
 
   it("applies the contract default limit and forwards only supported languages", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(photonPayload()));
+    const fetchMock = vi.fn((url: URL) =>
+      Promise.resolve(
+        url.hostname.startsWith("tencent")
+          ? jsonResponse(tencentSuggestionPayload())
+          : jsonResponse(photonPayload()),
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const { app } = await createApp({ authenticated: true });
 
     await request(app.getHttpServer()).get("/v1/places/search?q=paris").expect(200);
-    await request(app.getHttpServer()).get("/v1/places/search?q=paris&lang=en").expect(200);
-    // The stored `places.lang` default is `zh`, so an explicit `lang=zh` is the
-    // same cache key as the first request and must be served from cache.
+    // The fixture's stored `places.lang` is `en`, so an explicit `lang=en` shares
+    // the first request's cache key and is served from cache.
     const cached = await request(app.getHttpServer())
+      .get("/v1/places/search?q=paris&lang=en")
+      .expect(200);
+    // `lang=zh` is a mainland-China query: it must reach Tencent, not Photon.
+    const chinese = await request(app.getHttpServer())
       .get("/v1/places/search?q=paris&lang=zh")
       .expect(200);
 
     const first = firstFetchCall(fetchMock).url;
     expect(first.searchParams.get("limit")).toBe("6");
-    // Photon does not forward `zh`; the default language therefore stays off the wire.
-    expect(first.searchParams.get("lang")).toBeNull();
-    const english = (fetchMock.mock.calls[1] as unknown as [URL])[0];
-    expect(english.searchParams.get("lang")).toBe("en");
+    expect(first.searchParams.get("lang")).toBe("en");
+    const tencentCall = (fetchMock.mock.calls[1] as unknown as [URL])[0];
+    expect(tencentCall.hostname).toBe("tencent.example.test");
+    expect(tencentCall.searchParams.get("keyword")).toBe("paris");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(cached.body.cached).toBe(true);
+    expect(chinese.body.provider).toBe("tencent");
   });
 
   it("serves the second identical request from cache", async () => {

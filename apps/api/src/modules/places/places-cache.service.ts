@@ -5,7 +5,11 @@ import { createHash } from "node:crypto";
 import { withTimeout } from "../../common/utils/with-timeout.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { RedisService } from "../redis/redis.service.js";
-import { PLACES_SETTINGS, type PlacesProvider, type PlacesSettingsSource } from "./places.settings.js";
+import {
+  PLACES_SETTINGS,
+  type PlacesResponseProvider,
+  type PlacesSettingsSource,
+} from "./places.settings.js";
 
 /**
  * Versioned, provider-scoped cache namespace. The `v3` segment invalidates the
@@ -21,7 +25,7 @@ export interface PlacesCacheKeyInput {
   readonly limit: number;
   readonly lang?: string;
   /** Primary provider; part of the key so switching sources misses old entries. */
-  readonly provider: PlacesProvider;
+  readonly provider: PlacesResponseProvider;
 }
 
 /**
@@ -68,7 +72,11 @@ export class PlacesCacheService {
         this.warnUnavailable("read_invalid_entry");
         return undefined;
       }
-      if (parsed.data.provider !== "photon" && parsed.data.provider !== "geoapify") {
+      if (
+        parsed.data.provider !== "photon" &&
+        parsed.data.provider !== "geoapify" &&
+        parsed.data.provider !== "tencent"
+      ) {
         this.warnUnavailable("read_unexpected_provider");
         return undefined;
       }

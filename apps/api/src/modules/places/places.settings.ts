@@ -48,6 +48,26 @@ export const DEFAULT_PLACES_REDIS_TIMEOUT_MS = 500;
 export const DEFAULT_PLACES_LIMIT = 6;
 export const DEFAULT_PLACES_LANG: PlacesLanguage = "zh";
 
+/**
+ * Tencent Map WebService (mainland-China source; see
+ * https://lbs.qq.com/service/webService/webServiceGuide/webServiceSuggestion).
+ * The base URL is the documented `https://apis.map.qq.com/ws` prefix without a
+ * trailing slash; `/place/v1/suggestion` and `/geocoder/v1` are appended.
+ */
+export const DEFAULT_TENCENT_BASE_URL = "https://apis.map.qq.com/ws";
+/** Observed Tencent latency is 0.35–0.45 s, so 1.5 s is a generous hard budget. */
+export const DEFAULT_TENCENT_TIMEOUT_MS = 1_500;
+/** Tencent search results are cached for 5 minutes, not the 15 of the global path. */
+export const DEFAULT_TENCENT_CACHE_TTL_SECONDS = 300;
+/** Tencent's individual-developer WebService allowance is 10,000 calls per day. */
+export const DEFAULT_TENCENT_DAILY_LIMIT = 10_000;
+
+/**
+ * Provider that produced a response. `tencent` is only reachable through the
+ * China route (`isChinaQuery`), never through `PLACES_PROVIDER`.
+ */
+export type PlacesResponseProvider = PlacesProvider | "tencent";
+
 /** Never log more than one fallback warning per window. */
 const SETTINGS_WARN_THROTTLE_MS = 10_000;
 
@@ -68,6 +88,16 @@ export interface PlacesSettings {
   readonly geoapifyDailyLimit: number;
   /** Whether a failed/over-quota Geoapify search may be served by Photon. */
   readonly fallbackToPhoton: boolean;
+  /** Tencent WebService base URL, for example `https://apis.map.qq.com/ws`. */
+  readonly tencentBaseUrl: string;
+  /** Server-side only (`TENCENT_MAPS_KEY`). `null` means the China route degrades. */
+  readonly tencentApiKey: string | null;
+  /** Hard Tencent budget enforced with an AbortController. */
+  readonly tencentTimeoutMs: number;
+  /** TTL for non-empty, non-degraded China results. */
+  readonly tencentCacheTtlSeconds: number;
+  /** Redis daily request cap for Tencent; over the cap the China route degrades. */
+  readonly tencentDailyLimit: number;
   /** TTL for non-empty, non-degraded results. */
   readonly cacheTtlSeconds: number;
   /** TTL for empty and degraded results, to avoid hammering the upstream. */
@@ -153,6 +183,29 @@ export function resolvePlacesSettings(env: NodeJS.ProcessEnv = process.env): Pla
       env,
       "PLACES_FALLBACK_TO_PHOTON",
       DEFAULT_PLACES_FALLBACK_TO_PHOTON,
+    ),
+    tencentBaseUrl: stringSetting(env, "TENCENT_MAPS_BASE_URL", DEFAULT_TENCENT_BASE_URL),
+    tencentApiKey: stringSetting(env, "TENCENT_MAPS_KEY", "") || null,
+    tencentTimeoutMs: integerSetting(
+      env,
+      "TENCENT_MAPS_TIMEOUT_MS",
+      DEFAULT_TENCENT_TIMEOUT_MS,
+      1,
+      30_000,
+    ),
+    tencentCacheTtlSeconds: integerSetting(
+      env,
+      "TENCENT_MAPS_CACHE_TTL_SECONDS",
+      DEFAULT_TENCENT_CACHE_TTL_SECONDS,
+      1,
+      86_400,
+    ),
+    tencentDailyLimit: integerSetting(
+      env,
+      "TENCENT_MAPS_DAILY_LIMIT",
+      DEFAULT_TENCENT_DAILY_LIMIT,
+      0,
+      1_000_000,
     ),
     cacheTtlSeconds: integerSetting(
       env,
