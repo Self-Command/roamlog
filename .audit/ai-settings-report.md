@@ -36,6 +36,8 @@ apps/admin/components/settings/admin-settings.test.ts         # +2 断言（ai b
 apps/admin/components/settings/settings-console.test.tsx      # +1 ai 组渲染测试（29 tests）
 ```
 
+> **并行提交冲突（须知悉）**：上面 4 个 admin 文件里，前 3 个被并行 Agent 的 `git add -A` 扫进了它自己的提交 `a83c06c feat(limits): drive the search rate limit from the admin settings`（该提交 `--stat` 明确含这 3 个文件、58 insertions，`git show a83c06c:...` 可验证 ai 标签已在其中）；本任务第 2 个提交 `fa554df` 因此只含 `settings-console.test.tsx`。内容正确、历史归属错位，无重复改动。
+
 未触碰：`settings.service.ts`、`settings.registry.ts`、`modules/{reports,storage,email,health,metrics}/**`、`bootstrap/**`、`apps/web/**`、`packages/**` 的其他文件。**唯一例外**是 `packages/contracts/src/api/ai.ts`：任务 B 明确要求给 `AiChatResponse` 增加可选 `warnings`，该类型只存在于该文件（见 §5）。
 
 ---
