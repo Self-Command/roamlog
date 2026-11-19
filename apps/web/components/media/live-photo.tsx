@@ -12,6 +12,28 @@ export interface LivePhotoProps {
   durationMs?: number | null;
   className?: string;
   /**
+   * Accessible copy for embedding surfaces (the public share page). Private
+   * callers keep the `alt`-derived defaults, so nothing changes for them.
+   */
+  labels?: {
+    /** Name of the control while the motion asset can still play. */
+    live: string;
+    /** Name once the motion failed and only the still is left. */
+    still: string;
+  };
+  /**
+   * When set, the `<video>` is exposed with this accessible name instead of
+   * being hidden from assistive technology. A `<video>` without `controls` is
+   * not a widget, so the label documents the layer; the button stays the
+   * single keyboard entry point.
+   */
+  videoLabel?: string;
+  /**
+   * Called when the still itself fails to load (expired signed URL). Embedders
+   * use it to swap in their own placeholder; omitted keeps a plain `<img>`.
+   */
+  onStillError?: () => void;
+  /**
    * Test/embedding seam. When omitted the component reads
    * `prefers-reduced-motion` itself and follows live changes.
    */
@@ -39,6 +61,9 @@ export function LivePhoto({
   alt,
   durationMs = null,
   className,
+  labels,
+  videoLabel,
+  onStillError,
   prefersReducedMotion,
 }: LivePhotoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -122,8 +147,8 @@ export function LivePhoto({
       className={`group relative block overflow-hidden ${className ?? ""}`}
       aria-label={
         hasMotion
-          ? `${alt}（实况照片：聚焦或长按播放动图，按 Enter 播放）`
-          : `${alt}（照片）`
+          ? (labels?.live ?? `${alt}（实况照片：聚焦或长按播放动图，按 Enter 播放）`)
+          : (labels?.still ?? `${alt}（照片）`)
       }
       onPointerDown={startLongPress}
       onPointerUp={stop}
@@ -135,18 +160,26 @@ export function LivePhoto({
       onMouseLeave={stop}
       onClick={play}
       onKeyDown={(event) => {
-        if (event.key === "Enter") {
+        // Space is the native activation key of a `<button>`; handling it here
+        // keeps Enter and Space on one code path and stops the browser's
+        // synthetic click from firing a second play.
+        if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           play();
         }
       }}
       onKeyUp={(event) => {
-        if (event.key === "Enter") stop();
+        if (event.key === "Enter" || event.key === " ") stop();
       }}
       onBlur={stop}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- signed, short-lived URL */}
-      <img src={stillUrl} alt={alt} className="h-full w-full object-cover" draggable={false} />
+      <img
+        src={stillUrl}
+        alt={alt}
+        onError={onStillError}
+        className="h-full w-full object-cover"
+        draggable={false}
+      />
       {hasMotion ? (
         <video
           ref={videoRef}
@@ -156,7 +189,8 @@ export function LivePhoto({
           muted
           playsInline
           preload="none"
-          aria-hidden="true"
+          aria-label={videoLabel}
+          aria-hidden={videoLabel ? undefined : true}
           onError={() => {
             setFailed(true);
             setPlaying(false);

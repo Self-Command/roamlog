@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   PublicTripResponseSchema,
@@ -688,5 +688,218 @@ describe("ShareArticle place attribution", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     expect(credit).not.toHaveTextContent(/Geoapify|Photon|手动录入/);
+  });
+});
+
+const MOTION_URL =
+  "https://signed-photos.example.test/tenant-media/motion/photo-1.mov?X-Amz-Expires=900&X-Amz-Signature=motion-signature";
+
+/**
+ * A `PublicMedia` shaped exactly like the server's Live Photo projection: the
+ * signed still/thumb plus `livePhoto: true` and a signed `motion.url`. The
+ * payload has no bucket and no `storageKey`, so the page cannot render one.
+ */
+function livePhotoFixture(overrides: Partial<PhotoFixture> = {}): PhotoFixture {
+  return photo({
+    livePhoto: true,
+    motion: { url: MOTION_URL, mimeType: "video/quicktime", durationMs: 2400 },
+    ...overrides,
+  });
+}
+
+function liveSurface(container: HTMLElement): HTMLElement {
+  const surface = container.querySelector<HTMLElement>('[data-testid="live-photo"]');
+  if (!surface) throw new Error("expected a Live Photo surface on the public page");
+  return surface;
+}
+
+function liveVideo(container: HTMLElement): HTMLVideoElement {
+  const motion = container.querySelector<HTMLVideoElement>('[data-testid="live-photo-video"]');
+  if (!motion) throw new Error("expected the signed motion video on the public page");
+  return motion;
+}
+
+function liveBadge(container: HTMLElement): HTMLElement | null {
+  return container.querySelector<HTMLElement>('[data-testid="live-photo-badge"]');
+}
+
+function reducedMotionQuery() {
+  return {
+    matches: true,
+    media: "(prefers-reduced-motion: reduce)",
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  };
+}
+
+describe("ShareArticle live photos", () => {
+  beforeAll(() => {
+    // jsdom implements neither method, and the shared player calls both from
+    // real DOM events, so the doubles live on the element prototype.
+    Object.defineProperty(HTMLMediaElement.prototype, "play", {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockResolvedValue(undefined),
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "pause", {
+      configurable: true,
+      writable: true,
+      value: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the shared player and the LIVE badge for a paired motion", () => {
+    const { container } = render(<ShareArticle data={shareWithPhotos([livePhotoFixture()])} />);
+
+    const surface = liveSurface(container);
+    expect(surface).toHaveAttribute("data-live-photo", "true");
+    expect(surface).toHaveAttribute("data-playing", "false");
+
+    const badge = liveBadge(container);
+    expect(badge).toHaveTextContent("LIVE");
+    // Quiet mono annotation on the photo, not a second headline.
+    expect(badge?.className).toContain("text-[10px]");
+
+    // The still is the payload's signed display URL, exactly like a plain tile.
+    expect(container.querySelector("figure img")).toHaveAttribute("src", PHOTO_URL);
+
+    const motion = liveVideo(container);
+    expect(motion).toHaveAttribute("src", MOTION_URL);
+    expect(motion.muted).toBe(true);
+    expect(motion).toHaveProperty("playsInline", true);
+    expect(motion.getAttribute("preload")).toBe("none");
+    expect(motion.getAttribute("poster")).toBe(PHOTO_URL);
+  });
+
+  it("keeps an ordinary photo when the payload has no playable motion", () => {
+    const { container } = render(
+      <ShareArticle
+        data={shareWithPhotos([
+          livePhotoFixture({ id: "0193d3a0-0000-7000-8000-0000000000b1", livePhoto: false }),
+          livePhotoFixture({
+            id: "0193d3a0-0000-7000-8000-0000000000b2",
+            motion: null,
+          }),
+          livePhotoFixture({
+            id: "0193d3a0-0000-7000-8000-0000000000b3",
+            motion: { url: null, mimeType: "video/quicktime", durationMs: 2400 },
+          }),
+        ])}
+      />,
+    );
+
+    expect(container.querySelectorAll('[data-testid="live-photo"]')).toHaveLength(0);
+    expect(container.querySelectorAll("video")).toHaveLength(0);
+    expect(liveBadge(container)).toBeNull();
+    expect(photoImages(container)).toHaveLength(3);
+  });
+
+  it("plays on hover, pauses on leave, and plays on a mobile click", async () => {
+    const { container } = render(<ShareArticle data={shareWithPhotos([livePhotoFixture()])} />);
+    const surface = liveSurface(container);
+    const motion = liveVideo(container);
+
+    fireEvent.mouseEnter(surface);
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "true"));
+    expect(motion.play).toHaveBeenCalled();
+
+    fireEvent.mouseLeave(surface);
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "false"));
+    expect(motion.pause).toHaveBeenCalled();
+
+    // Touch devices have no hover: a tap is the explicit request to play.
+    fireEvent.click(surface);
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "true"));
+  });
+
+  it("does not auto-play under prefers-reduced-motion but keeps the badge and click", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(reducedMotionQuery));
+    const { container } = render(<ShareArticle data={shareWithPhotos([livePhotoFixture()])} />);
+    const surface = liveSurface(container);
+    const motion = liveVideo(container);
+
+    fireEvent.mouseEnter(surface);
+    await act(async () => undefined);
+
+    expect(surface).toHaveAttribute("data-playing", "false");
+    expect(motion.play).not.toHaveBeenCalled();
+    expect(liveBadge(container)).toHaveTextContent("LIVE");
+
+    fireEvent.click(surface);
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "true"));
+  });
+
+  it("falls back to the still when the signed motion URL fails, with no error copy", async () => {
+    const { container } = render(<ShareArticle data={shareWithPhotos([livePhotoFixture()])} />);
+
+    fireEvent.error(liveVideo(container));
+
+    await waitFor(() =>
+      expect(container.querySelector('[data-testid="live-photo-video"]')).toBeNull(),
+    );
+    expect(photoImages(container)).toHaveLength(1);
+    expect(photoImages(container)[0]).toHaveAttribute("src", PHOTO_URL);
+    // An external visitor must never see playback diagnostics.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(container.textContent).not.toMatch(/无法播放|播放失败|加载失败|视频错误|Video error/);
+  });
+
+  it("drops the tile to the generated placeholder when the still itself is expired", async () => {
+    const { container } = render(<ShareArticle data={shareWithPhotos([livePhotoFixture()])} />);
+
+    fireEvent.error(container.querySelector("figure img")!);
+
+    await waitFor(() => expect(photoGradients(container)).toHaveLength(1));
+    expect(container.querySelector('[data-testid="live-photo"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/无法播放|加载失败/);
+  });
+
+  it("exposes readable labels and plays from Enter and Space", async () => {
+    const { container } = render(
+      <ShareArticle
+        data={shareWithPhotos([livePhotoFixture({ caption: null, location: null })])}
+      />,
+    );
+    const surface = liveSurface(container);
+    const motion = liveVideo(container);
+
+    expect(surface.tagName).toBe("BUTTON");
+    expect(surface).toHaveAccessibleName("播放这段 Live Photo");
+    expect(motion).toHaveAccessibleName("播放这段 Live Photo");
+    expect(motion).toHaveAttribute("aria-label", "播放这段 Live Photo");
+    expect(motion).not.toHaveAttribute("aria-hidden");
+
+    fireEvent.keyDown(surface, { key: "Enter" });
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "true"));
+    expect(motion.play).toHaveBeenCalled();
+
+    fireEvent.keyUp(surface, { key: "Enter" });
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "false"));
+
+    fireEvent.keyDown(surface, { key: " " });
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "true"));
+    fireEvent.keyUp(surface, { key: " " });
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "false"));
+  });
+
+  it("plays only the payload's signed motion URL and leaks no storage coordinates", () => {
+    const data = shareWithPhotos([livePhotoFixture()]);
+    const { container } = render(<ShareArticle data={data} />);
+
+    expect(liveVideo(container).getAttribute("src")).toBe(data.media[0]?.motion?.url);
+
+    const html = container.innerHTML;
+    expect(html).not.toMatch(/storageKey|storage-key|bucket|X-Amz-Security-Token/i);
+    expect(html).not.toContain("media.example.invalid");
+    expect(html).not.toContain("/_next/image");
   });
 });

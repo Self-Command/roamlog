@@ -23,6 +23,7 @@ import {
 } from "@/lib/trip-presentation";
 import type { PublicMedia, PublicTrip, PublicTripResponse } from "@roamlog/contracts";
 
+import { LivePhoto } from "@/components/media/live-photo";
 import { PlacesAttribution } from "@/components/map/places-attribution";
 
 import { sanitizePublicHtml } from "./html";
@@ -320,10 +321,26 @@ function coverImageUrl(cover: PublicTrip["cover"]): string | null {
 }
 
 /**
+ * The shared player is a `<button>`-rooted surface, so the public page has to
+ * give it the same 4:3 cell a plain photo tile gets; otherwise the wall jumps
+ * between rows. Matches the `aspect-[4/3] w-full object-cover` used below.
+ */
+const SHARE_PHOTO_TILE = "aspect-[4/3] w-full";
+
+/** Visitor-facing copy for the public player; it names no bucket or key. */
+const PUBLIC_LIVE_PHOTO_LABEL = "播放这段 Live Photo";
+
+/**
  * Photo tiles are grid cells, so the signed variant is the right bytes for
  * small viewports; the display URL stays in `src` for the widest layout. Both
  * come from the public payload — the client never assembles a bucket origin,
  * key, or signature.
+ *
+ * A paired Live Photo hands the same payload URLs to the shared `LivePhoto`
+ * player, so long-press, hover, Enter/Space and the reduced-motion rule exist
+ * exactly once in this codebase. `motion.url` is signed and expiring: when it
+ * is missing, stale or rejected by the browser the still stays and no error
+ * copy reaches an external visitor.
  */
 function SharePhoto({ media, index }: { media: PublicMedia; index: number }) {
   const [failed, setFailed] = useState(false);
@@ -340,10 +357,28 @@ function SharePhoto({ media, index }: { media: PublicMedia; index: number }) {
   // gradient instead of leaving a blank or broken frame in the wall.
   const photoUrl = failed ? null : (media.url ?? media.thumbUrl);
   const thumbUrl = failed ? null : media.thumbUrl;
+  // `livePhoto` alone is not enough: a still that is still processing carries
+  // no signed motion URL, and such a payload must stay an ordinary photo.
+  const motionUrl = media.livePhoto === true ? (media.motion?.url ?? null) : null;
 
   return (
     <figure className="overflow-hidden rounded-control border border-hairline bg-surface-1">
-      {photoUrl ? (
+      {photoUrl && motionUrl ? (
+        <LivePhoto
+          stillUrl={photoUrl}
+          motionUrl={motionUrl}
+          alt={caption ?? ""}
+          labels={{
+            live: caption
+              ? `${caption}（实况照片：长按、悬停或点击播放）`
+              : PUBLIC_LIVE_PHOTO_LABEL,
+            still: caption ? `${caption}（照片）` : "旅行照片",
+          }}
+          videoLabel={PUBLIC_LIVE_PHOTO_LABEL}
+          className={SHARE_PHOTO_TILE}
+          onStillError={() => setFailed(true)}
+        />
+      ) : photoUrl ? (
         <img
           src={photoUrl}
           srcSet={

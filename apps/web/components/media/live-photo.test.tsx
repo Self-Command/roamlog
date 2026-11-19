@@ -101,4 +101,56 @@ describe("<LivePhoto />", () => {
     render(<LivePhoto stillUrl={STILL} motionUrl={MOTION} alt="Daegu" durationMs={2400} />);
     expect(screen.getByTestId("live-photo-badge")).toHaveTextContent("2s");
   });
+
+  it("plays on Space as well as Enter", async () => {
+    render(<LivePhoto stillUrl={STILL} motionUrl={MOTION} alt="Gwangju" />);
+    const surface = screen.getByTestId("live-photo");
+
+    fireEvent.keyDown(surface, { key: " " });
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "true"));
+    expect(video().play).toHaveBeenCalled();
+
+    fireEvent.keyUp(surface, { key: " " });
+    await waitFor(() => expect(surface).toHaveAttribute("data-playing", "false"));
+    expect(video().pause).toHaveBeenCalled();
+  });
+
+  it("accepts embedding labels without changing the private defaults", () => {
+    const { rerender } = render(<LivePhoto stillUrl={STILL} motionUrl={MOTION} alt="Suwon" />);
+
+    expect(screen.getByTestId("live-photo")).toHaveAccessibleName(
+      "Suwon（实况照片：聚焦或长按播放动图，按 Enter 播放）",
+    );
+    expect(video()).toHaveAttribute("aria-hidden", "true");
+    expect(video()).not.toHaveAttribute("aria-label");
+
+    rerender(
+      <LivePhoto
+        stillUrl={STILL}
+        motionUrl={MOTION}
+        alt=""
+        labels={{ live: "播放这段 Live Photo", still: "照片" }}
+        videoLabel="播放这段 Live Photo"
+      />,
+    );
+
+    expect(screen.getByTestId("live-photo")).toHaveAccessibleName("播放这段 Live Photo");
+    expect(video()).toHaveAttribute("aria-label", "播放这段 Live Photo");
+    expect(video()).not.toHaveAttribute("aria-hidden");
+  });
+
+  it("reports a still that fails to load so embedders can swap in a placeholder", () => {
+    const onStillError = vi.fn();
+    render(
+      <LivePhoto
+        stillUrl={STILL}
+        motionUrl={MOTION}
+        alt="Andong"
+        onStillError={onStillError}
+      />,
+    );
+
+    fireEvent.error(screen.getByAltText("Andong"));
+    expect(onStillError).toHaveBeenCalledTimes(1);
+  });
 });
