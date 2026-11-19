@@ -23,13 +23,11 @@ import { SanitizeModule } from "../../../common/services/sanitize.module.js";
 import { AuditModule } from "../../audit/audit.module.js";
 import { EmailModule } from "../../email/mail.module.js";
 import { PrismaModule } from "../../prisma/prisma.module.js";
-import { PrismaService } from "../../prisma/prisma.service.js";
 import { RedisModule } from "../../redis/redis.module.js";
 import { RedisService } from "../../redis/redis.service.js";
 import { StorageModule } from "../../storage/storage.module.js";
 import { StorageService } from "../../storage/storage.service.js";
 import { TripsModule } from "../../trips/trips.module.js";
-import { AdminReportsService } from "../admin-reports.service.js";
 import { ReportsModule } from "../reports.module.js";
 
 const databaseUrl = process.env.ROAMLOG_TEST_DATABASE_URL;
@@ -145,7 +143,7 @@ async function call(
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const text = await response.text();
-  let parsed: Json = {};
+  let parsed: Json;
   try {
     parsed = text ? (JSON.parse(text) as Json) : {};
   } catch {

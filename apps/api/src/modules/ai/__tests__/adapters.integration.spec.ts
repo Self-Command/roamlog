@@ -197,7 +197,6 @@ describe.skipIf(!hasGateway)("AI plan loop against a real gateway", () => {
           message: "我想去京都待一周，预算 8000 人民币，喜欢咖啡馆和古寺",
         });
 
-        // eslint-disable-next-line no-console
         console.log(
           `\n[${protocol}] readOnlyTrace=${JSON.stringify(response.readOnlyTrace)}` +
             `\n[${protocol}] plannedCalls=${JSON.stringify(response.plannedCalls)}` +

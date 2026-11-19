@@ -85,7 +85,7 @@ async function call(
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const text = await response.text();
-  let parsed: Json = {};
+  let parsed: Json;
   try {
     parsed = text ? (JSON.parse(text) as Json) : {};
   } catch {

@@ -130,6 +130,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       const reason = error instanceof Error ? error.message : "unknown error";
       throw new Error(
         `Redis is required (REDIS_REQUIRED=true) but unreachable at boot: ${reason}`,
+        { cause: error },
       );
     }
   }

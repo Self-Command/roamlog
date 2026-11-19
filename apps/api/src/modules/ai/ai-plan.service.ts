@@ -133,7 +133,7 @@ export class AiPlanService {
     const pastDateTools = new Set<string>();
     /** Round of the first date rejection; later rounds count as "the retry". */
     let firstPastDateRound: number | null = null;
-    let pastDateIgnoredThisTurn = false;
+    let pastDateIgnoredThisTurn: boolean;
 
     while (rounds < MAX_PLAN_ROUNDS) {
       rounds += 1;

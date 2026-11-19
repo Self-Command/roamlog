@@ -134,7 +134,7 @@ export class StorageSettingsConsumer {
 
   private async read(): Promise<ResolvedStorageConfig> {
     let group: Record<string, SettingValue>;
-    let items = new Map<string, AdminSettingItem>();
+    let items: Map<string, AdminSettingItem>;
 
     try {
       const [values, admin] = await Promise.all([

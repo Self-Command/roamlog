@@ -37,7 +37,7 @@ export class MailTestRateLimitGuard implements CanActivate {
     const key = `${KEY_PREFIX}${createHash("sha256").update(identity, "utf8").digest("hex")}`;
 
     let count: number;
-    let retryAfterSeconds = MAIL_TEST_WINDOW_SECONDS;
+    let retryAfterSeconds: number;
     try {
       const counter = await withTimeout(
         this.redis.incrementFixedWindow(key, MAIL_TEST_WINDOW_SECONDS),
