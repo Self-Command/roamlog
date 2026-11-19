@@ -221,7 +221,7 @@ describe("entity contracts", () => {
 
   describe("structured destinations", () => {
     const destination = {
-      id: "0192f4c5-6a7b-7c8d-c123-456789abcdef",
+      id: "0192f4c5-6a7b-7c8d-b123-456789abcd01",
       name: "Kyoto",
       provider: "geoapify",
       providerPlaceId: "51e1bdfea47461405994da8b683bb64140f00103f9",

@@ -21,6 +21,7 @@ export const GetAdminPermissions200RolesItemActionsItem = {
   "admin:workspaces:read": "admin:workspaces:read",
   "admin:workspaces:suspend": "admin:workspaces:suspend",
   "admin:workspaces:restore": "admin:workspaces:restore",
+  "admin:workspaces:transfer": "admin:workspaces:transfer",
   "admin:workspaces:delete": "admin:workspaces:delete",
   "admin:content:read": "admin:content:read",
   "admin:content:delete": "admin:content:delete",

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { TripPageItemsItemCover } from "./tripPageItemsItemCover";
+import type { TripPageItemsItemDestinationsV2Item } from "./tripPageItemsItemDestinationsV2Item";
 import type { TripPageItemsItemStatus } from "./tripPageItemsItemStatus";
 import type { TripPageItemsItemVisibility } from "./tripPageItemsItemVisibility";
 
@@ -81,9 +82,10 @@ export type TripPageItemsItem = {
   /**
    * @maxItems 30
    * @items.minLength 1
-   * @items.maxLength 120
+   * @items.maxLength 160
    */
   destinations: string[];
+  destinationsV2?: TripPageItemsItemDestinationsV2Item[];
   /**
    * @items.minLength 2
    * @items.maxLength 2

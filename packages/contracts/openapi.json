@@ -2920,9 +2920,149 @@
                   "items": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 120
+                    "maxLength": 160
                   },
                   "maxItems": 30
+                },
+                "destinationsV2": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Sortable UUIDv7 identifier."
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "provider": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "enum": [
+                          "geoapify",
+                          "photon",
+                          "local",
+                          null
+                        ]
+                      },
+                      "providerPlaceId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "address": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 400
+                      },
+                      "country": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "countryCode": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 2,
+                        "maxLength": 2,
+                        "pattern": "^[A-Z]{2}$"
+                      },
+                      "lat": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "lng": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      "timeZone": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+                        "description": "IANA time zone name, for example Asia/Shanghai."
+                      },
+                      "bbox": {
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180,
+                            "description": "west"
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90,
+                            "description": "south"
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180,
+                            "description": "east"
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90,
+                            "description": "north"
+                          }
+                        ],
+                        "description": "Bounding box as [west, south, east, north]."
+                      },
+                      "order": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "provider",
+                      "providerPlaceId",
+                      "address",
+                      "country",
+                      "countryCode",
+                      "lat",
+                      "lng",
+                      "timeZone",
+                      "bbox",
+                      "order"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "countryCodes": {
                   "type": "array",
@@ -5802,7 +5942,128 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 120
+              "maxLength": 160
+            },
+            "maxItems": 30
+          },
+          "destinationsV2": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "geoapify",
+                    "photon",
+                    "local",
+                    null
+                  ]
+                },
+                "providerPlaceId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "address": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 400
+                },
+                "country": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "countryCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 2,
+                  "maxLength": 2,
+                  "pattern": "^[A-Z]{2}$"
+                },
+                "lat": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lng": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "timeZone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+                  "description": "IANA time zone name, for example Asia/Shanghai."
+                },
+                "bbox": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "west"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "south"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "east"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "north"
+                    }
+                  ],
+                  "description": "Bounding box as [west, south, east, north]."
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
             },
             "maxItems": 30
           },
@@ -11130,7 +11391,7 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 120
+              "maxLength": 160
             },
             "maxItems": 30
           },
@@ -11323,7 +11584,7 @@
                 "items": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 120
+                  "maxLength": 160
                 },
                 "maxItems": 30
               },
@@ -15226,9 +15487,149 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 120
+              "maxLength": 160
             },
             "maxItems": 30
+          },
+          "destinationsV2": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "geoapify",
+                    "photon",
+                    "local",
+                    null
+                  ]
+                },
+                "providerPlaceId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "address": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 400
+                },
+                "country": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "countryCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 2,
+                  "maxLength": 2,
+                  "pattern": "^[A-Z]{2}$"
+                },
+                "lat": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lng": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "timeZone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+                  "description": "IANA time zone name, for example Asia/Shanghai."
+                },
+                "bbox": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "west"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "south"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "east"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "north"
+                    }
+                  ],
+                  "description": "Bounding box as [west, south, east, north]."
+                },
+                "order": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "provider",
+                "providerPlaceId",
+                "address",
+                "country",
+                "countryCode",
+                "lat",
+                "lng",
+                "timeZone",
+                "bbox",
+                "order"
+              ],
+              "additionalProperties": false
+            }
           },
           "countryCodes": {
             "type": "array",
@@ -15915,9 +16316,149 @@
                   "items": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 120
+                    "maxLength": 160
                   },
                   "maxItems": 30
+                },
+                "destinationsV2": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Sortable UUIDv7 identifier."
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "provider": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "enum": [
+                          "geoapify",
+                          "photon",
+                          "local",
+                          null
+                        ]
+                      },
+                      "providerPlaceId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "address": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 400
+                      },
+                      "country": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "countryCode": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 2,
+                        "maxLength": 2,
+                        "pattern": "^[A-Z]{2}$"
+                      },
+                      "lat": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "lng": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      "timeZone": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+                        "description": "IANA time zone name, for example Asia/Shanghai."
+                      },
+                      "bbox": {
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180,
+                            "description": "west"
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90,
+                            "description": "south"
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180,
+                            "description": "east"
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90,
+                            "description": "north"
+                          }
+                        ],
+                        "description": "Bounding box as [west, south, east, north]."
+                      },
+                      "order": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "provider",
+                      "providerPlaceId",
+                      "address",
+                      "country",
+                      "countryCode",
+                      "lat",
+                      "lng",
+                      "timeZone",
+                      "bbox",
+                      "order"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "countryCodes": {
                   "type": "array",
@@ -17229,7 +17770,128 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 120
+              "maxLength": 160
+            },
+            "maxItems": 30
+          },
+          "destinationsV2": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "geoapify",
+                    "photon",
+                    "local",
+                    null
+                  ]
+                },
+                "providerPlaceId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "address": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 400
+                },
+                "country": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "countryCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 2,
+                  "maxLength": 2,
+                  "pattern": "^[A-Z]{2}$"
+                },
+                "lat": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "lng": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": -180,
+                  "maximum": 180
+                },
+                "timeZone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:\\/[A-Za-z0-9_+-]+)*$",
+                  "description": "IANA time zone name, for example Asia/Shanghai."
+                },
+                "bbox": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "west"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "south"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180,
+                      "description": "east"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90,
+                      "description": "north"
+                    }
+                  ],
+                  "description": "Bounding box as [west, south, east, north]."
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
             },
             "maxItems": 30
           },
@@ -25842,6 +26504,363 @@
         }
       }
     },
+    "/v1/workspaces/{workspaceId}/media/{mediaId}/motion/presign": {
+      "post": {
+        "operationId": "presignMediaMotion",
+        "tags": [
+          "Media"
+        ],
+        "summary": "Presign an upload for the motion clip of a Live Photo",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "mediaId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fileName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "mimeType": {
+                    "type": "string",
+                    "enum": [
+                      "video/quicktime",
+                      "video/mp4"
+                    ]
+                  },
+                  "size": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 52428800
+                  },
+                  "durationMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 30000
+                  }
+                },
+                "required": [
+                  "fileName",
+                  "mimeType",
+                  "size"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mediaId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "storageKey": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500,
+                      "description": "Server-derived object key; echoed back on completion."
+                    },
+                    "uploadUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "PUT"
+                      ]
+                    },
+                    "headers": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    }
+                  },
+                  "required": [
+                    "mediaId",
+                    "storageKey",
+                    "uploadUrl",
+                    "method",
+                    "headers",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspaceId}/media/{mediaId}/motion": {
+      "post": {
+        "operationId": "completeMediaMotionUpload",
+        "tags": [
+          "Media"
+        ],
+        "summary": "Attach the uploaded motion clip to its Live Photo",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "mediaId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "storageKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "mimeType": {
+                    "type": "string",
+                    "enum": [
+                      "video/quicktime",
+                      "video/mp4"
+                    ]
+                  },
+                  "sizeBytes": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 52428800
+                  },
+                  "durationMs": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 30000
+                  }
+                },
+                "required": [
+                  "storageKey",
+                  "mimeType",
+                  "sizeBytes",
+                  "durationMs"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Media"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/media/{mediaId}/complete": {
       "post": {
         "operationId": "completeMediaUpload",
@@ -29638,6 +30657,7 @@
                                 "admin:workspaces:read",
                                 "admin:workspaces:suspend",
                                 "admin:workspaces:restore",
+                                "admin:workspaces:transfer",
                                 "admin:workspaces:delete",
                                 "admin:content:read",
                                 "admin:content:delete",
@@ -29689,6 +30709,7 @@
                               "admin:workspaces:read",
                               "admin:workspaces:suspend",
                               "admin:workspaces:restore",
+                              "admin:workspaces:transfer",
                               "admin:workspaces:delete",
                               "admin:content:read",
                               "admin:content:delete",
@@ -29843,6 +30864,7 @@
                             "admin:workspaces:read",
                             "admin:workspaces:suspend",
                             "admin:workspaces:restore",
+                            "admin:workspaces:transfer",
                             "admin:workspaces:delete",
                             "admin:content:read",
                             "admin:content:delete",
@@ -29928,6 +30950,7 @@
                                 "admin:workspaces:read",
                                 "admin:workspaces:suspend",
                                 "admin:workspaces:restore",
+                                "admin:workspaces:transfer",
                                 "admin:workspaces:delete",
                                 "admin:content:read",
                                 "admin:content:delete",
@@ -29979,6 +31002,7 @@
                               "admin:workspaces:read",
                               "admin:workspaces:suspend",
                               "admin:workspaces:restore",
+                              "admin:workspaces:transfer",
                               "admin:workspaces:delete",
                               "admin:content:read",
                               "admin:content:delete",

@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { UpdateTripRequestDestinationsV2Item } from "./updateTripRequestDestinationsV2Item";
 import type { UpdateTripRequestStatus } from "./updateTripRequestStatus";
 import type { UpdateTripRequestVisibility } from "./updateTripRequestVisibility";
 
@@ -74,9 +75,11 @@ export interface UpdateTripRequest {
   /**
    * @maxItems 30
    * @items.minLength 1
-   * @items.maxLength 120
+   * @items.maxLength 160
    */
   destinations?: string[];
+  /** @maxItems 30 */
+  destinationsV2?: UpdateTripRequestDestinationsV2Item[];
   /**
    * @items.minLength 2
    * @items.maxLength 2

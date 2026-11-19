@@ -22,6 +22,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CompleteMediaMotionUploadBody,
   CompleteMediaRequest,
   GetMediaResponse,
   ListTripMediaParams,
@@ -31,6 +32,8 @@ import type {
   MediaPresignRequest,
   MediaPresignResponse,
   MessageResponse,
+  PresignMediaMotion200,
+  PresignMediaMotionBody,
   ProblemDetails,
   SetTripCoverRequest,
   Trip,
@@ -225,6 +228,300 @@ export const usePresignMediaUpload = <TError = ProblemDetails, TContext = unknow
   TContext
 > => {
   return useMutation(getPresignMediaUploadMutationOptions(options), queryClient);
+};
+export type presignMediaMotionResponse200 = {
+  data: PresignMediaMotion200;
+  status: 200;
+};
+
+export type presignMediaMotionResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type presignMediaMotionResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type presignMediaMotionResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type presignMediaMotionResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type presignMediaMotionResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type presignMediaMotionResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type presignMediaMotionResponseSuccess = presignMediaMotionResponse200 & {
+  headers: Headers;
+};
+export type presignMediaMotionResponseError = (
+  | presignMediaMotionResponse400
+  | presignMediaMotionResponse401
+  | presignMediaMotionResponse403
+  | presignMediaMotionResponse404
+  | presignMediaMotionResponse429
+  | presignMediaMotionResponse500
+) & {
+  headers: Headers;
+};
+
+export type presignMediaMotionResponse =
+  presignMediaMotionResponseSuccess | presignMediaMotionResponseError;
+
+export const getPresignMediaMotionUrl = (workspaceId: string, mediaId: string) => {
+  return `/v1/workspaces/${workspaceId}/media/${mediaId}/motion/presign`;
+};
+
+/**
+ * @summary Presign an upload for the motion clip of a Live Photo
+ */
+export const presignMediaMotion = async (
+  workspaceId: string,
+  mediaId: string,
+  presignMediaMotionBody: PresignMediaMotionBody,
+  options?: RequestInit,
+): Promise<presignMediaMotionResponse> => {
+  const res = await fetch(getPresignMediaMotionUrl(workspaceId, mediaId), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(presignMediaMotionBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: presignMediaMotionResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as presignMediaMotionResponse;
+};
+
+export const getPresignMediaMotionMutationKey = () => ["presignMediaMotion"] as const;
+
+export const getPresignMediaMotionMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof presignMediaMotion>>,
+    TError,
+    PresignMediaMotionMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof presignMediaMotion>>,
+  TError,
+  PresignMediaMotionMutationVariables,
+  TContext
+> => {
+  const mutationKey = getPresignMediaMotionMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof presignMediaMotion>>,
+    PresignMediaMotionMutationVariables
+  > = (props) => {
+    const { workspaceId, mediaId, data } = props ?? {};
+
+    return presignMediaMotion(workspaceId, mediaId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PresignMediaMotionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof presignMediaMotion>>
+>;
+export type PresignMediaMotionMutationBody = PresignMediaMotionBody;
+export type PresignMediaMotionMutationError = ProblemDetails;
+export type PresignMediaMotionMutationVariables = {
+  workspaceId: string;
+  mediaId: string;
+  data: PresignMediaMotionBody;
+};
+
+/** @summary Presign an upload for the motion clip of a Live Photo */
+export const usePresignMediaMotion = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof presignMediaMotion>>,
+      TError,
+      PresignMediaMotionMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof presignMediaMotion>>,
+  TError,
+  PresignMediaMotionMutationVariables,
+  TContext
+> => {
+  return useMutation(getPresignMediaMotionMutationOptions(options), queryClient);
+};
+export type completeMediaMotionUploadResponse200 = {
+  data: Media;
+  status: 200;
+};
+
+export type completeMediaMotionUploadResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type completeMediaMotionUploadResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type completeMediaMotionUploadResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type completeMediaMotionUploadResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type completeMediaMotionUploadResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type completeMediaMotionUploadResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type completeMediaMotionUploadResponseSuccess = completeMediaMotionUploadResponse200 & {
+  headers: Headers;
+};
+export type completeMediaMotionUploadResponseError = (
+  | completeMediaMotionUploadResponse400
+  | completeMediaMotionUploadResponse401
+  | completeMediaMotionUploadResponse403
+  | completeMediaMotionUploadResponse404
+  | completeMediaMotionUploadResponse429
+  | completeMediaMotionUploadResponse500
+) & {
+  headers: Headers;
+};
+
+export type completeMediaMotionUploadResponse =
+  completeMediaMotionUploadResponseSuccess | completeMediaMotionUploadResponseError;
+
+export const getCompleteMediaMotionUploadUrl = (workspaceId: string, mediaId: string) => {
+  return `/v1/workspaces/${workspaceId}/media/${mediaId}/motion`;
+};
+
+/**
+ * @summary Attach the uploaded motion clip to its Live Photo
+ */
+export const completeMediaMotionUpload = async (
+  workspaceId: string,
+  mediaId: string,
+  completeMediaMotionUploadBody: CompleteMediaMotionUploadBody,
+  options?: RequestInit,
+): Promise<completeMediaMotionUploadResponse> => {
+  const res = await fetch(getCompleteMediaMotionUploadUrl(workspaceId, mediaId), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(completeMediaMotionUploadBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeMediaMotionUploadResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as completeMediaMotionUploadResponse;
+};
+
+export const getCompleteMediaMotionUploadMutationKey = () => ["completeMediaMotionUpload"] as const;
+
+export const getCompleteMediaMotionUploadMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeMediaMotionUpload>>,
+    TError,
+    CompleteMediaMotionUploadMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeMediaMotionUpload>>,
+  TError,
+  CompleteMediaMotionUploadMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCompleteMediaMotionUploadMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeMediaMotionUpload>>,
+    CompleteMediaMotionUploadMutationVariables
+  > = (props) => {
+    const { workspaceId, mediaId, data } = props ?? {};
+
+    return completeMediaMotionUpload(workspaceId, mediaId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteMediaMotionUploadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeMediaMotionUpload>>
+>;
+export type CompleteMediaMotionUploadMutationBody = CompleteMediaMotionUploadBody;
+export type CompleteMediaMotionUploadMutationError = ProblemDetails;
+export type CompleteMediaMotionUploadMutationVariables = {
+  workspaceId: string;
+  mediaId: string;
+  data: CompleteMediaMotionUploadBody;
+};
+
+/** @summary Attach the uploaded motion clip to its Live Photo */
+export const useCompleteMediaMotionUpload = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof completeMediaMotionUpload>>,
+      TError,
+      CompleteMediaMotionUploadMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof completeMediaMotionUpload>>,
+  TError,
+  CompleteMediaMotionUploadMutationVariables,
+  TContext
+> => {
+  return useMutation(getCompleteMediaMotionUploadMutationOptions(options), queryClient);
 };
 export type completeMediaUploadResponse200 = {
   data: Media;

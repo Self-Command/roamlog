@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { TripCoverProperty } from "./tripCoverProperty";
+import type { TripDestinationsV2Item } from "./tripDestinationsV2Item";
 import type { TripStatus } from "./tripStatus";
 import type { TripVisibility } from "./tripVisibility";
 
@@ -81,9 +82,10 @@ export interface Trip {
   /**
    * @maxItems 30
    * @items.minLength 1
-   * @items.maxLength 120
+   * @items.maxLength 160
    */
   destinations: string[];
+  destinationsV2?: TripDestinationsV2Item[];
   /**
    * @items.minLength 2
    * @items.maxLength 2

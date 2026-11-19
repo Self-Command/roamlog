@@ -43,7 +43,7 @@ export type PublicTripResponseTrip = {
   /**
    * @maxItems 30
    * @items.minLength 1
-   * @items.maxLength 120
+   * @items.maxLength 160
    */
   destinations: string[];
   /**

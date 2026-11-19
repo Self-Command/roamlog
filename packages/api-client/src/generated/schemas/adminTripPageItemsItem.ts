@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminTripPageItemsItemCover } from "./adminTripPageItemsItemCover";
+import type { AdminTripPageItemsItemDestinationsV2Item } from "./adminTripPageItemsItemDestinationsV2Item";
 import type { AdminTripPageItemsItemStatus } from "./adminTripPageItemsItemStatus";
 import type { AdminTripPageItemsItemVisibility } from "./adminTripPageItemsItemVisibility";
 
@@ -81,9 +82,10 @@ export type AdminTripPageItemsItem = {
   /**
    * @maxItems 30
    * @items.minLength 1
-   * @items.maxLength 120
+   * @items.maxLength 160
    */
   destinations: string[];
+  destinationsV2?: AdminTripPageItemsItemDestinationsV2Item[];
   /**
    * @items.minLength 2
    * @items.maxLength 2
