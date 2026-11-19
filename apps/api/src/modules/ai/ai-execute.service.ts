@@ -32,6 +32,8 @@ export class AiExecuteService {
    *
    * - The plan must belong to the same workspace **and** user.
    * - Every submitted call must have been planned; a subset is fine.
+   * - Calls run strictly in the submitted order, so a `trips.create` result is
+   *   available to the calls that follow it in the same batch.
    * - Each call runs as the calling user through the product services, so the
    *   real role/visibility/version checks apply.
    * - Partial failure does not roll back what already succeeded.
@@ -94,7 +96,17 @@ export class AiExecuteService {
     const candidates = new Map<string, AiPlaceCandidate>(
       run.candidates.map((candidate) => [candidate.providerPlaceId, candidate]),
     );
-    const context = { actor, membership, runId, candidates };
+    // `createdTripIds` is this batch's only cross-call channel: the toolbox
+    // appends every successful `trips.create` id and resolves a later
+    // trip-scoped call's placeholder `tripId` from it. The array is created per
+    // execution, so another plan can never lend its ids to this one.
+    const context = {
+      actor,
+      membership,
+      runId,
+      candidates,
+      createdTripIds: [] as string[],
+    };
     const results: AiToolResult[] = [];
 
     for (const call of body.calls) {
@@ -107,11 +119,12 @@ export class AiExecuteService {
     const failed = results.length - succeeded;
     return {
       results,
-      partialFailure: succeeded > 0 && failed > 0,
-      summary:
-        failed === 0
-          ? `${succeeded} action(s) applied.`
-          : `${succeeded} action(s) applied, ${failed} failed. Nothing that succeeded was rolled back.`,
+      // "Partially failed" means *any* call failed. Requiring a success as well
+      // made the all-failed case (`succeeded === 0`) look like a clean success
+      // to every consumer, which is how the UI ended up claiming "全部完成"
+      // while zero rows were written.
+      partialFailure: failed > 0,
+      summary: describeExecutionSummary(succeeded, failed),
     };
   }
 
@@ -166,6 +179,19 @@ export class AiExecuteService {
 
     return result;
   }
+}
+
+/**
+ * Plain-text summary bucketed by failure count (no UI vocabulary, no markup).
+ *
+ * `failed === 0`        → everything applied
+ * `succeeded === 0`     → every call failed, nothing was written
+ * otherwise             → partial: the successful writes were kept
+ */
+export function describeExecutionSummary(succeeded: number, failed: number): string {
+  if (failed === 0) return `已执行 ${succeeded} 项`;
+  if (succeeded === 0) return `${failed} 项全部失败，没有写入任何数据`;
+  return `已执行 ${succeeded} 项，${failed} 项失败，成功的操作未被回滚`;
 }
 
 /** Re-exported so specs can assert the trace shape. */

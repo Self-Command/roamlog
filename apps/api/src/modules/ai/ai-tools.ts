@@ -44,6 +44,14 @@ export interface AiToolContext {
   readonly runId: string;
   /** Places returned by `places.search` during this run, keyed by provider id. */
   readonly candidates: Map<string, AiPlaceCandidate>;
+  /**
+   * Ids produced by successful `trips.create` calls **in this execution batch**,
+   * in execution order. The execute loop owns the array, the toolbox appends to
+   * it, and a trip-scoped call that carries no usable id is pointed at its only
+   * entry. Two or more creations make that inference ambiguous, which is an
+   * error — never a guess.
+   */
+  readonly createdTripIds?: string[];
   readonly today?: string;
 }
 
@@ -61,6 +69,14 @@ const MAX_STOP_ADDRESS_LENGTH = 400;
 const dateOnly = z.iso.date();
 const uuid = z.uuid({ version: "v7" });
 const nonEmpty = (max: number) => z.string().trim().min(1).max(max);
+
+/**
+ * A trip reference on a write tool. The model may leave it out (or send a
+ * placeholder such as `new`) when the same plan creates the trip; `execute`
+ * then fills in the id that `trips.create` returned. A string that is already
+ * a UUID is never rewritten — see `resolveTripTarget`.
+ */
+const tripRef = z.string().trim().max(200).optional();
 
 /**
  * Argument whitelists. Deliberately **not** `.strict()`: unknown keys (including
@@ -88,8 +104,31 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
     visibility: z.enum(["private", "workspace"]).optional(),
   }),
   "trips.get": z.object({ tripId: uuid }),
+  /**
+   * Descriptive fields only. `visibility`, `showExactPhotoLocation`, `status`,
+   * `favorite`, covers, grants and settings are absent on purpose: the model may
+   * fix a mistyped title or extend a trip's dates, never change who can read it
+   * or switch off a privacy control. `version` is also absent — the tool reads
+   * the current row through the visibility-checked path and passes its version
+   * as the optimistic-lock token.
+   */
+  "trips.update": z
+    .object({
+      tripId: tripRef,
+      title: nonEmpty(160).optional(),
+      summary: z.string().max(1000).optional(),
+      startDate: dateOnly.optional(),
+      endDate: dateOnly.optional(),
+    })
+    .refine(
+      (value) =>
+        [value.title, value.summary, value.startDate, value.endDate].some(
+          (field) => field !== undefined,
+        ),
+      { message: "at least one of title/summary/startDate/endDate must change", path: ["title"] },
+    ),
   "stops.add": z.object({
-    tripId: uuid,
+    tripId: tripRef,
     providerPlaceId: nonEmpty(200),
     startDate: dateOnly.optional(),
     endDate: dateOnly.optional(),
@@ -97,7 +136,7 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
   }),
   "stops.list": z.object({ tripId: uuid }),
   "itinerary.addDay": z.object({
-    tripId: uuid,
+    tripId: tripRef,
     date: dateOnly,
     title: nonEmpty(180).optional(),
     items: z
@@ -117,13 +156,13 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
       .max(8),
   }),
   "packing.add": z.object({
-    tripId: uuid,
+    tripId: tripRef,
     name: nonEmpty(160),
     category: z.enum(["documents", "clothing", "gear", "health", "other"]).optional(),
     quantity: z.number().int().min(1).max(999).optional(),
   }),
   "budget.setSummary": z.object({
-    tripId: uuid,
+    tripId: tripRef,
     amountMinor: z.number().int().nonnegative(),
     currency: z.string().regex(/^[A-Z]{3}$/u),
   }),
@@ -180,19 +219,43 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
     },
   },
   {
-    name: "stops.add",
+    name: "trips.update",
     description:
-      "Add a city stop to a trip. WRITES DATA. providerPlaceId must come from places.search in this same run.",
+      "Change an EXISTING trip's title, summary, startDate or endDate (for example \"make it 6 days\" means a new endDate). WRITES DATA. Use this instead of creating a new trip when the user wants to extend, shorten, rename or re-summarise a trip. It cannot delete a trip, change who can see it, or touch settings.",
     parameters: {
       type: "object",
       properties: {
-        tripId: { type: "string" },
+        tripId: {
+          type: "string",
+          description:
+            "Trip UUID. Omit only when this same plan creates the trip with trips.create: the server then targets that new trip.",
+        },
+        title: { type: "string", maxLength: 160 },
+        summary: { type: "string", maxLength: 1000 },
+        startDate: { type: "string", description: "YYYY-MM-DD" },
+        endDate: { type: "string", description: "YYYY-MM-DD" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "stops.add",
+    description:
+      "Add a city stop to a trip. WRITES DATA. providerPlaceId must come from places.search in this same run. Omit tripId when this same plan creates the trip; the server attaches the stop to that new trip.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: {
+          type: "string",
+          description:
+            "Trip UUID. Omit only when an earlier trips.create in this same plan supplies it.",
+        },
         providerPlaceId: { type: "string" },
         startDate: { type: "string", description: "YYYY-MM-DD; defaults to the trip start" },
         endDate: { type: "string", description: "YYYY-MM-DD; defaults to startDate" },
         notes: { type: "string", maxLength: 4000 },
       },
-      required: ["tripId", "providerPlaceId"],
+      required: ["providerPlaceId"],
       additionalProperties: false,
     },
   },
@@ -209,11 +272,15 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
   {
     name: "itinerary.addDay",
     description:
-      "Add one day of itinerary items to a trip. WRITES DATA. Items are created in the order given.",
+      "Add one day of itinerary items to a trip. WRITES DATA. Items are created in the order given. Omit tripId when this same plan creates the trip; the server attaches the day to that new trip.",
     parameters: {
       type: "object",
       properties: {
-        tripId: { type: "string" },
+        tripId: {
+          type: "string",
+          description:
+            "Trip UUID. Omit only when an earlier trips.create in this same plan supplies it.",
+        },
         date: { type: "string", description: "YYYY-MM-DD, within the trip dates" },
         title: { type: "string", maxLength: 180 },
         items: {
@@ -237,18 +304,22 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
           },
         },
       },
-      required: ["tripId", "date", "items"],
+      required: ["date", "items"],
       additionalProperties: false,
     },
   },
   {
     name: "packing.add",
     description:
-      "Add one packing item to a trip. WRITES DATA. Use the existing categories; do not invent new ones.",
+      "Add one packing item to a trip. WRITES DATA. Use the existing categories; do not invent new ones. Omit tripId when this same plan creates the trip.",
     parameters: {
       type: "object",
       properties: {
-        tripId: { type: "string" },
+        tripId: {
+          type: "string",
+          description:
+            "Trip UUID. Omit only when an earlier trips.create in this same plan supplies it.",
+        },
         name: { type: "string", maxLength: 160 },
         category: {
           type: "string",
@@ -256,22 +327,26 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
         },
         quantity: { type: "integer", minimum: 1, maximum: 999 },
       },
-      required: ["tripId", "name"],
+      required: ["name"],
       additionalProperties: false,
     },
   },
   {
     name: "budget.setSummary",
     description:
-      "Set the trip budget total. WRITES DATA. Amounts are integer minor units of the currency.",
+      "Set the trip budget total. WRITES DATA. Amounts are integer minor units of the currency. Omit tripId when this same plan creates the trip.",
     parameters: {
       type: "object",
       properties: {
-        tripId: { type: "string" },
+        tripId: {
+          type: "string",
+          description:
+            "Trip UUID. Omit only when an earlier trips.create in this same plan supplies it.",
+        },
         amountMinor: { type: "integer", minimum: 0 },
         currency: { type: "string", description: "ISO 4217 uppercase" },
       },
-      required: ["tripId", "amountMinor", "currency"],
+      required: ["amountMinor", "currency"],
       additionalProperties: false,
     },
   },
@@ -285,6 +360,79 @@ function issueMessage(error: z.ZodError): string {
   const first = error.issues[0];
   const path = first?.path.map(String).join(".") || "args";
   return `${path}: ${first?.message ?? "invalid arguments"}`.slice(0, 300);
+}
+
+/** The write tools that act on exactly one existing trip via `args.tripId`. */
+const TRIP_SCOPED_WRITE_TOOLS: ReadonlySet<AiToolName> = new Set<AiToolName>([
+  "trips.update",
+  "stops.add",
+  "itinerary.addDay",
+  "packing.add",
+  "budget.setSummary",
+]);
+
+/**
+ * A stored Trip id is always a UUIDv7 (`UuidV7Schema`), so anything else — a
+ * missing field, `new`, `{{tripId}}`, a v4-shaped invention — cannot name an
+ * existing trip and is treated as a placeholder rather than a target.
+ */
+const TRIP_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+function isTripIdPlaceholder(value: unknown): boolean {
+  if (typeof value !== "string") {
+    return true;
+  }
+  const candidate = value.trim();
+  return candidate.length === 0 || !TRIP_ID_PATTERN.test(candidate);
+}
+
+function tripTargetError(code: string, message: string): AiToolOutcome {
+  return { ok: false, payload: { error: code }, error: { code, message: message.slice(0, 300) } };
+}
+
+type TripTargetResolution =
+  | { readonly kind: "ok"; readonly call: AiToolCall }
+  | { readonly kind: "error"; readonly outcome: AiToolOutcome };
+
+/**
+ * Fills a trip-scoped write's `tripId` from the batch, or fails loudly.
+ *
+ * Only a missing/placeholder id is ever replaced: a well-formed UUID is the
+ * caller's explicit target and still goes through the normal visibility and
+ * role checks, so a 404/403 is reported instead of being silently redirected.
+ * When the batch created exactly one trip, every placeholder resolves to it;
+ * zero or two-plus creations cannot be resolved unambiguously and produce a
+ * readable per-call failure instead of a guess.
+ */
+function resolveTripTarget(call: AiToolCall, context: AiToolContext): TripTargetResolution {
+  if (!TRIP_SCOPED_WRITE_TOOLS.has(call.tool)) {
+    return { kind: "ok", call };
+  }
+  if (!isTripIdPlaceholder(call.args.tripId)) {
+    return { kind: "ok", call };
+  }
+
+  const created = context.createdTripIds ?? [];
+  const [only] = created;
+  if (created.length === 1 && only) {
+    return { kind: "ok", call: { tool: call.tool, args: { ...call.args, tripId: only } } };
+  }
+  if (created.length === 0) {
+    return {
+      kind: "error",
+      outcome: tripTargetError(
+        "TRIP_ID_UNRESOLVED",
+        `${call.tool} needs a tripId, and no trips.create succeeded before it in this plan. Create the trip first in the same plan, or name an existing trip id.`,
+      ),
+    };
+  }
+  return {
+    kind: "error",
+    outcome: tripTargetError(
+      "TRIP_ID_AMBIGUOUS",
+      `${call.tool} needs an explicit tripId: this plan created ${created.length} trips, so the server will not guess which one it means.`,
+    ),
+  };
 }
 
 /**
@@ -339,28 +487,43 @@ export class AiToolbox {
   }
 
   async execute(call: AiToolCall, context: AiToolContext): Promise<AiToolOutcome> {
-    const schema = ArgsSchemas[call.tool];
+    // A trip-scoped write may leave `tripId` to the batch: `trips.create` ran
+    // earlier in this same execute loop and its id is the only new trip.
+    const target = resolveTripTarget(call, context);
+    if (target.kind === "error") {
+      return target.outcome;
+    }
+    const effective = target.call;
+    const schema = ArgsSchemas[effective.tool];
     if (!schema) {
       return {
         ok: false,
         payload: { error: "UNKNOWN_TOOL" },
-        error: { code: "UNKNOWN_TOOL", message: `Unknown tool ${call.tool}.` },
+        error: { code: "UNKNOWN_TOOL", message: `Unknown tool ${effective.tool}.` },
       };
     }
-    const parsed = schema.safeParse(call.args);
+    const parsed = schema.safeParse(effective.args);
     if (!parsed.success) {
       return invalid(issueMessage(parsed.error));
     }
 
-    switch (call.tool) {
+    switch (effective.tool) {
       case "places.search":
         return this.searchPlaces(parsed.data as { q: string; limit?: number }, context);
       case "trips.get":
         return this.getTrip((parsed.data as { tripId: string }).tripId, context);
       case "stops.list":
         return this.listStops((parsed.data as { tripId: string }).tripId, context);
-      case "trips.create":
-        return this.createTrip(parsed.data as Record<string, unknown>, context);
+      case "trips.create": {
+        const outcome = await this.createTrip(parsed.data as Record<string, unknown>, context);
+        // Remember the new trip so later calls in this batch can reference it.
+        if (outcome.ok && outcome.entityId) {
+          context.createdTripIds?.push(outcome.entityId);
+        }
+        return outcome;
+      }
+      case "trips.update":
+        return this.updateTrip(parsed.data as Record<string, unknown>, context);
       case "stops.add":
         return this.addStop(parsed.data as Record<string, unknown>, context);
       case "itinerary.addDay":
@@ -471,6 +634,43 @@ export class AiToolbox {
       ok: true,
       entityId: trip.id,
       payload: { tripId: trip.id, title: trip.title, startDate: trip.startDate, endDate: trip.endDate },
+    };
+  }
+
+  /**
+   * Edits an existing trip through the product's own update path.
+   *
+   * Only the four descriptive fields survive the whitelist; `version` is read
+   * here (never authored by the model) so `TripsService.update` still performs
+   * its optimistic-lock check, its `trip:update` role check and its
+   * visibility check. A refusal therefore comes back as the same error code the
+   * HTTP route returns, not as a 500.
+   */
+  private async updateTrip(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const current = await this.trips.get(context.actor, context.membership, tripId);
+    const patch = {
+      version: current.version,
+      ...(args.title === undefined ? {} : { title: args.title }),
+      ...(args.summary === undefined ? {} : { summary: args.summary }),
+      ...(args.startDate === undefined ? {} : { startDate: args.startDate }),
+      ...(args.endDate === undefined ? {} : { endDate: args.endDate }),
+    };
+    const trip = await this.trips.update(context.actor, context.membership, tripId, patch);
+    return {
+      ok: true,
+      entityId: trip.id,
+      payload: {
+        tripId: trip.id,
+        title: trip.title,
+        summary: trip.summary,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        version: trip.version,
+      },
     };
   }
 

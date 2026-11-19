@@ -26,18 +26,32 @@ describe("AI planning contracts", () => {
       "places.search",
       "trips.create",
       "trips.get",
+      "trips.update",
       "stops.add",
       "stops.list",
       "itinerary.addDay",
       "packing.add",
       "budget.setSummary",
     ]);
-    // No destructive or privilege-escalating tool may ever appear.
-    for (const forbidden of ["delete", "update", "permission", "settings"]) {
+    // `trips.update` is the one non-additive write and it is field-whitelisted
+    // (title/summary/startDate/endDate). Destructive, identity-ish and
+    // audience-ish capabilities must still never appear as tool names.
+    for (const forbidden of [
+      "delete",
+      "permission",
+      "settings",
+      "visibility",
+      "share",
+      "grant",
+      "member",
+      "role",
+    ]) {
       expect(AI_TOOL_NAMES.some((name) => name.includes(forbidden))).toBe(false);
     }
     expect(isReadOnlyAiTool("places.search")).toBe(true);
     expect(isReadOnlyAiTool("trips.create")).toBe(false);
+    // Updating an existing trip is a write: it never runs while planning.
+    expect(isReadOnlyAiTool("trips.update")).toBe(false);
   });
 
   it("rejects unknown tools and non-object arguments", () => {

@@ -1,7 +1,10 @@
-import { ForbiddenException, HttpException } from "@nestjs/common";
+import { ForbiddenException, HttpException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
-import { AiExecuteService } from "../ai-execute.service.js";
+import {
+  AiExecuteService,
+  describeExecutionSummary,
+} from "../ai-execute.service.js";
 import { AiToolbox } from "../ai-tools.js";
 import {
   actorStub,
@@ -11,6 +14,7 @@ import {
   STOP_ID,
   TRIP_ID,
   toolServiceMocks,
+  tripRecord,
   WORKSPACE_ID,
 } from "./ai-fixtures.js";
 
@@ -89,6 +93,8 @@ describe("AiExecuteService", () => {
       { tool: "trips.create", ok: true, entityId: TRIP_ID },
     ]);
     expect(response.partialFailure).toBe(false);
+    // failed === 0 → the "all applied" bucket.
+    expect(response.summary).toBe("已执行 1 项");
     expect(mocks.trips.create).toHaveBeenCalledTimes(1);
     expect(mocks.stops.create).not.toHaveBeenCalled();
     expect(runStore.consume).toHaveBeenCalledTimes(1);
@@ -194,7 +200,38 @@ describe("AiExecuteService", () => {
     ]);
     expect(response.partialFailure).toBe(true);
     expect(audit.record).toHaveBeenCalledTimes(2);
-    expect(response.summary).toContain("1 action(s) applied, 1 failed");
+    expect(response.summary).toBe("已执行 1 项，1 项失败，成功的操作未被回滚");
+  });
+
+  it("reports an all-failed plan as a failure, never as a clean success", async () => {
+    const mocks = toolServiceMocks();
+    const gone = new NotFoundException({
+      code: "TRIP_NOT_FOUND",
+      message: "Trip not found.",
+    });
+    mocks.trips.create.mockRejectedValue(gone);
+    mocks.stops.create.mockRejectedValue(gone);
+    const { service } = harness(plannedRun(), mocks);
+
+    const response = await service.execute(
+      actorStub() as never,
+      membershipStub() as never,
+      RUN_ID,
+      {
+        calls: [
+          { tool: "trips.create", args: { title: "Kyoto" } },
+          { tool: "stops.add", args: { tripId: TRIP_ID, providerPlaceId: KINKAKUJI.providerPlaceId } },
+        ],
+        idempotencyKey: "execute-once-6b",
+      },
+    );
+
+    // succeeded === 0 — the branch that used to answer `partialFailure: false`.
+    expect(response.results.map((result) => result.ok)).toEqual([false, false]);
+    expect(response.partialFailure).toBe(true);
+    expect(response.summary).toBe("2 项全部失败，没有写入任何数据");
+    // Nothing was written, so the summary must not claim an execution.
+    expect(response.summary).not.toContain("已执行");
   });
 
   it("never forwards model-authored workspaceId/userId to the services", async () => {
@@ -258,5 +295,138 @@ describe("AiExecuteService", () => {
     expect(mocks.stops.create).not.toHaveBeenCalled();
     expect(STOP_ID).toBeTruthy();
     expect(aiSettings().configured).toBe(true);
+  });
+
+  it("hands the trip created in this batch to the calls that follow it", async () => {
+    const plannedCalls = [
+      { tool: "trips.create", args: { title: "京都 5 天", startDate: "2027-03-01", endDate: "2027-03-05" } },
+      { tool: "stops.add", args: { providerPlaceId: KINKAKUJI.providerPlaceId } },
+      { tool: "packing.add", args: { tripId: "new", name: "护照" } },
+    ];
+    const { service, mocks } = harness(plannedRun({ plannedCalls }));
+
+    const response = await service.execute(
+      actorStub() as never,
+      membershipStub() as never,
+      RUN_ID,
+      { calls: plannedCalls, idempotencyKey: "execute-inject-1" },
+    );
+
+    expect(response.results.map((result) => result.ok)).toEqual([true, true, true]);
+    expect(response.partialFailure).toBe(false);
+    // Both children hang off the trip this batch created, in execution order.
+    expect(mocks.stops.create.mock.calls[0]?.[2]).toBe(TRIP_ID);
+    expect(mocks.packing.create.mock.calls[0]?.[2]).toBe(TRIP_ID);
+  });
+
+  it("keeps an explicitly submitted trip id instead of redirecting it", async () => {
+    const createdId = "01942f30-1200-7000-8000-0000000002ff";
+    const mocks = toolServiceMocks();
+    mocks.trips.create.mockResolvedValue(tripRecord({ id: createdId }));
+    const plannedCalls = [
+      { tool: "trips.create", args: { title: "京都" } },
+      { tool: "stops.add", args: { tripId: TRIP_ID, providerPlaceId: KINKAKUJI.providerPlaceId } },
+    ];
+    const { service } = harness(plannedRun({ plannedCalls }), mocks);
+
+    await service.execute(actorStub() as never, membershipStub() as never, RUN_ID, {
+      calls: plannedCalls,
+      idempotencyKey: "execute-inject-2",
+    });
+
+    expect(mocks.stops.create.mock.calls[0]?.[2]).toBe(TRIP_ID);
+  });
+
+  it("fails a trip-scoped call that no create in the batch can satisfy", async () => {
+    const plannedCalls = [
+      { tool: "stops.add", args: { providerPlaceId: KINKAKUJI.providerPlaceId } },
+    ];
+    const { service, mocks } = harness(plannedRun({ plannedCalls }));
+
+    const response = await service.execute(
+      actorStub() as never,
+      membershipStub() as never,
+      RUN_ID,
+      { calls: plannedCalls, idempotencyKey: "execute-inject-3" },
+    );
+
+    expect(response.results[0]).toMatchObject({
+      tool: "stops.add",
+      ok: false,
+      error: { code: "TRIP_ID_UNRESOLVED" },
+    });
+    expect(mocks.stops.create).not.toHaveBeenCalled();
+    expect(response.partialFailure).toBe(true);
+    expect(response.summary).toBe("1 项全部失败，没有写入任何数据");
+  });
+
+  it("refuses to guess between two trips created in the same batch", async () => {
+    const mocks = toolServiceMocks();
+    mocks.trips.create
+      .mockResolvedValueOnce(tripRecord({ id: TRIP_ID }))
+      .mockResolvedValueOnce(tripRecord({ id: "01942f30-1200-7000-8000-0000000002aa" }));
+    const plannedCalls = [
+      { tool: "trips.create", args: { title: "京都" } },
+      { tool: "trips.create", args: { title: "大阪" } },
+      { tool: "packing.add", args: { name: "护照" } },
+    ];
+    const { service } = harness(plannedRun({ plannedCalls }), mocks);
+
+    const response = await service.execute(
+      actorStub() as never,
+      membershipStub() as never,
+      RUN_ID,
+      { calls: plannedCalls, idempotencyKey: "execute-inject-4" },
+    );
+
+    expect(response.results[2]).toMatchObject({
+      tool: "packing.add",
+      ok: false,
+      error: { code: "TRIP_ID_AMBIGUOUS" },
+    });
+    expect(mocks.packing.create).not.toHaveBeenCalled();
+    expect(response.partialFailure).toBe(true);
+  });
+
+  it("runs trips.update through the product service with the loaded version", async () => {
+    const plannedCalls = [
+      { tool: "trips.update", args: { tripId: TRIP_ID, endDate: "2026-12-06", version: 99 } },
+    ];
+    const { service, mocks } = harness(plannedRun({ plannedCalls }));
+
+    const response = await service.execute(
+      actorStub() as never,
+      membershipStub() as never,
+      RUN_ID,
+      { calls: plannedCalls, idempotencyKey: "execute-update-1" },
+    );
+
+    expect(response.results).toEqual([{ tool: "trips.update", ok: true, entityId: TRIP_ID }]);
+    // Both calls go through TripsService: no direct prisma write.
+    expect(mocks.trips.get).toHaveBeenCalledTimes(1);
+    expect(mocks.trips.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      TRIP_ID,
+      { version: 1, endDate: "2026-12-06" },
+    );
+  });
+});
+
+describe("describeExecutionSummary", () => {
+  it("uses the applied bucket when nothing failed", () => {
+    expect(describeExecutionSummary(2, 0)).toBe("已执行 2 项");
+  });
+
+  it("uses the partial bucket when some calls failed", () => {
+    expect(describeExecutionSummary(1, 1)).toBe(
+      "已执行 1 项，1 项失败，成功的操作未被回滚",
+    );
+  });
+
+  it("uses the all-failed bucket when no call succeeded", () => {
+    const summary = describeExecutionSummary(0, 2);
+    expect(summary).toBe("2 项全部失败，没有写入任何数据");
+    expect(summary).not.toContain("已执行");
   });
 });

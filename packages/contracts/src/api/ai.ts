@@ -21,14 +21,20 @@ export const AiProtocolSchema = z.enum([
 export type AiProtocol = z.infer<typeof AiProtocolSchema>;
 
 /**
- * The first tool set: read (`places.search`, `trips.get`, `stops.list`) and
- * additive writes only. Deletes, role changes and settings are not exposed —
- * an agent must not be able to destroy or escalate.
+ * The tool set: read (`places.search`, `trips.get`, `stops.list`), additive
+ * writes, and one field-whitelisted `trips.update`.
+ *
+ * `trips.update` exists because "make my 5-day trip 6 days" is a real user
+ * request that otherwise forces the model to `trips.create` a duplicate. The
+ * tool only accepts descriptive fields (`title`/`summary`/`startDate`/
+ * `endDate`), so it still cannot delete a trip, change its audience
+ * (`visibility`), its sharing/privacy switches or any setting.
  */
 export const AI_TOOL_NAMES = [
   "places.search",
   "trips.create",
   "trips.get",
+  "trips.update",
   "stops.add",
   "stops.list",
   "itinerary.addDay",
