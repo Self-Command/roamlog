@@ -27,7 +27,7 @@ export const SETTINGS_GROUP_SUMMARIES: Record<SystemSettingGroup, string> = {
   limits: "账户级请求速率限制。",
 };
 
-export type SettingsConsumptionStatus = "frontend" | "backend";
+export type SettingsConsumptionStatus = "frontend" | "backend" | "unwired";
 
 export interface SettingsConsumption {
   status: SettingsConsumptionStatus;
@@ -38,17 +38,30 @@ export interface SettingsConsumption {
  * Read-only truth about how far each group's values travel. This is a static
  * constant, deliberately not a runtime probe: the admin UI cannot observe the
  * web frontend or the worker, so it must not pretend it can.
+ *
+ * - `frontend`: the web client really reads the value.
+ * - `backend`: a backend module really reads the value at request time.
+ * - `unwired`: stored in the database only; changing it does not change
+ *   behavior, because the runtime still reads an environment variable.
+ *
+ * `mail`, `storage`, `ai` and `limits` are `unwired` until their runtime owners
+ * actually consume `SettingsService`; see `settings-consumption.ts` for
+ * field-level exceptions.
  */
 export const SETTINGS_CONSUMPTION: Record<SystemSettingGroup, SettingsConsumption> = {
   general: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
   seo: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
   theme: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
-  mail: { status: "backend", label: "已接入后端，前端/Worker 消费待完成" },
-  storage: { status: "backend", label: "已接入后端，前端/Worker 消费待完成" },
-  media: { status: "backend", label: "已接入后端，前端/Worker 消费待完成" },
-  ai: { status: "backend", label: "已接入后端，前端/Worker 消费待完成" },
-  places: { status: "backend", label: "已接入后端，前端/Worker 消费待完成" },
-  limits: { status: "backend", label: "已接入后端，前端/Worker 消费待完成" },
+  mail: { status: "unwired", label: "未接入（不生效，仍读环境变量）" },
+  storage: { status: "unwired", label: "未接入（不生效，仍读环境变量）" },
+  media: {
+    status: "frontend",
+    label:
+      "前端已消费 4/6 个键（maxEdge、quality、targetBytes、maxUploadBytes）；keepOriginal 与 livePhotoEnabled 未接入（不生效）",
+  },
+  ai: { status: "unwired", label: "未接入（不生效，仍读环境变量）" },
+  places: { status: "backend", label: "后端已消费（PlacesModule 运行期读取）" },
+  limits: { status: "unwired", label: "未接入（不生效，仍读环境变量）" },
 };
 
 export const SETTINGS_SOURCE_LABELS = {

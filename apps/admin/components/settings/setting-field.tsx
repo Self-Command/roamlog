@@ -68,8 +68,14 @@ function FieldHeading({
         {item.isSecret ? <Badge tone="orange">密钥</Badge> : null}
         {consumption ? (
           <Badge
-            tone={consumption.status === "frontend" ? "green" : "yellow"}
-            aria-label={`${item.label} 前端消费状态`}
+            tone={
+              consumption.status === "frontend"
+                ? "green"
+                : consumption.status === "backend"
+                  ? "blue"
+                  : "yellow"
+            }
+            aria-label={`${item.label} 消费状态`}
           >
             {consumption.label}
           </Badge>

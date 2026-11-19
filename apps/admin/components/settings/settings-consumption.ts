@@ -8,12 +8,12 @@ import {
 /**
  * Field-level truth for settings whose group-level status is too coarse.
  *
- * The `media` group mixes four values the web client actually reads with two
- * behavior switches that are not implemented yet. Showing one green "consumed"
- * line for the whole group would be the exact "fake setting" problem this UI is
- * meant to prevent, so each key gets its own honest label.
+ * A group badge can only be honest if every key in the group travels the same
+ * distance. These groups mix values a client really reads with switches that
+ * are not wired into any runtime path yet, so each exception gets its own
+ * label instead of a green group badge.
  */
-export type SettingFieldConsumptionStatus = "frontend" | "unwired";
+export type SettingFieldConsumptionStatus = "frontend" | "backend" | "unwired";
 
 export interface SettingFieldConsumption {
   status: SettingFieldConsumptionStatus;
@@ -28,6 +28,14 @@ export const SETTING_FIELD_CONSUMPTION: Readonly<Record<string, SettingFieldCons
     "media.maxUploadBytes": { status: "frontend", label: "前端已消费" },
     "media.keepOriginal": { status: "unwired", label: "未接入（不生效）" },
     "media.livePhotoEnabled": { status: "unwired", label: "未接入（不生效）" },
+    "general.registrationEnabled": { status: "unwired", label: "未接入（不生效）" },
+    "seo.sitemapEnabled": { status: "unwired", label: "未接入（不生效）" },
+    "places.provider": { status: "backend", label: "后端已消费" },
+    "places.apiKey": { status: "backend", label: "后端已消费" },
+    "places.lang": { status: "backend", label: "后端已消费" },
+    "places.limit": { status: "backend", label: "后端已消费" },
+    "places.cacheTtlSeconds": { status: "backend", label: "后端已消费" },
+    "places.dailyQuota": { status: "backend", label: "后端已消费" },
   });
 
 /** `null` means the group map is accurate enough for this key. */
@@ -36,16 +44,22 @@ export function settingFieldConsumption(key: string): SettingFieldConsumption | 
 }
 
 /**
- * Group-level summary, corrected for `media`. The base map in
- * `lib/admin-settings` is a static truth table; this override is static too,
- * because the admin UI still cannot observe the web client at runtime.
+ * Group-level summary with the field-level exceptions spelled out, so a
+ * consumed group cannot hide a switch that does nothing.
  */
 export function settingsGroupConsumption(group: SystemSettingGroup): SettingsConsumption {
-  if (group === "media") {
+  if (group === "general") {
     return {
       status: "frontend",
       label:
-        "前端已消费 4/6 个键（maxEdge、quality、targetBytes、maxUploadBytes）；keepOriginal 与 livePhotoEnabled 未接入（不生效）",
+        "前端已消费（标题/描述/主题）；general.registrationEnabled 未接入（不生效）",
+    };
+  }
+  if (group === "seo") {
+    return {
+      status: "frontend",
+      label:
+        "前端已消费（标题/描述/OG/robots）；seo.sitemapEnabled 未接入（不生效）",
     };
   }
   return SETTINGS_CONSUMPTION[group];

@@ -168,12 +168,65 @@ const mediaItems: AdminSettingItem[] = [
   }),
 ];
 
+const placesItems: AdminSettingItem[] = [
+  makeItem({
+    key: "places.provider",
+    type: "string",
+    label: "Places provider",
+    group: "places",
+    default: "geoapify",
+    value: "geoapify",
+    options: ["geoapify", "photon"],
+  }),
+  makeItem({
+    key: "places.apiKey",
+    type: "secret",
+    label: "Places API key",
+    group: "places",
+    default: null,
+    secret: { hasValue: false, last4: null },
+  }),
+  makeItem({
+    key: "places.lang",
+    type: "string",
+    label: "Search language",
+    group: "places",
+    default: "zh",
+    value: "zh",
+  }),
+  makeItem({
+    key: "places.limit",
+    type: "number",
+    label: "Result limit",
+    group: "places",
+    default: 6,
+    value: 6,
+  }),
+  makeItem({
+    key: "places.cacheTtlSeconds",
+    type: "number",
+    label: "Cache TTL (seconds)",
+    group: "places",
+    default: 900,
+    value: 900,
+  }),
+  makeItem({
+    key: "places.dailyQuota",
+    type: "number",
+    label: "Daily quota",
+    group: "places",
+    default: 2500,
+    value: 2500,
+  }),
+];
+
 function responseOf(): AdminSettingsResponse {
   return {
     groups: [
       { group: "general", label: "General", items: generalItems },
       { group: "mail", label: "Mail", items: mailItems },
       { group: "media", label: "Media", items: mediaItems },
+      { group: "places", label: "Places", items: placesItems },
     ],
     generatedAt: "2026-11-19T05:00:00.000Z",
   };
@@ -211,13 +264,19 @@ function createApi(initial: AdminSettingsResponse) {
 }
 
 async function renderConsole(
-  initialGroup: "general" | "mail" | "media" = "general",
+  initialGroup: "general" | "mail" | "media" | "places" = "general",
   role: "super_admin" | "analyst" = "super_admin",
 ) {
   const fake = createApi(responseOf());
   render(<SettingsConsole role={role} initialGroup={initialGroup} api={fake.api} />);
   const heading =
-    initialGroup === "mail" ? "Mail" : initialGroup === "media" ? "Media" : "General";
+    initialGroup === "mail"
+      ? "Mail"
+      : initialGroup === "media"
+        ? "Media"
+        : initialGroup === "places"
+          ? "Places"
+          : "General";
   await screen.findByRole("heading", { name: heading });
   return fake;
 }
@@ -234,6 +293,11 @@ describe("SettingsConsole", () => {
     expect(screen.getByLabelText("Site title")).toHaveValue("Roamlog");
     expect(screen.getByLabelText("Default language")).toHaveValue("zh-CN");
     expect(screen.getByRole("switch", { name: "Registration open" })).not.toBeChecked();
+    expect(
+      within(screen.getByRole("article", { name: "设置项 Registration open" })).getByLabelText(
+        "Registration open 消费状态",
+      ),
+    ).toHaveTextContent("未接入（不生效）");
     expect(screen.getByLabelText("Default time zone")).toBeDisabled();
     expect(screen.getByText("由环境变量锁定，界面不可改。")).toBeInTheDocument();
     expect(screen.getByLabelText("Metadata JSON 键 1")).toHaveValue("theme");
@@ -246,18 +310,49 @@ describe("SettingsConsole", () => {
     ).toBeInTheDocument();
   });
 
-  it("deep-links to a group, shows its real consumption status, and switches groups", async () => {
+  it("marks an unwired group as a warning and never as consumed", async () => {
     const user = userEvent.setup();
     await renderConsole("mail");
 
     expect(screen.getByRole("heading", { name: "Mail" })).toBeInTheDocument();
-    expect(screen.getByText("已接入后端，前端/Worker 消费待完成")).toBeInTheDocument();
+    const status = screen.getByText("未接入（不生效，仍读环境变量）");
+    expect(status).toHaveAttribute("data-consumption-status", "unwired");
+    expect(status.className).toContain("text-accent-yellow");
+    expect(status.className).not.toContain("text-accent-green");
+    expect(status.textContent).toContain("不生效");
     expect(screen.getByLabelText("SMTP port")).toHaveValue(587);
 
     await user.click(screen.getByRole("link", { name: /General/ }));
     expect(screen.getByRole("heading", { name: "General" })).toBeInTheDocument();
-    expect(screen.getByText("前端已消费（标题/描述/主题）")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "前端已消费（标题/描述/主题）；general.registrationEnabled 未接入（不生效）",
+      ),
+    ).toBeInTheDocument();
     expect(window.location.search).toBe("?group=general");
+  });
+
+  it("shows places as backend-consumed and labels all six keys", async () => {
+    await renderConsole("places");
+
+    const status = screen.getByText("后端已消费（PlacesModule 运行期读取）");
+    expect(status).toHaveAttribute("data-consumption-status", "backend");
+    expect(status.className).toContain("text-accent-blue");
+    expect(status.className).not.toContain("text-accent-green");
+
+    for (const label of [
+      "Places provider",
+      "Places API key",
+      "Search language",
+      "Result limit",
+      "Cache TTL (seconds)",
+      "Daily quota",
+    ]) {
+      const field = screen.getByRole("article", { name: `设置项 ${label}` });
+      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
+        "后端已消费",
+      );
+    }
   });
 
   it("marks each media key truthfully instead of claiming the whole group is consumed", async () => {
@@ -275,14 +370,14 @@ describe("SettingsConsole", () => {
       "Max upload bytes",
     ]) {
       const field = screen.getByRole("article", { name: `设置项 ${label}` });
-      expect(within(field).getByLabelText(`${label} 前端消费状态`)).toHaveTextContent(
+      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
         "前端已消费",
       );
     }
 
     for (const label of ["Keep originals", "Live Photos"]) {
       const field = screen.getByRole("article", { name: `设置项 ${label}` });
-      expect(within(field).getByLabelText(`${label} 前端消费状态`)).toHaveTextContent(
+      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
         "未接入（不生效）",
       );
     }

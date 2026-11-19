@@ -539,6 +539,19 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
   }
 
   const groupDirtyCount = dirtyKeys.length;
+  const consumption = settingsGroupConsumption(group);
+  const consumptionTone =
+    consumption.status === "frontend"
+      ? "green"
+      : consumption.status === "backend"
+        ? "blue"
+        : "yellow";
+  const consumptionStatusLabel =
+    consumption.status === "frontend"
+      ? "前端已消费"
+      : consumption.status === "backend"
+        ? "后端已消费"
+        : "未接入";
 
   return (
     <div className="space-y-5">
@@ -693,17 +706,22 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
             className="flex flex-col gap-2 rounded-card border border-hairline bg-surface-deep px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="min-w-0">
-              <p className="type-eyebrow">FRONTEND CONSUMPTION</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="type-eyebrow">CONSUMPTION STATUS</p>
+                <Badge tone={consumptionTone}>{consumptionStatusLabel}</Badge>
+              </div>
               <p
-                aria-label="前端消费状态"
+                data-consumption-status={consumption.status}
                 className={cn(
                   "mt-1 text-[11px] leading-5",
-                  settingsGroupConsumption(group).status === "frontend"
+                  consumption.status === "frontend"
                     ? "text-accent-green"
-                    : "text-accent-yellow",
+                    : consumption.status === "backend"
+                      ? "text-accent-blue"
+                      : "text-accent-yellow",
                 )}
               >
-                {settingsGroupConsumption(group).label}
+                {consumption.label}
               </p>
             </div>
             <p className="font-mono text-[9px] text-stone">

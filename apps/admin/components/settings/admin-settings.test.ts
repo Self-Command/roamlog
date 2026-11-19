@@ -39,22 +39,45 @@ describe("admin settings helpers", () => {
     expect(settingsGroupHref("seo")).toBe("/admin/settings?group=seo");
   });
 
-  it("maps every group to its real consumption status", () => {
-    expect(SETTINGS_CONSUMPTION.general.label).toBe("前端已消费（标题/描述/主题）");
-    expect(SETTINGS_CONSUMPTION.seo.label).toBe("前端已消费（标题/描述/主题）");
-    expect(SETTINGS_CONSUMPTION.theme.label).toBe("前端已消费（标题/描述/主题）");
-    for (const group of ["mail", "storage", "media", "ai", "places", "limits"] as const) {
-      expect(SETTINGS_CONSUMPTION[group].label).toBe("已接入后端，前端/Worker 消费待完成");
+  it("maps every group to its real consumption status without the old vague claim", () => {
+    expect(SETTINGS_CONSUMPTION.general).toMatchObject({ status: "frontend" });
+    expect(SETTINGS_CONSUMPTION.seo).toMatchObject({ status: "frontend" });
+    expect(SETTINGS_CONSUMPTION.theme).toMatchObject({ status: "frontend" });
+    expect(SETTINGS_CONSUMPTION.places).toMatchObject({ status: "backend" });
+    expect(SETTINGS_CONSUMPTION.places.label).toContain("后端已消费");
+
+    for (const group of ["mail", "storage", "ai", "limits"] as const) {
+      expect(SETTINGS_CONSUMPTION[group]).toEqual({
+        status: "unwired",
+        label: "未接入（不生效，仍读环境变量）",
+      });
     }
+
+    const rendered = [
+      ...Object.values(SETTINGS_CONSUMPTION).map((entry) => entry.label),
+      ...(["general", "seo", "theme", "mail", "storage", "media", "ai", "places", "limits"] as const).map(
+        (group) => settingsGroupConsumption(group).label,
+      ),
+    ].join("\n");
+    expect(rendered).not.toContain("前端/Worker 消费待完成");
   });
 
-  it("overrides only media at the group level, with the exact 4/6 split", () => {
+  it("keeps media's exact 4/6 split and spells out group-level exceptions", () => {
     const media = settingsGroupConsumption("media");
     expect(media.status).toBe("frontend");
     expect(media.label).toContain("前端已消费 4/6 个键");
     expect(media.label).toContain("keepOriginal 与 livePhotoEnabled 未接入（不生效）");
+
+    const general = settingsGroupConsumption("general");
+    expect(general.status).toBe("frontend");
+    expect(general.label).toContain("general.registrationEnabled 未接入（不生效）");
+
+    const seo = settingsGroupConsumption("seo");
+    expect(seo.status).toBe("frontend");
+    expect(seo.label).toContain("seo.sitemapEnabled 未接入（不生效）");
+
     expect(settingsGroupConsumption("mail")).toBe(SETTINGS_CONSUMPTION.mail);
-    expect(settingsGroupConsumption("general")).toBe(SETTINGS_CONSUMPTION.general);
+    expect(settingsGroupConsumption("places")).toBe(SETTINGS_CONSUMPTION.places);
   });
 
   it("labels the six media keys one by one instead of one group badge", () => {
@@ -69,10 +92,28 @@ describe("admin settings helpers", () => {
         label: "前端已消费",
       });
     }
-    for (const key of ["media.keepOriginal", "media.livePhotoEnabled"]) {
+    for (const key of [
+      "media.keepOriginal",
+      "media.livePhotoEnabled",
+      "general.registrationEnabled",
+      "seo.sitemapEnabled",
+    ]) {
       expect(settingFieldConsumption(key)).toEqual({
         status: "unwired",
         label: "未接入（不生效）",
+      });
+    }
+    for (const key of [
+      "places.provider",
+      "places.apiKey",
+      "places.lang",
+      "places.limit",
+      "places.cacheTtlSeconds",
+      "places.dailyQuota",
+    ]) {
+      expect(settingFieldConsumption(key)).toEqual({
+        status: "backend",
+        label: "后端已消费",
       });
     }
     expect(settingFieldConsumption("site.title")).toBeNull();
