@@ -425,9 +425,10 @@ describe("PlacesService", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { service, redis } = setup();
 
-    // Han script picks the China route and only ever reaches Tencent; a
-    // romanized keyword keeps the global route, whatever `lang` says — the
-    // fixture's `zh` default no longer moves Paris to the mainland source.
+    // An address keyword (`建国路87号`: 路 + 号) picks the China route and only
+    // ever reaches Tencent; a romanized keyword keeps the global route,
+    // whatever `lang` says — the fixture's `zh` default no longer moves Paris
+    // to the mainland source.
     await service.search({ q: "建国路87号", limit: 6, lang: "zh" });
     await service.search({ q: "Paris", limit: 6, lang: "zh" });
     await service.search({ q: "Paris", limit: 6, lang: "zh" });
@@ -532,6 +533,10 @@ describe("PlacesService", () => {
  * `places.lang` defaults to `zh`, so reading it as a geographic signal sent
  * every search typed in the Chinese UI — `Paris` included — to a source that
  * only covers the mainland, and overseas destinations are a main flow here.
+ *
+ * Han script alone is the same mistake one level down: the China route requires
+ * an explicit `country=CN` or a keyword that *looks like a Chinese address*
+ * (a 省/市/区/路/号… marker), never Han characters by themselves.
  */
 describe("PlacesService route signals", () => {
   it("sends a Chinese-UI search for Paris to Geoapify and never calls Tencent", async () => {
@@ -551,27 +556,29 @@ describe("PlacesService route signals", () => {
   });
 
   /**
-   * Deviation from the requested test list, reported to the requester.
-   *
-   * `东京` is Han script, so `country === "CN" || HAN_SCRIPT.test(q)` routes it
-   * to Tencent — exactly like `京都`. The requested pair "`lang=zh` + `东京` →
-   * Geoapify" and "no lang + `京都` → Tencent" cannot both hold: the two
-   * keywords differ in meaning, not in script, and the agreed fix uses only
-   * `country` and Han script. Separating them would need a signal the spec
-   * explicitly forbids inventing (a China locality list / address-shape rule),
-   * so this test pins today's real behaviour instead of a false expectation.
-   * Overseas place names written in Han still reach the China route.
+   * Tencent's coverage ends at the mainland border and it answers these names
+   * with unrelated Chinese places — `东京` → 东京城镇 (黑龙江省牡丹江市宁安市),
+   * `巴黎` → 巴黎春天(成山店) (上海市浦东新区), `纽约` → 南通纽约时代 (江苏省南通市) —
+   * whose coordinates the China route is allowed to store. None of them contains
+   * an address marker, so each must take the global route.
    */
-  it("still routes `东京` to Tencent, because Han script is the only keyword signal", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
-    const { service, tencent } = setup({ settings: { provider: "geoapify" } });
-    const tencentSuggest = vi.spyOn(tencent, "suggest");
+  it.each(["东京", "京都", "巴黎", "首尔", "纽约", "伦敦"])(
+    "routes the overseas Han-script name %s to Geoapify and never calls Tencent",
+    async (q) => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
+      vi.stubGlobal("fetch", fetchMock);
+      const { service, tencent } = setup({ settings: { provider: "geoapify" } });
+      const tencentSuggest = vi.spyOn(tencent, "suggest");
 
-    const response = await service.search({ q: "东京", limit: 3, lang: "zh" });
+      const response = await service.search({ q, limit: 3, lang: "zh" });
 
-    expect(tencentSuggest).toHaveBeenCalledTimes(1);
-    expect(response.provider).toBe("tencent");
-  });
+      expect(response.provider).toBe("geoapify");
+      expect(response.degraded).toBe(false);
+      expect(tencentSuggest).not.toHaveBeenCalled();
+      const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
+      expect(hosts).toEqual(["geoapify.example.test"]);
+    },
+  );
 
   it("routes a Han street address from the Chinese UI to Tencent", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
@@ -599,15 +606,42 @@ describe("PlacesService route signals", () => {
     expect(geoapifySearch).not.toHaveBeenCalled();
   });
 
-  it("routes a Han keyword to Tencent when the caller omits lang entirely", async () => {
+  it("routes country=CN to Tencent even for an overseas name in Latin script", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
-    const { settings, service } = setup({ settings: { provider: "geoapify" } });
+    const { service, geoapify } = setup({ settings: { provider: "geoapify" } });
+    const geoapifySearch = vi.spyOn(geoapify, "search");
 
-    const response = await service.search({ q: "京都", limit: 3 });
+    const response = await service.search({ q: "Tokyo", limit: 3, country: "CN" });
 
-    expect(settings.defaultLang).toBe("zh");
     expect(response.provider).toBe("tencent");
+    expect(geoapifySearch).not.toHaveBeenCalled();
+    expect((vi.mocked(fetch).mock.calls[0] as unknown as [URL])[0].hostname).toBe(
+      "tencent.example.test",
+    );
   });
+
+  /**
+   * A bare Han place name carries no address marker, so it takes the global
+   * route. That is the accepted trade-off: OSM knows `天安门`, and `清水寺`
+   * really is in Japan, so Geoapify is the correct source for both.
+   */
+  it.each(["天安门", "清水寺"])(
+    "routes the marker-free Han place name %s to Geoapify when the caller omits lang",
+    async (q) => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
+      vi.stubGlobal("fetch", fetchMock);
+      const { settings, service, tencent } = setup({ settings: { provider: "geoapify" } });
+      const tencentSuggest = vi.spyOn(tencent, "suggest");
+
+      const response = await service.search({ q, limit: 3 });
+
+      expect(settings.defaultLang).toBe("zh");
+      expect(response.provider).toBe("geoapify");
+      expect(tencentSuggest).not.toHaveBeenCalled();
+      const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
+      expect(hosts).toEqual(["geoapify.example.test"]);
+    },
+  );
 });
 
 /**
@@ -616,7 +650,7 @@ describe("PlacesService route signals", () => {
  * failure degrades to `map_pick` instead.
  */
 describe("PlacesService China route", () => {
-  it("routes a Han keyword to Tencent, converts GCJ-02 to WGS-84 and never calls Photon", async () => {
+  it("routes a Chinese address to Tencent, converts GCJ-02 to WGS-84 and never calls Photon", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload()));
     vi.stubGlobal("fetch", fetchMock);
     const { service, photon } = setup();

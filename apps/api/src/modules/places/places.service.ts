@@ -33,22 +33,44 @@ interface UpstreamFailure {
 const HAN_SCRIPT = /\p{Script=Han}/u;
 
 /**
+ * Characters that mark a **mainland Chinese address**: the administrative
+ * divisions (省/市/区/县/镇/乡/村), the street and house-number vocabulary
+ * (路/街/号/弄/巷), and the building vocabulary (栋/室/楼/大厦/广场/小区).
+ *
+ * Rationale, and why this replaced "any Han character". Han script alone says
+ * nothing about *where* a place is: `东京`, `京都`, `巴黎`, `首尔`, `纽约` and
+ * `伦敦` are all Han, but Tencent's coverage ends at the mainland border, so it
+ * answered those with wrong Chinese places — `东京` → 东京城镇 (黑龙江省牡丹江市
+ * 宁安市), `巴黎` → 巴黎春天(成山店) (上海市浦东新区), `纽约` → 南通纽约时代
+ * (江苏省南通市). Those wrong coordinates are worse than no result, and the
+ * China route allows storing them. The characters above, by contrast, are
+ * effectively exclusive to mainland addresses and street signage: none of the
+ * six overseas names contains one, while `建国路87号` and
+ * `北京市朝阳区建国路87号` each contain several.
+ */
+const CHINA_ADDRESS_MARKERS =
+  /[省市区县镇乡村路街号弄巷栋室楼厦广场小区]/u;
+
+/**
  * Decides whether a query belongs to the mainland-China route.
  *
  * Two geographic signals, either of which is enough:
  * - `country=CN` — the caller told us the place is in China;
- * - the keyword contains Han characters — the user is typing a Chinese address.
+ * - the keyword is Han **and** looks like a Chinese address, i.e. it contains at
+ *   least one `CHINA_ADDRESS_MARKERS` character.
  *
  * `lang` is deliberately **not** a signal: it only states the display-language
  * preference, and `places.lang` defaults to `zh`. Reading it as "the place is in
- * China" sent *every* query typed in the Chinese UI — `Paris`, `London`, even
- * `东京` — to Tencent, whose coverage ends at the mainland border; searching
- * overseas destinations in Chinese is a main flow of this travel journal, and it
- * answered with an empty list plus `degraded`.
+ * China" sent *every* query typed in the Chinese UI — `Paris`, `London` — to
+ * Tencent, whose coverage ends at the mainland border.
  *
- * A Chinese query must never be answered by a global gazetteer: Photon returns
- * wrong house numbers on the same street (`北京市朝阳区建国路87号` → `建国路75号`),
- * which is worse than returning nothing.
+ * A bare Han place name (`天安门`, `清水寺`, `东京`) deliberately takes the
+ * global route: OSM knows 天安门, 清水寺 really is in Japan, and a wrong Chinese
+ * town is far worse than an empty list.
+ *
+ * A Chinese *address* must still never be answered by a global gazetteer: Photon
+ * returns wrong house numbers on the same street (`北京市朝阳区建国路87号` →
+ * `建国路75号`), which is worse than returning nothing.
  */
 export function isChinaQuery(query: {
   readonly q: string;
@@ -56,7 +78,10 @@ export function isChinaQuery(query: {
   readonly lang?: string | undefined;
   readonly country?: string | undefined;
 }): boolean {
-  return query.country === "CN" || HAN_SCRIPT.test(query.q);
+  if (query.country === "CN") {
+    return true;
+  }
+  return HAN_SCRIPT.test(query.q) && CHINA_ADDRESS_MARKERS.test(query.q);
 }
 
 /**
