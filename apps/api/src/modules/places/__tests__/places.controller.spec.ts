@@ -13,9 +13,11 @@ import { AuthService } from "../../auth/auth.service.js";
 import { PinoLoggerService } from "../../observability/pino-logger.service.js";
 import { PrismaService } from "../../prisma/prisma.service.js";
 import { RedisService } from "../../redis/redis.service.js";
+import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
 import { PlacesCacheService } from "../places-cache.service.js";
 import { PlaceSearchRateLimitGuard } from "../places-rate-limit.guard.js";
+import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesRateLimiter } from "../places-rate-limiter.service.js";
 import { PlacesController } from "../places.controller.js";
 import { PlacesService } from "../places.service.js";
@@ -55,8 +57,10 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
         provide: PrismaService,
         useValue: { client: { user: { findUnique: vi.fn() } } },
       },
+      GeoapifyClient,
       PhotonClient,
       PlacesCacheService,
+      PlacesQuotaService,
       PlacesRateLimiter,
       PlacesService,
       SessionGuard,

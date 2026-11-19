@@ -41,14 +41,17 @@ vi.mock("@/lib/api/media", async (importOriginal) => {
 });
 
 const KYOTO: Place = {
-  provider: "photon",
+  provider: "geoapify",
   providerPlaceId: "k-1",
   name: "京都",
+  address: "京都市, 京都府, 日本",
   country: "日本",
   countryCode: "JP",
   lat: 35.0116,
   lng: 135.7681,
   timeZone: "Asia/Tokyo",
+  bbox: [135.6, 34.85, 135.93, 35.17],
+  importance: 0.19,
   type: "city",
 };
 
@@ -128,6 +131,9 @@ describe("TripForm create", () => {
     // Origin: pick a real place, which must carry lat/lng/country/timezone.
     await user.type(screen.getByRole("combobox", { name: "旅行起点" }), "京都");
     await user.click(await screen.findByRole("option", { name: /^京都/ }));
+    // The selected origin shows the provider's full address, not just a code.
+    expect(await screen.findByText("京都市, 京都府, 日本")).toBeInTheDocument();
+    expect(screen.getByText("地点库")).toBeInTheDocument();
 
     // Destination: manual entry (no coordinates invented).
     await user.type(screen.getByLabelText("手动添加目的地"), "金泽");

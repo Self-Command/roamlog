@@ -74,10 +74,12 @@ export function OriginField({
 
           {origin ? (
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <Badge tone={origin.provider === "photon" ? "blue" : "slate"}>
-                {origin.provider === "photon" ? "地点库" : "手动地点"}
+              <Badge tone={origin.provider !== "local" ? "blue" : "slate"}>
+                {origin.provider !== "local" ? "地点库" : "手动地点"}
               </Badge>
-              {origin.countryCode ? (
+              {origin.address ? (
+                <span className="type-meta max-w-full">{origin.address}</span>
+              ) : origin.countryCode ? (
                 <span className="type-meta">{origin.countryCode}</span>
               ) : null}
               {origin.timeZone ? (

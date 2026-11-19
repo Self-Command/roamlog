@@ -16,14 +16,59 @@ describe("normalizePhotonFeature", () => {
       provider: "photon",
       providerPlaceId: "R:7444",
       name: "Paris",
+      address: "Paris, Île-de-France, France",
       country: "France",
       countryCode: "FR",
       lat: 48.8566,
       lng: 2.3522,
       timeZone: null,
+      bbox: null,
+      importance: null,
       type: "city",
     });
     expect(PlaceSchema.safeParse(place).success).toBe(true);
+  });
+
+  it("composes the street, house number and postcode Photon already returns", () => {
+    const place = normalizePhotonFeature(
+      photonFeature({
+        street: "Rue de Rivoli",
+        housenumber: "12",
+        postcode: "75001",
+        city: "Paris",
+      }),
+    );
+
+    expect(place?.address).toBe("12 Rue de Rivoli, 75001 Paris, Île-de-France, France");
+  });
+
+  it("composes a partial address when only a postcode/city is present", () => {
+    const place = normalizePhotonFeature(photonFeature({ postcode: "75001", city: "Paris" }));
+
+    expect(place?.address).toBe("75001 Paris, Île-de-France, France");
+  });
+
+  it("keeps address null when only country/state metadata exists", () => {
+    const place = normalizePhotonFeature(photonFeature({ city: undefined }));
+
+    expect(place?.address).toBeNull();
+  });
+
+  it("re-orders Photon's [west, north, east, south] extent to [west, south, east, north]", () => {
+    const place = normalizePhotonFeature(photonFeature({ extent: [2.22, 48.9, 2.47, 48.81] }));
+
+    expect(place?.bbox).toEqual([2.22, 48.81, 2.47, 48.9]);
+  });
+
+  it("drops an inconsistent extent instead of emitting an invalid bbox", () => {
+    const place = normalizePhotonFeature(photonFeature({ extent: [2.47, 48.9, 2.22, 48.81] }));
+
+    expect(place?.bbox).toBeNull();
+  });
+
+  it("maps Photon's importance when it is in range", () => {
+    expect(normalizePhotonFeature(photonFeature({ importance: 0.72 }))?.importance).toBe(0.72);
+    expect(normalizePhotonFeature(photonFeature({ importance: 1.4 }))?.importance).toBeNull();
   });
 
   it("keeps providerPlaceId null instead of inventing an OSM id", () => {

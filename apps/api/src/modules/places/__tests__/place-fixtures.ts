@@ -25,8 +25,14 @@ export function asLogger(logger: LoggerMock): PinoLoggerService {
 
 export function testSettings(overrides: Partial<PlacesSettings> = {}): PlacesSettings {
   return {
+    provider: "photon",
     baseUrl: "https://photon.example.test/api",
     timeoutMs: 2_500,
+    geoapifyBaseUrl: "https://geoapify.example.test/v1/geocode/autocomplete",
+    geoapifyApiKey: "test-key",
+    geoapifyTimeoutMs: 1_200,
+    geoapifyDailyLimit: 3_000,
+    fallbackToPhoton: true,
     cacheTtlSeconds: 900,
     emptyCacheTtlSeconds: 30,
     rateLimitMax: 30,
@@ -102,6 +108,13 @@ export interface PhotonFeatureOverrides {
   type?: unknown;
   osm_key?: unknown;
   osm_value?: unknown;
+  street?: unknown;
+  housenumber?: unknown;
+  postcode?: unknown;
+  city?: unknown;
+  state?: unknown;
+  extent?: unknown;
+  importance?: unknown;
 }
 
 export function photonFeature(overrides: PhotonFeatureOverrides = {}) {
@@ -136,6 +149,13 @@ export function photonFeature(overrides: PhotonFeatureOverrides = {}) {
     "name",
     "country",
     "countrycode",
+    "street",
+    "housenumber",
+    "postcode",
+    "city",
+    "state",
+    "extent",
+    "importance",
   ] as const) {
     if (key in overrides) {
       properties[key] = overrides[key];
@@ -146,5 +166,88 @@ export function photonFeature(overrides: PhotonFeatureOverrides = {}) {
 }
 
 export function photonPayload(features: unknown[] = [photonFeature()]) {
+  return { type: "FeatureCollection", features };
+}
+
+export interface GeoapifyFeatureOverrides {
+  place_id?: unknown;
+  name?: unknown;
+  country?: unknown;
+  country_code?: unknown;
+  coordinates?: unknown;
+  lon?: unknown;
+  lat?: unknown;
+  result_type?: unknown;
+  formatted?: unknown;
+  address_line1?: unknown;
+  address_line2?: unknown;
+  timezone?: unknown;
+  bbox?: unknown;
+  propertyBbox?: unknown;
+  rank?: unknown;
+}
+
+/** A trimmed copy of a real Kyoto autocomplete hit (2026-11-19). */
+export function geoapifyFeature(overrides: GeoapifyFeatureOverrides = {}) {
+  const geometry: { type: string; coordinates: unknown } = {
+    type: "Point",
+    coordinates: [135.7681441, 35.0115754],
+  };
+  const properties: Record<string, unknown> = {
+    place_id:
+      "51e1bdfea47461405994da8b683bb64140f00103f901d146c57b01000000c00201920309e6b885e6b0b4e5afba",
+    name: "京都市",
+    country: "日本",
+    country_code: "jp",
+    city: "京都市",
+    state: "京都府",
+    formatted: "京都市, 京都府, 日本",
+    address_line1: "京都市",
+    address_line2: "京都府, 日本",
+    lon: 135.7681441,
+    lat: 35.0115754,
+    result_type: "city",
+    timezone: { name: "Asia/Tokyo", abbreviation_STD: "JST" },
+    rank: { importance: 0.18666666666666665, confidence: 1 },
+  };
+  const feature: Record<string, unknown> = {
+    type: "Feature",
+    geometry,
+    properties,
+    bbox: [135.6081441, 34.8515754, 135.9281441, 35.1715754],
+  };
+
+  if ("coordinates" in overrides) {
+    geometry.coordinates = overrides.coordinates;
+  }
+  if ("bbox" in overrides) {
+    feature.bbox = overrides.bbox;
+  }
+  if ("propertyBbox" in overrides) {
+    properties.bbox = overrides.propertyBbox;
+  }
+  for (const key of [
+    "place_id",
+    "name",
+    "country",
+    "country_code",
+    "lon",
+    "lat",
+    "result_type",
+    "formatted",
+    "address_line1",
+    "address_line2",
+    "timezone",
+    "rank",
+  ] as const) {
+    if (key in overrides) {
+      properties[key] = overrides[key];
+    }
+  }
+
+  return feature;
+}
+
+export function geoapifyPayload(features: unknown[] = [geoapifyFeature()]) {
   return { type: "FeatureCollection", features };
 }

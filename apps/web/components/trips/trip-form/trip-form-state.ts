@@ -1,5 +1,6 @@
 import type {
   CreateTripRequest,
+  Place,
   Trip,
   TripStatus,
   TripVisibility,
@@ -33,11 +34,13 @@ export const TRIP_FORM_LIMITS = {
 
 export interface TripFormOrigin {
   name: string;
-  provider: "photon" | "local";
+  provider: Place["provider"];
   lat: number | null;
   lng: number | null;
   countryCode: string | null;
   timeZone: string | null;
+  /** In-session display only: `Trip` has no address column yet. */
+  address: string | null;
 }
 
 export interface TripFormValues {
@@ -178,6 +181,9 @@ export function valuesFromTrip(trip: Trip): TripFormValues {
           lng: trip.originLng,
           countryCode: trip.originCountryCode,
           timeZone: trip.timeZone,
+          // `Trip` persists coordinates, not a formatted address, so an edited
+          // trip cannot restore the provider's address here.
+          address: null,
         }
       : null,
     originQuery: originName,

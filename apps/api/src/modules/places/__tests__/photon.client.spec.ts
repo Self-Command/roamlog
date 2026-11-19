@@ -5,8 +5,14 @@ import { abortAwareFetch, firstFetchCall, jsonResponse, photonPayload, photonFea
 
 function createClient(overrides: { baseUrl?: string; timeoutMs?: number } = {}) {
   return new PhotonClient({
+    provider: "photon",
     baseUrl: "https://photon.example.test/api",
     timeoutMs: 2_500,
+    geoapifyBaseUrl: "https://geoapify.example.test/v1/geocode/autocomplete",
+    geoapifyApiKey: "test-key",
+    geoapifyTimeoutMs: 1_200,
+    geoapifyDailyLimit: 3_000,
+    fallbackToPhoton: true,
     cacheTtlSeconds: 900,
     emptyCacheTtlSeconds: 30,
     rateLimitMax: 30,

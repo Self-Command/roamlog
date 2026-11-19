@@ -184,7 +184,8 @@ export function TripForm(props: TripFormProps) {
         return {
           id,
           label: place.name,
-          description: [place.type, place.country].filter(Boolean).join(" · ") || undefined,
+          // A full address beats a bare country for disambiguating "Springfield".
+          description: place.address ?? place.country,
           meta: place.countryCode || undefined,
         };
       });
@@ -253,11 +254,12 @@ export function TripForm(props: TripFormProps) {
     const origin = place
       ? {
           name: place.name,
-          provider: "photon" as const,
+          provider: place.provider,
           lat: place.lat,
           lng: place.lng,
           countryCode: place.countryCode ?? null,
           timeZone: place.timeZone ?? null,
+          address: place.address ?? null,
         }
       : {
           name: option.label,
@@ -266,6 +268,7 @@ export function TripForm(props: TripFormProps) {
           lng: null,
           countryCode: option.meta ?? null,
           timeZone: null,
+          address: null,
         };
     updateFields({ origin, originQuery: origin.name }, ["origin"]);
   }
@@ -282,6 +285,7 @@ export function TripForm(props: TripFormProps) {
           lng: null,
           countryCode: null,
           timeZone: null,
+          address: null,
         },
         originQuery: name,
       },

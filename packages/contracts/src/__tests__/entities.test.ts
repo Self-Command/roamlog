@@ -10,6 +10,7 @@ import {
   InvitationSchema,
   IsoTimestampSchema,
   JournalEntrySchema,
+  PlaceSchema,
   PlaceSearchQuerySchema,
   PlaceSearchResponseSchema,
   PublicMediaSchema,
@@ -223,6 +224,65 @@ describe("entity contracts", () => {
         cached: false,
       }).items,
     ).toEqual([]);
+  });
+
+  it("accepts the Geoapify place fields and keeps address, bbox and importance nullable", () => {
+    const place = {
+      provider: "geoapify",
+      providerPlaceId: "51e1bdfea47461405994da8b683bb64140f00103f901d146c57b",
+      name: "京都市",
+      address: "京都市, 京都府, 日本",
+      country: "日本",
+      countryCode: "JP",
+      lat: 35.0115754,
+      lng: 135.7681441,
+      timeZone: "Asia/Tokyo",
+      bbox: [135.6081441, 34.8515754, 135.9281441, 35.1715754],
+      importance: 0.18666666666666665,
+      type: "city",
+    };
+
+    expect(PlaceSchema.parse(place)).toEqual(place);
+    expect(
+      PlaceSchema.parse({
+        ...place,
+        address: null,
+        timeZone: null,
+        bbox: null,
+        importance: null,
+      }),
+    ).toMatchObject({ address: null, timeZone: null, bbox: null, importance: null });
+  });
+
+  it("keeps the Geoapify place contract strict and order-aware", () => {
+    const base = {
+      provider: "geoapify",
+      providerPlaceId: null,
+      name: "Kyoto",
+      address: null,
+      country: "Japan",
+      countryCode: "JP",
+      lat: 35,
+      lng: 135,
+      timeZone: "Asia/Tokyo",
+      bbox: null,
+      importance: null,
+      type: "city",
+    };
+
+    expect(PlaceSchema.safeParse({ ...base, unexpected: true }).success).toBe(false);
+    expect(PlaceSchema.safeParse({ ...base, bbox: [136, 34, 135, 36] }).success).toBe(false);
+    expect(PlaceSchema.safeParse({ ...base, bbox: [135, 36, 136, 34] }).success).toBe(false);
+    expect(PlaceSchema.safeParse({ ...base, importance: 1.5 }).success).toBe(false);
+    expect(PlaceSchema.safeParse({ ...base, timeZone: "local time" }).success).toBe(false);
+    expect(
+      PlaceSearchResponseSchema.safeParse({
+        items: [base],
+        provider: "geoapify",
+        degraded: false,
+        cached: false,
+      }).success,
+    ).toBe(true);
   });
 
   it("exposes media display URLs without bucket, object key, or raw variants", () => {
