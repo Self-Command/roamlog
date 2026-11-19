@@ -109,6 +109,12 @@ Admin 访问要求平台角色 + 已验证 TOTP。所有后台写操作进入只
 | 行程与打包 | 按日期分组、排序、负责人、完成状态、批量打包与进度                          |
 | 预算       | `amountMinor` 金额、分类、均分/自定义分账、预算汇总、settle-up              |
 | 媒体       | 预签名上传、MIME/大小校验、sharp 变体、blurhash、EXIF 处理、签名读取        |
+| 客户端压缩 | 浏览器 WebP 阶梯（默认 2000px / 0.82 / 1.5MB）、25MB 上限、30 秒生效窗口    |
+| Live Photo | iOS 静图 + `.MOV` 配对、`MediaMotion` 1:1、≤50MB 且 ≤30 秒、长按播放         |
+| 地点搜索   | Geoapify 主源 + Photon 兜底、每日 3000 配额、缓存、归属文案、无 key 降级    |
+| AI 助手    | 三协议、plan→execute 两阶段、plan 只读、工具白名单、每日配额（可选，未配置 503） |
+| 举报审核   | 四类举报目标、后台队列、dismiss/remove/restore/warn、审核标记与作者删除分离 |
+| 系统设置   | 45 键 9 组、公开投影、secret 写后不可读、审计 reveal、加密 key ring        |
 | 地图       | MapLibre 世界地图、旅行路线、停靠点、地理编码与列表降级                     |
 | 搜索       | PostgreSQL 全文搜索 + trigram 兜底，按 Workspace 与可见性过滤               |
 | 公开分享   | hash 存储 token、过期、撤销、可选密码、`noindex`、可选预算摘要              |
@@ -118,7 +124,7 @@ Admin 访问要求平台角色 + 已验证 TOTP。所有后台写操作进入只
 
 ## 演示截图
 
-截图资产索引、来源和发布要求见 [docs/assets/screenshots/README.md](docs/assets/screenshots/README.md)。以下截图来自 2026-11-18 当前开发预览的 MSW/fixture 演示数据，它是视觉证据，不是真实 API/生产数据证据。
+截图资产索引、来源和发布要求见 [docs/assets/screenshots/README.md](docs/assets/screenshots/README.md)。以下截图是历史视觉证据（生成于 mock/fixture 模式移除之前），不代表当前真实 API 数据；新的截图必须来自当前代码与真实服务。
 
 > [!NOTE]
 > PNG 已生成在 `docs/assets/screenshots/`，但仓库现有 `.gitignore` 的 `screenshots/` 规则仍会忽略该目录。提交前必须由根 Agent 显式追踪这些资产，或收窄 ignore 规则；否则 GitHub README 会断图。
@@ -448,14 +454,15 @@ pnpm admin:bootstrap -- --force
 | 前端构建   | `NEXT_PUBLIC_APP_ENV`                                                                                                           | 部署环境徽标（production/staging）             |
 | 限流       | `RATE_LIMIT_WINDOW_SECONDS`, `AUTH_RATE_LIMIT_MAX`, `PUBLIC_SHARE_*_RATE_LIMIT_MAX`                                             | 登录、分享、预签名请求限流                     |
 | 数据库     | `DATABASE_URL`, `POSTGRES_*`                                                                                                    | PostgreSQL 连接与 Compose 初始化               |
-| Redis      | `REDIS_URL`, `REDIS_PREFIX`, `REDIS_PASSWORD`                                                                                   | 队列、限流、幂等、presence 与隔离前缀          |
+| Redis      | `REDIS_URL`, `REDIS_PREFIX`, `REDIS_REQUIRED`, `REDIS_PASSWORD`                                                                 | 队列、限流、幂等、presence 与隔离前缀；`REDIS_REQUIRED=true` 时 Redis 不可用即拒绝启动 |
+| 进程       | `SHUTDOWN_GRACE_MS`                                                                                                             | SIGTERM 优雅停机预算，0–300000 ms，默认 10000                   |
 | 认证       | `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_*`, `GITHUB_CLIENT_*`                                                                      | session 签名与 OAuth                           |
 | 管理后台   | `ADMIN_2FA_ENFORCED`                                                                                                            | 平台后台强制 TOTP                              |
 | 对象存储   | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_FORCE_PATH_STYLE`                                | 私有媒体与导出（服务端内部 endpoint）          |
 | 媒体投递   | `S3_PUBLIC_ENDPOINT`, `S3_PUBLIC_BASE_URL`, `MEDIA_SIGNED_URL_TTL_SECONDS`, `MEDIA_CORS_ORIGINS`                                | 浏览器可见的签名 origin、TTL、桶 CORS          |
-| 图片压缩   | `MEDIA_MAX_EDGE`, `MEDIA_QUALITY`, `MEDIA_TARGET_BYTES`, `MEDIA_KEEP_ORIGINAL`                                                  | 上传前浏览器端压缩目标                         |
+| 图片压缩   | `MEDIA_MAX_EDGE`, `MEDIA_QUALITY`, `MEDIA_TARGET_BYTES`, `MEDIA_KEEP_ORIGINAL`                                                  | **仅 `check:env` 预检/文档占位，API 与 web 不读取**；实际参数是后台 `media.*` 设置 |
 | 设置加密   | `CONFIG_ENCRYPTION_KEY`, `CONFIG_ENCRYPTION_KEYS`                                                                               | 后台 secret 设置的 AES-256-GCM key 与轮转 ring |
-| 地点搜索   | `PLACES_PROVIDER`, `GEOAPIFY_API_KEY`, `PLACES_FALLBACK_TO_PHOTON`, `GEOAPIFY_DAILY_LIMIT`                                      | Geoapify 主源、Photon 兜底与每日额度           |
+| 地点搜索   | `PLACES_PROVIDER`, `GEOAPIFY_API_KEY`, `PLACES_FALLBACK_TO_PHOTON`, `GEOAPIFY_DAILY_LIMIT`, `PLACES_*`                           | Geoapify 主源、Photon 兜底、每日额度与高级超时/缓存/限流参数 |
 | AI 规划    | `AI_ENABLED`, `AI_PROTOCOL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_OUTPUT_TOKENS`, `AI_DAILY_QUOTA` | 可选 AI planner：三协议、超时、输出上限与配额  |
 | MinIO 镜像 | `MINIO_IMAGE`, `MINIO_MC_IMAGE`                                                                                                 | 固定、可验证的镜像来源                         |
 | 邮件       | `EMAIL_PROVIDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `RESEND_API_KEY`, `EMAIL_FROM`                        | Mailpit / SMTP relay / Resend                  |
@@ -620,6 +627,28 @@ pnpm check:env -- --env production --env-file /opt/roamlog/config/.env.productio
 - [STG_FULL_CHAIN_REPORT.md](STG_FULL_CHAIN_REPORT.md)：媒体、邮件、导出、重试与幂等的真实链路。
 - [W5_A11Y_PERF_REPORT.md](W5_A11Y_PERF_REPORT.md)：axe、键盘、视觉和移动端修复后的复验。
 
+### 如何本地验证
+
+一条命令跑完全仓验收门禁（typecheck、lint、契约、各包测试、production build）：
+
+```bash
+bash .audit/local-verify/full-acceptance.sh
+```
+
+- 日志与逐门 PASS/FAIL 写入 `.audit/evidence/full/<gate>.log`；脚本失败即退出、
+  最后打印汇总。
+- 脚本会检查 CodeGraph 新鲜度，并要求本地 PostgreSQL 测试库
+  （`postgresql://postgres@127.0.0.1:55444/roamlog_local`）。
+- 只想复现单条链路时，用上表里的 `pnpm test` / `pnpm e2e:*`，不要用 mock 模式替代
+  —— 仓库没有数据源开关，只有真实 API 路径。
+
+新能力的专项验证入口：媒体/压缩/Live Photo 见
+[media-pipeline.md](docs/operations/media-pipeline.md)，举报审核见
+[moderation.md](docs/operations/moderation.md)，设置与加密见
+[settings.md](docs/operations/settings.md)，地点见
+[places.md](docs/operations/places.md)，AI 见
+[ai-provider.md](docs/operations/ai-provider.md)。
+
 ## CI/CD 与发布
 
 ### CI
@@ -762,6 +791,11 @@ Roamlog 的视觉参考 Resend 的编辑感，但实现必须是**真实产品�
 | ------------------------------------------------- | ------------------------------------------- |
 | [架构](docs/architecture.md)                      | 容器、时序、部署、失败模式和安全边界        |
 | [Operations](docs/operations/README.md)           | staging、迁移、备份、回滚、密钥、监控与排障 |
+| [媒体链路](docs/operations/media-pipeline.md)     | 客户端压缩、Live Photo 配对、服务端校验与 EXIF |
+| [举报审核](docs/operations/moderation.md)         | 四类举报、队列裁决、`moderatedAt` 与已知限制 |
+| [系统设置](docs/operations/settings.md)           | 45 键 9 组、消费状态、secret 与 reveal |
+| [地点搜索](docs/operations/places.md)             | Geoapify/Photon、配额、缓存与归属 |
+| [AI 配置](docs/operations/ai-provider.md)         | 三协议、plan→execute、配额、错误码与成本 |
 | [Release gate](docs/operations/release-gate.md)   | CI、GHCR、镜像发布与部署证据                |
 | [Staging full-chain](e2e/staging-full/README.md)  | 本地真实服务全链路 harness                  |
 | [截图资产索引](docs/assets/screenshots/README.md) | 截图命名、生成和发布要求                    |

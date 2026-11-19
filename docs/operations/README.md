@@ -6,6 +6,9 @@
 | [staging-deployment.md](./staging-deployment.md)                 | Prepare secrets, start compose, TLS/CORS/CSP/HSTS, bootstrap, smoke tests |
 | [release-gate.md](./release-gate.md)                             | CI dry run, GHCR publication, staging image deployment                    |
 | [media-delivery.md](./media-delivery.md)                         | Two storage endpoints, presigning, bucket CORS, media DNS/TLS             |
+| [media-pipeline.md](./media-pipeline.md)                         | Browser compression, server validation, EXIF, Live Photo pairing          |
+| [moderation.md](./moderation.md)                                 | Reports, Admin queue, takedown/restore and its known limits               |
+| [settings.md](./settings.md)                                     | 45 settings keys, consumption status, secret reveal, encryption key loss  |
 | [email-production.md](./email-production.md)                     | Production mail provider, SPF/DKIM/DMARC checks, rollback                 |
 | [migrations.md](./migrations.md)                                 | Migration preflight, apply, failure recovery                              |
 | [backup-restore.md](./backup-restore.md)                         | PostgreSQL, object storage, Redis recovery and drills                     |

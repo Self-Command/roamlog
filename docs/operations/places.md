@@ -22,21 +22,26 @@ Related files:
 | `PLACES_FALLBACK_TO_PHOTON` | no       | `true`             | Serve results from Photon when Geoapify is missing/failing/over quota |
 | `GEOAPIFY_DAILY_LIMIT`      | no       | `3000` (free plan) | Redis counter per UTC day; `0` disables the cap                       |
 
-Advanced knobs keep their code defaults and are normally not set in the
-templates:
+Advanced knobs are documented in the templates (commented where the default is
+right) and only need changing during an incident or capacity change:
 
-| Variable                           | Default                                                |
-| ---------------------------------- | ------------------------------------------------------ |
-| `GEOAPIFY_URL`                     | `https://api.geoapify.com/v1/geocode/autocomplete`     |
-| `GEOAPIFY_TIMEOUT_MS`              | `1200` (the 1.2 s budget for the primary source)       |
-| `PHOTON_URL`                       | `https://photon.komoot.io/api`                         |
-| `PHOTON_TIMEOUT_MS`                | `2500`                                                 |
-| `PLACES_CACHE_TTL_SECONDS`         | `900` (15 minutes)                                     |
-| `PLACES_EMPTY_CACHE_TTL_SECONDS`   | `30` (empty/degraded results, to protect the upstream) |
-| `PLACES_RATE_LIMIT_MAX`            | `30` per user+IP per window                            |
-| `PLACES_RATE_LIMIT_WINDOW_SECONDS` | `60`                                                   |
-| `PLACES_RATE_LIMIT_TIMEOUT_MS`     | `750`                                                  |
-| `PLACES_REDIS_TIMEOUT_MS`          | `500`                                                  |
+| Variable                           | Default                                                | Allowed range |
+| ---------------------------------- | ------------------------------------------------------ | ------------- |
+| `GEOAPIFY_URL`                     | `https://api.geoapify.com/v1/geocode/autocomplete`     | http(s) URL   |
+| `GEOAPIFY_TIMEOUT_MS`              | `1200` (the 1.2 s budget for the primary source)       | 1–30000       |
+| `PHOTON_URL`                       | `https://photon.komoot.io/api`                         | http(s) URL   |
+| `PHOTON_TIMEOUT_MS`                | `2500`                                                 | 1–30000       |
+| `PLACES_CACHE_TTL_SECONDS`         | `900` (15 minutes)                                     | 1–86400       |
+| `PLACES_EMPTY_CACHE_TTL_SECONDS`   | `30` (empty/degraded results, to protect the upstream) | 1–3600        |
+| `PLACES_RATE_LIMIT_MAX`            | `30` per user+IP per window                            | 1–100000      |
+| `PLACES_RATE_LIMIT_WINDOW_SECONDS` | `60`                                                   | 1–86400       |
+| `PLACES_RATE_LIMIT_TIMEOUT_MS`     | `750`                                                  | 1–5000        |
+| `PLACES_REDIS_TIMEOUT_MS`          | `500`                                                  | 1–5000        |
+| `PLACES_LANG`                      | `zh`                                                   | `zh` or `en`  |
+| `PLACES_LIMIT`                     | `6`                                                    | 1–10          |
+
+`PLACES_LANG` / `PLACES_LIMIT` are defaults for requests that omit the query
+parameter; an explicit `lang`/`limit` from the client wins.
 
 `pnpm check:env` validates the provider enum, the fallback flag, the daily cap
 and warns when `PLACES_PROVIDER=geoapify` has no key but still has the fallback.
@@ -60,12 +65,23 @@ It errors if the fallback is disabled on top of a missing key (no provider left)
    With `PLACES_FALLBACK_TO_PHOTON=false` those cases surface as a degraded
    search instead.
 
-The Admin settings registry also exposes `places.provider`, `places.apiKey`,
-`places.cacheTtlSeconds` and `places.dailyQuota`. In this slice the Places
-module resolves `process.env` only (`places.settings.ts`); environment is the
-source of truth for deployment. A key saved as an encrypted Admin setting uses
-`CONFIG_ENCRYPTION_KEY` and must not be assumed to reach this module until the
-wiring lands.
+7. **No key, no backends, no results.** With `GEOAPIFY_API_KEY` empty and
+   Photon unreachable, search answers `200 { items: [], degraded: true,
+   provider: "geoapify" }`. Search never turns an upstream outage into a 5xx.
+   The UI must render an explicit “search unavailable / try later” state, not
+   an empty success list.
+
+### Settings vs environment
+
+`PlacesSettingsResolver` resolves the six `places.*` Admin keys per request and
+falls back to the environment, then to code defaults. Because no `places.*` key
+is env-locked, a value saved in the Admin console **wins over** `GEOAPIFY_*` /
+`PLACES_*`; changing only the env file after a save has no effect until the
+stored value is cleared/reset. `places.apiKey` is stored encrypted with
+`CONFIG_ENCRYPTION_KEY` and is decrypted only inside the resolver. The provider
+switch therefore exists in two places: env (for first boot) and Admin
+(`places.provider`, for day-2 operations). Keep them in sync when you roll
+back.
 
 ## 3. Quota and caching strategy
 
@@ -89,14 +105,19 @@ and the map tiles/data require OpenStreetMap credit. The product must show:
 
 > © OpenStreetMap contributors / Powered by Geoapify
 
-- The map already renders a `© OpenStreetMap` credit
-  (`apps/web/components/map/map-canvas.tsx`).
-- A **`Powered by Geoapify`** credit next to place-search results is not
-  present yet. Add it in the search panel before enabling Geoapify results in a
-  public deployment; removing the `GEOAPIFY_API_KEY` falls back to Photon and
-  only the OpenStreetMap credit is required.
-- Attribution must stay visible on mobile and in reduced-motion layouts; do not
-  hide it behind a tooltip or hover state.
+- `apps/web/lib/places-attribution.ts` is the single source of truth:
+  - `geoapify` → `Powered by Geoapify · © OpenStreetMap contributors`
+    (links to geoapify.com);
+  - `photon` → `Search by Photon · © OpenStreetMap contributors`
+    (links to photon.komoot.io);
+  - `local` (manually typed place) → `手动录入`, **no third-party credit**;
+  - `null`/unknown (map-only) → conservative `© OpenStreetMap contributors`.
+- Attribution must stay visible on mobile and in reduced-motion layouts; the
+  copy object also carries a short variant (`Geoapify · © OSM contributors`) for
+  narrow surfaces. Do not hide it behind a tooltip or hover state.
+- A deployment that turns Geoapify on must keep the Geoapify credit in the
+  search UI. Removing `GEOAPIFY_API_KEY` (or `PLACES_PROVIDER=photon`) changes
+  the credit to the Photon variant — do not keep stale Geoapify branding.
 
 **Terms and caching boundaries.** Verify the current terms before a public
 launch: <https://www.geoapify.com/> and
@@ -134,14 +155,39 @@ PLACES_FALLBACK_TO_PHOTON=true
 Verify one search end to end, the attribution credit, and the quota counter
 (`places:quota:geoapify:<date>` in Redis) before declaring recovery.
 
-## 6. Troubleshooting
+## 6. Verify it took effect
+
+```bash
+# 1. one search through the API
+curl -s "$API/v1/places/search?q=kyoto&limit=3" -H "authorization: Bearer $TOKEN" | jq
+
+# expected shape: { items: [...], provider: "geoapify"|"photon", degraded: false, cached: false }
+# "degraded": true means the primary failed/over quota; "provider" names who served it.
+
+# 2. cache + quota are visible in Redis
+redis-cli KEYS 'places:v3:*' | head
+redis-cli GET "places:quota:geoapify:$(date -u +%F)"     # consumed today
+redis-cli TTL "places:quota:geoapify:$(date -u +%F)"     # seconds to UTC midnight
+
+# 3. logs
+# places.search_completed  {provider, resultCount, degraded:false, durationMs}
+# places.upstream_failed   {provider, reason, fallback:"photon"}
+# places.cache_bypassed / places.quota_fail_open  -> Redis problem, still serving
+```
+
+The UI check is the attribution line: after a successful search the panel must
+show `Powered by Geoapify · © OpenStreetMap contributors` (or the Photon
+variant). If the credits are missing, treat it as a provider-terms blocker.
+
+## 7. Troubleshooting
 
 | Symptom                                   | Check                                                                                          |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Search always returns Photon results      | `GEOAPIFY_API_KEY` empty, `PLACES_PROVIDER=photon`, or the preflight warning was ignored       |
-| No results at all                         | Both providers down or `PLACES_FALLBACK_TO_PHOTON=false`; inspect API logs and upstream status |
+| Empty list with `degraded: true`    | No usable provider: empty `GEOAPIFY_API_KEY`, Photon down, and/or `PLACES_FALLBACK_TO_PHOTON=false`; this is a 200-by-design, not a crash |
+| Credit shows the wrong provider     | `provider` in the response vs `places-attribution.ts`; a saved `places.provider` overrides env |
+| Stale results after switching provider | Cache keys are provider-scoped; a saved `places.*` value wins over env, so update the Admin value (or clear it) and restart if the process still holds old settings |
 | Quota exhausted early                     | `GEOAPIFY_DAILY_LIMIT` at/below 3000, other deployments sharing the key, UTC rollover time     |
 | `places.quota_fail_open` in logs          | Redis unavailable; the cap is not enforced. Restore Redis before relying on the quota          |
-| Stale results after switching provider    | Cache keys are provider-scoped; restart the API if the process still holds old settings        |
-| Map shows Geoapify results without credit | Add `Powered by Geoapify` next to the results; this is a release blocker for Geoapify mode     |
+| Geoapify results with no credit          | Attribution is code, not config: check the deployed web bundle and `places-attribution.ts`; a release blocker for Geoapify mode |
 | Upstream 401/403                          | Key revoked or scoped wrong; rotate in the provider console and update the secret store        |

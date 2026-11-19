@@ -54,11 +54,48 @@ a real non-empty string (for example `local-gateway-token`) rather than
 | `anthropic-messages` | `POST {AI_BASE_URL}/messages`         | `x-api-key: {AI_API_KEY}` + `anthropic-version` | Messages API; system prompt separate, tools use `input_schema`. |
 
 The planner is an **agent loop with tools**, not a free-form text generator: the
-model may only propose tool calls from `AI_TOOL_NAMES` (`places.search`,
-`trips.get`, `stops.list`, `trips.create`, `stops.add`, `itinerary.addDay`,
-`packing.add`, `budget.setSummary`). Read-only tools run while planning; writes
-wait for explicit confirmation. Model output that does not match the plan/tool
-contract is exposed as `AI_SCHEMA_INVALID` and is never applied to data.
+model may only propose tool calls from `AI_TOOL_NAMES`. Model output that does
+not match the plan/tool contract is exposed as `AI_SCHEMA_INVALID` and is never
+applied to data.
+
+### Tool whitelist
+
+`packages/contracts/src/api/ai.ts` defines the eight names; the server rejects
+anything else before a tool runs:
+
+| Tool | Kind | Purpose |
+| --- | --- | --- |
+| `places.search` | read-only | resolve autocomplete results during planning |
+| `trips.get` | read-only | read the target trip |
+| `stops.list` | read-only | read existing stops |
+| `trips.create` | write | create a trip |
+| `stops.add` | write | add one stop |
+| `itinerary.addDay` | write | add a day |
+| `packing.add` | write | add a packing item |
+| `budget.setSummary` | write | set the budget summary |
+
+`AI_READ_ONLY_TOOLS = ["places.search", "trips.get", "stops.list"]`. Tool
+arguments are validated server-side; each tool silently drops arguments outside
+its own allow-list, so a model cannot smuggle extra fields into a write.
+
+### Two-phase plan → execute
+
+1. **Plan** (`POST /v1/workspaces/:workspaceId/ai/chat`): the loop may execute **read-only** tools to
+   gather context. Every *write* call the model requests is validated and
+   recorded in `plannedCalls` with
+   `message: "Not executed yet. The user must confirm the plan first."`
+   **Nothing is written to the database during planning** — no trip, stop,
+   packing item or budget row. The plan is persisted in the run store and the
+   response returns the run id + planned calls.
+2. **Execute** (`POST /v1/workspaces/:workspaceId/ai/runs/:runId/execute`): only calls that were in the
+   recorded plan can run (`AI_RUN_CALL_NOT_PLANNED` otherwise), the run is
+   single-use (`AI_RUN_CONSUMED`), and every call is audited. Arguments are not
+   stored in the audit record, only tool identity and outcome.
+
+Limits per plan run: `MAX_PLAN_ROUNDS = 8` model turns,
+`MAX_TOOL_CALLS_PER_RUN = 40` tool calls (`AI_LOOP_LIMIT` when exceeded), and
+`AI_TIMEOUT_MS` per upstream call. Past-dated write calls are rejected during
+planning by a date gate, not left to the model's prompt compliance.
 
 ## 3. Recipes
 
@@ -129,6 +166,32 @@ AI_DAILY_QUOTA=10
   run may still make several upstream calls.
 - Rate limiting for AI routes uses the API-wide guards; keep
   `RATE_LIMIT_WINDOW_SECONDS` and the auth limits in mind when tuning quotas.
+- The quota counter is Redis-backed and **fails open**: if Redis is unavailable
+  the request is allowed with an `ai.quota_unavailable` warning (throttled to one
+  log per 10 s). During a Redis outage `AI_DAILY_QUOTA` is not enforced.
+
+### Verify a configured gateway
+
+```bash
+# 1. plan: read-only tools only, no DB writes (editor+ in the workspace)
+curl -s -X POST "$API/v1/workspaces/$WS/ai/chat" -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"message":"3 days in Kyoto"}' | jq '{runId, message, plannedCalls, readOnlyTrace, warnings}'
+
+# 2. confirm nothing was written: plannedCalls are proposals only
+psql "$DATABASE_URL" -c 'select count(*) from "Trip" where "createdById" = ...'
+
+# 3. execute the accepted subset once (calls + idempotencyKey are required)
+curl -s -X POST "$API/v1/workspaces/$WS/ai/runs/$RUN/execute" \
+  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"calls":[...],"idempotencyKey":"plan-'$RUN'-1"}' | jq '{results, partialFailure}'
+
+# 4. a second execute must fail with AI_RUN_CONSUMED
+```
+
+Expected error codes: `AI_NOT_CONFIGURED` (503) when `AI_BASE_URL`+`AI_MODEL`
+are empty, `AI_QUOTA` (429) when the per-user daily cap is hit, `AI_UPSTREAM`
+(502) on timeout/connection failure.
 
 ## 5. Failure codes
 
@@ -149,6 +212,15 @@ The API answers with a problem body whose `code` is one of the values in
 | `AI_TOOL_FAILED`          | A read/write tool failed during execution.                                        | Inspect API logs; partial failure is reported in `results`.                 |
 
 ## 6. Cost control
+
+Order of magnitude, not a quote: one plan run makes **2–6 upstream calls** (up
+to 8 turns), each carrying the tool schemas plus trip context, and the plan is
+then executed once. With a small model in the `gpt-4o-mini` class and a
+4 000-token output cap, a single plan is typically in the **US$0.01–0.05**
+range; the default `AI_DAILY_QUOTA=20` therefore bounds a user at roughly
+**US$0.2–1 per day**. A frontier model can multiply that by 10–30×, so model
+choice dominates cost far more than the token caps. Measure your own provider
+invoice after the first week instead of trusting this estimate.
 
 1. Use a small, cheap model for the planning loop; reserve larger models for
    exceptional plans. Tool schemas are large, so prompt tokens dominate.

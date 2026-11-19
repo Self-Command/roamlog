@@ -122,10 +122,36 @@ curl -X POST http://127.0.0.1:4000/v1/admin/settings/mail/test \
 
 ## 7. Known limitation: the worker is not connected
 
-`apps/worker/src/dependencies.ts` still builds its SMTP/Resend transport from
-`EMAIL_PROVIDER`, `SMTP_*`, `EMAIL_FROM` and `RESEND_API_KEY` at process start.
-Changing mail settings in the Admin console does **not** change worker email
-(export-ready notifications). To keep those working, keep the environment
-values populated with the same relay/credentials until the worker consumes the
-settings through a shared configuration channel. Do not assume "all mail is
-wired": only API transactional mail is.
+> **The worker’s export-ready notification still reads the process environment.
+> Changing `mail.*` in the Admin console does NOT change worker email.**
+> `apps/worker/src/dependencies.ts` builds its SMTP/Resend transport from
+> `EMAIL_PROVIDER`, `EMAIL_FROM`, `SMTP_*` and `RESEND_API_KEY` at process
+> start; it does not import `SettingsService`. Only API transactional mail
+> (§3) honours the Admin values.
+
+Practical consequences:
+
+- Keep the environment values populated with the same relay/credentials as the
+  Admin settings until the worker consumes the settings through a shared
+  configuration channel. Divergence is silent: invitation and sign-up mail go
+  through the new relay, export mail through the old one.
+- Rotating an SMTP password only in the Admin console leaves export mail
+  failing (auth error in worker logs). Rotate both, restart the worker.
+- Turning mail off in the Admin console does not stop worker export mail; use
+  the environment or feature flags for that.
+- If the worker logs `mail_not_configured`/`EAUTH` while the Admin “send test”
+  succeeds, this is the expected split — fix `EMAIL_*`/`SMTP_*`, not the
+  settings row.
+
+Verification:
+
+```bash
+# API path (Admin settings): should succeed after a settings-only change
+curl -s -X POST "$API/v1/admin/settings/mail/test" -H "authorization: Bearer $ADMIN" \
+  -H 'content-type: application/json' -d '{"to":"verify@roamlog.test"}'
+
+# worker path (environment): trigger one export and inspect the worker log/EmailLog
+# Expect provider identity from EMAIL_*/SMTP_*; a settings-only change must NOT alter it.
+```
+
+Do not assume "all mail is wired": only API transactional mail is.
