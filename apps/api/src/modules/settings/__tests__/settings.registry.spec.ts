@@ -105,6 +105,37 @@ describe("SETTINGS_REGISTRY", () => {
     }
   });
 
+  it("caps the upload setting at the server-enforced 25 MB boundary", () => {
+    const entry = SETTINGS_BY_KEY.get("media.maxUploadBytes");
+    expect(entry).toBeDefined();
+
+    // 25,000,000 is the largest value the presign endpoint's 25 MiB hard cap can
+    // honour for every file, so the setting must accept it...
+    expect(entry?.schema.safeParse(25_000_000).success).toBe(true);
+    expect(entry?.defaultValue).toBe(25_000_000);
+
+    // ...and refuse one byte more instead of storing a limit the server ignores.
+    const overLimit = entry?.schema.safeParse(25_000_001);
+    expect(overLimit?.success).toBe(false);
+    if (overLimit && !overLimit.success) {
+      const issue = overLimit.error.issues[0];
+      expect(issue?.code).toBe("too_big");
+      expect(issue?.message).toMatch(/25000000|25[,_]000[,_]000/u);
+    }
+
+    // The old 100 MB ceiling is gone and the 1 MB floor still holds.
+    expect(entry?.schema.safeParse(100_000_000).success).toBe(false);
+    expect(entry?.schema.safeParse(1_000_000).success).toBe(true);
+    expect(entry?.schema.safeParse(999_999).success).toBe(false);
+  });
+
+  it("documents that the server enforces the upload cap", () => {
+    const help = SETTINGS_BY_KEY.get("media.maxUploadBytes")?.help ?? "";
+    expect(help).toContain("上限 25 MB");
+    expect(help).toContain("由服务端强制");
+    expect(help).toContain("客户端会先拦一次");
+  });
+
   it("offers only the color modes that actually render", () => {
     const entry = SETTINGS_BY_KEY.get("theme.defaultMode");
 

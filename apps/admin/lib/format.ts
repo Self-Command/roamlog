@@ -1,3 +1,4 @@
+// 十进制，与 `apps/web/lib/api/media.ts` 的 COVER_MAX_BYTES 与 settings 的 media.maxUploadBytes 口径一致；改动需三处同步。
 const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   month: "2-digit",
   day: "2-digit",
@@ -28,18 +29,25 @@ export function formatCount(value: number): string {
   return new Intl.NumberFormat("zh-CN", { notation: "compact" }).format(value);
 }
 
+/**
+ * Formats byte counts with decimal units (`/1_000`, not `/1_024`) so the same
+ * file reads the same here and in `apps/web/components/media`. Values are
+ * grouped with the zh-CN separator; MB and above keep one decimal place while
+ * the trailing `.0` is dropped, and KB stays integral like the web client. This
+ * is display only — thresholds stay in bytes.
+ */
 export function formatBytes(value: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let size = value;
   let unitIndex = 0;
 
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
+  while (size >= 1_000 && unitIndex < units.length - 1) {
+    size /= 1_000;
     unitIndex += 1;
   }
 
   return `${new Intl.NumberFormat("zh-CN", {
-    maximumFractionDigits: unitIndex >= 3 ? 1 : 0,
+    maximumFractionDigits: unitIndex >= 2 ? 1 : 0,
   }).format(size)} ${units[unitIndex]}`;
 }
 

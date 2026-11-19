@@ -467,12 +467,16 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     key: "media.maxUploadBytes",
     group: "media",
     type: "number",
-    schema: z.number().int().min(1_000_000).max(100_000_000),
+    // The server hard-caps presigned uploads at 25 MiB (26,214,400 bytes). The
+    // setting stops at the decimal 25 MB mark so an operator can never save a
+    // value the presign endpoint would refuse; do not raise this without
+    // changing the media module's cap at the same time.
+    schema: z.number().int().min(1_000_000).max(25_000_000),
     isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "Max upload bytes",
-    help: "Largest single upload the presign endpoint accepts. The browser also pre-checks files against it, clamped to 25 MB.",
+    help: "Largest single upload the presign endpoint accepts. 上限 25 MB，由服务端强制；客户端会先拦一次。",
   }),
 
   define({
