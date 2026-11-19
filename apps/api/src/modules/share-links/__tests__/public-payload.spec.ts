@@ -247,6 +247,10 @@ describe("ShareLinksService public read model", () => {
       caption: "Euljiro at dusk",
       date: "2026-11-11",
       location: "Seoul",
+      // Live-photo projection: an ordinary still carries no motion and is never
+      // mistaken for a playable one.
+      livePhoto: false,
+      motion: null,
     });
     expect(payload.entries[0]?.media).toEqual(payload.media);
     expect(JSON.stringify(payload)).not.toMatch(/variants|bucket|"key"/);
@@ -289,6 +293,128 @@ describe("ShareLinksService public read model", () => {
     ]);
     await expect(service.readPublic(SHARE_TOKEN, {})).rejects.toThrow(
       /storage unavailable/,
+    );
+  });
+});
+
+describe("ShareLinksService public place provider", () => {
+  function stopRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: "01942f30-1200-7000-8000-000000000020",
+      tripId: TRIP_ID,
+      workspaceId: WORKSPACE_ID,
+      city: "京都",
+      country: "日本",
+      countryCode: "JP",
+      lat: 35.0116,
+      lng: 135.7681,
+      provider: "geoapify",
+      providerPlaceId: "geoapify:place/kyoto",
+      timeZone: "Asia/Tokyo",
+      address: null,
+      bbox: null,
+      startDate: new Date("2026-11-10T00:00:00.000Z"),
+      endDate: new Date("2026-11-12T00:00:00.000Z"),
+      notes: "",
+      order: 0,
+      version: 1,
+      createdById: USER_ID,
+      updatedById: USER_ID,
+      createdAt: new Date("2026-11-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-11-02T00:00:00.000Z"),
+      deletedAt: null,
+      ...overrides,
+    };
+  }
+
+  function bundleWithStops(
+    stops: Array<Record<string, unknown>>,
+    trip: Record<string, unknown> = tripRow(),
+  ): PublicTripBundle {
+    return { ...bundleWith([], []), trip, stops };
+  }
+
+  it("exposes each stop provider and the trip origin provider", async () => {
+    const { service } = buildService(
+      bundleWithStops(
+        [
+          stopRow({ provider: "geoapify" }),
+          stopRow({ id: "01942f30-1200-7000-8000-000000000021", provider: "photon", order: 1 }),
+          stopRow({ id: "01942f30-1200-7000-8000-000000000022", provider: "local", order: 2 }),
+        ],
+        tripRow({ originProvider: "photon" }),
+      ),
+    );
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.stops.map((stop) => stop.provider)).toEqual([
+      "geoapify",
+      "photon",
+      "local",
+    ]);
+    expect(payload.trip.originProvider).toBe("photon");
+  });
+
+  it("reports null instead of inventing a provider for legacy rows", async () => {
+    const legacyStop = stopRow({ provider: null });
+    const legacyTrip = tripRow();
+    delete legacyTrip.originProvider;
+    const { service } = buildService(bundleWithStops([legacyStop], legacyTrip));
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.stops[0]?.provider).toBeNull();
+    expect(payload.trip.originProvider).toBeNull();
+  });
+
+  it("degrades an unknown future provider value to null instead of failing the strict schema", async () => {
+    const { service } = buildService(
+      bundleWithStops(
+        [stopRow({ provider: "future-provider" })],
+        tripRow({ originProvider: "future-provider" }),
+      ),
+    );
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.stops[0]?.provider).toBeNull();
+    expect(payload.trip.originProvider).toBeNull();
+  });
+
+  it("projects a full Prisma row with future columns without leaking internal fields", async () => {
+    const trip = tripRow({
+      originProvider: "geoapify",
+      // Columns a later migration (or another module) may add. The public
+      // presenter builds the payload key by key, so they must never reach the
+      // strict schema — a spread would make the public page 500.
+      moderatedAt: new Date("2026-11-19T10:00:00.000Z"),
+      moderatedById: USER_ID,
+      bucket: "roamlog-private",
+      storageKey: "trips/origin/private.jpg",
+      lastViewedAt: new Date("2026-11-19T11:00:00.000Z"),
+      futureColumn: { nested: true },
+    });
+    const stop = stopRow({
+      provider: "geoapify",
+      moderatedAt: new Date("2026-11-19T10:00:00.000Z"),
+      moderatedById: USER_ID,
+      bucket: "roamlog-private",
+      storageKey: "stops/kyoto/private.jpg",
+      key: "stops/kyoto/private.jpg",
+      variants: { large: { key: "stops/kyoto/large.webp" } },
+      futureColumn: "unknown",
+    });
+    const { service } = buildService({
+      ...bundleWith([mediaRow()], []),
+      trip,
+      stops: [stop],
+    });
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+
+    expect(payload.stops[0]?.provider).toBe("geoapify");
+    expect(payload.trip.originProvider).toBe("geoapify");
+
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toMatch(
+      /moderatedAt|moderatedById|storageKey|bucket|"key"|variants|futureColumn|lastViewedAt/,
     );
   });
 });

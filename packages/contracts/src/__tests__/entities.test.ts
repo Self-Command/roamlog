@@ -23,6 +23,8 @@ import {
   CreateTripRequestSchema,
   UpdateStopRequestSchema,
   TripCoverSchema,
+  TripDestinationProviderSchema,
+  TripDestinationSchema,
   TripParticipantSchema,
   TripSchema,
   UpdateTripRequestSchema,
@@ -217,6 +219,85 @@ describe("entity contracts", () => {
     ).toBe(false);
   });
 
+  describe("structured destinations", () => {
+    const destination = {
+      id: "0192f4c5-6a7b-7c8d-c123-456789abcdef",
+      name: "Kyoto",
+      provider: "geoapify",
+      providerPlaceId: "51e1bdfea47461405994da8b683bb64140f00103f9",
+      address: "京都市, 京都府, 日本",
+      country: "日本",
+      countryCode: "JP",
+      lat: 35.0116,
+      lng: 135.7681,
+      timeZone: "Asia/Tokyo",
+      bbox: [135.6, 34.85, 135.93, 35.17],
+      order: 0,
+    };
+
+    it("parses a trip that carries both the deprecated names and destinationsV2", () => {
+      const parsed = TripSchema.parse({ ...trip, destinationsV2: [destination] });
+      expect(parsed.destinations).toEqual(["Kyoto", "Osaka"]);
+      expect(parsed.destinationsV2).toEqual([destination]);
+    });
+
+    it("keeps destinationsV2 omitted for readers that predate the field", () => {
+      const parsed = TripSchema.parse(trip);
+      expect(parsed.destinationsV2).toBeUndefined();
+    });
+
+    it("keeps every metadata field nullable and rejects unknown keys", () => {
+      const nameOnly = {
+        ...destination,
+        provider: null,
+        providerPlaceId: null,
+        address: null,
+        country: null,
+        countryCode: null,
+        lat: null,
+        lng: null,
+        timeZone: null,
+        bbox: null,
+      };
+      expect(TripDestinationSchema.parse(nameOnly).provider).toBeNull();
+      // `address` is nullable but still required: a missing key is not "unknown".
+      const { address: _address, ...missingAddress } = destination;
+      expect(TripDestinationSchema.safeParse(missingAddress).success).toBe(false);
+      expect(TripDestinationSchema.safeParse({ ...destination, unknown: 1 }).success).toBe(false);
+      expect(TripDestinationSchema.safeParse({ ...destination, order: -1 }).success).toBe(false);
+      expect(TripDestinationSchema.safeParse({ ...destination, provider: "osm" }).success).toBe(
+        false,
+      );
+      expect(TripDestinationSchema.safeParse({ ...destination, countryCode: "jp" }).success).toBe(
+        false,
+      );
+      expect(TripDestinationSchema.safeParse({ ...destination, lng: null }).success).toBe(false);
+      expect(
+        TripDestinationSchema.safeParse({ ...destination, bbox: [135.93, 34.85, 135.6, 35.17] })
+          .success,
+      ).toBe(false);
+    });
+
+    it("shares the provider value set with the place search", () => {
+      expect(TripDestinationProviderSchema.options).toEqual(PlaceSearchProviderSchema.options);
+    });
+
+    it("rejects duplicate or over-long destination rows on the trip", () => {
+      expect(
+        TripSchema.safeParse({ ...trip, destinationsV2: [destination, { ...destination }] })
+          .success,
+      ).toBe(true);
+      // Duplicate names are a payload rule (`TripDestinationInputListSchema`),
+      // not a row rule; the entity schema only checks the row shape.
+      expect(
+        TripSchema.safeParse({
+          ...trip,
+          destinationsV2: [{ ...destination, lat: 31.2, lng: 121.4, order: 1 }],
+        }).success,
+      ).toBe(true);
+    });
+  });
+
   it("projects a serializable cover without storage secrets", () => {
     const cover = {
       mediaId: MEDIA,
@@ -383,6 +464,9 @@ describe("entity contracts", () => {
       countryCode: "JP",
       lat: 35.0116,
       lng: 135.7681,
+      // The public page credits the real source; `null` stays legal for manually
+      // typed or legacy stops (the key itself is required).
+      provider: "photon",
       address: "京都市, 京都府, 日本",
       startDate: "2026-11-21",
       endDate: "2026-11-24",
@@ -391,7 +475,9 @@ describe("entity contracts", () => {
     };
 
     expect(PublicStopSchema.parse(publicStop).address).toBe("京都市, 京都府, 日本");
+    expect(PublicStopSchema.parse(publicStop).provider).toBe("photon");
     expect(PublicStopSchema.safeParse({ ...publicStop, address: null }).success).toBe(true);
+    expect(PublicStopSchema.safeParse({ ...publicStop, provider: null }).success).toBe(true);
     // A bbox in a public stop is an unknown key: the schema is strict.
     expect(PublicStopSchema.safeParse({ ...publicStop, bbox: [1, 2, 3, 4] }).success).toBe(false);
   });
