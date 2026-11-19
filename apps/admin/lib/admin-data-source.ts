@@ -10,13 +10,10 @@ import {
   useGetAdminMetrics,
   useGetAdminSystem,
   useListAdminAudit,
-  useListAdminComments,
   useListAdminEmails,
-  useListAdminEntries,
   useListAdminFlags,
   useListAdminJobs,
   useListAdminMedia,
-  useListAdminTrips,
   useListAdminUsers,
   useListAdminWorkspaces,
   usePauseAdminQueue,
@@ -60,7 +57,6 @@ import type {
   AuditLog,
   EmailStatus,
   MediaStatus,
-  TripVisibility,
 } from "@roamlog/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -72,7 +68,6 @@ import {
 } from "./admin-api-error";
 import { type AdminDashboardData } from "./admin-types";
 import {
-  type AdminContentItem,
   type AdminEmailRecord,
   type AdminFailedJob,
   type AdminFlagRecord,
@@ -611,89 +606,6 @@ export function mapAdminWorkspaces(
   });
 }
 
-export function mapAdminContent(input: {
-  trips: readonly {
-    id: string;
-    workspaceId: string;
-    title: string;
-    summary: string;
-    visibility: TripVisibility;
-    createdById: string;
-    createdAt: string;
-    updatedAt: string;
-    deletedAt: string | null;
-  }[];
-  entries: readonly {
-    id: string;
-    workspaceId: string;
-    title: string;
-    excerpt: string;
-    createdById: string;
-    createdAt: string;
-    updatedAt: string;
-    deletedAt: string | null;
-  }[];
-  comments: readonly {
-    id: string;
-    workspaceId: string;
-    targetType: string;
-    body: string;
-    authorId: string;
-    createdAt: string;
-    updatedAt: string;
-    deletedAt: string | null;
-  }[];
-  users: readonly AdminUserPageItemsItem[];
-  workspaces: readonly AdminWorkspacePageItemsItem[];
-}): readonly AdminContentItem[] {
-  return [
-    ...input.trips.map((trip) => ({
-      id: trip.id,
-      kind: "trip" as const,
-      title: trip.title,
-      excerpt: trip.summary,
-      workspaceId: trip.workspaceId,
-      workspaceName: workspaceName(trip.workspaceId, input.workspaces),
-      authorName: userName(trip.createdById, input.users),
-      visibility: trip.visibility,
-      status: trip.deletedAt ? ("deleted" as const) : ("published" as const),
-      reportCount: 0,
-      createdAt: trip.createdAt,
-      updatedAt: trip.updatedAt,
-      shareToken: null,
-    })),
-    ...input.entries.map((entry) => ({
-      id: entry.id,
-      kind: "entry" as const,
-      title: entry.title,
-      excerpt: entry.excerpt,
-      workspaceId: entry.workspaceId,
-      workspaceName: workspaceName(entry.workspaceId, input.workspaces),
-      authorName: userName(entry.createdById, input.users),
-      visibility: "workspace" as const,
-      status: entry.deletedAt ? ("deleted" as const) : ("published" as const),
-      reportCount: 0,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-      shareToken: null,
-    })),
-    ...input.comments.map((comment) => ({
-      id: comment.id,
-      kind: "comment" as const,
-      title: `Re: ${comment.targetType}`,
-      excerpt: comment.body,
-      workspaceId: comment.workspaceId,
-      workspaceName: workspaceName(comment.workspaceId, input.workspaces),
-      authorName: userName(comment.authorId, input.users),
-      visibility: "workspace" as const,
-      status: comment.deletedAt ? ("deleted" as const) : ("published" as const),
-      reportCount: 0,
-      createdAt: comment.createdAt,
-      updatedAt: comment.updatedAt,
-      shareToken: null,
-    })),
-  ].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-}
 
 export function mapAdminMedia(
   media: readonly AdminMediaPageItemsItem[],
@@ -1013,22 +925,6 @@ export function useAdminWorkspacesResource(): AdminResource<readonly AdminWorksp
   return combineResources([query], () => itemsOf<AdminWorkspaceListItem>(query));
 }
 
-export function useAdminContentResource(): AdminResource<readonly AdminContentItem[]> {
-  const trips = useListAdminTrips({ limit: 100 });
-  const entries = useListAdminEntries({ limit: 100 });
-  const comments = useListAdminComments({ limit: 100 });
-  const users = useListAdminUsers({ limit: 100 });
-  const workspaces = useListAdminWorkspaces({ limit: 100 });
-  return combineResources([trips, entries, comments, users, workspaces], () =>
-    mapAdminContent({
-      trips: itemsOf(trips),
-      entries: itemsOf(entries),
-      comments: itemsOf(comments),
-      users: itemsOf(users),
-      workspaces: itemsOf(workspaces),
-    }),
-  );
-}
 
 export function useAdminMediaResource(): AdminResource<readonly AdminMediaItem[]> {
   const media = useListAdminMedia({ limit: 100 });

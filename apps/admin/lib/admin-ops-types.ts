@@ -1,23 +1,4 @@
-import type { EmailStatus, MediaStatus, TripVisibility } from "@roamlog/contracts";
-
-export type ContentKind = "trip" | "entry" | "comment";
-export type ContentModerationStatus = "published" | "flagged" | "deleted";
-
-export interface AdminContentItem {
-  id: string;
-  kind: ContentKind;
-  title: string;
-  excerpt: string;
-  workspaceId: string;
-  workspaceName: string;
-  authorName: string;
-  visibility: TripVisibility;
-  status: ContentModerationStatus;
-  reportCount: number;
-  createdAt: string;
-  updatedAt: string;
-  shareToken: string | null;
-}
+import type { EmailStatus, MediaStatus } from "@roamlog/contracts";
 
 export interface AdminMediaItem {
   id: string;
@@ -115,16 +96,4 @@ export function formatUptime(totalSeconds: number): string {
   }
   return `${hours} 小时 ${minutes} 分`;
 }
-
-export const CONTENT_KIND_LABELS: Record<ContentKind, string> = {
-  trip: "旅行",
-  entry: "日志",
-  comment: "评论",
-};
-
-export const CONTENT_STATUS_LABELS: Record<ContentModerationStatus, string> = {
-  published: "已发布",
-  flagged: "待审核",
-  deleted: "已删除",
-};
 
