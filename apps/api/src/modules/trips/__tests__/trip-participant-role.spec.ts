@@ -310,8 +310,8 @@ async function seedFixtures(client: ReturnType<typeof createPrismaClient>): Prom
 /**
  * Runs the real guard chain exactly as Nest does for
  * `@UseGuards(ContentTenantGuard, RolesGuard)` on `/v1/trips/:tripId`:
- * ContentTenantGuard resolves the trip workspace and delegates to TenantGuard,
- * which resolves the membership, then calls TripParticipantRoleGuard.
+ * ContentTenantGuard resolves the trip workspace, delegates to TenantGuard for
+ * the Workspace membership, then invokes TripParticipantRoleGuard.
  */
 async function enterTrip(
   userId: string,
@@ -398,17 +398,13 @@ integration("trip participant role authorization on real PostgreSQL", () => {
     const sessionGuard = new SessionGuard({} as never, prismaService);
     const verifiedEmailGuard = new VerifiedEmailGuard();
     tripParticipantRoleGuard = new TripParticipantRoleGuard(prismaService);
-    const tenantGuard = new TenantGuard(
-      sessionGuard,
-      verifiedEmailGuard,
-      accessService,
-      tripParticipantRoleGuard,
-    );
+    const tenantGuard = new TenantGuard(sessionGuard, verifiedEmailGuard, accessService);
     contentGuard = new ContentTenantGuard(
       prismaService,
       sessionGuard,
       verifiedEmailGuard,
       tenantGuard,
+      tripParticipantRoleGuard,
     );
     rolesGuard = new RolesGuard();
 
