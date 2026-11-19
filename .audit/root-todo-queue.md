@@ -35,3 +35,15 @@
 2. 生产侧：真实 SMTP 凭据（Gmail 应用专用密码当前被拒）、备份任务、`CONFIG_ENCRYPTION_KEY` 已生成并异地备份
 3. tag rc.5 → GitHub Actions 构建镜像 → 拉取部署（**不许本地构镜像**）
 4. 部署后：`/v1/ready` 三态、媒体上传真实往返、后台设置改一项验一次生效
+## 新增待办（2026-11-19 15:55）
+
+| # | 任务 | 依据 | 优先级 |
+|---|---|---|---|
+| 6 | **WORKSPACE_TRANSFER_PERMISSION**：转移工作区所有权目前由 `admin:workspaces:delete` 兜底（`apps/api/src/modules/admin/admin-workspaces.service.ts:217`），UI 能力检查同样复用 delete（`apps/admin/components/workspaces/workspaces-view.tsx:174-179`）。语义错配：能删工作区的人就能转移所有权。应新增独立 `admin:workspaces:transfer` 动作并重接 API/UI | `DEBT_SWEEP_1` 边界报告（幽灵项 `admin:workspaces:transfer` 已从 `NON_GRANTABLE_ADMIN_ACTIONS` 删除，本次不新增动作） | P1 |
+
+## 流程规则更新（2026-11-19）
+
+1. **契约生成单点**：`contracts:generate` / `api-client:generate` 只由根 Agent 在所有契约改动落地后执行一次（今天已有两次因提前生成把半成品固化）。
+2. **迁移提交后必须通知根 Agent 应用**：今天因 `0009_media_motion` 未应用到共享库，导致**所有公开分享页 500**。
+3. **`prisma generate` 由提交 schema 的人负责**，不作为"后续事项"（今天 `packages/db` 因此编译不过）。
+4. **`packages/contracts` 的任何改动必须保持每一步可编译**：它是被全仓 import 的共享包，语法错误会让所有 Agent 的本地环境同时失效。
