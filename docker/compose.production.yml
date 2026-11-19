@@ -263,7 +263,6 @@ services:
       NODE_ENV: production
       APP_ENV: production
       API_URL: http://api:4000
-      NEXT_PUBLIC_DATA_MODE: api
       NEXT_TELEMETRY_DISABLED: "1"
     ports:
       - "127.0.0.1:${PRODUCTION_WEB_PORT:-13000}:3000"
@@ -286,7 +285,6 @@ services:
       NODE_ENV: production
       APP_ENV: production
       API_URL: http://api:4000
-      NEXT_PUBLIC_ADMIN_DATA_MODE: api
       NEXT_TELEMETRY_DISABLED: "1"
     ports:
       - "127.0.0.1:${PRODUCTION_ADMIN_PORT:-13001}:3000"

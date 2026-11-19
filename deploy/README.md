@@ -281,6 +281,8 @@ frozen in place for production purposes:
   entry); `docker/web.Dockerfile` and `docker/admin.Dockerfile` default that arg
   to `production`, because the base image sets `NODE_ENV=production` and the
   Admin badge would otherwise claim `PRODUCTION` on staging.
+  `NEXT_PUBLIC_DATA_MODE` / `NEXT_PUBLIC_ADMIN_DATA_MODE` 已移除，应用只有真实
+  API 路径，因此 staging 与 production 镜像都不再接受 data-mode build arg。
 - They read `/opt/roamlog/config/.env.staging`, which does not carry the
   production mail validation contract (`APP_ENV=production`,
   `EMAIL_PROVIDER=resend|smtp`).

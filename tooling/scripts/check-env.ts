@@ -28,10 +28,21 @@ EMAIL_PROVIDER, bucket CORS origins).
 Exit codes
   0  configuration passed
   1  configuration failed, or bad usage
+
+Retired flags
+  The retired data-mode build flags were removed with the mock data mode.
+  The application only has the live API path, so a leftover export is
+  reported as a warning (never a failure) and has no effect.
 `;
 
 const DEFAULT_LOCAL_ENV_FILES = [".env.local", ".env"] as const;
 const DEFAULT_PRODUCTION_ENV_FILE = "docker/production.env.example";
+
+/**
+ * Build-time switches retired with the mock data mode. They are listed here
+ * only for a reverse assertion: a stale export is reported, never enforced.
+ */
+const RETIRED_DATA_MODE_KEYS = ["NEXT_PUBLIC_DATA_MODE", "NEXT_PUBLIC_ADMIN_DATA_MODE"] as const;
 
 const BASE_REQUIRED_KEYS = [
   "DATABASE_URL",
@@ -404,6 +415,24 @@ const reportPlaceholders = (keys: readonly string[], asError: boolean): void => 
     else warnings.push(message.replace("; replace it", " (local default)"));
   }
 };
+
+/**
+ * Reverse assertion for the retired data-mode build flag. It must not fail:
+ * the build ignores the variable now, so a leftover export is a warning that
+ * names the key and tells the operator where to remove it.
+ */
+const reportRetiredDataModeFlags = (): void => {
+  for (const key of RETIRED_DATA_MODE_KEYS) {
+    if (process.env[key] === undefined) continue;
+    warnings.push(
+      `${key} is still set in process.env but the data-mode build flag was removed; the app only has the live API path. Remove it from your shell/profile or env file.`,
+    );
+  }
+};
+
+// Checked even in production mode, where the reviewed file (not process.env)
+// drives the rules: a leftover shell export is exactly the stale usage wanted.
+reportRetiredDataModeFlags();
 
 if (options.mode === "production") {
   checkAppEnv();

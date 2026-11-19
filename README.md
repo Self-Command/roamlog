@@ -335,28 +335,10 @@ pnpm --version
 pnpm install --frozen-lockfile
 ```
 
-### 模式 A：Mock 模式（只需 Node.js）
+> 数据源已固定为真实 API：应用没有 mock / fixture 模式，本地开发也必须启动
+> API、PostgreSQL、Redis 和 MinIO，不能只启动 Next.js。
 
-Web 默认 `NEXT_PUBLIC_DATA_MODE=mock`，Admin 默认 `fixture`。这是最快的界面查看方式：
-
-```bash
-# Terminal 1
-pnpm --filter @roamlog/web dev
-
-# Terminal 2
-pnpm --filter @roamlog/admin dev
-```
-
-- Web: <http://localhost:3000>
-- Admin: <http://localhost:3001>
-
-Mock 边界：
-
-- Web 在 development/test 下启动 MSW；生产构建不会启动 Service Worker。
-- Admin fixture 操作写本地状态和模拟审计，不会请求 API。
-- mock 模式不证明真实登录、数据库、上传、邮件、队列或实时协作。
-
-### 模式 B：API 模式（完整本地栈）
+### 本地完整栈（真实 API）
 
 1. 准备根环境文件。API/Worker/Prisma 会读取仓库根目录的 `.env.local`：
 
@@ -387,32 +369,26 @@ pnpm db:seed
 Seed 只允许 local/staging。若要把 seed 图片上传到 MinIO，在 `.env.local` 设置
 `ROAMLOG_SEED_S3_UPLOAD=true` 后重新运行 `pnpm db:seed`。
 
-4. 在 Web/Admin 的开发环境启用 API 数据源。可分别创建被 Git 忽略的
+4. 让 Web/Admin 的开发环境指向本地 API。可分别创建被 Git 忽略的
    `apps/web/.env.local` 与 `apps/admin/.env.local`：
 
 ```dotenv
 # apps/web/.env.local
 API_URL=http://localhost:4000
-NEXT_PUBLIC_DATA_MODE=api
 
 # apps/admin/.env.local
 API_URL=http://localhost:4000
-NEXT_PUBLIC_ADMIN_DATA_MODE=api
 ```
 
 也可以在启动前导出同名环境变量：
 
 ```powershell
 $env:API_URL = "http://localhost:4000"
-$env:NEXT_PUBLIC_DATA_MODE = "api"
-$env:NEXT_PUBLIC_ADMIN_DATA_MODE = "api"
 pnpm dev
 ```
 
 ```bash
 export API_URL=http://localhost:4000
-export NEXT_PUBLIC_DATA_MODE=api
-export NEXT_PUBLIC_ADMIN_DATA_MODE=api
 pnpm dev
 ```
 
@@ -469,7 +445,7 @@ pnpm admin:bootstrap -- --force
 | Runtime    | `NODE_ENV`, `APP_ENV`, `LOG_LEVEL`, `ROAMLOG_ENV_FILE`                                                   | Node 运行模式、部署形态、日志级别     |
 | URL        | `APP_URL`, `ADMIN_URL`, `API_URL`, `BETTER_AUTH_URL`                                                     | 公开 origin 与 Better Auth 基址       |
 | 网络边界   | `CORS_ORIGINS`, `TRUST_PROXY`, `SESSION_COOKIE_DOMAIN`                                                   | 精确 CORS、代理信任、父域 cookie      |
-| 前端模式   | `NEXT_PUBLIC_DATA_MODE`, `NEXT_PUBLIC_ADMIN_DATA_MODE`, `NEXT_PUBLIC_APP_ENV`                            | `mock/fixture` 或 `api`、环境徽标     |
+| 前端构建   | `NEXT_PUBLIC_APP_ENV`                                                                                    | 部署环境徽标（production/staging）    |
 | 限流       | `RATE_LIMIT_WINDOW_SECONDS`, `AUTH_RATE_LIMIT_MAX`, `PUBLIC_SHARE_*_RATE_LIMIT_MAX`                      | 登录、分享、预签名请求限流            |
 | 数据库     | `DATABASE_URL`, `POSTGRES_*`                                                                             | PostgreSQL 连接与 Compose 初始化      |
 | Redis      | `REDIS_URL`, `REDIS_PREFIX`, `REDIS_PASSWORD`                                                            | 队列、限流、幂等、presence 与隔离前缀 |
@@ -485,6 +461,8 @@ pnpm admin:bootstrap -- --force
 | Bootstrap  | `BOOTSTRAP_SUPER_ADMIN_EMAIL`, `BOOTSTRAP_SUPER_ADMIN_NAME`                                              | 首个平台管理员目标                    |
 | Seed       | `DEMO_SEED_ENABLED`, `DEMO_*`, `ROAMLOG_SEED_S3_UPLOAD`                                                  | 仅 local/staging 演示数据             |
 | 发布       | `ROAMLOG_IMAGE_TAG`, `PRODUCTION_*_PORT`, `STAGING_*_PORT`                                               | 镜像 tag 与 loopback 端口             |
+
+> `NEXT_PUBLIC_DATA_MODE` / `NEXT_PUBLIC_ADMIN_DATA_MODE` 已移除，应用只有真实 API 路径：Docker build args、Compose、env 模板和 `check-env` 都不再接受这两个变量。
 
 `APP_ENV` 与 `NODE_ENV` 的区别：staging 也以 `NODE_ENV=production` 运行以复用 Node 运行时行为，因此**生产专属校验（媒体公开 origin、真实邮件通道）只由 `APP_ENV=production` 触发**。省略 `APP_ENV` 会让 API 静默回落为 `development` 并跳过这些校验，`pnpm check:env -- --env production` 会因此直接报错。
 

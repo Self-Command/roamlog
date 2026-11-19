@@ -290,8 +290,6 @@ staging_env_required = root_env_required | {
     "MINIO_ROOT_USER",
     "MINIO_ROOT_PASSWORD",
     "S3_FORCE_PATH_STYLE",
-    "NEXT_PUBLIC_DATA_MODE",
-    "NEXT_PUBLIC_ADMIN_DATA_MODE",
     "ROAMLOG_IMAGE_TAG",
 }
 require_env_keys("docker/staging.env.example", staging_env_required)
