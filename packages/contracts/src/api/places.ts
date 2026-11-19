@@ -7,10 +7,11 @@ export const PlaceTypeSchema = z.enum(["city", "region", "country", "poi", "othe
 export type PlaceType = z.infer<typeof PlaceTypeSchema>;
 
 /**
- * Search-provider enum. It is intentionally separate from the `Stop`
- * `PlaceProviderSchema` (still `"photon" | "local"`): adding a search source must
- * not widen the stored Stop provider contract until Stops can actually persist
- * an `address`/`bbox` pair (tracked separately).
+ * Search-provider enum. It is defined separately from the stored `Stop`
+ * `PlaceProviderSchema` for readability, but the two **must** carry the same
+ * values: every place a search returns has to be storable on a stop without
+ * being relabelled. Stops persist `address`/`bbox` since 0006 and `geoapify`
+ * since 0007; `entities.test.ts` asserts the two value sets never drift.
  */
 export const PlaceSearchProviderSchema = z.enum(["geoapify", "photon", "local"]);
 export type PlaceSearchProvider = z.infer<typeof PlaceSearchProviderSchema>;

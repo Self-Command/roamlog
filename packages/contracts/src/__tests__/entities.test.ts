@@ -10,7 +10,9 @@ import {
   InvitationSchema,
   IsoTimestampSchema,
   JournalEntrySchema,
+  PlaceProviderSchema,
   PlaceSchema,
+  PlaceSearchProviderSchema,
   PlaceSearchQuerySchema,
   PlaceSearchResponseSchema,
   PublicMediaSchema,
@@ -278,6 +280,40 @@ describe("entity contracts", () => {
     expect(StopSchema.parse(stop).address).toBe("京都市, 京都府, 日本");
     expect(StopSchema.parse(stop).bbox).toEqual([135.6, 34.85, 135.93, 35.17]);
     expect(StopSchema.safeParse({ ...stop, timeZone: "local time" }).success).toBe(false);
+  });
+
+  it("accepts geoapify as a stored stop provider and rejects unknown sources", () => {
+    expect(PlaceProviderSchema.parse("geoapify")).toBe("geoapify");
+    expect(PlaceProviderSchema.safeParse("mapbox").success).toBe(false);
+
+    const request = {
+      city: "Kyoto",
+      country: "Japan",
+      countryCode: "JP",
+      startDate: "2026-11-21",
+      endDate: "2026-11-24",
+    };
+    expect(CreateStopRequestSchema.safeParse({ ...request, provider: "geoapify" }).success).toBe(
+      true,
+    );
+    expect(CreateStopRequestSchema.safeParse({ ...request, provider: "mapbox" }).success).toBe(
+      false,
+    );
+    expect(UpdateStopRequestSchema.safeParse({ version: 1, provider: "geoapify" }).success).toBe(
+      true,
+    );
+    expect(UpdateStopRequestSchema.safeParse({ version: 1, provider: "mapbox" }).success).toBe(
+      false,
+    );
+  });
+
+  it("keeps the stored stop provider set identical to the places search provider set", () => {
+    // A search source that cannot be stored forces the API to drop or mislabel
+    // it; this assertion is the tripwire for that drift.
+    expect([...PlaceProviderSchema.options].sort()).toEqual(
+      [...PlaceSearchProviderSchema.options].sort(),
+    );
+    expect(PlaceSearchProviderSchema.options).toEqual(["geoapify", "photon", "local"]);
   });
 
   it("keeps the stop address/bbox nullable and rejects inverted or short boxes", () => {

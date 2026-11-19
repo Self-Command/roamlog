@@ -3,7 +3,12 @@ import { z } from "zod";
 import { CountryCodeSchema, DateOnlySchema, IsoTimestampSchema, UuidV7Schema } from "../common/ids";
 import { IanaTimeZoneSchema, GeoBboxSchema } from "./trip";
 
-export const PlaceProviderSchema = z.enum(["photon", "local"]);
+/**
+ * Source a stored stop's place metadata came from. Since the place search
+ * returns Geoapify results by default (Photon is the fallback), a picked place
+ * must be storable verbatim instead of being rejected or relabelled.
+ */
+export const PlaceProviderSchema = z.enum(["geoapify", "photon", "local"]);
 export type PlaceProvider = z.infer<typeof PlaceProviderSchema>;
 
 export const StopSchema = z

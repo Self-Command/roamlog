@@ -35,6 +35,7 @@ describe("0005_platform_role_override migration", () => {
       "0004_system_setting",
       migrationName,
       "0006_trip_stop_address_bbox",
+      "0007_stop_provider_geoapify",
     ]);
   });
 
