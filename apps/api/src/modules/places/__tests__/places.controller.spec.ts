@@ -21,7 +21,7 @@ import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesRateLimiter } from "../places-rate-limiter.service.js";
 import { PlacesController } from "../places.controller.js";
 import { PlacesService } from "../places.service.js";
-import { PLACES_SETTINGS } from "../places.settings.js";
+import { PLACES_SETTINGS, staticPlacesSettingsSource } from "../places.settings.js";
 import {
   asLogger,
   fakeRedis,
@@ -49,7 +49,7 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
   const builder = Test.createTestingModule({
     controllers: [PlacesController],
     providers: [
-      { provide: PLACES_SETTINGS, useValue: settings },
+      { provide: PLACES_SETTINGS, useValue: staticPlacesSettingsSource(settings) },
       { provide: PinoLoggerService, useValue: asLogger(logger) },
       { provide: RedisService, useValue: redis },
       { provide: AuthService, useValue: { resolveSession: vi.fn().mockResolvedValue(null) } },
@@ -141,15 +141,20 @@ describe("GET /v1/places/search", () => {
 
     await request(app.getHttpServer()).get("/v1/places/search?q=paris").expect(200);
     await request(app.getHttpServer()).get("/v1/places/search?q=paris&lang=en").expect(200);
-    await request(app.getHttpServer()).get("/v1/places/search?q=paris&lang=zh").expect(200);
+    // The stored `places.lang` default is `zh`, so an explicit `lang=zh` is the
+    // same cache key as the first request and must be served from cache.
+    const cached = await request(app.getHttpServer())
+      .get("/v1/places/search?q=paris&lang=zh")
+      .expect(200);
 
     const first = firstFetchCall(fetchMock).url;
     expect(first.searchParams.get("limit")).toBe("6");
+    // Photon does not forward `zh`; the default language therefore stays off the wire.
     expect(first.searchParams.get("lang")).toBeNull();
     const english = (fetchMock.mock.calls[1] as unknown as [URL])[0];
     expect(english.searchParams.get("lang")).toBe("en");
-    const chinese = (fetchMock.mock.calls[2] as unknown as [URL])[0];
-    expect(chinese.searchParams.get("lang")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(cached.body.cached).toBe(true);
   });
 
   it("serves the second identical request from cache", async () => {

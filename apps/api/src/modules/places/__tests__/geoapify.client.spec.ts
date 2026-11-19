@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GeoapifyClient } from "../geoapify.client.js";
+import { staticPlacesSettingsSource } from "../places.settings.js";
 import {
   abortAwareFetch,
   firstFetchCall,
@@ -11,12 +12,12 @@ import {
 
 function createClient(overrides: Parameters<typeof testSettings>[0] = {}) {
   return new GeoapifyClient(
-    testSettings({
+    staticPlacesSettingsSource(testSettings({
       provider: "geoapify",
       geoapifyBaseUrl: "https://geoapify.example.test/v1/geocode/autocomplete",
       geoapifyApiKey: "fake-key",
       ...overrides,
-    }),
+    })),
   );
 }
 

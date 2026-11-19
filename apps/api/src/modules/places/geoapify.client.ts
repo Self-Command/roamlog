@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Place } from "@roamlog/contracts";
 
 import { GeoapifyPayloadError, normalizeGeoapifyPayload } from "./geoapify-normalizer.js";
-import { PLACES_SETTINGS, type PlacesSettings } from "./places.settings.js";
+import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
 
 /**
  * Reasons a Geoapify search degrades. They are safe to log: no query text and
@@ -52,17 +52,18 @@ export interface GeoapifySearchInput {
  */
 @Injectable()
 export class GeoapifyClient {
-  constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettings) {}
+  constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource) {}
 
   async search(input: GeoapifySearchInput): Promise<GeoapifySearchOutcome> {
-    const apiKey = this.settings.geoapifyApiKey;
+    const settings = await this.settings.resolve();
+    const apiKey = settings.geoapifyApiKey;
     if (!apiKey) {
       return { ok: false, reason: "not_configured", durationMs: 0 };
     }
 
     let endpoint: URL;
     try {
-      endpoint = new URL(this.settings.geoapifyBaseUrl);
+      endpoint = new URL(settings.geoapifyBaseUrl);
     } catch {
       return { ok: false, reason: "invalid_url", durationMs: 0 };
     }
@@ -81,7 +82,7 @@ export class GeoapifyClient {
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
-      Math.max(1, this.settings.geoapifyTimeoutMs),
+      Math.max(1, settings.geoapifyTimeoutMs),
     );
 
     try {

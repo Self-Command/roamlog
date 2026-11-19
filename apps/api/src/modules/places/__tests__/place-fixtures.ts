@@ -39,6 +39,8 @@ export function testSettings(overrides: Partial<PlacesSettings> = {}): PlacesSet
     rateLimitWindowSeconds: 60,
     rateLimitTimeoutMs: 750,
     redisTimeoutMs: 500,
+    defaultLimit: 6,
+    defaultLang: "zh",
     ...overrides,
   };
 }

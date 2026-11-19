@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { withTimeout } from "../../common/utils/with-timeout.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { RedisService } from "../redis/redis.service.js";
-import { PLACES_SETTINGS, type PlacesSettings } from "./places.settings.js";
+import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
 
 const RATE_LIMIT_KEY_PREFIX = "rate-limit:placeSearch:";
 const RATE_LIMIT_WARN_THROTTLE_MS = 10_000;
@@ -31,21 +31,22 @@ export class PlacesRateLimiter {
   constructor(
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
-    @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettings,
+    @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource,
   ) {}
 
   async consume(identity: string): Promise<PlacesRateLimitDecision> {
-    const limit = this.settings.rateLimitMax;
-    const windowSeconds = this.settings.rateLimitWindowSeconds;
+    const settings = await this.settings.resolve();
+    const limit = settings.rateLimitMax;
+    const windowSeconds = settings.rateLimitWindowSeconds;
     const key = `${RATE_LIMIT_KEY_PREFIX}${createHash("sha256").update(identity, "utf8").digest("hex")}`;
 
     try {
       const counter = await withTimeout(
         this.redis.incrementFixedWindow(key, windowSeconds),
-        this.settings.rateLimitTimeoutMs,
+        settings.rateLimitTimeoutMs,
         "Places rate-limit counter timed out",
       );
-      return this.decision(counter.count, counter.ttlSeconds);
+      return this.decision(counter.count, counter.ttlSeconds, limit);
     } catch (error) {
       this.warnFailOpen(error);
       return {
@@ -57,8 +58,7 @@ export class PlacesRateLimiter {
     }
   }
 
-  private decision(count: number, ttlSeconds: number): PlacesRateLimitDecision {
-    const limit = this.settings.rateLimitMax;
+  private decision(count: number, ttlSeconds: number, limit: number): PlacesRateLimitDecision {
     return {
       allowed: count <= limit,
       limit,

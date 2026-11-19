@@ -12,11 +12,34 @@ import { GeoapifyClient } from "./geoapify.client.js";
 import { PhotonClient } from "./photon.client.js";
 import { PlacesCacheService } from "./places-cache.service.js";
 import { PlacesQuotaService } from "./places-quota.service.js";
-import { PLACES_SETTINGS, type PlacesProvider, type PlacesSettings } from "./places.settings.js";
+import {
+  PLACES_SETTINGS,
+  type PlacesProvider,
+  type PlacesSettings,
+  type PlacesSettingsSource,
+} from "./places.settings.js";
 
 interface UpstreamFailure {
   readonly reason: string;
   readonly httpStatus?: number;
+}
+
+/**
+ * Applies `places.limit` / `places.lang` only when the caller omitted them.
+ * An explicit query value always wins; the contract then validates the range.
+ */
+function withSettingsDefaults(rawQuery: unknown, settings: PlacesSettings): unknown {
+  if (rawQuery === null || typeof rawQuery !== "object" || Array.isArray(rawQuery)) {
+    return rawQuery;
+  }
+  const query = { ...(rawQuery as Record<string, unknown>) };
+  if (query.limit === undefined || query.limit === "") {
+    query.limit = settings.defaultLimit;
+  }
+  if (query.lang === undefined || query.lang === "") {
+    query.lang = settings.defaultLang;
+  }
+  return query;
 }
 
 /**
@@ -41,13 +64,14 @@ export class PlacesService {
     @Inject(PhotonClient) private readonly photon: PhotonClient,
     @Inject(PlacesQuotaService) private readonly quota: PlacesQuotaService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
-    @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettings,
+    @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource,
   ) {}
 
   async search(rawQuery: unknown): Promise<PlaceSearchResponse> {
-    const query = parseRequest(PlaceSearchQuerySchema, rawQuery);
+    const settings = await this.settings.resolve();
+    const query = parseRequest(PlaceSearchQuerySchema, withSettingsDefaults(rawQuery, settings));
     const startedAt = Date.now();
-    const primary = this.settings.provider;
+    const primary = settings.provider;
     const cacheKey = this.cache.key({
       q: query.q,
       limit: query.limit,
@@ -121,7 +145,7 @@ export class PlacesService {
       }
     }
 
-    if (degraded && primary === "geoapify" && this.settings.fallbackToPhoton) {
+    if (degraded && primary === "geoapify" && settings.fallbackToPhoton) {
       const fallback = await this.photon.search(request);
       upstreamDurationMs += fallback.durationMs;
       if (fallback.ok) {
@@ -188,8 +212,8 @@ export class PlacesService {
 
     const ttlSeconds =
       response.degraded || response.items.length === 0
-        ? this.settings.emptyCacheTtlSeconds
-        : this.settings.cacheTtlSeconds;
+        ? settings.emptyCacheTtlSeconds
+        : settings.cacheTtlSeconds;
     await this.cache.write(cacheKey, response, ttlSeconds);
 
     return response;

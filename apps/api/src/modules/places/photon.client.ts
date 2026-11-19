@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Place } from "@roamlog/contracts";
 
-import { PLACES_SETTINGS, type PlacesSettings } from "./places.settings.js";
+import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
 import { PhotonPayloadError, normalizePhotonPayload } from "./photon-normalizer.js";
 
 /**
@@ -71,12 +71,13 @@ function forwardedLang(lang: "zh" | "en" | undefined): string | undefined {
  */
 @Injectable()
 export class PhotonClient {
-  constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettings) {}
+  constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource) {}
 
   async search(input: PhotonSearchInput): Promise<PhotonSearchOutcome> {
+    const settings = await this.settings.resolve();
     let endpoint: URL;
     try {
-      endpoint = new URL(this.settings.baseUrl);
+      endpoint = new URL(settings.baseUrl);
     } catch {
       return { ok: false, reason: "invalid_url", durationMs: 0 };
     }
@@ -93,7 +94,7 @@ export class PhotonClient {
 
     const startedAt = Date.now();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), Math.max(1, this.settings.timeoutMs));
+    const timer = setTimeout(() => controller.abort(), Math.max(1, settings.timeoutMs));
 
     try {
       let result = await this.attempt(endpoint, controller.signal);

@@ -3,7 +3,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { withTimeout } from "../../common/utils/with-timeout.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { RedisService } from "../redis/redis.service.js";
-import { PLACES_SETTINGS, type PlacesSettings } from "./places.settings.js";
+import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
 
 const QUOTA_KEY_PREFIX = "places:quota:geoapify:";
 const QUOTA_WARN_THROTTLE_MS = 10_000;
@@ -48,11 +48,12 @@ export class PlacesQuotaService {
   constructor(
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
-    @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettings,
+    @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource,
   ) {}
 
   async consume(now: Date = new Date()): Promise<PlacesQuotaDecision> {
-    const limit = this.settings.geoapifyDailyLimit;
+    const settings = await this.settings.resolve();
+    const limit = settings.geoapifyDailyLimit;
     if (limit <= 0) {
       return { allowed: true, limit, remaining: Number.MAX_SAFE_INTEGER };
     }
@@ -63,7 +64,7 @@ export class PlacesQuotaService {
     try {
       const counter = await withTimeout(
         this.redis.incrementFixedWindow(key, secondsUntilUtcMidnight(now)),
-        this.settings.redisTimeoutMs,
+        settings.redisTimeoutMs,
         "Places daily quota counter timed out",
       );
       const remaining = Math.max(0, limit - counter.count);

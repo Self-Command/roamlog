@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RedisService } from "../../redis/redis.service.js";
 import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
-import type { PlacesSettings } from "../places.settings.js";
+import { staticPlacesSettingsSource, type PlacesSettings } from "../places.settings.js";
 import { PlacesCacheService } from "../places-cache.service.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesService } from "../places.service.js";
@@ -32,20 +32,21 @@ function setup(
   service: PlacesService;
 } {
   const settings = testSettings(options.settings);
+  const source = staticPlacesSettingsSource(settings);
   const logger = makeLogger();
   const redis = options.redis ?? fakeRedis();
   const cache = new PlacesCacheService(
     redis as unknown as RedisService,
     asLogger(logger),
-    settings,
+    source,
   );
   const service = new PlacesService(
     cache,
-    new GeoapifyClient(settings),
-    new PhotonClient(settings),
-    new PlacesQuotaService(redis as unknown as RedisService, asLogger(logger), settings),
+    new GeoapifyClient(source),
+    new PhotonClient(source),
+    new PlacesQuotaService(redis as unknown as RedisService, asLogger(logger), source),
     asLogger(logger),
-    settings,
+    source,
   );
   return { settings, logger, redis, cache, service };
 }

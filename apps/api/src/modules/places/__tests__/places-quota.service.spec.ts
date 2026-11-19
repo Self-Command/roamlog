@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { RedisService } from "../../redis/redis.service.js";
 import { secondsUntilUtcMidnight, PlacesQuotaService } from "../places-quota.service.js";
+import { staticPlacesSettingsSource } from "../places.settings.js";
 import { asLogger, fakeRedis, makeLogger, testSettings, type FakeRedis } from "./place-fixtures.js";
 
 function setup(options: { redis?: FakeRedis; dailyLimit?: number } = {}) {
@@ -14,7 +15,7 @@ function setup(options: { redis?: FakeRedis; dailyLimit?: number } = {}) {
   const quota = new PlacesQuotaService(
     redis as unknown as RedisService,
     asLogger(logger),
-    settings,
+    staticPlacesSettingsSource(settings),
   );
   return { quota, redis, logger };
 }

@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PhotonClient } from "../photon.client.js";
+import { staticPlacesSettingsSource } from "../places.settings.js";
 import { abortAwareFetch, firstFetchCall, jsonResponse, photonPayload, photonFeature } from "./place-fixtures.js";
 
 function createClient(overrides: { baseUrl?: string; timeoutMs?: number } = {}) {
-  return new PhotonClient({
+  return new PhotonClient(staticPlacesSettingsSource({
     provider: "photon",
     baseUrl: "https://photon.example.test/api",
     timeoutMs: 2_500,
@@ -19,8 +20,10 @@ function createClient(overrides: { baseUrl?: string; timeoutMs?: number } = {}) 
     rateLimitWindowSeconds: 60,
     rateLimitTimeoutMs: 750,
     redisTimeoutMs: 500,
+    defaultLimit: 6,
+    defaultLang: "zh",
     ...overrides,
-  });
+  }));
 }
 
 afterEach(() => {

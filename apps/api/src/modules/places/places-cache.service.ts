@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { withTimeout } from "../../common/utils/with-timeout.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { RedisService } from "../redis/redis.service.js";
-import { PLACES_SETTINGS, type PlacesProvider, type PlacesSettings } from "./places.settings.js";
+import { PLACES_SETTINGS, type PlacesProvider, type PlacesSettingsSource } from "./places.settings.js";
 
 /**
  * Versioned, provider-scoped cache namespace. The `v3` segment invalidates the
@@ -42,7 +42,7 @@ export class PlacesCacheService {
   constructor(
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
-    @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettings,
+    @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource,
   ) {}
 
   key(input: PlacesCacheKeyInput): string {
@@ -53,9 +53,10 @@ export class PlacesCacheService {
 
   async read(key: string): Promise<PlaceSearchResponse | undefined> {
     try {
+      const settings = await this.settings.resolve();
       const stored = await withTimeout(
         this.redis.get(key),
-        this.settings.redisTimeoutMs,
+        settings.redisTimeoutMs,
         "Places cache read timed out",
       );
       if (stored === null) {
@@ -84,9 +85,10 @@ export class PlacesCacheService {
 
   async write(key: string, response: PlaceSearchResponse, ttlSeconds: number): Promise<void> {
     try {
+      const settings = await this.settings.resolve();
       await withTimeout(
         this.redis.set(key, JSON.stringify(response), ttlSeconds),
-        this.settings.redisTimeoutMs,
+        settings.redisTimeoutMs,
         "Places cache write timed out",
       );
     } catch (error) {
