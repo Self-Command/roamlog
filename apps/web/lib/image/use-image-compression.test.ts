@@ -99,6 +99,11 @@ describe("compressImage worker lifecycle", () => {
     const worker = FakeWorker.instances[0];
     if (!worker) throw new Error("Worker was not constructed");
     expect(worker.messages).toHaveLength(1);
+    expect(worker.messages[0]).toMatchObject({
+      maxEdge: 2000,
+      targetBytes: 1_500_000,
+      quality: 0.82,
+    });
     expect(worker.options.type).toBe("module");
 
     worker.emitProgress({
@@ -120,6 +125,27 @@ describe("compressImage worker lifecycle", () => {
     worker.emitResult(secondResult);
     await expect(second).resolves.toBe(secondResult);
     expect(worker.terminated).toBe(false);
+  });
+
+  it("forwards the media policy values to the worker request", async () => {
+    const { compressImage } = await loadCompressor();
+    const promise = compressImage(
+      new File(["image"], "cover.jpg", { type: "image/jpeg" }),
+      { maxEdge: 1200, quality: 0.9, targetBytes: 900_000 },
+    );
+
+    await vi.waitFor(() => expect(FakeWorker.instances).toHaveLength(1));
+    const worker = FakeWorker.instances[0];
+    if (!worker) throw new Error("Worker was not constructed");
+
+    expect(worker.messages[0]).toMatchObject({
+      maxEdge: 1200,
+      quality: 0.9,
+      targetBytes: 900_000,
+    });
+
+    worker.emitResult(makeResult());
+    await expect(promise).resolves.toBeDefined();
   });
 
   it("terminates the worker and rejects when the caller aborts", async () => {

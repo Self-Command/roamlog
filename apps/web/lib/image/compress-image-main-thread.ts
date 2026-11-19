@@ -3,6 +3,7 @@ import { encode as encodeBlurhash } from "blurhash";
 import {
   IMAGE_BLURHASH_COMPONENTS,
   IMAGE_MAX_EDGE,
+  IMAGE_QUALITY_STEPS,
   IMAGE_TARGET_BYTES,
   IMAGE_THUMB_QUALITY,
   ImageCompressionError,
@@ -11,6 +12,7 @@ import {
   createDecodeError,
   encodeQualityLadder,
   isImageCompressionError,
+  qualityLadderFrom,
   shouldSkipCompression,
   type CompressionResult,
   type ImageCompressionProgress,
@@ -26,6 +28,8 @@ interface DecodedSource {
 export interface MainThreadCompressionOptions {
   maxEdge?: number;
   targetBytes?: number;
+  /** Starting WebP quality; the ladder keeps the historical relative falloff. */
+  quality?: number;
   onProgress?: (progress: ImageCompressionProgress) => void;
   signal?: AbortSignal;
 }
@@ -167,6 +171,7 @@ export async function compressImageOnMainThread(
   const startedAt = performance.now();
   const maxEdge = options.maxEdge ?? IMAGE_MAX_EDGE;
   const targetBytes = options.targetBytes ?? IMAGE_TARGET_BYTES;
+  const qualities = qualityLadderFrom(options.quality ?? IMAGE_QUALITY_STEPS[0]);
   const report = (
     percent: number,
     stage: ImageCompressionProgress["stage"],
@@ -212,9 +217,10 @@ export async function compressImageOnMainThread(
     context.drawImage(decoded.source, 0, 0, target.width, target.height);
 
     throwIfAborted(options.signal);
-    report(8, "encoding", 0, 0.82);
+    report(8, "encoding", 0, qualities[0] ?? IMAGE_QUALITY_STEPS[0]);
     const encoded = await encodeQualityLadder({
       targetBytes,
+      qualities,
       encode: async (quality, iteration) => {
         throwIfAborted(options.signal);
         report(

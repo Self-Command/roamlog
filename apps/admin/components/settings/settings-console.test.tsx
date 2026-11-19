@@ -113,11 +113,67 @@ const mailItems: AdminSettingItem[] = [
   }),
 ];
 
+const mediaItems: AdminSettingItem[] = [
+  makeItem({
+    key: "media.maxEdge",
+    type: "number",
+    label: "Max edge (px)",
+    group: "media",
+    default: 2000,
+    value: 2000,
+    isPublic: true,
+  }),
+  makeItem({
+    key: "media.quality",
+    type: "number",
+    label: "WebP quality",
+    group: "media",
+    default: 0.82,
+    value: 0.82,
+    isPublic: true,
+  }),
+  makeItem({
+    key: "media.targetBytes",
+    type: "number",
+    label: "Target bytes",
+    group: "media",
+    default: 1_500_000,
+    value: 1_500_000,
+    isPublic: true,
+  }),
+  makeItem({
+    key: "media.maxUploadBytes",
+    type: "number",
+    label: "Max upload bytes",
+    group: "media",
+    default: 25 * 1024 * 1024,
+    value: 25 * 1024 * 1024,
+    isPublic: true,
+  }),
+  makeItem({
+    key: "media.keepOriginal",
+    type: "boolean",
+    label: "Keep originals",
+    group: "media",
+    default: false,
+    value: false,
+  }),
+  makeItem({
+    key: "media.livePhotoEnabled",
+    type: "boolean",
+    label: "Live Photos",
+    group: "media",
+    default: false,
+    value: false,
+  }),
+];
+
 function responseOf(): AdminSettingsResponse {
   return {
     groups: [
       { group: "general", label: "General", items: generalItems },
       { group: "mail", label: "Mail", items: mailItems },
+      { group: "media", label: "Media", items: mediaItems },
     ],
     generatedAt: "2026-11-19T05:00:00.000Z",
   };
@@ -155,12 +211,14 @@ function createApi(initial: AdminSettingsResponse) {
 }
 
 async function renderConsole(
-  initialGroup: "general" | "mail" = "general",
+  initialGroup: "general" | "mail" | "media" = "general",
   role: "super_admin" | "analyst" = "super_admin",
 ) {
   const fake = createApi(responseOf());
   render(<SettingsConsole role={role} initialGroup={initialGroup} api={fake.api} />);
-  await screen.findByRole("heading", { name: initialGroup === "mail" ? "Mail" : "General" });
+  const heading =
+    initialGroup === "mail" ? "Mail" : initialGroup === "media" ? "Media" : "General";
+  await screen.findByRole("heading", { name: heading });
   return fake;
 }
 
@@ -200,6 +258,34 @@ describe("SettingsConsole", () => {
     expect(screen.getByRole("heading", { name: "General" })).toBeInTheDocument();
     expect(screen.getByText("前端已消费（标题/描述/主题）")).toBeInTheDocument();
     expect(window.location.search).toBe("?group=general");
+  });
+
+  it("marks each media key truthfully instead of claiming the whole group is consumed", async () => {
+    await renderConsole("media");
+
+    expect(
+      screen.getByText(/前端已消费 4\/6 个键（maxEdge、quality、targetBytes、maxUploadBytes）/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/keepOriginal 与 livePhotoEnabled 未接入（不生效）/)).toBeInTheDocument();
+
+    for (const label of [
+      "Max edge (px)",
+      "WebP quality",
+      "Target bytes",
+      "Max upload bytes",
+    ]) {
+      const field = screen.getByRole("article", { name: `设置项 ${label}` });
+      expect(within(field).getByLabelText(`${label} 前端消费状态`)).toHaveTextContent(
+        "前端已消费",
+      );
+    }
+
+    for (const label of ["Keep originals", "Live Photos"]) {
+      const field = screen.getByRole("article", { name: `设置项 ${label}` });
+      expect(within(field).getByLabelText(`${label} 前端消费状态`)).toHaveTextContent(
+        "未接入（不生效）",
+      );
+    }
   });
 
   it("keeps save disabled until something actually changed", async () => {

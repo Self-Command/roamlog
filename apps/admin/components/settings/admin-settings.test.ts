@@ -13,6 +13,10 @@ import {
   settingValueSource,
   settingsGroupHref,
 } from "../../lib/admin-settings";
+import {
+  settingFieldConsumption,
+  settingsGroupConsumption,
+} from "./settings-consumption";
 
 function item(overrides: Partial<AdminSettingItem> & Pick<AdminSettingItem, "key" | "type" | "label">): AdminSettingItem {
   return {
@@ -42,6 +46,36 @@ describe("admin settings helpers", () => {
     for (const group of ["mail", "storage", "media", "ai", "places", "limits"] as const) {
       expect(SETTINGS_CONSUMPTION[group].label).toBe("已接入后端，前端/Worker 消费待完成");
     }
+  });
+
+  it("overrides only media at the group level, with the exact 4/6 split", () => {
+    const media = settingsGroupConsumption("media");
+    expect(media.status).toBe("frontend");
+    expect(media.label).toContain("前端已消费 4/6 个键");
+    expect(media.label).toContain("keepOriginal 与 livePhotoEnabled 未接入（不生效）");
+    expect(settingsGroupConsumption("mail")).toBe(SETTINGS_CONSUMPTION.mail);
+    expect(settingsGroupConsumption("general")).toBe(SETTINGS_CONSUMPTION.general);
+  });
+
+  it("labels the six media keys one by one instead of one group badge", () => {
+    for (const key of [
+      "media.maxEdge",
+      "media.quality",
+      "media.targetBytes",
+      "media.maxUploadBytes",
+    ]) {
+      expect(settingFieldConsumption(key)).toEqual({
+        status: "frontend",
+        label: "前端已消费",
+      });
+    }
+    for (const key of ["media.keepOriginal", "media.livePhotoEnabled"]) {
+      expect(settingFieldConsumption(key)).toEqual({
+        status: "unwired",
+        label: "未接入（不生效）",
+      });
+    }
+    expect(settingFieldConsumption("site.title")).toBeNull();
   });
 
   it("derives the value source from envLocked and updatedAt, never from guesses", () => {

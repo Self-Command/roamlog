@@ -13,6 +13,7 @@ import {
   type SettingDraftValue,
 } from "../../lib/admin-settings";
 import { cn } from "../admin-shell/cn";
+import { settingFieldConsumption } from "./settings-consumption";
 
 interface SettingFieldProps {
   item: AdminSettingItem;
@@ -55,6 +56,7 @@ function FieldHeading({
   ids: ReturnType<typeof fieldIds>;
   error: string | null;
 }) {
+  const consumption = settingFieldConsumption(item.key);
   return (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
@@ -64,6 +66,14 @@ function FieldHeading({
         <Badge tone="neutral">{item.type}</Badge>
         {item.isPublic ? <Badge tone="blue">公开</Badge> : null}
         {item.isSecret ? <Badge tone="orange">密钥</Badge> : null}
+        {consumption ? (
+          <Badge
+            tone={consumption.status === "frontend" ? "green" : "yellow"}
+            aria-label={`${item.label} 前端消费状态`}
+          >
+            {consumption.label}
+          </Badge>
+        ) : null}
       </div>
       <code className="mt-1.5 block font-mono text-[9px] text-muted">{item.key}</code>
       {item.help ? (

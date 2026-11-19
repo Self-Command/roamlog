@@ -404,38 +404,42 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     help: "Required by MinIO and some B2/Wasabi deployments.",
   }),
 
+  // `media` is a mixed group: only the four values the browser compressor
+  // genuinely reads are public. `keepOriginal` and `livePhotoEnabled` stay
+  // private because neither behavior is wired yet — publishing them would let
+  // the admin UI imply a switch works when it does not.
   define({
     key: "media.maxEdge",
     group: "media",
     type: "number",
     schema: z.number().int().min(500).max(8_000),
-    isPublic: false,
+    isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "Max edge (px)",
-    help: "Longest edge the browser keeps when compressing an image.",
+    help: "Longest edge the browser keeps when compressing an image. The web client reads it from the public projection and clamps it to 500–4000.",
   }),
   define({
     key: "media.quality",
     group: "media",
     type: "number",
     schema: z.number().min(0.4).max(0.95),
-    isPublic: false,
+    isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "WebP quality",
-    help: "Compression quality between 0.4 and 0.95.",
+    help: "Compression quality between 0.4 and 0.95. The browser starts its quality ladder at this value.",
   }),
   define({
     key: "media.targetBytes",
     group: "media",
     type: "number",
     schema: z.number().int().min(100_000).max(10_000_000),
-    isPublic: false,
+    isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "Target bytes",
-    help: "Size the client compressor aims for before uploading.",
+    help: "Size the client compressor aims for before uploading; the web client clamps it to 100 KB–5 MB.",
   }),
   define({
     key: "media.keepOriginal",
@@ -446,7 +450,7 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isSecret: false,
     envLocked: false,
     label: "Keep originals",
-    help: "Upload the untouched original alongside the compressed derivative.",
+    help: "Upload the untouched original alongside the compressed derivative. 当前未接入：改动不影响上传行为。",
   }),
   define({
     key: "media.livePhotoEnabled",
@@ -457,18 +461,18 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     isSecret: false,
     envLocked: false,
     label: "Live Photos",
-    help: "Accept paired still/motion uploads from iOS.",
+    help: "Accept paired still/motion uploads from iOS. 当前未接入：改动不影响上传行为。",
   }),
   define({
     key: "media.maxUploadBytes",
     group: "media",
     type: "number",
     schema: z.number().int().min(1_000_000).max(100_000_000),
-    isPublic: false,
+    isPublic: true,
     isSecret: false,
     envLocked: false,
     label: "Max upload bytes",
-    help: "Largest single upload the presign endpoint accepts.",
+    help: "Largest single upload the presign endpoint accepts. The browser also pre-checks files against it, clamped to 25 MB.",
   }),
 
   define({

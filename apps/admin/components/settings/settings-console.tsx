@@ -33,7 +33,6 @@ import type { AdminConsoleRole } from "../../lib/admin-types";
 import { AdminMutationError, type AdminApiFailure } from "../../lib/admin-api-error";
 import { AdminSettingsError, type AdminSettingsApi } from "../../lib/admin-settings-api";
 import {
-  SETTINGS_CONSUMPTION,
   SETTINGS_GROUP_SUMMARIES,
   SETTINGS_REVEAL_DURATION_MS,
   collectGroupUpdates,
@@ -48,6 +47,7 @@ import {
   settingsGroupHref,
   type SettingDraftValue,
 } from "../../lib/admin-settings";
+import { settingsGroupConsumption } from "./settings-consumption";
 import { formatDateTime } from "../../lib/format";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { cn } from "../admin-shell/cn";
@@ -698,12 +698,12 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
                 aria-label="前端消费状态"
                 className={cn(
                   "mt-1 text-[11px] leading-5",
-                  SETTINGS_CONSUMPTION[group].status === "frontend"
+                  settingsGroupConsumption(group).status === "frontend"
                     ? "text-accent-green"
                     : "text-accent-yellow",
                 )}
               >
-                {SETTINGS_CONSUMPTION[group].label}
+                {settingsGroupConsumption(group).label}
               </p>
             </div>
             <p className="font-mono text-[9px] text-stone">

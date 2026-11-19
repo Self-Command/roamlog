@@ -7,10 +7,10 @@ import { useId, useRef, useState, type DragEvent } from "react";
 
 import {
   COVER_ACCEPT_ATTRIBUTE,
-  COVER_MAX_BYTES,
   type CoverMediaClient,
 } from "@/lib/api/media";
 import type { ImageCompressor } from "@/lib/image/use-image-compression";
+import { useMediaCompressionPolicy } from "@/lib/settings";
 
 import {
   type CoverTransition,
@@ -46,6 +46,7 @@ export interface CoverUploaderProps {
   className?: string;
   /** Injectable media client; production uses the generated API client. */
   client?: CoverMediaClient;
+  /** Overrides the public `media.maxUploadBytes` policy for embedded flows. */
   maxBytes?: number;
   pollIntervalMs?: number;
   processTimeoutMs?: number;
@@ -130,7 +131,7 @@ export function CoverUploader({
   disabled = false,
   className,
   client,
-  maxBytes = COVER_MAX_BYTES,
+  maxBytes,
   pollIntervalMs,
   processTimeoutMs,
   compressor,
@@ -141,6 +142,10 @@ export function CoverUploader({
   const [dropNotice, setDropNotice] = useState<string | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
   const titleId = useId();
+  // Read once per render from the shared 30s public-settings cache; the
+  // resolved values flow into validation and the compressor for this upload.
+  const mediaPolicy = useMediaCompressionPolicy();
+  const effectiveMaxBytes = maxBytes ?? mediaPolicy.maxUploadBytes;
 
   const upload = useCoverUpload({
     workspaceId,
@@ -149,7 +154,8 @@ export function CoverUploader({
     client,
     onError,
     onTransition,
-    maxBytes,
+    maxBytes: effectiveMaxBytes,
+    mediaPolicy,
     pollIntervalMs,
     processTimeoutMs,
     compressor,
@@ -358,7 +364,7 @@ export function CoverUploader({
             <div>
               <p className="text-sm text-body">拖拽图片到这里，或</p>
               <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-                JPEG · PNG · WebP · AVIF · HEIC / 最大 {formatMegabytes(maxBytes)}
+                JPEG · PNG · WebP · AVIF · HEIC / 最大 {formatMegabytes(effectiveMaxBytes)}
               </p>
             </div>
             <Button variant="ghost" size="sm" onClick={openPicker} disabled={disabled}>

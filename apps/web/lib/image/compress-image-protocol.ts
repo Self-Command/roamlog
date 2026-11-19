@@ -9,6 +9,8 @@ export interface CompressWorkerRequest {
   file: File;
   maxEdge: number;
   targetBytes: number;
+  /** Starting WebP quality; the worker derives its four-step ladder from it. */
+  quality: number;
 }
 
 export interface CompressWorkerError {

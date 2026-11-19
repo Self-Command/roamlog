@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
 import {
@@ -29,6 +29,35 @@ import {
   type CoverTransition,
   type UseCoverUploadOptions,
 } from "./use-cover-upload";
+
+const DEFAULT_POLICY = {
+  maxEdge: 2000,
+  quality: 0.82,
+  targetBytes: 1_500_000,
+  maxUploadBytes: 25_000_000,
+};
+
+/**
+ * The hook normally reads `useMediaCompressionPolicy()` (and therefore the
+ * public API). These tests drive the same seam directly so policy changes can
+ * be simulated without a network request.
+ */
+const mediaPolicyState = vi.hoisted(() => ({
+  policy: {
+    maxEdge: 2000,
+    quality: 0.82,
+    targetBytes: 1_500_000,
+    maxUploadBytes: 25_000_000,
+  },
+}));
+
+vi.mock("@/lib/settings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/settings")>();
+  return {
+    ...actual,
+    useMediaCompressionPolicy: () => mediaPolicyState.policy,
+  };
+});
 
 beforeAll(() => {
   vi.spyOn(console, "info").mockImplementation(() => undefined);
@@ -500,5 +529,87 @@ describe("useCoverUpload state machine", () => {
     expect(capturedSignal?.aborted).toBe(true);
     expect(calls.presign).toHaveLength(0);
     expect(calls.put).toHaveLength(0);
+  });
+});
+
+describe("media compression policy consumption", () => {
+  afterEach(() => {
+    mediaPolicyState.policy = { ...DEFAULT_POLICY };
+  });
+
+  it("feeds the policy values into the compressor", async () => {
+    mediaPolicyState.policy = {
+      maxEdge: 1200,
+      quality: 0.9,
+      targetBytes: 900_000,
+      maxUploadBytes: 8 * 1024 * 1024,
+    };
+    const compressor = vi.fn(createFakeImageCompressor());
+    const { result } = setup({ compressor });
+
+    act(() =>
+      result.current.selectFile(makeImage("cover.jpg", "image/jpeg", 5 * 1024 * 1024)),
+    );
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    expect(compressor).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({
+        maxEdge: 1200,
+        quality: 0.9,
+        targetBytes: 900_000,
+      }),
+    );
+  });
+
+  it("rejects a file above the policy maxUploadBytes before compressing", async () => {
+    mediaPolicyState.policy = {
+      ...DEFAULT_POLICY,
+      maxUploadBytes: 4 * 1024 * 1024,
+    };
+    const compressor = vi.fn(createFakeImageCompressor());
+    const { result } = setup({ compressor });
+
+    act(() =>
+      result.current.selectFile(makeImage("cover.jpg", "image/jpeg", 5 * 1024 * 1024)),
+    );
+    await waitFor(() => expect(result.current.phase).toBe("error"));
+
+    expect(result.current.error?.code).toBe("COVER_TOO_LARGE");
+    expect(compressor).not.toHaveBeenCalled();
+  });
+
+  it("uses the changed policy for the next upload without remounting", async () => {
+    const compressor = vi.fn(createFakeImageCompressor());
+    const { result, rerender } = setup({ compressor });
+
+    act(() => result.current.selectFile(makeImage()));
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+    expect(compressor.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        maxEdge: 2000,
+        quality: 0.82,
+        targetBytes: 1_500_000,
+      }),
+    );
+
+    mediaPolicyState.policy = {
+      maxEdge: 1200,
+      quality: 0.9,
+      targetBytes: 900_000,
+      maxUploadBytes: 8 * 1024 * 1024,
+    };
+    rerender();
+
+    act(() => result.current.selectFile(makeImage()));
+    await waitFor(() => expect(compressor).toHaveBeenCalledTimes(2));
+
+    expect(compressor.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        maxEdge: 1200,
+        quality: 0.9,
+        targetBytes: 900_000,
+      }),
+    );
   });
 });

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 import {
   IMAGE_MAX_EDGE,
+  IMAGE_QUALITY_STEPS,
   IMAGE_TARGET_BYTES,
   ImageCompressionError,
   isImageCompressionError,
@@ -22,6 +23,8 @@ export interface CompressImageOptions {
   onProgress?: (progress: ImageCompressionProgress) => void;
   maxEdge?: number;
   targetBytes?: number;
+  /** Starting WebP quality from the media policy; defaults to 0.82. */
+  quality?: number;
 }
 
 export type ImageCompressor = (
@@ -56,6 +59,7 @@ interface PendingCompression {
   file: File;
   maxEdge: number;
   targetBytes: number;
+  quality: number;
   signal: AbortSignal | undefined;
   onProgress: ((progress: ImageCompressionProgress) => void) | undefined;
   resolve: (result: CompressionResult) => void;
@@ -87,6 +91,7 @@ class CompressionWorkerClient {
         file,
         maxEdge: options.maxEdge ?? IMAGE_MAX_EDGE,
         targetBytes: options.targetBytes ?? IMAGE_TARGET_BYTES,
+        quality: options.quality ?? IMAGE_QUALITY_STEPS[0],
         signal: options.signal,
         onProgress: options.onProgress,
         resolve,
@@ -147,6 +152,7 @@ class CompressionWorkerClient {
       file: job.file,
       maxEdge: job.maxEdge,
       targetBytes: job.targetBytes,
+      quality: job.quality,
     };
     try {
       this.worker?.postMessage(request);

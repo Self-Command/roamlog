@@ -280,8 +280,16 @@ describe("admin settings routes", () => {
         "seo.descriptionTemplate",
         "seo.ogImageUrl",
         "seo.robots",
+        "media.maxEdge",
+        "media.quality",
+        "media.targetBytes",
+        "media.maxUploadBytes",
       ]),
     );
+    for (const key of ["media.keepOriginal", "media.livePhotoEnabled"]) {
+      expect(keys, key).not.toContain(key);
+      expect(JSON.stringify(body), key).not.toContain(key);
+    }
     for (const key of [
       "mail.resendApiKey",
       "mail.smtpPassword",
@@ -399,5 +407,19 @@ describe("public settings route", () => {
     expect(body.settings).not.toHaveProperty("general.registrationEnabled");
     expect(body.settings).not.toHaveProperty("mail.smtpPassword");
     expect(JSON.stringify(body)).not.toContain(STORED_PASSWORD);
+  });
+
+  it("publishes the four client-consumed media keys with their numeric defaults", async () => {
+    const { app } = await createApp({});
+
+    const response = await request(app.getHttpServer()).get("/v1/public/settings").expect(200);
+    const body = response.body as PublicSettingsResponse;
+
+    expect(body.settings["media.maxEdge"]).toBe(2000);
+    expect(body.settings["media.quality"]).toBe(0.82);
+    expect(body.settings["media.targetBytes"]).toBe(1_500_000);
+    expect(body.settings["media.maxUploadBytes"]).toBe(25_000_000);
+    expect(body.settings).not.toHaveProperty("media.keepOriginal");
+    expect(body.settings).not.toHaveProperty("media.livePhotoEnabled");
   });
 });

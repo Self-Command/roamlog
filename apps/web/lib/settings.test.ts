@@ -8,16 +8,21 @@ import {
   DEFAULT_SITE_DESCRIPTION,
   DEFAULT_SITE_TITLE,
   DEFAULT_TITLE_TEMPLATE,
+  MEDIA_COMPRESSION_DEFAULTS,
+  MEDIA_COMPRESSION_LIMITS,
   PUBLIC_SETTINGS_REVALIDATE_SECONDS,
   PUBLIC_SETTING_KEYS,
   THEME_ACCENT_TOKENS,
   applyTitleTemplate,
   buildSiteMetadata,
+  getMediaCompressionPolicy,
   getPublicSettings,
   resolveThemeAccent,
   resolveThemeMode,
   resolveThemePresentation,
+  useMediaCompressionPolicy,
   usePublicSettings,
+  type MediaCompressionPolicy,
   type PublicSettingsMap,
 } from "./settings";
 
@@ -295,5 +300,134 @@ describe("usePublicSettings", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({});
     expect(warn.mock.calls[0]?.[0]).toContain("using code defaults");
+  });
+});
+
+describe("getMediaCompressionPolicy", () => {
+  it("falls back to the code defaults when the public media keys are missing", () => {
+    expect(getMediaCompressionPolicy({})).toEqual({
+      maxEdge: 2000,
+      quality: 0.82,
+      targetBytes: 1_500_000,
+      maxUploadBytes: 25_000_000,
+    });
+    expect(getMediaCompressionPolicy(SETTINGS)).toEqual(MEDIA_COMPRESSION_DEFAULTS);
+  });
+
+  it("passes through values inside the safe client band", () => {
+    const settings: PublicSettingsMap = {
+      "media.maxEdge": 1200,
+      "media.quality": 0.9,
+      "media.targetBytes": 3_000_000,
+      "media.maxUploadBytes": 8 * 1024 * 1024,
+    };
+
+    expect(getMediaCompressionPolicy(settings)).toEqual({
+      maxEdge: 1200,
+      quality: 0.9,
+      targetBytes: 3_000_000,
+      maxUploadBytes: 8 * 1024 * 1024,
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the defaults and warns for out-of-band values", () => {
+    const policy = getMediaCompressionPolicy({
+      "media.maxEdge": 8000,
+      "media.quality": 0.2,
+      "media.targetBytes": 20_000_000,
+      "media.maxUploadBytes": 100 * 1024 * 1024,
+    });
+
+    expect(policy).toEqual(MEDIA_COMPRESSION_DEFAULTS);
+    expect(warn).toHaveBeenCalledTimes(4);
+    expect(warn.mock.calls.map(([message]: unknown[]) => String(message))).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("media.maxEdge=8000"),
+        expect.stringContaining("media.quality=0.2"),
+        expect.stringContaining("media.targetBytes=20000000"),
+        expect.stringContaining("media.maxUploadBytes=104857600"),
+      ]),
+    );
+  });
+
+  it("treats NaN, negatives and wrong types as invalid without throwing", () => {
+    const policy = getMediaCompressionPolicy({
+      "media.maxEdge": Number.NaN,
+      "media.quality": -0.2,
+      "media.targetBytes": "1500000",
+      "media.maxUploadBytes": Number.POSITIVE_INFINITY,
+    });
+
+    expect(policy).toEqual(MEDIA_COMPRESSION_DEFAULTS);
+    expect(warn).toHaveBeenCalledTimes(4);
+  });
+
+  it("documents safe bounds that contain the defaults", () => {
+    for (const [key, value] of Object.entries(MEDIA_COMPRESSION_DEFAULTS)) {
+      const bounds = MEDIA_COMPRESSION_LIMITS[key as keyof MediaCompressionPolicy];
+      expect(value).toBeGreaterThanOrEqual(bounds.min);
+      expect(value).toBeLessThanOrEqual(bounds.max);
+    }
+    expect(MEDIA_COMPRESSION_LIMITS.maxUploadBytes.max).toBe(25_000_000);
+    expect(MEDIA_COMPRESSION_LIMITS.maxEdge).toEqual({ min: 500, max: 4000 });
+  });
+});
+
+describe("useMediaCompressionPolicy", () => {
+  function wrapper(client: QueryClient) {
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return createElement(QueryClientProvider, { client }, children);
+    };
+  }
+
+  it("requests nothing when disabled and returns the code defaults", () => {
+    const fetcher = vi.fn(async () => jsonResponse(publicSettingsBody(SETTINGS)));
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+
+    const { result } = renderHook(
+      () =>
+        useMediaCompressionPolicy({
+          enabled: false,
+          fetcher: fetcher as unknown as typeof fetch,
+        }),
+      { wrapper: wrapper(client) },
+    );
+
+    expect(result.current).toEqual(MEDIA_COMPRESSION_DEFAULTS);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("derives the live policy from the fetched public settings", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse(
+        publicSettingsBody({
+          ...SETTINGS,
+          "media.maxEdge": 1200,
+          "media.quality": 0.9,
+          "media.targetBytes": 900_000,
+          "media.maxUploadBytes": 8 * 1024 * 1024,
+        }),
+      ),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+
+    const { result } = renderHook(
+      () =>
+        useMediaCompressionPolicy({ fetcher: fetcher as unknown as typeof fetch }),
+      { wrapper: wrapper(client) },
+    );
+
+    await waitFor(() => expect(result.current.maxEdge).toBe(1200));
+    expect(result.current).toEqual({
+      maxEdge: 1200,
+      quality: 0.9,
+      targetBytes: 900_000,
+      maxUploadBytes: 8 * 1024 * 1024,
+    });
   });
 });

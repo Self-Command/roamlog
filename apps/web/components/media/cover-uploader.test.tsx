@@ -18,6 +18,17 @@ import { renderWithQuery } from "@/test/query-harness";
 
 import { type CoverChange, CoverUploader, type CoverUploaderProps } from "./cover-uploader";
 
+// The uploader reads the public media policy on every render. Tests must not
+// hit the settings endpoint; the default policy keeps the existing assertions
+// (25 MB, 2000px) meaningful.
+vi.mock("@/lib/settings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/settings")>();
+  return {
+    ...actual,
+    useMediaCompressionPolicy: () => actual.MEDIA_COMPRESSION_DEFAULTS,
+  };
+});
+
 beforeAll(() => {
   vi.spyOn(console, "info").mockImplementation(() => undefined);
   Object.defineProperty(URL, "createObjectURL", {
@@ -62,7 +73,7 @@ describe("CoverUploader", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByText("拖拽图片到这里，或")).toBeInTheDocument();
     expect(screen.getByText(/JPEG · PNG · WebP · AVIF · HEIC/)).toBeInTheDocument();
-    expect(screen.getByText(/最大 25 MB/)).toBeInTheDocument();
+    expect(screen.getByText(/最大 23\.8 MB/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "选择图片" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("尚未设置封面。");
   });

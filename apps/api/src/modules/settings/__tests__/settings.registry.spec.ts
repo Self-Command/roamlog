@@ -46,6 +46,10 @@ describe("SETTINGS_REGISTRY", () => {
         "theme.accent",
         "theme.defaultMode",
         "theme.loginTagline",
+        "media.maxEdge",
+        "media.quality",
+        "media.targetBytes",
+        "media.maxUploadBytes",
       ].sort(),
     );
     for (const key of publicKeys) {
@@ -73,6 +77,10 @@ describe("SETTINGS_REGISTRY", () => {
       "ai.dailyQuota",
       "limits.searchPerMinute",
       "limits.uploadPerMinute",
+      // Behavior switches that are still unimplemented must not be public:
+      // publishing them would let the web client imply they take effect.
+      "media.keepOriginal",
+      "media.livePhotoEnabled",
     ];
     for (const key of mustStayPrivate) {
       expect(SETTINGS_BY_KEY.get(key)?.isPublic, key).toBe(false);
@@ -80,6 +88,21 @@ describe("SETTINGS_REGISTRY", () => {
     expect(publicSettingDefinitions()).not.toContainEqual(
       expect.objectContaining({ key: "mail.resendApiKey" }),
     );
+    expect(publicSettingDefinitions()).not.toContainEqual(
+      expect.objectContaining({ key: "media.keepOriginal" }),
+    );
+    expect(publicSettingDefinitions()).not.toContainEqual(
+      expect.objectContaining({ key: "media.livePhotoEnabled" }),
+    );
+  });
+
+  it("labels the two unwired media switches as not wired, in their help text", () => {
+    for (const key of ["media.keepOriginal", "media.livePhotoEnabled"]) {
+      const entry = SETTINGS_BY_KEY.get(key);
+      expect(entry?.isPublic, key).toBe(false);
+      expect(entry?.help, key).toContain("当前未接入");
+      expect(entry?.help, key).toContain("改动不影响上传行为");
+    }
   });
 
   it("offers only the color modes that actually render", () => {

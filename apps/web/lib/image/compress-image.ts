@@ -8,6 +8,32 @@ export const IMAGE_THUMB_QUALITY = 0.72;
 export const IMAGE_BLURHASH_COMPONENTS = [4, 3] as const;
 export const IMAGE_SKIP_MAX_BYTES = 200 * 1024;
 
+/** Relative falloff of each ladder step against the 0.82 design baseline. */
+const QUALITY_LADDER_RATIOS = IMAGE_QUALITY_STEPS.map(
+  (quality) => quality / IMAGE_QUALITY_STEPS[0],
+);
+
+function roundQuality(value: number): number {
+  return Math.round(value * 1_000) / 1_000;
+}
+
+/**
+ * Derives the four-step ladder from a configured start quality. The relative
+ * falloff stays the historical one (1, 0.854, 0.732, 0.671), so the default
+ * 0.82 reproduces `IMAGE_QUALITY_STEPS` exactly while a policy of 0.9 starts at
+ * 0.9. The start is clamped to the WebP-safe 0.4–1 range.
+ */
+export function qualityLadderFrom(
+  startQuality: number = IMAGE_QUALITY_STEPS[0],
+): readonly number[] {
+  const start = Number.isFinite(startQuality)
+    ? Math.min(1, Math.max(0.4, startQuality))
+    : IMAGE_QUALITY_STEPS[0];
+  return QUALITY_LADDER_RATIOS.map((ratio) =>
+    Math.max(0.4, roundQuality(start * ratio)),
+  );
+}
+
 export type ImageCompressionFailureCode =
   | "DECODE_FAILED"
   | "ENCODE_FAILED"

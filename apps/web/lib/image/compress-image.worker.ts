@@ -3,6 +3,7 @@ import { encode as encodeBlurhash } from "blurhash";
 import {
   IMAGE_BLURHASH_COMPONENTS,
   IMAGE_MAX_EDGE,
+  IMAGE_QUALITY_STEPS,
   IMAGE_TARGET_BYTES,
   IMAGE_THUMB_QUALITY,
   ImageCompressionError,
@@ -11,6 +12,7 @@ import {
   createDecodeError,
   encodeQualityLadder,
   isImageCompressionError,
+  qualityLadderFrom,
   shouldSkipCompression,
   type CompressionResult,
   type ImageCompressionProgress,
@@ -120,6 +122,9 @@ async function compress(
   const { file, id } = request;
   const maxEdge = request.maxEdge > 0 ? request.maxEdge : IMAGE_MAX_EDGE;
   const targetBytes = request.targetBytes > 0 ? request.targetBytes : IMAGE_TARGET_BYTES;
+  const qualities = qualityLadderFrom(
+    request.quality > 0 ? request.quality : IMAGE_QUALITY_STEPS[0],
+  );
 
   progress(id, {
     percent: 2,
@@ -191,11 +196,12 @@ async function compress(
       percent: 8,
       stage: "encoding",
       iteration: 0,
-      quality: 0.82,
+      quality: qualities[0] ?? IMAGE_QUALITY_STEPS[0],
     });
 
     const encoded = await encodeQualityLadder({
       targetBytes,
+      qualities,
       encode: async (quality, iteration) => {
         progress(id, {
           percent: Math.min(42, 8 + iteration * 9),

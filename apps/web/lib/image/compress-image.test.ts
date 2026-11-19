@@ -9,6 +9,7 @@ import {
   computeThumbnailSize,
   createDecodeError,
   encodeQualityLadder,
+  qualityLadderFrom,
   shouldSkipCompression,
   toWebpFileName,
 } from "./compress-image";
@@ -83,6 +84,41 @@ describe("encodeQualityLadder", () => {
   it("uses the production target of 1.5MB", () => {
     expect(IMAGE_TARGET_BYTES).toBe(1_500_000);
     expect([...IMAGE_QUALITY_STEPS]).toEqual([0.82, 0.7, 0.6, 0.55]);
+  });
+});
+
+describe("qualityLadderFrom", () => {
+  it("reproduces the historical ladder for the default 0.82 start", () => {
+    expect([...qualityLadderFrom()]).toEqual([...IMAGE_QUALITY_STEPS]);
+    expect([...qualityLadderFrom(IMAGE_QUALITY_STEPS[0])]).toEqual([...IMAGE_QUALITY_STEPS]);
+  });
+
+  it("starts at a configured quality and keeps the relative falloff", () => {
+    const ladder = qualityLadderFrom(0.9);
+
+    expect(ladder).toHaveLength(4);
+    expect(ladder[0]).toBe(0.9);
+    expect(ladder[1]).toBeCloseTo(0.9 * (0.7 / 0.82), 2);
+    expect(ladder[2]).toBeCloseTo(0.9 * (0.6 / 0.82), 2);
+    expect(ladder[3]).toBeCloseTo(0.9 * (0.55 / 0.82), 2);
+  });
+
+  it("clamps the start into the WebP-safe range", () => {
+    expect(qualityLadderFrom(0.1)[0]).toBe(0.4);
+    expect(qualityLadderFrom(1.5)[0]).toBe(1);
+    expect([...qualityLadderFrom(Number.NaN)]).toEqual([...qualityLadderFrom()]);
+  });
+
+  it("feeds a custom start into the ladder actually encoded", async () => {
+    const encode = vi.fn(async (_quality: number) => blobOfSize(10));
+
+    await encodeQualityLadder({
+      encode,
+      targetBytes: 100,
+      qualities: qualityLadderFrom(0.9),
+    });
+
+    expect(encode.mock.calls.map(([quality]) => quality)).toEqual([0.9]);
   });
 });
 

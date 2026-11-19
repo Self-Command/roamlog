@@ -3,7 +3,7 @@ import {
   type PublicSettingsResponse,
 } from "@roamlog/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { cache } from "react";
+import { cache, useMemo } from "react";
 import type { Metadata } from "next";
 
 /**
@@ -41,6 +41,10 @@ export const PUBLIC_SETTING_KEYS = [
   "theme.accent",
   "theme.defaultMode",
   "theme.loginTagline",
+  "media.maxEdge",
+  "media.quality",
+  "media.targetBytes",
+  "media.maxUploadBytes",
 ] as const;
 export type PublicSettingKey = (typeof PUBLIC_SETTING_KEYS)[number];
 
@@ -71,6 +75,10 @@ export function getApiBaseUrl(): string {
 function warnPublicSettings(message: string, cause?: unknown): void {
   // A warning, not an error: settings are optional, and this must stay out of
   // the rendered UI entirely.
+  if (cause === undefined) {
+    console.warn(`[roamlog] ${message}`);
+    return;
+  }
   console.warn(`[roamlog] ${message}`, cause);
 }
 
@@ -140,12 +148,13 @@ export const PUBLIC_SETTINGS_QUERY_KEY = ["v1", "public-settings"] as const;
  * server round-trip. One shared cache entry, revalidated every 30 seconds.
  * Failures resolve to `{}` instead of rejecting, so no error surface appears.
  */
-export function usePublicSettings(options?: { fetcher?: typeof fetch }) {
+export function usePublicSettings(options?: { fetcher?: typeof fetch; enabled?: boolean }) {
   const fetcher = options?.fetcher;
 
   return useQuery({
     queryKey: PUBLIC_SETTINGS_QUERY_KEY,
     staleTime: PUBLIC_SETTINGS_REVALIDATE_SECONDS * 1_000,
+    enabled: options?.enabled ?? true,
     queryFn: async ({ signal }): Promise<PublicSettingsMap> => {
       try {
         const response = await (fetcher ?? fetch)(PUBLIC_SETTINGS_PATH, {
@@ -315,4 +324,140 @@ export function resolveThemePresentation(settings: PublicSettingsMap): ThemePres
       colorScheme,
     },
   };
+}
+
+/**
+ * The four `media.*` values the browser compression pipeline is allowed to
+ * read. They are part of the public projection because the client cannot know
+ * them otherwise; the two behavior switches (`keepOriginal`, `livePhotoEnabled`)
+ * are intentionally absent until they are implemented.
+ */
+export type PublicMediaSettingKey =
+  | "media.maxEdge"
+  | "media.quality"
+  | "media.targetBytes"
+  | "media.maxUploadBytes";
+
+export interface MediaCompressionPolicy {
+  /** Longest edge kept by the browser compressor, in CSS pixels. */
+  maxEdge: number;
+  /** Starting WebP quality; the ladder is derived from it. */
+  quality: number;
+  /** Byte budget the compressor aims for before uploading. */
+  targetBytes: number;
+  /** File size accepted before upload starts. */
+  maxUploadBytes: number;
+}
+
+/**
+ * Code defaults from `apps/web/lib/image/compress-image.ts` and
+ * `apps/web/lib/api/media.ts`, repeated here so a settings outage still yields
+ * today's pipeline. Keep them in sync with the registry defaults.
+ */
+export const MEDIA_COMPRESSION_DEFAULTS: Readonly<MediaCompressionPolicy> = Object.freeze({
+  maxEdge: 2000,
+  quality: 0.82,
+  targetBytes: 1_500_000,
+  // Decimal 25 MB, mirroring the registry/DEFAULT_SETTINGS value.
+  maxUploadBytes: 25_000_000,
+});
+
+export interface MediaCompressionBound {
+  readonly min: number;
+  readonly max: number;
+}
+
+/**
+ * Safe client-side ranges. They are narrower than the admin registry on
+ * purpose: a browser upload must never be driven by a 8000px / 100 MB value
+ * that would exhaust a mobile device.
+ */
+export const MEDIA_COMPRESSION_LIMITS: Readonly<
+  Record<keyof MediaCompressionPolicy, MediaCompressionBound>
+> = Object.freeze({
+  maxEdge: Object.freeze({ min: 500, max: 4000 }),
+  quality: Object.freeze({ min: 0.4, max: 0.95 }),
+  targetBytes: Object.freeze({ min: 100_000, max: 5_000_000 }),
+  maxUploadBytes: Object.freeze({ min: 1_000_000, max: 25_000_000 }),
+});
+
+/**
+ * Normalizes one public media setting.
+ *
+ * A missing key or an obviously invalid value (wrong type, `NaN`, `±Infinity`,
+ * non-positive) falls back to the code default. A finite value outside the
+ * safe band also falls back instead of being clamped to the edge: turning an
+ * operator's 8000px into 4000px silently would make the admin UI lie about
+ * what it stored. The returned policy is therefore always inside the band, and
+ * every fallback is logged once, never thrown.
+ */
+function readMediaNumber(
+  settings: PublicSettingsMap,
+  key: PublicMediaSettingKey,
+  bounds: MediaCompressionBound,
+  fallback: number,
+): number {
+  const raw = settings[key];
+  if (raw === undefined) {
+    return fallback;
+  }
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
+    warnPublicSettings(
+      `public setting ${key} is not a positive finite number; using the code default ${String(fallback)}`,
+    );
+    return fallback;
+  }
+  if (raw < bounds.min || raw > bounds.max) {
+    warnPublicSettings(
+      `public setting ${key}=${String(raw)} is outside the safe client range ${String(
+        bounds.min,
+      )}..${String(bounds.max)}; using the code default ${String(fallback)}`,
+    );
+    return fallback;
+  }
+  return raw;
+}
+
+/** Builds the compression policy the upload pipeline must use. Never throws. */
+export function getMediaCompressionPolicy(settings: PublicSettingsMap): MediaCompressionPolicy {
+  return {
+    maxEdge: readMediaNumber(
+      settings,
+      "media.maxEdge",
+      MEDIA_COMPRESSION_LIMITS.maxEdge,
+      MEDIA_COMPRESSION_DEFAULTS.maxEdge,
+    ),
+    quality: readMediaNumber(
+      settings,
+      "media.quality",
+      MEDIA_COMPRESSION_LIMITS.quality,
+      MEDIA_COMPRESSION_DEFAULTS.quality,
+    ),
+    targetBytes: readMediaNumber(
+      settings,
+      "media.targetBytes",
+      MEDIA_COMPRESSION_LIMITS.targetBytes,
+      MEDIA_COMPRESSION_DEFAULTS.targetBytes,
+    ),
+    maxUploadBytes: readMediaNumber(
+      settings,
+      "media.maxUploadBytes",
+      MEDIA_COMPRESSION_LIMITS.maxUploadBytes,
+      MEDIA_COMPRESSION_DEFAULTS.maxUploadBytes,
+    ),
+  };
+}
+
+/**
+ * Client policy for upload surfaces. Shares the 30-second public-settings cache
+ * entry, so an admin change reaches the next upload without a rebuild. Before
+ * the first fetch resolves, the code defaults apply — never an error state.
+ */
+export function useMediaCompressionPolicy(options?: {
+  fetcher?: typeof fetch;
+  enabled?: boolean;
+}): MediaCompressionPolicy {
+  const query = usePublicSettings(options);
+  const settings = query.data;
+  return useMemo(() => getMediaCompressionPolicy(settings ?? {}), [settings]);
 }

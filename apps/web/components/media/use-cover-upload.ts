@@ -4,7 +4,11 @@ import type { MediaPresignResponse, MediaRead, Trip } from "@roamlog/contracts";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { COVER_MAX_BYTES, createCoverMediaClient, type CoverMediaClient } from "@/lib/api/media";
+import { createCoverMediaClient, type CoverMediaClient } from "@/lib/api/media";
+import {
+  useMediaCompressionPolicy,
+  type MediaCompressionPolicy,
+} from "@/lib/settings";
 import {
   isImageCompressionError,
   toWebpFileName,
@@ -93,6 +97,13 @@ export interface UseCoverUploadOptions {
   maxBytes?: number;
   pollIntervalMs?: number;
   processTimeoutMs?: number;
+  /**
+   * Media compression policy. Omitted on the normal path: the hook reads the
+   * public `media.*` settings through the shared 30s cache. CoverUploader
+   * passes an already-resolved policy so the console change reaches the very
+   * next upload; tests inject one to stay off the network.
+   */
+  mediaPolicy?: MediaCompressionPolicy;
   /** Test/embedding seam; production uses the singleton Worker pipeline. */
   compressor?: ImageCompressor;
   /**
@@ -276,6 +287,12 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
     [providedClient],
   );
   const { compress: workerCompress } = useImageCompression();
+  // `enabled` keeps the hook order stable while letting an injected policy
+  // (CoverUploader, tests) skip the public-settings request entirely.
+  const settingsPolicy = useMediaCompressionPolicy({
+    enabled: options.mediaPolicy === undefined,
+  });
+  const mediaPolicy = options.mediaPolicy ?? settingsPolicy;
 
   const [state, setState] = useState<CoverUploadState>(INITIAL_STATE);
   const stateRef = useRef<CoverUploadState>(INITIAL_STATE);
@@ -431,7 +448,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
           enter("validating");
           setState((current) => ({ ...current, error: null, progress: null }));
           const validation = validateCoverFile(file, {
-            maxBytes: config.maxBytes ?? COVER_MAX_BYTES,
+            maxBytes: config.maxBytes ?? mediaPolicy.maxUploadBytes,
           });
           if (!validation.ok) {
             fail(validation.error);
@@ -448,6 +465,9 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
 
           const compression = await compressor(file, {
             signal,
+            maxEdge: mediaPolicy.maxEdge,
+            quality: mediaPolicy.quality,
+            targetBytes: mediaPolicy.targetBytes,
             onProgress: (progress) => {
               if (alive()) reportCompressionProgress(progress.percent);
             },
@@ -577,6 +597,7 @@ export function useCoverUpload(options: UseCoverUploadOptions): UseCoverUploadRe
       enter,
       fail,
       finish,
+      mediaPolicy,
       presignUpload,
       queryClient,
       reportCompressionProgress,
