@@ -18,6 +18,20 @@ export const categoryColors: Record<ExpenseCategory, string> = {
   other: "bg-accent-slate",
 };
 
+/**
+ * SVG-safe counterpart of `categoryColors`: Recharts paints `fill`/`stroke`
+ * attributes, so the chart needs the raw CSS variable instead of the Tailwind
+ * utility class. Mapping order is identical to `categoryColors`.
+ */
+export const categoryChartColors: Record<ExpenseCategory, string> = {
+  transport: "var(--accent-blue)",
+  stay: "var(--accent-orange)",
+  food: "var(--accent-yellow)",
+  activity: "var(--accent-green)",
+  shopping: "var(--accent-red)",
+  other: "var(--accent-slate)",
+};
+
 export interface CurrencyTotal {
   currency: string;
   amountMinor: number;

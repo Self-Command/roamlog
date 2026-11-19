@@ -1,0 +1,42 @@
+/*
+ * Chart motion tokens for the insights page.
+ *
+ * Rule set (fixed by research, see .audit/research-insights-charts.md):
+ * - entrance: 220ms, opacity + 6px translate, ease-out, exactly once
+ * - data updates: handled by Recharts `animationDuration` (200-300ms)
+ * - never: infinite loops, breathing/pulse, hover scaling
+ *
+ * Second of the three reduced-motion guards: this media query removes the
+ * entrance animation for users who ask for reduced motion, independently of
+ * the component-level `useReducedMotion` hook and of Recharts' own `auto` mode.
+ */
+
+@keyframes roamlog-chart-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.roamlog-chart-enter {
+  opacity: 1;
+}
+
+.roamlog-chart-enter--run {
+  animation: roamlog-chart-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roamlog-chart-enter--run {
+    animation: none;
+  }
+}
+
+/* The workspace-level escape hatch used by @roamlog/ui. */
+html.reduce-motion .roamlog-chart-enter--run {
+  animation: none;
+}

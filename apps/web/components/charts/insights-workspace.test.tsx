@@ -1,10 +1,11 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFakeAdapter, makeEntry, makeExpense, makeTrip } from "@/test/fake-data";
 import { renderWithQuery } from "@/test/query-harness";
 
+import { stubChartLayout } from "./chart-test-setup";
 import { InsightsWorkspace } from "./insights-workspace";
 
 const harness = vi.hoisted(() => ({
@@ -46,6 +47,11 @@ function realTrips() {
 describe("InsightsWorkspace data truthfulness", () => {
   beforeEach(() => {
     harness.adapter = createFakeAdapter();
+    stubChartLayout();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("renders the insufficient-data empty state without invented numbers", async () => {
@@ -103,6 +109,13 @@ describe("InsightsWorkspace data truthfulness", () => {
     expect(screen.getByText(/5,000/)).toBeInTheDocument();
     expect(screen.getByText("路线距离")).toBeInTheDocument();
     expect(screen.getAllByText("尚未接入").length).toBeGreaterThan(0);
+
+    // Annual, monthly, category and budget panels are all Recharts surfaces now.
+    expect(document.querySelectorAll("[data-slot='chart']").length).toBe(4);
+    expect(
+      screen.getByRole("group", { name: "最近十二个月支出面积图" }),
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll(".recharts-surface").length).toBe(4);
   });
 
   it("surfaces a retryable error when records fail to load", async () => {

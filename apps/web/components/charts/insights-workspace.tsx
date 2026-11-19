@@ -14,6 +14,13 @@ import { useMemo, useState } from "react";
 
 import { useInsightsData } from "./insights-data";
 import {
+  AnnualTripsChart,
+  BudgetCompositionChart,
+  CategoryMixChart,
+  ChartReveal,
+  MonthlySpendChart,
+} from "./insights-charts";
+import {
   aggregateTripStats,
   annualTrips,
   budgetRows,
@@ -66,23 +73,13 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
 
   const stats = useMemo(() => aggregateTripStats(trips), [trips]);
   const annual = useMemo(() => annualTrips(trips), [trips]);
-  const annualMax = Math.max(1, ...annual.map(([, count]) => count));
   const currency = workspace?.defaultCurrency ?? "CNY";
   const displayExpenses = useMemo(
     () => expenses.filter((expense) => expense.currency === currency),
     [currency, expenses],
   );
   const monthly = useMemo(() => monthlySpend(displayExpenses, currency), [currency, displayExpenses]);
-  const monthlyMax = Math.max(1, ...monthly.map((point) => point.amountMinor));
   const monthlyTotal = monthly.reduce((sum, point) => sum + point.amountMinor, 0);
-  const linePoints = monthly
-    .map((point, index) => {
-      const x = 10 + (index / Math.max(1, monthly.length - 1)) * 580;
-      const y = 150 - (point.amountMinor / monthlyMax) * 120;
-      return `${x},${y}`;
-    })
-    .join(" ");
-  const areaPoints = `10,160 ${linePoints} 590,160`;
   const categories = useMemo(
     () => categoryTotals(expenses, currency),
     [currency, expenses],
@@ -254,28 +251,9 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
             </div>
             <Badge tone="neutral">{stats.tripCount}</Badge>
           </div>
-          <div className="mt-6 flex h-44 items-end gap-3">
-            {annual.map(([year, count]) => (
-              <div
-                key={year}
-                tabIndex={0}
-                role="img"
-                aria-label={`${year} 年 ${count} 次旅行`}
-                className="flex h-full flex-1 flex-col justify-end gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ink"
-              >
-                <div className="relative flex flex-1 items-end">
-                  <div
-                    className="w-full rounded-t-[3px] bg-gradient-to-t from-accent-orange/35 to-accent-orange/80"
-                    style={{ height: `${Math.max(8, (count / annualMax) * 100)}%` }}
-                  />
-                  <span className="absolute -top-5 inset-x-0 text-center font-mono text-[9px] text-body">
-                    {count}
-                  </span>
-                </div>
-                <span className="text-center font-mono text-[8px] text-stone">{year}</span>
-              </div>
-            ))}
-          </div>
+          <ChartReveal>
+            <AnnualTripsChart data={annual} />
+          </ChartReveal>
         </section>
 
         <section className="surface-card p-5 lg:col-span-8">
@@ -295,70 +273,9 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
               description={`记录 ${currency} 支出后，这里会显示真实的月度节奏。`}
             />
           ) : (
-            <div className="mt-4 overflow-hidden rounded-control border border-hairline bg-surface-2 p-2">
-              <svg
-                viewBox="0 0 600 170"
-                role="img"
-                aria-label="最近十二个月支出面积图"
-                className="h-44 w-full"
-              >
-                <defs>
-                  <linearGradient id="spend-area" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#ff801f" stopOpacity="0.34" />
-                    <stop offset="1" stopColor="#ff801f" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                {[0, 40, 80, 120, 160].map((y) => (
-                  <line
-                    key={y}
-                    x1="10"
-                    y1={y}
-                    x2="590"
-                    y2={y}
-                    stroke="rgba(255,255,255,0.07)"
-                    strokeWidth="1"
-                  />
-                ))}
-                <polygon points={areaPoints} fill="url(#spend-area)" />
-                <polyline
-                  points={linePoints}
-                  fill="none"
-                  stroke="#ff801f"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
-                {monthly.map((point, index) => {
-                  const x = 10 + (index / Math.max(1, monthly.length - 1)) * 580;
-                  const y = 150 - (point.amountMinor / monthlyMax) * 120;
-                  return (
-                    <circle
-                      key={point.key}
-                      cx={x}
-                      cy={y}
-                      r="2.5"
-                      fill="#070708"
-                      stroke="#ff801f"
-                      strokeWidth="1.5"
-                    >
-                      <title>{`${point.label} · ${formatMoney(point.amountMinor, currency)}`}</title>
-                    </circle>
-                  );
-                })}
-                {monthly.map((point, index) => (
-                  <text
-                    key={`${point.key}-label`}
-                    x={10 + (index / Math.max(1, monthly.length - 1)) * 580}
-                    y="166"
-                    textAnchor="middle"
-                    fill="rgba(255,255,255,0.35)"
-                    fontSize="7"
-                    fontFamily="monospace"
-                  >
-                    {index % 2 === 0 ? point.label : ""}
-                  </text>
-                ))}
-              </svg>
-            </div>
+            <ChartReveal>
+              <MonthlySpendChart points={monthly} currency={currency} />
+            </ChartReveal>
           )}
           {otherCurrencies.length > 0 ? (
             <p className="mt-3 font-mono text-[9px] text-stone">
@@ -386,16 +303,10 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
             />
           ) : (
             <>
-              <div className="mt-4 flex h-3 overflow-hidden rounded-pill bg-white/5">
-                {categories.map((item) => (
-                  <div
-                    key={item.category}
-                    className={categoryColors[item.category]}
-                    style={{ width: `${(item.total / Math.max(1, categoryTotal)) * 100}%` }}
-                    title={`${categoryLabels[item.category]} ${formatMoney(item.total, currency)}`}
-                  />
-                ))}
-              </div>
+              {/* 环形图不再输出图例：分类标签与金额保留在下方 DOM 明细里，避免重复文本。 */}
+              <ChartReveal>
+                <CategoryMixChart items={categories} currency={currency} />
+              </ChartReveal>
               <div className="mt-4 space-y-3">
                 {categories.map((item) => (
                   <div key={item.category}>
@@ -435,11 +346,17 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
             />
           ) : (
             <div className="mt-4 space-y-4">
-              {budgets.map(({ trip, currency: budgetCurrency, budgetAmountMinor, spentAmountMinor, hasOtherCurrencySpend }) => {
-                const percent = Math.round((spentAmountMinor / Math.max(1, budgetAmountMinor)) * 100);
-                return (
-                  <div key={trip.id}>
-                    <div className="flex items-center justify-between gap-3">
+              <ChartReveal>
+                <BudgetCompositionChart rows={budgets} />
+              </ChartReveal>
+              <p className="text-[9px] text-stone">
+                堆叠条按每趟旅行自身预算的百分比绘制，避免不同币种直接比较长度；金额见下方明细。
+              </p>
+              <div className="space-y-3">
+                {budgets.map(({ trip, currency: budgetCurrency, budgetAmountMinor, spentAmountMinor, hasOtherCurrencySpend }) => {
+                  const percent = Math.round((spentAmountMinor / Math.max(1, budgetAmountMinor)) * 100);
+                  return (
+                    <div key={trip.id} className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-[12px] text-body">{trip.title}</p>
                         <p className="mt-0.5 font-mono text-[8px] uppercase text-stone">
@@ -452,17 +369,9 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
                         {formatMoney(budgetAmountMinor, budgetCurrency)}
                       </span>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-pill bg-white/5">
-                      <div
-                        className={`h-full rounded-pill ${
-                          spentAmountMinor > budgetAmountMinor ? "bg-accent-red" : "bg-accent-orange"
-                        }`}
-                        style={{ width: `${Math.min(100, percent)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </section>
@@ -499,33 +408,38 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
               description="记录日志或支出后，这里会显示真实的月度活跃热力图。"
             />
           ) : (
-            <div className="mt-4 space-y-2 overflow-x-auto">
-              {heatmap.map((row) => (
-                <div key={row.year} className="flex min-w-[520px] items-center gap-2">
-                  <span className="w-10 shrink-0 font-mono text-[8px] text-stone">{row.year}</span>
-                  <div className="grid flex-1 grid-cols-12 gap-1">
-                    {row.months.map((cell) => (
-                      <div
-                        key={cell.key}
-                        tabIndex={0}
-                        role="img"
-                        aria-label={`${cell.key} 记录 ${cell.count} 条`}
-                        className={`h-7 rounded-[3px] outline-none focus-visible:ring-1 focus-visible:ring-ink ${
-                          cell.count === 0
-                            ? "bg-white/[0.045]"
-                            : cell.count < 2
-                              ? "bg-accent-green/20"
-                              : cell.count < 5
-                                ? "bg-accent-green/45"
-                                : "bg-accent-green/80"
-                        }`}
-                        title={`${cell.key} · ${cell.count} 条记录`}
-                      />
-                    ))}
+            /* 热力图保持现有 DOM 网格：图表库版本多 +136KB 且 a11y 更差，这里只补入场动画。 */
+            <ChartReveal className="mt-4 overflow-x-auto">
+              <div className="space-y-2">
+                {heatmap.map((row) => (
+                  <div key={row.year} className="flex min-w-[520px] items-center gap-2">
+                    <span className="w-10 shrink-0 font-mono text-[8px] text-stone">
+                      {row.year}
+                    </span>
+                    <div className="grid flex-1 grid-cols-12 gap-1">
+                      {row.months.map((cell) => (
+                        <div
+                          key={cell.key}
+                          tabIndex={0}
+                          role="img"
+                          aria-label={`${cell.key} 记录 ${cell.count} 条`}
+                          className={`h-7 rounded-[3px] outline-none focus-visible:ring-1 focus-visible:ring-ink ${
+                            cell.count === 0
+                              ? "bg-white/[0.045]"
+                              : cell.count < 2
+                                ? "bg-accent-green/20"
+                                : cell.count < 5
+                                  ? "bg-accent-green/45"
+                                  : "bg-accent-green/80"
+                          }`}
+                          title={`${cell.key} · ${cell.count} 条记录`}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </ChartReveal>
           )}
         </section>
 
