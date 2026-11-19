@@ -40,6 +40,7 @@ export class ReportsService {
       body.targetId,
       membership.workspaceId,
       actor.user.id,
+      actor.user.platformRole,
     );
     if (!visible) {
       throw new NotFoundException({

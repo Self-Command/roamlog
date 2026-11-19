@@ -1,6 +1,7 @@
 import type { AdminReportItem, ReportTargetType } from "@roamlog/contracts";
 
 import type { PrismaService } from "../prisma/prisma.service.js";
+import { tripVisibilityWhere } from "../trips/trip-access.js";
 
 type Db = PrismaService["client"];
 
@@ -270,8 +271,16 @@ export async function buildAdminReportItems(
 /**
  * A report is only accepted for content the reporter can actually see in this
  * workspace: same tenant, not author-deleted, not already moderated away, and
- * not somebody else's private trip. Missing and forbidden look identical (404)
- * so the endpoint cannot be used to probe for content.
+ * — the part this function used to get wrong — visible under the unified trip
+ * rule in `trip-access.ts`.
+ *
+ * The earlier hand-written predicate (`visibility != "private"`) disagreed with
+ * the rule in five ways: it leaked `custom` trips with no grant, hid
+ * `private` trips from joined participants, hid granted workspaces, ignored
+ * `super_admin`, and never looked at the trip behind a media row. This function
+ * is the probe surface of the reports endpoint ("missing" and "forbidden" both
+ * return 404), so answering with a different rule made 200/404 a visibility
+ * oracle.
  */
 export async function isVisibleReportTarget(
   db: Db,
@@ -279,36 +288,50 @@ export async function isVisibleReportTarget(
   id: string,
   workspaceId: string,
   userId: string,
+  platformRole = "user",
 ): Promise<boolean> {
-  const sharedTrip = {
-    deletedAt: null,
-    moderatedAt: null,
-    OR: [{ visibility: { not: "private" as const } }, { createdById: userId }],
-  };
+  const visibility = tripVisibilityWhere({ userId, workspaceId, platformRole });
 
   if (type === "trip") {
     const trip = await db.trip.findFirst({
-      where: { id, workspaceId, ...sharedTrip },
+      where: { id, workspaceId, deletedAt: null, moderatedAt: null, ...visibility },
       select: { id: true },
     });
     return trip !== null;
   }
   if (type === "entry") {
     const entry = await db.journalEntry.findFirst({
-      where: { id, workspaceId, trip: sharedTrip },
+      where: {
+        id,
+        workspaceId,
+        trip: { deletedAt: null, moderatedAt: null, ...visibility },
+      },
       select: { id: true },
     });
     return entry !== null;
   }
   if (type === "comment") {
     const comment = await db.comment.findFirst({
-      where: { id, workspaceId, trip: sharedTrip },
+      where: {
+        id,
+        workspaceId,
+        trip: { deletedAt: null, moderatedAt: null, ...visibility },
+      },
       select: { id: true },
     });
     return comment !== null;
   }
+  // Workspace-level media (`tripId: null`) is readable by every member, exactly
+  // as `MediaService.visibilityFilter` decides it; trip media inherits the
+  // trip's decision.
   const media = await db.media.findFirst({
-    where: { id, workspaceId, deletedAt: null, moderatedAt: null },
+    where: {
+      id,
+      workspaceId,
+      deletedAt: null,
+      moderatedAt: null,
+      OR: [{ tripId: null }, { trip: { deletedAt: null, ...visibility } }],
+    },
     select: { id: true },
   });
   return media !== null;
