@@ -1,5 +1,24 @@
 import type { MediaStatus } from "@roamlog/contracts";
 
+/**
+ * The paired motion asset columns. Mirrors `MediaMotion` in the schema; the
+ * presenter is the only place these rows become contract objects, and it never
+ * exposes `storageKey`/`thumbKey`.
+ */
+export interface MediaMotionRecord {
+  id: string;
+  mediaId: string;
+  storageKey: string;
+  thumbKey: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+  createdAt: Date;
+  deletedAt: Date | null;
+}
+
 export interface MediaRecord {
   id: string;
   workspaceId: string;
@@ -17,7 +36,13 @@ export interface MediaRecord {
   error: string | null;
   caption: string | null;
   date: Date | null;
+  location: string | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+  /**
+   * Present only when the row was loaded with its `motion` relation. `null`
+   * (or absent) means "ordinary image": the API reports `livePhoto: false`.
+   */
+  motion?: MediaMotionRecord | null;
 }

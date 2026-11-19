@@ -71,6 +71,47 @@ export class MediaController {
     );
   }
 
+  @Post("workspaces/:workspaceId/media/:mediaId/motion/presign")
+  @RequirePermission("media:presign", "media")
+  @UseGuards(MediaPresignRateLimitGuard, MediaTenantGuard, RolesGuard)
+  presignMotion(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("mediaId") mediaId: string,
+    @Body() body: unknown,
+  ) {
+    return this.media.presignMotion(actor, membership, mediaId, body);
+  }
+
+  /**
+   * Completion callback for the paired motion asset (`POST .../motion`).
+   *
+   * Same permission and tenant rules as `complete`: the body is validated by
+   * `CompleteMediaMotionRequestSchema`, and the object is HEADed before a
+   * `MediaMotion` row exists.
+   */
+  @Post("workspaces/:workspaceId/media/:mediaId/motion")
+  @HttpCode(200)
+  @RequirePermission("media:complete", "media")
+  @UseGuards(MediaTenantGuard, RolesGuard)
+  completeMotion(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("mediaId") mediaId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+  ) {
+    if (!idempotencyKey) {
+      return this.media.completeMotion(actor, membership, mediaId, body);
+    }
+    const key = parseRequest(IdempotencyKeySchema, idempotencyKey);
+    return this.idempotency.run(
+      `media:motion:${actor.user.id}:${mediaId}`,
+      key,
+      () => this.media.completeMotion(actor, membership, mediaId, body),
+    );
+  }
+
   @Get("workspaces/:workspaceId/media")
   @RequirePermission("media:read", "media")
   @UseGuards(TenantGuard, RolesGuard)

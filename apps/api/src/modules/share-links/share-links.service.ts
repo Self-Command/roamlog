@@ -7,12 +7,14 @@ import {
 } from "@nestjs/common";
 import {
   CreateShareLinkRequestSchema,
+  PlaceProviderSchema,
   PublicShareQuerySchema,
   PublicShareTokenSchema,
   PublicTripResponseSchema,
   ShareLinkCreatedSchema,
   ShareLinkSchema,
   tripDurationDays,
+  type PlaceProvider,
   type PublicMedia,
   type PublicTripResponse,
   type ShareLink,
@@ -36,6 +38,7 @@ import type { WorkspaceMembershipAccess } from "../../common/services/workspace-
 import { ActivitiesService } from "../activities/activities.service.js";
 import {
   MediaUrlService,
+  type MediaUrlMotionSource,
   type MediaUrlSource,
   type SignedMediaUrls,
 } from "../media/media-url.service.js";
@@ -226,6 +229,10 @@ export class ShareLinksService {
         coverMediaId: trip.coverMediaId ?? null,
         cover,
         origin: canonicalTripOrigin(trip.origin),
+        // The trip row may not carry the origin source yet (older databases and
+        // manually typed origins); the public page falls back to the neutral OSM
+        // credit instead of inventing a provider.
+        originProvider: placeProviderOrNull(trip.originProvider),
         destinations: trip.destinations ?? [],
         countryCodes: trip.countryCodes ?? [],
         tags: trip.tags ?? [],
@@ -237,6 +244,9 @@ export class ShareLinksService {
         countryCode: stop.countryCode,
         lat: stop.lat ?? null,
         lng: stop.lng ?? null,
+        // Only the enum members are exposed: a legacy or future provider value
+        // degrades to `null` so a public share never 500s on a strict schema.
+        provider: placeProviderOrNull(stop.provider),
         // The formatted address is shown on the public page so a visitor can see
         // the place; the bbox stays private (it is never read here at all).
         address: typeof stop.address === "string" ? stop.address : null,
@@ -284,7 +294,13 @@ export class ShareLinksService {
         continue;
       }
       rowsById.set(id, record);
-      sources.push({ id, key, status, variants: record.variants });
+      sources.push({
+        id,
+        key,
+        status,
+        variants: record.variants,
+        motion: motionSource(record.motion),
+      });
     }
 
     const signed: ReadonlyMap<string, SignedMediaUrls> =
@@ -298,6 +314,7 @@ export class ShareLinksService {
       if (!row || !urls || urls.url === null || urls.expiresAt === null) {
         continue;
       }
+      const motion = liveMotionView(row.motion, urls.motionUrl);
       views.push({
         id: source.id,
         url: urls.url,
@@ -309,6 +326,8 @@ export class ShareLinksService {
         caption: stringOrNull(row.caption),
         date: row.date ? dateOnly(row.date) : null,
         location: stringOrNull(row.location),
+        livePhoto: motion !== null,
+        motion,
       });
     }
     return views;
@@ -449,6 +468,61 @@ function entryMediaViews(
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+/**
+ * Narrows a stored provider to the shared enum.
+ *
+ * Unknown values (a row from before the provider column, or a provider this
+ * release does not know yet) degrade to `null` instead of failing the strict
+ * public schema: a share must never 500 because of place metadata.
+ */
+function placeProviderOrNull(value: unknown): PlaceProvider | null {
+  return PlaceProviderSchema.nullable().catch(null).parse(value);
+}
+
+/**
+ * Motion row as the URL signer needs it, or `null` when the row is absent,
+ * soft-deleted or malformed. Only storage coordinates and the allow-listed mime
+ * types survive this narrowing.
+ */
+function motionSource(value: unknown): MediaUrlMotionSource | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const row = value as Record<string, unknown>;
+  if (row.deletedAt !== null && row.deletedAt !== undefined) {
+    return null;
+  }
+  const storageKey = typeof row.storageKey === "string" ? row.storageKey : "";
+  const mimeType = typeof row.mimeType === "string" ? row.mimeType : "";
+  if (!storageKey || (mimeType !== "video/quicktime" && mimeType !== "video/mp4")) {
+    return null;
+  }
+  return {
+    storageKey,
+    mimeType,
+    durationMs: typeof row.durationMs === "number" ? row.durationMs : null,
+    deletedAt: null,
+  };
+}
+
+/**
+ * `PublicMedia.motion` view for the public page.
+ *
+ * Returns `null` for an ordinary image so the schema's `livePhoto: false` and
+ * `motion: null` stay in sync, and never lets the bucket/key through.
+ */
+function liveMotionView(
+  value: unknown,
+  url: string | null,
+): { url: string | null; mimeType: "video/quicktime" | "video/mp4"; durationMs: number | null } | null {
+  const source = motionSource(value);
+  if (!source) {
+    return null;
+  }
+  const mimeType = source.mimeType === "video/quicktime" ? "video/quicktime" : "video/mp4";
+  return { url, mimeType, durationMs: source.durationMs };
 }
 
 /**

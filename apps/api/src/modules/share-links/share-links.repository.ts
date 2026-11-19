@@ -162,6 +162,9 @@ export class ShareLinksRepository {
             : { OR: [{ tripId: trip.id }, { id: coverMediaId }] }),
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        // The paired motion row is part of the public media projection: a shared
+        // Live Photo must stay playable on the public page (D2).
+        include: { motion: true },
       }),
     ]);
 
@@ -184,7 +187,7 @@ export class ShareLinksRepository {
         entryId: { in: entries.map((entry) => entry.id) },
         media: { status: "ready", deletedAt: null },
       },
-      include: { media: true },
+      include: { media: { include: { motion: true } } },
       orderBy: [{ order: "asc" }],
     });
     const mediaByEntry = new Map<string, Array<Record<string, unknown>>>();

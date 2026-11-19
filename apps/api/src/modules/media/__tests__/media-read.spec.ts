@@ -19,7 +19,7 @@ const LARGE_KEY = "ws/2026/11/media/large.webp";
 const THUMB_KEY = "ws/2026/11/media/thumb.webp";
 const NOW = new Date("2026-11-11T00:00:00.000Z");
 
-function mediaRow(overrides: Partial<MediaRecord> = {}): MediaRecord & { location: string } {
+function mediaRow(overrides: Partial<MediaRecord> = {}): MediaRecord {
   return {
     id: MEDIA_ID,
     workspaceId: WORKSPACE_ID,

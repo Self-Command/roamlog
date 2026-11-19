@@ -7,14 +7,17 @@ import {
   UnprocessableEntityException,
 } from "@nestjs/common";
 import {
+  CompleteMediaMotionRequestSchema,
   CompleteMediaRequestSchema,
   encodeCursor,
   MediaListQuerySchema,
+  MediaMotionPresignRequestSchema,
   MediaPresignRequestSchema,
   SetTripCoverRequestSchema,
   TripMediaListQuerySchema,
   UpdateMediaRequestSchema,
   type Media,
+  type MediaMotionPresignResponse,
   type MediaPage,
   type MediaPresignResponse,
   type MediaRead,
@@ -34,13 +37,21 @@ import { StorageService } from "../storage/storage.service.js";
 import {
   assertSafeMediaKey,
   assertSupportedImage,
+  assertSupportedMotion,
   buildMediaKey,
+  buildMotionKey,
   sanitizeFileName,
 } from "./media-rules.js";
-import type { MediaRecord } from "./media-records.js";
+import type { MediaMotionRecord, MediaRecord } from "./media-records.js";
 import { MediaRepository } from "./media.repository.js";
 import { MediaUrlService } from "./media-url.service.js";
-import { presentMedia, presentMediaRead, variantKeys, type MediaVariantView } from "./media.presenter.js";
+import {
+  liveMotion,
+  presentMedia,
+  presentMediaRead,
+  variantKeys,
+  type MediaVariantView,
+} from "./media.presenter.js";
 import { TripCoverService } from "./trip-cover.service.js";
 import {
   assertTripVisible,
@@ -205,6 +216,133 @@ export class MediaService {
     return this.presentWithUrls(updated);
   }
 
+  /**
+   * Presigns the PUT for the paired motion asset of an existing still.
+   *
+   * Same pipeline as {@link presign} — one `StorageService.createPresignedUpload`
+   * call, one signed URL, one `Content-Type` header — with the video content type
+   * and the tighter motion limits (≤50 MB, ≤30 s). The object key is derived from
+   * the media folder on the server; the returned `storageKey` is an echo for the
+   * completion callback, not a client-controlled path.
+   */
+  async presignMotion(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    mediaId: string,
+    rawInput: unknown,
+  ): Promise<MediaMotionPresignResponse> {
+    this.permissions.assertCan(membership.role, "media:presign", "media");
+    const input = parseRequest(MediaMotionPresignRequestSchema, rawInput);
+    const media = await this.requireMedia(membership.workspaceId, mediaId);
+    await this.assertMediaVisible(membership, media);
+    const mime = assertSupportedMotion({
+      mimeType: input.mimeType,
+      sizeBytes: input.size,
+      durationMs: input.durationMs ?? null,
+    });
+    sanitizeFileName(input.fileName);
+    assertSafeMediaKey(media.key);
+
+    const storageKey = buildMotionKey({ mediaKey: media.key, mimeType: mime });
+    const upload = await this.storage.createPresignedUpload(storageKey, mime);
+    await this.repository.transaction(async (tx) => {
+      await this.activities.record(tx, {
+        workspaceId: membership.workspaceId,
+        tripId: media.tripId,
+        actorId: actor.user.id,
+        verb: "media.motion_presigned",
+        entityType: "media",
+        entityId: mediaId,
+        metadata: { mimeType: mime, size: input.size },
+      });
+    });
+
+    return {
+      mediaId,
+      storageKey,
+      uploadUrl: upload.url,
+      method: upload.method,
+      headers: upload.headers,
+      expiresAt: upload.expiresAt,
+    };
+  }
+
+  /**
+   * Completion callback for the motion upload.
+   *
+   * The object is HEADed before the row is written, exactly like a still: the
+   * callback cannot register a motion row that points at nothing, and the stored
+   * size/type come from the object store rather than from the client. The row is
+   * upserted, so retrying a completed upload does not violate the 1:1 unique
+   * constraint.
+   */
+  async completeMotion(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    mediaId: string,
+    rawInput: unknown,
+  ): Promise<MediaRead> {
+    this.permissions.assertCan(membership.role, "media:complete", "media");
+    const input = parseRequest(CompleteMediaMotionRequestSchema, rawInput);
+    const media = await this.requireMedia(membership.workspaceId, mediaId);
+    await this.assertMediaVisible(membership, media);
+    const mime = assertSupportedMotion({
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
+      durationMs: input.durationMs,
+    });
+
+    // The completion callback may only complete the key this media owns.
+    const expectedKey = buildMotionKey({ mediaKey: media.key, mimeType: mime });
+    if (input.storageKey !== expectedKey) {
+      throw new BadRequestException({
+        code: "MEDIA_MOTION_KEY_MISMATCH",
+        message: "The motion object key does not belong to this media.",
+      });
+    }
+
+    const uploaded = await this.storage.completeUpload(expectedKey);
+    if (uploaded.size <= 0) {
+      throw new BadRequestException({
+        code: "MEDIA_MOTION_EMPTY_UPLOAD",
+        message: "The uploaded motion object is empty.",
+      });
+    }
+    // The store's view wins: a client that under-reports its size cannot smuggle
+    // an oversized movie past the 50 MB ceiling.
+    assertSupportedMotion({
+      mimeType: mime,
+      sizeBytes: uploaded.size,
+      durationMs: input.durationMs,
+    });
+
+    const motion = await this.repository.upsertMotion({
+      id: generateUuidV7(),
+      mediaId,
+      storageKey: expectedKey,
+      thumbKey: media.motion?.thumbKey ?? null,
+      mimeType: mime,
+      sizeBytes: uploaded.size,
+      durationMs: input.durationMs,
+      width: null,
+      height: null,
+    });
+
+    await this.repository.transaction(async (tx) => {
+      await this.activities.record(tx, {
+        workspaceId: membership.workspaceId,
+        tripId: media.tripId,
+        actorId: actor.user.id,
+        verb: "media.motion_uploaded",
+        entityType: "media",
+        entityId: mediaId,
+        metadata: { size: uploaded.size, mimeType: mime },
+      });
+    });
+
+    return this.presentReadWithMotion(media, motion);
+  }
+
   async listWorkspace(
     _actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
@@ -356,7 +494,7 @@ export class MediaService {
       data: {
         mediaId,
         workspaceId: membership.workspaceId,
-        keys: variantKeys(current),
+        keys: [...variantKeys(current), ...motionObjectKeys(current)],
       },
       delayMs: DELETE_DELAY_MS,
     });
@@ -497,7 +635,27 @@ export class MediaService {
         }
       }
     }
-    return presentMedia(record, views);
+    const motion = liveMotion(record);
+    const motionView = motion
+      ? {
+          url: (await this.storage.createSignedReadUrl(assertStorageKey(motion.storageKey))).url,
+        }
+      : null;
+    return presentMedia(record, views, motionView);
+  }
+
+  /**
+   * Read projection right after a motion write: sign the still and the video
+   * together so the client gets `livePhoto: true` and a playable `motion.url` in
+   * the same response instead of asking again.
+   */
+  private async presentReadWithMotion(
+    record: MediaRecord,
+    motion: MediaMotionRecord,
+  ): Promise<MediaRead> {
+    const withMotion: MediaRecord = { ...record, motion };
+    const urls = await this.signer().sign(withMotion);
+    return presentMediaRead(withMotion, urls);
   }
 
   private visibilityFilter(membership: WorkspaceMembershipAccess): Record<string, unknown> {
@@ -551,6 +709,15 @@ function parseOptionalCompletion(rawInput: unknown): {
 function assertStorageKey(key: string): string {
   assertSafeMediaKey(key);
   return key;
+}
+
+/** Object keys the delayed cleanup job must purge for a deleted Live Photo. */
+function motionObjectKeys(record: MediaRecord): string[] {
+  const motion = liveMotion(record);
+  if (!motion) {
+    return [];
+  }
+  return motion.thumbKey ? [motion.storageKey, motion.thumbKey] : [motion.storageKey];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
