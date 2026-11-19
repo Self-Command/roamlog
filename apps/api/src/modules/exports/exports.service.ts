@@ -134,7 +134,7 @@ export class ExportsService {
     const visible = hasMore ? records.slice(0, query.limit) : records;
     const last = visible.at(-1);
     return {
-      items: visible.map(presentExport),
+      items: visible.map((record) => presentExport(record)),
       nextCursor:
         hasMore && last
           ? encodeCursor({ id: last.id, createdAt: last.createdAt })
@@ -148,10 +148,10 @@ export class ExportsService {
     await this.assertCanRead(actor, record);
     if (isExportExpired(record)) {
       await this.repository.markExpired(exportId);
-      return presentExportDetail(
-        { ...record, status: "expired", error: "Export expired." },
-        null,
-      );
+      return presentExportDetail(record, null, {
+        status: "expired",
+        error: "Export expired.",
+      });
     }
     if (!canDownloadExport(record)) {
       return presentExportDetail(record, null);
