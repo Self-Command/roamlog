@@ -1,7 +1,6 @@
 import {
   Activity,
   Building2,
-  FileText,
   Image,
   LayoutDashboard,
   ListChecks,
@@ -40,10 +39,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   },
   {
     label: "内容与资产",
-    items: [
-      { href: "/admin/content", label: "内容审核", icon: FileText },
-      { href: "/admin/media", label: "媒体库", icon: Image },
-    ],
+    items: [{ href: "/admin/media", label: "媒体库", icon: Image }],
   },
   {
     label: "数据与运营",
