@@ -47,12 +47,11 @@ export function testSettings(overrides: Partial<PlacesSettings> = {}): PlacesSet
     redisTimeoutMs: 500,
     defaultLimit: 6,
     /**
-     * `en` keeps the shared fixture on the global route: since the Tencent
-     * routing landed, `lang: "zh"` (the production default) routes every query to
-     * mainland China. Tests that exercise that route set `lang: "zh"`, send a
-     * Han keyword or pass `defaultLang: "zh"` explicitly.
+     * The production default. `lang` is a display preference only: it must not
+     * decide the route, so the shared fixture keeps the real value and every
+     * provider test below exercises the Chinese UI's actual configuration.
      */
-    defaultLang: "en",
+    defaultLang: "zh",
     ...overrides,
   };
 }

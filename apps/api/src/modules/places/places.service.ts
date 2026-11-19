@@ -35,11 +35,16 @@ const HAN_SCRIPT = /\p{Script=Han}/u;
 /**
  * Decides whether a query belongs to the mainland-China route.
  *
- * Three documented signals, any of which is enough:
+ * Two geographic signals, either of which is enough:
  * - `country=CN` — the caller told us the place is in China;
- * - `lang=zh` — the UI is Chinese, so the door-plate-level Chinese source is the
- *   right one (`places.lang` defaults to `zh`);
  * - the keyword contains Han characters — the user is typing a Chinese address.
+ *
+ * `lang` is deliberately **not** a signal: it only states the display-language
+ * preference, and `places.lang` defaults to `zh`. Reading it as "the place is in
+ * China" sent *every* query typed in the Chinese UI — `Paris`, `London`, even
+ * `东京` — to Tencent, whose coverage ends at the mainland border; searching
+ * overseas destinations in Chinese is a main flow of this travel journal, and it
+ * answered with an empty list plus `degraded`.
  *
  * A Chinese query must never be answered by a global gazetteer: Photon returns
  * wrong house numbers on the same street (`北京市朝阳区建国路87号` → `建国路75号`),
@@ -47,10 +52,11 @@ const HAN_SCRIPT = /\p{Script=Han}/u;
  */
 export function isChinaQuery(query: {
   readonly q: string;
+  /** Accepted so a parsed query object can be passed whole; never a signal. */
   readonly lang?: string | undefined;
   readonly country?: string | undefined;
 }): boolean {
-  return query.country === "CN" || query.lang === "zh" || HAN_SCRIPT.test(query.q);
+  return query.country === "CN" || HAN_SCRIPT.test(query.q);
 }
 
 /**

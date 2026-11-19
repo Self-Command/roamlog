@@ -35,9 +35,12 @@ function storedPlaces(
   return {
     "places.provider": "geoapify",
     "places.apiKey": null,
-    // `en` keeps these stored-settings tests on the global route: since the
-    // Chinese route landed, `places.lang=zh` sends every query to Tencent.
-    "places.lang": "en",
+    /**
+     * The production default. `places.lang` is a display preference and no
+     * longer chooses the route, so these tests keep the real value; their
+     * keywords are romanized and take the global route on their own.
+     */
+    "places.lang": "zh",
     "places.limit": 6,
     "places.cacheTtlSeconds": 900,
     "places.dailyQuota": 3_000,
@@ -154,8 +157,8 @@ describe("PlacesSettingsResolver", () => {
     const { service, resolver } = harness(new Error("db down"), logger);
 
     const settings = await resolver.resolve();
-    // `lang: "en"` keeps this on the global route; the environment fallback this
-    // test exercises is about the provider, not about the language default.
+    // The keyword is romanized, so the route is global whatever the stored
+    // language preference is; this test is about the provider fallback.
     const response = await service.search({ q: "Kyoto", lang: "en" });
 
     expect(settings.provider).toBe("photon");

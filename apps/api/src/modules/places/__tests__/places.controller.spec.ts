@@ -154,22 +154,25 @@ describe("GET /v1/places/search", () => {
     const { app } = await createApp({ authenticated: true });
 
     await request(app.getHttpServer()).get("/v1/places/search?q=paris").expect(200);
-    // The fixture's stored `places.lang` is `en`, so an explicit `lang=en` shares
-    // the first request's cache key and is served from cache.
+    // The fixture's `places.lang` default is `zh`, so the first request already
+    // forwarded `lang=zh` and an explicit `lang=zh` shares its cache key.
     const cached = await request(app.getHttpServer())
-      .get("/v1/places/search?q=paris&lang=en")
-      .expect(200);
-    // `lang=zh` is a mainland-China query: it must reach Tencent, not Photon.
-    const chinese = await request(app.getHttpServer())
       .get("/v1/places/search?q=paris&lang=zh")
+      .expect(200);
+    // Han script is the keyword signal: this request must reach Tencent, not
+    // Photon. `lang=zh` alone is not enough to pick the mainland source.
+    const chinese = await request(app.getHttpServer())
+      .get(`/v1/places/search?q=${encodeURIComponent("建国路87号")}&lang=zh`)
       .expect(200);
 
     const first = firstFetchCall(fetchMock).url;
     expect(first.searchParams.get("limit")).toBe("6");
-    expect(first.searchParams.get("lang")).toBe("en");
+    // The client forwards `lang` only where the upstream supports it (`en`);
+    // `zh` is a display preference and is dropped before the Photon request.
+    expect(first.searchParams.get("lang")).toBeNull();
     const tencentCall = (fetchMock.mock.calls[1] as unknown as [URL])[0];
     expect(tencentCall.hostname).toBe("tencent.example.test");
-    expect(tencentCall.searchParams.get("keyword")).toBe("paris");
+    expect(tencentCall.searchParams.get("keyword")).toBe("建国路87号");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(cached.body.cached).toBe(true);
     expect(chinese.body.provider).toBe("tencent");

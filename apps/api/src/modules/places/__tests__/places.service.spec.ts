@@ -44,6 +44,7 @@ function setup(
   cache: PlacesCacheService;
   service: PlacesService;
   photon: PhotonClient;
+  geoapify: GeoapifyClient;
   tencent: TencentClient;
 } {
   const settings = options.resolved ?? testSettings(options.settings);
@@ -56,17 +57,18 @@ function setup(
     source,
   );
   const photon = new PhotonClient(source);
+  const geoapify = new GeoapifyClient(source);
   const tencent = new TencentClient(source);
   const service = new PlacesService(
     cache,
-    new GeoapifyClient(source),
+    geoapify,
     photon,
     tencent,
     new PlacesQuotaService(redis as unknown as RedisService, asLogger(logger), source),
     asLogger(logger),
     source,
   );
-  return { settings, logger, redis, cache, service, photon, tencent };
+  return { settings, logger, redis, cache, service, photon, geoapify, tencent };
 }
 
 /** Dispatches by upstream host so a fallback test can fail only the primary. */
@@ -423,11 +425,12 @@ describe("PlacesService", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { service, redis } = setup();
 
-    // `lang: "zh"` is a China query and only ever reaches Tencent; `lang: "en"`
-    // keeps the global route, whose second call is served from cache.
+    // Han script picks the China route and only ever reaches Tencent; a
+    // romanized keyword keeps the global route, whatever `lang` says — the
+    // fixture's `zh` default no longer moves Paris to the mainland source.
+    await service.search({ q: "建国路87号", limit: 6, lang: "zh" });
     await service.search({ q: "Paris", limit: 6, lang: "zh" });
-    await service.search({ q: "Paris", limit: 6, lang: "en" });
-    await service.search({ q: "Paris", limit: 6, lang: "en" });
+    await service.search({ q: "Paris", limit: 6, lang: "zh" });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const hosts = (fetchMock.mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
@@ -520,6 +523,90 @@ describe("PlacesService", () => {
     const response = await service.search({ q: "France", limit: 2 });
 
     expect(response.items).toHaveLength(2);
+  });
+});
+
+/**
+ * The route signals, pinned independently of the China route's behaviour.
+ *
+ * `places.lang` defaults to `zh`, so reading it as a geographic signal sent
+ * every search typed in the Chinese UI — `Paris` included — to a source that
+ * only covers the mainland, and overseas destinations are a main flow here.
+ */
+describe("PlacesService route signals", () => {
+  it("sends a Chinese-UI search for Paris to Geoapify and never calls Tencent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
+    vi.stubGlobal("fetch", fetchMock);
+    const { service, tencent } = setup({ settings: { provider: "geoapify" } });
+    const tencentSuggest = vi.spyOn(tencent, "suggest");
+
+    const response = await service.search({ q: "Paris", limit: 3, lang: "zh" });
+
+    expect(response.provider).toBe("geoapify");
+    expect(response.degraded).toBe(false);
+    expect(response.items).toHaveLength(1);
+    expect(tencentSuggest).not.toHaveBeenCalled();
+    const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
+    expect(hosts).toEqual(["geoapify.example.test"]);
+  });
+
+  /**
+   * Deviation from the requested test list, reported to the requester.
+   *
+   * `东京` is Han script, so `country === "CN" || HAN_SCRIPT.test(q)` routes it
+   * to Tencent — exactly like `京都`. The requested pair "`lang=zh` + `东京` →
+   * Geoapify" and "no lang + `京都` → Tencent" cannot both hold: the two
+   * keywords differ in meaning, not in script, and the agreed fix uses only
+   * `country` and Han script. Separating them would need a signal the spec
+   * explicitly forbids inventing (a China locality list / address-shape rule),
+   * so this test pins today's real behaviour instead of a false expectation.
+   * Overseas place names written in Han still reach the China route.
+   */
+  it("still routes `东京` to Tencent, because Han script is the only keyword signal", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
+    const { service, tencent } = setup({ settings: { provider: "geoapify" } });
+    const tencentSuggest = vi.spyOn(tencent, "suggest");
+
+    const response = await service.search({ q: "东京", limit: 3, lang: "zh" });
+
+    expect(tencentSuggest).toHaveBeenCalledTimes(1);
+    expect(response.provider).toBe("tencent");
+  });
+
+  it("routes a Han street address from the Chinese UI to Tencent", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
+    const { service, geoapify } = setup({ settings: { provider: "geoapify" } });
+    const geoapifySearch = vi.spyOn(geoapify, "search");
+
+    const response = await service.search({ q: "建国路87号", limit: 3, lang: "zh" });
+
+    expect(response.provider).toBe("tencent");
+    expect(response.degraded).toBe(false);
+    expect(geoapifySearch).not.toHaveBeenCalled();
+    expect((vi.mocked(fetch).mock.calls[0] as unknown as [URL])[0].hostname).toBe(
+      "tencent.example.test",
+    );
+  });
+
+  it("routes country=CN even when the keyword is romanized", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
+    const { service, geoapify } = setup({ settings: { provider: "geoapify" } });
+    const geoapifySearch = vi.spyOn(geoapify, "search");
+
+    const response = await service.search({ q: "Beijing", limit: 3, country: "CN" });
+
+    expect(response.provider).toBe("tencent");
+    expect(geoapifySearch).not.toHaveBeenCalled();
+  });
+
+  it("routes a Han keyword to Tencent when the caller omits lang entirely", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
+    const { settings, service } = setup({ settings: { provider: "geoapify" } });
+
+    const response = await service.search({ q: "京都", limit: 3 });
+
+    expect(settings.defaultLang).toBe("zh");
+    expect(response.provider).toBe("tencent");
   });
 });
 
