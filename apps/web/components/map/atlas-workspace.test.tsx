@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -98,6 +98,37 @@ describe("AtlasWorkspace data truthfulness", () => {
     expect(screen.getByText(/另有 1 个停靠点缺少经纬度/)).toBeInTheDocument();
     expect(screen.queryByTestId("world-map")).not.toBeInTheDocument();
     expect(screen.queryByText(/9 个国家/)).not.toBeInTheDocument();
+  });
+
+  it("offers a flat/globe switch without leaving the map route", async () => {
+    const user = userEvent.setup();
+    harness.adapter = createFakeAdapter({
+      trips: trips(),
+      stops: [
+        makeStop({
+          id: "0198f000-0000-7000-8000-000000000046",
+          tripId: TRIP_A,
+          lat: 35.0116,
+          lng: 135.7681,
+        }),
+      ],
+    });
+
+    renderWithQuery(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
+    await screen.findByTestId("world-map");
+
+    const group = screen.getByRole("group", { name: "地图视图切换" });
+    const flatButton = within(group).getByRole("button", { name: "平面" });
+    const globeButton = within(group).getByRole("button", { name: "地球" });
+    expect(flatButton).toHaveAttribute("aria-pressed", "true");
+    expect(globeButton).toHaveAttribute("aria-pressed", "false");
+
+    // The switch is a real pair of buttons, so it is reached by Tab and
+    // activated by Enter/Space without a pointer.
+    flatButton.focus();
+    expect(flatButton).toHaveFocus();
+    await user.tab();
+    expect(globeButton).toHaveFocus();
   });
 
   it("filters the trip sidebar by real search text", async () => {

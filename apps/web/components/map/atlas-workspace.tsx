@@ -20,8 +20,9 @@ import {
   MapPin,
   Search,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   formatDateRange,
@@ -31,6 +32,23 @@ import {
 
 import { useAtlasData } from "./atlas-data";
 import { AtlasMap, type AtlasPoint } from "./atlas-map";
+import type { GlobePoint } from "./globe-view";
+
+/**
+ * The globe is map code plus MapLibre's globe projection, so it is only
+ * downloaded when the view is actually used and never prerendered on the
+ * server (WebGL has no server implementation).
+ */
+const GlobeView = dynamic(() => import("./globe-view"), {
+  ssr: false,
+  loading: () => (
+    <div role="status" className="flex min-h-80 items-center justify-center bg-black">
+      <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
+        LOADING GLOBE…
+      </p>
+    </div>
+  ),
+});
 
 function countryLabel(code: string | undefined): string {
   if (!code) return "—";
@@ -70,7 +88,29 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
   const [status, setStatus] = useState("all");
   const [year, setYear] = useState("all");
   const [view, setView] = useState<"map" | "list">("map");
+  const [mapProjection, setMapProjection] = useState<"flat" | "globe">("flat");
+  const [weakDevice, setWeakDevice] = useState(false);
+  const [globeFailed, setGlobeFailed] = useState(false);
   const [selectedId, setSelectedId] = useState("");
+
+  // The globe is offered as the overview only when the device can carry it.
+  // Weak devices stay on the existing 2D map (see the hint above the map).
+  useEffect(() => {
+    const reduced =
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        : false;
+    const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+    const lowMemory = typeof deviceMemory === "number" && deviceMemory < 4;
+    setWeakDevice(reduced || lowMemory);
+    if (reduced || lowMemory) return;
+    try {
+      const canvas = document.createElement("canvas");
+      if (canvas.getContext("webgl2")) setMapProjection("globe");
+    } catch {
+      // Keep the flat view; the toggle still lets the user try the globe.
+    }
+  }, []);
 
   const years = useMemo(
     () =>
@@ -139,6 +179,13 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
   const totalDays = filteredTrips.reduce((sum, trip) => sum + trip.durationDays, 0);
   const unmappedCount = visibleStopCount - mappedStops.length;
   const coverUrl = selected?.cover?.thumbUrl ?? selected?.cover?.url ?? null;
+
+  // Hand-off from the globe: keep the trip selected, then reuse the existing
+  // 2D atlas map on the same route.
+  function enterFlatMap(point: GlobePoint) {
+    if (point.tripId) setSelectedId(point.tripId);
+    setMapProjection("flat");
+  }
 
   if (isLoading) {
     return <AtlasLoading />;
@@ -221,22 +268,77 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="surface-card overflow-hidden">
-          <div className="flex h-14 items-center gap-3 border-b border-hairline px-4">
+          <div className="flex min-h-14 flex-wrap items-center gap-3 border-b border-hairline px-4 py-2">
             <span className="size-1.5 rounded-pill bg-accent-orange" />
             <p className="type-eyebrow text-body">WORLD / FOOTPRINT</p>
-            <span className="ml-auto hidden font-mono text-[8px] uppercase tracking-[0.08em] text-stone sm:inline">
+            <span className="hidden font-mono text-[8px] uppercase tracking-[0.08em] text-stone sm:inline">
               {points.length} STOPS · REAL COORDINATES
             </span>
+            <div
+              role="group"
+              aria-label="地图视图切换"
+              className="ml-auto flex items-center gap-1 rounded-control border border-hairline-strong bg-surface-1 p-1"
+            >
+              <Button
+                type="button"
+                variant={mapProjection === "flat" ? "subtle" : "ghost"}
+                size="sm"
+                className="border-0"
+                aria-pressed={mapProjection === "flat"}
+                onClick={() => setMapProjection("flat")}
+              >
+                <MapIcon aria-hidden="true" />
+                平面
+              </Button>
+              <Button
+                type="button"
+                variant={mapProjection === "globe" ? "subtle" : "ghost"}
+                size="sm"
+                className="border-0"
+                aria-pressed={mapProjection === "globe"}
+                onClick={() => setMapProjection("globe")}
+              >
+                <Globe2 aria-hidden="true" />
+                地球
+              </Button>
+            </div>
           </div>
 
           {view === "map" ? (
             <div className="relative">
+              {weakDevice && mapProjection === "flat" ? (
+                <p
+                  role="status"
+                  className="border-b border-hairline bg-surface-2 px-4 py-2 text-[10px] leading-5 text-muted"
+                >
+                  已按低内存或减少动效设置默认使用平面视图；可切换到地球。
+                </p>
+              ) : null}
+              {globeFailed ? (
+                <p
+                  role="status"
+                  className="border-b border-hairline bg-surface-2 px-4 py-2 text-[10px] leading-5 text-muted"
+                >
+                  地球视图加载失败，已回到平面地图。
+                </p>
+              ) : null}
               {points.length > 0 ? (
-                <AtlasMap
-                  points={points}
-                  selectedTripId={selected?.id}
-                  onSelectTrip={setSelectedId}
-                />
+                mapProjection === "globe" ? (
+                  <GlobeView
+                    points={points}
+                    onEnterMap={enterFlatMap}
+                    onError={() => {
+                      setGlobeFailed(true);
+                      setMapProjection("flat");
+                    }}
+                  />
+                ) : (
+                  <AtlasMap
+                    points={points}
+                    selectedTripId={selected?.id}
+                    onSelectTrip={setSelectedId}
+                  />
+                )
               ) : (
                 <div className="flex min-h-80 items-center justify-center p-6">
                   <EmptyState
