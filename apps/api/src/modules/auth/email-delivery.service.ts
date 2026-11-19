@@ -1,6 +1,8 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 
 import { AppConfigService } from "../../config/app-config.service.js";
+import { MailService } from "../email/mail.service.js";
+import { MailSettingsConsumer } from "../settings/mail-settings.consumer.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 
@@ -24,16 +26,6 @@ interface MailInput {
   html: string;
   text: string;
   userId?: string;
-}
-
-interface SmtpTransport {
-  sendMail(input: {
-    from: string;
-    to: string;
-    subject: string;
-    html: string;
-    text: string;
-  }): Promise<{ messageId?: string }>;
 }
 
 function escapeHtml(value: string): string {
@@ -60,15 +52,26 @@ function emailShell(title: string, body: string): string {
   ].join("");
 }
 
+/**
+ * Transactional templates and the `EmailLog` audit trail.
+ *
+ * The transport itself lives in `MailService`, which reads the admin `mail.*`
+ * settings (DB > env > default). This service only renders templates, records
+ * the attempt, and reports the delivery outcome.
+ */
 @Injectable()
 export class EmailDeliveryService {
-  private smtpTransport: SmtpTransport | undefined;
-  private smtpLoadFailed = false;
+  private fallbackMail: MailService | undefined;
 
   constructor(
-    @Inject(AppConfigService) private readonly config: AppConfigService,
+    @Inject(AppConfigService) _config: AppConfigService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
+    /**
+     * Optional so `scripts/bootstrap-admin.ts`, which constructs this service
+     * by hand outside Nest, keeps working with an environment-only transport.
+     */
+    @Optional() @Inject(MailService) private readonly mail?: MailService,
   ) {}
 
   async sendVerificationEmail(user: MailUser, url: string): Promise<void> {
@@ -115,43 +118,23 @@ export class EmailDeliveryService {
     });
   }
 
-  private async getSmtpTransport(): Promise<SmtpTransport | undefined> {
-    if (!this.config.smtpHost || this.smtpLoadFailed) {
-      return undefined;
-    }
-    if (this.smtpTransport) {
-      return this.smtpTransport;
-    }
+  /** True when the admin settings/env resolve to a usable transport. */
+  async isConfigured(): Promise<boolean> {
+    return this.mailer.isConfigured();
+  }
 
-    try {
-      const packageName = "nodemailer";
-      const { createTransport } = (await import(packageName)) as {
-        createTransport: (options: Record<string, unknown>) => SmtpTransport;
-      };
-      this.smtpTransport = createTransport({
-        host: this.config.smtpHost,
-        port: this.config.smtpPort,
-        secure: false,
-        ...(this.config.smtpUser && this.config.smtpPassword
-          ? {
-              auth: {
-                user: this.config.smtpUser,
-                pass: this.config.smtpPassword,
-              },
-            }
-          : {}),
-      });
-      return this.smtpTransport;
-    } catch (error) {
-      this.smtpLoadFailed = true;
-      this.logger.warn(
-        {
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        },
-        "email.smtp_adapter_unavailable",
-      );
-      return undefined;
+  private get mailer(): MailService {
+    if (this.mail) {
+      return this.mail;
     }
+    // Hand-constructed callers (bootstrap script) get environment-only mail.
+    if (!this.fallbackMail) {
+      this.fallbackMail = new MailService(
+        new MailSettingsConsumer(undefined, this.logger),
+        this.logger,
+      );
+    }
+    return this.fallbackMail;
   }
 
   private async send(input: MailInput): Promise<void> {
@@ -167,78 +150,44 @@ export class EmailDeliveryService {
     });
 
     try {
-      const providerId = await this.deliver(input, emailLog.id);
+      const result = await this.mailer.send({
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+        text: input.text,
+        // Reuses the EmailLog id so a retry is idempotent at the provider.
+        idempotencyKey: emailLog.id,
+      });
       await this.prisma.client.emailLog.update({
         where: { id: emailLog.id },
         data: {
           status: "sent",
-          providerId: providerId?.slice(0, 200) ?? null,
+          providerId: result.providerId?.slice(0, 200) ?? null,
         },
       });
     } catch (error) {
+      const code =
+        typeof error === "object" && error !== null && "code" in error
+          ? String(error.code).slice(0, 64)
+          : "UNKNOWN";
       await this.prisma.client.emailLog
         .update({
           where: { id: emailLog.id },
           data: {
             status: "failed",
-            error: "Email delivery failed",
+            error: code === "NOT_CONFIGURED" ? "mail_not_configured" : `mail_${code.toLowerCase()}`,
           },
         })
         .catch(() => undefined);
       this.logger.error(
         {
+          event: "email.delivery_failed",
           template: input.template,
-          errorName: error instanceof Error ? error.name : "UnknownError",
-          errorCode:
-            typeof error === "object" && error !== null && "code" in error
-              ? String(error.code).slice(0, 64)
-              : undefined,
+          code,
         },
         "email.delivery_failed",
       );
-      throw new Error("Email delivery failed", { cause: error });
+      throw error;
     }
-  }
-
-  private async deliver(input: MailInput, deliveryId: string): Promise<string | undefined> {
-    const smtp = await this.getSmtpTransport();
-    if (smtp) {
-      const result = await smtp.sendMail({
-        from: this.config.emailFrom,
-        to: input.to,
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-      });
-      return result.messageId;
-    }
-
-    const apiKey = this.config.resendApiKey;
-    if (!apiKey || apiKey.includes("placeholder")) {
-      throw new Error("No email delivery provider is configured");
-    }
-
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-        "idempotency-key": deliveryId,
-      },
-      body: JSON.stringify({
-        from: this.config.emailFrom,
-        to: [input.to],
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Resend rejected the email with status ${response.status}`);
-    }
-
-    const payload = (await response.json()) as { id?: unknown };
-    return typeof payload.id === "string" ? payload.id : undefined;
   }
 }

@@ -12,6 +12,7 @@ import { CommentsModule } from "./modules/comments/comments.module.js";
 import { EntriesModule } from "./modules/entries/entries.module.js";
 import { ExpensesModule } from "./modules/expenses/expenses.module.js";
 import { ExportsModule } from "./modules/exports/exports.module.js";
+import { EmailModule } from "./modules/email/mail.module.js";
 import { FeatureFlagsModule } from "./modules/feature-flags/feature-flags.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
 import { IdempotencyModule } from "./modules/idempotency/idempotency.module.js";
@@ -43,6 +44,7 @@ import { WorkspacesModule } from "./modules/workspaces/workspaces.module.js";
     RedisModule,
     StorageModule,
     IdempotencyModule,
+    EmailModule,
     AuthModule,
     AuditModule,
     ActivitiesModule,
