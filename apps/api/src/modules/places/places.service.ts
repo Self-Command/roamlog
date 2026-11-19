@@ -85,6 +85,28 @@ export function isChinaQuery(query: {
 }
 
 /**
+ * Whether Photon may be consulted as the Geoapify fallback.
+ *
+ * Photon does the right thing for romanized queries — `Paris`, `Tokyo`,
+ * `5th Avenue` — which is exactly why it stays as the fallback. It is
+ * **unsuitable for a Han-script query**, because it has no `lang=zh` support
+ * (its public instance answers the forwarded `lang` with a 400, see
+ * `photon.client.ts`) and its lexical match then resolves a Han place name
+ * against the Han names its index holds, which come overwhelmingly from OSM
+ * data inside China. Measured 2026-11-19: `东京` → a village called 东京 in
+ * Zhejiang/Heilongjiang instead of Tokyo, while Geoapify answers the same
+ * query with 东京都/日本 (35.677, 139.764). A wrong mainland coordinate is
+ * worse than an empty list, so for a Han query a Geoapify failure degrades
+ * straight to `map_pick` and Photon is never called.
+ *
+ * This is one hard condition — "does the query contain a Han character" — and
+ * deliberately not a heuristic that inspects a result for a plausible country.
+ */
+export function allowsPhotonFallback(q: string): boolean {
+  return !HAN_SCRIPT.test(q);
+}
+
+/**
  * Applies `places.limit` / `places.lang` only when the caller omitted them.
  * An explicit query value always wins; the contract then validates the range.
  */
@@ -113,8 +135,13 @@ function withSettingsDefaults(rawQuery: unknown, settings: PlacesSettings): unkn
  *   response is `200 { items: [], degraded: true, fallback: "map_pick" }` so the
  *   client offers "pick on the map" instead of a wrong house number.
  * - **Global** → `settings.provider` (`geoapify` by default, `photon` as the
- *   rollback switch) with the existing Photon fallback when `fallbackToPhoton`.
- *   Geoapify is never called once its Redis daily cap is exhausted.
+ *   rollback switch). When Geoapify fails and `fallbackToPhoton` is on, Photon
+ *   answers — but only for a query without Han script (`allowsPhotonFallback`).
+ *   A Han query degrades to `200 { items: [], degraded: true, fallback:
+ *   "map_pick" }` instead, because Photon resolves Han names against the
+ *   Chinese OSM names in its index and returns a same-named mainland village
+ *   for a query such as `东京`. Geoapify is never called once its Redis daily
+ *   cap is exhausted.
  *
  * Shared behaviour:
  * - When no source produces items the response is `200 { items: [], degraded:
@@ -177,7 +204,7 @@ export class PlacesService {
     let items: Place[] = [];
     let servedBy: PlacesResponseProvider = primary;
     let degraded = false;
-    let fallbackUsed = false;
+    let photonFallbackServed = false;
     let fallback: "map_pick" | undefined;
     let primaryFailure: UpstreamFailure | undefined;
     let fallbackFailure: UpstreamFailure | undefined;
@@ -220,6 +247,11 @@ export class PlacesService {
       if (!quota.allowed) {
         primaryFailure = { reason: "quota_exceeded" };
         degraded = true;
+        // Quota is checked before the upstream call, so a Han query never even
+        // reaches Photon here; the client gets `map_pick`.
+        if (!allowsPhotonFallback(query.q)) {
+          fallback = "map_pick";
+        }
       } else {
         const outcome = await this.geoapify.search(request);
         upstreamDurationMs += outcome.durationMs;
@@ -250,23 +282,36 @@ export class PlacesService {
     }
 
     if (!china && degraded && primary === "geoapify" && settings.fallbackToPhoton) {
-      const fallbackOutcome = await this.photon.search(request);
-      upstreamDurationMs += fallbackOutcome.durationMs;
-      if (fallbackOutcome.ok) {
-        items = fallbackOutcome.items;
-        servedBy = "photon";
-        fallbackUsed = true;
+      if (!allowsPhotonFallback(query.q)) {
+        // A Han-script query. Photon would answer it with a same-named Chinese
+        // village, so it is skipped and the client gets `map_pick` instead.
+        fallback = "map_pick";
       } else {
-        fallbackFailure = {
-          reason: fallbackOutcome.reason,
-          ...(fallbackOutcome.httpStatus === undefined
-            ? {}
-            : { httpStatus: fallbackOutcome.httpStatus }),
-        };
+        const fallbackOutcome = await this.photon.search(request);
+        upstreamDurationMs += fallbackOutcome.durationMs;
+        if (fallbackOutcome.ok) {
+          items = fallbackOutcome.items;
+          servedBy = "photon";
+          photonFallbackServed = true;
+        } else {
+          fallbackFailure = {
+            reason: fallbackOutcome.reason,
+            ...(fallbackOutcome.httpStatus === undefined
+              ? {}
+              : { httpStatus: fallbackOutcome.httpStatus }),
+          };
+        }
       }
     }
 
     const capped = items.slice(0, query.limit);
+    // Which fallback the client should see: the China route's `map_pick`, an
+    // explicit skip of Photon, or the Photon answer that served the request.
+    const reportedFallback = china || fallback !== undefined
+      ? (fallback ?? null)
+      : photonFallbackServed
+        ? "photon"
+        : null;
     const response = PlaceSearchResponseSchema.parse({
       items: capped,
       provider: degraded && capped.length === 0 ? primary : servedBy,
@@ -305,7 +350,7 @@ export class PlacesService {
           ...(primaryFailure?.upstreamStatus === undefined
             ? {}
             : { upstreamStatus: primaryFailure.upstreamStatus }),
-          fallback: china ? (fallback ?? null) : fallbackUsed ? "photon" : null,
+          fallback: reportedFallback,
           ...(fallbackFailure === undefined
             ? {}
             : {
