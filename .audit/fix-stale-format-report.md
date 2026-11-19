@@ -213,3 +213,118 @@ Failed:    @roamlog/api#lint
 1. 由 `apps/web/components/media` 的 owner 把 `cover-upload-validation.ts` 的 `formatBytes` 改为 re-export `@/lib/format-bytes`，彻底去重（`index.ts` 的 re-export 可保留）。
 2. 给 `apps/api` 开一个同源任务：`media-rules.ts` 的错误文案改十进制（"52.4 MB"），并统一 `MAX_MEDIA_BYTES` 与 `media.maxUploadBytes` 的口径（25,000,000 vs 25 MiB）。
 3. 等 `LINT_FIX_API` 收尾后重跑 `pnpm lint` 应回到 0 error。
+
+# 第二轮（追加授权）：两处收口
+
+父 Agent 授权后追加。commit `fix(media): share one byte formatter and match the server copy to its constants`。
+
+## 变更文件
+
+| 文件 | 说明 |
+|---|---|
+| `apps/web/components/media/cover-upload-validation.ts` | 删本地 `formatBytes`，改为再导出 `@/lib/format-bytes` |
+| `apps/api/src/modules/media/media-rules.ts` | 新增十进制 `formatMegabytes`；动图文案改为由常量计算；`MAX_MEDIA_BYTES` 加注释 |
+| `apps/api/src/modules/media/__tests__/media-rules.spec.ts` | +3 个测试（4 → 7） |
+| `.audit/fix-stale-format-report.md` | 本文件 |
+
+`apps/web/components/media/index.ts:16` 的 re-export **未改动**，对外 API 不变。
+
+## 1) web 去重
+
+```diff
+-export function formatBytes(bytes: number): string { ... }
++export { formatBytes };
+```
+
+本地那份 15 行实现被删除，改为 `import { formatBytes } from "@/lib/format-bytes"` + `export { formatBytes }`（同一 import，避免 `import/no-duplicates`）。`cover-upload-validation.test.tsx` 从 `./cover-upload-validation` 导入 `formatBytes` 的 8 个测试**无需改动**即通过——证明再导出对调用方完全透明。
+
+## 2) 服务端口径对齐
+
+```diff
+-message: "Live Photo motion clips must be between 1 byte and 50 MB.",
++message: `Live Photo motion clips must be between 1 byte and ${formatMegabytes(MAX_MOTION_BYTES)}.`,
+```
+
+52,428,800 → **"52.4 MB"**。数字由常量计算，常量变了文案自动跟着变。
+
+### 服务端为何仍用二进制常量（父 Agent 要求写清）
+
+`MAX_MOTION_BYTES = 50 * 1024 * 1024 = 52,428,800` 与 `MAX_MEDIA_BYTES = 25 * 1024 * 1024 = 26,214,400` **保持不变**，理由：
+
+1. **改常量是行为变更，改文案只是显示变更。** 这两个常量是真实的上传闸门（`sizeBytes > MAX_MOTION_BYTES` 直接 400）。把它们改成十进制会让服务端**收紧**约 4.8%（52.4 MB → 50 MB、26.2 MB → 25 MB），已在队列/在途的上传会被新拒。本任务只统一"用户看到的数字"，不应顺手改闸门。
+2. **`MAX_MEDIA_BYTES` 的 1.2 MB 差是刻意的收紧容差，不是笔误。** 浏览器按 settings 的 25,000,000 先拦，服务端留到 26,214,400，用户不会遇到"客户端放过、服务端才报错"的割裂。已在常量上补注释固化这一点。
+3. **两者必须由 `@roamlog/contracts` 统一，而不是跨 app import。** web 与 api 是不可互相 import 的独立部署单元；真要共享只能是 `packages/**`（本任务禁区），所以服务端保留一份 `formatMegabytes`。这是**跨进程边界的合理重复**，与 web 内部那两处"同 app 内重复实现"性质不同。
+
+### 判断：图片文案**不**由 `MAX_MEDIA_BYTES` 计算
+
+若把 `"Images must be between 1 byte and 25 MB."` 也改成由常量计算，会得到 **"26.2 MB"** —— 反而制造出与客户端「25 MB」的新数字不一致，正是本任务要消灭的问题。因此：**动图**文案由常量计算（它本来就该是 52.4），**图片**文案维持「25 MB」（= settings 的 25,000,000 = 客户端实际告知值），并在 `MAX_MEDIA_BYTES` 注释与测试里把这个决定钉住，防止后人"顺手统一"成 26.2。
+
+## 验证（原始输出）
+
+### web 定向（`components/media` + `lib/image` + `lib/format-bytes`）
+
+```
+ ✓ lib/image/live-photo-pair.test.ts (10 tests)
+ ✓ lib/image/live-photo-motion.test.ts (7 tests)
+ ✓ lib/format-bytes.test.ts (4 tests)
+ ✓ lib/image/compress-image.test.ts (17 tests)
+ ✓ lib/image/use-image-compression.test.ts (5 tests)
+ ✓ components/media/live-photo.test.tsx (10 tests)
+ ✓ components/media/use-live-photo-upload.test.tsx (4 tests)
+ ✓ components/media/cover-upload-validation.test.tsx (8 tests)
+ ✓ components/media/cover-uploader.test.tsx (15 tests)
+ ✓ components/media/use-cover-upload.test.tsx (20 tests)
+ Test Files  10 passed (10)
+      Tests  100 passed (100)
+```
+
+### api 定向（`src/modules/media`）
+
+```
+ ✓ media-bucket.spec.ts (2)
+ ✓ media-motion.spec.ts (8)
+ ✓ media-read.spec.ts (11)
+ ✓ media-url.service.spec.ts (11)
+ ✓ trip-cover-projection.spec.ts (8)
+ ✓ media-rules.spec.ts (7)      ← 4 → 7
+ Test Files  6 passed (6)
+      Tests  47 passed (47)
+```
+
+### `pnpm lint --force`（必须 --force，绕过 turbo 缓存）
+
+```
+Cached: 0 cached, 11 total          ← 确认未走缓存
+Tasks: 10 successful, 11 total
+Failed: @roamlog/api#lint
+@roamlog/api:lint: src/modules/trips/__tests__/trips-origin-address.spec.ts
+@roamlog/api:lint:   71:7  error  'row' is never reassigned. Use 'const' instead  prefer-const
+```
+
+**非 0，但唯一错误在 `trips-origin-address.spec.ts`（其它 Agent 在途文件），不在 media/。** web/admin lint 通过，worker 仅 19 条既有 warning。
+
+### 归属隔离证据（证明失败与我的改动无关）
+
+对四个改动文件单独跑 eslint：
+
+```
+$ (apps/api) eslint src/modules/media/media-rules.ts src/modules/media/__tests__/media-rules.spec.ts
+[eslint exit: 0]        # 无任何输出
+$ (apps/web) eslint -c ../../eslint.config.mjs components/media/cover-upload-validation.ts lib/format-bytes.ts
+[eslint exit: 0]        # 无任何输出
+```
+
+`pnpm --filter @roamlog/api typecheck` 的全量错误文件只有两个，且都不是 media：
+
+```
+src/modules/exports/__tests__/export-presenter.spec.ts
+test/staging-export-download.e2e-spec.ts
+```
+
+两处均为 `ExportRecord` 缺少 `bucket` 字段——由其它 Agent 在途的 `packages/db/prisma/migrations/0011_export_bucket/` 迁移引起（其 spec 尚未同步）。`tsc` 输出中 `modules/media` 相关错误数 = **0**。
+
+## 第二轮遗留风险
+
+1. `formatMegabytes`（api）与 `formatBytes`（web）是跨 app 的重复实现，规则相同但不同步。根治需挪到 `packages/contracts`，属禁区，建议单开任务。
+2. `media.service.ts:233/:328` 两处**内部注释**仍写「≤50 MB / 50 MB ceiling」，非用户可见，未改（该文件不在授权范围）。
+3. 图片文案的「25 MB」仍是字面量，未与 settings `media.maxUploadBytes` 建立编译期联系；若 settings 改值，此处会漂移。建议 contracts 导出 `MEDIA_MAX_BYTES_ADVERTISED`。

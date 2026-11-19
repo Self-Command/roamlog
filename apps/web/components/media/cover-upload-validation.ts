@@ -1,6 +1,7 @@
 import { MediaPresignRequestSchema } from "@roamlog/contracts";
 
 import { COVER_MAX_BYTES, COVER_MIME_TYPES } from "@/lib/api/media";
+import { formatBytes } from "@/lib/format-bytes";
 
 import {
   coverValidationError,
@@ -50,18 +51,11 @@ export function resolveCoverMimeType(file: Pick<File, "name" | "type">): string 
 }
 
 /**
- * Formats upload sizes in decimal units, matching the admin setting
- * `media.maxUploadBytes` (25,000,000 bytes → `25 MB`). Binary units would show
- * the same limit as `23.8 MB` and make the UI contradict the setting.
+ * Re-exported so `./index` and `cover-uploader.tsx` keep importing it from this
+ * module. The rules now live in `@/lib/format-bytes`, which the compression and
+ * Live Photo pipelines share: two byte-identical copies had already drifted.
  */
-export function formatBytes(bytes: number): string {
-  if (bytes >= 1_000_000) {
-    const megabytes = bytes / 1_000_000;
-    return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`;
-  }
-  if (bytes >= 1_000) return `${Math.round(bytes / 1_000)} KB`;
-  return `${bytes} B`;
-}
+export { formatBytes };
 
 function invalid(code: ValidationCode, message: string): CoverValidationResult {
   return { ok: false, error: coverValidationError(code, message) };

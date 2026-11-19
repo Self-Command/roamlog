@@ -12,6 +12,22 @@ export const ALLOWED_IMAGE_MIME_TYPES = [
 export type AllowedImageMime = (typeof ALLOWED_IMAGE_MIME_TYPES)[number];
 export type MediaVariantName = "original" | "thumb" | "medium" | "large";
 
+/**
+ * Server-side image ceiling. Deliberately **wider** than the limit we advertise.
+ *
+ * `settings.media.maxUploadBytes` — mirrored by the web `COVER_MAX_BYTES` — is
+ * 25,000,000 bytes, i.e. `25 MB` decimal. This constant is 25 MiB = 26,214,400
+ * bytes, roughly 1.2 MB of slack. The gap is intentional, not a typo: the
+ * browser rejects at 25 MB so a user is never surprised by a server-only
+ * failure, while the server keeps tolerating uploads sized against a slightly
+ * larger ceiling (already-queued work, clients that rounded a size). Tightening
+ * this to 25,000,000 would be a behaviour change for in-flight uploads.
+ *
+ * Because of that slack the user-facing copy must NOT be derived from this
+ * constant: `formatMegabytes(MAX_MEDIA_BYTES)` would print `26.2 MB` and
+ * contradict the `25 MB` the client advertises. The copy states the advertised
+ * limit instead; `media-rules.spec.ts` pins that choice.
+ */
 export const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 
 /**
@@ -52,6 +68,22 @@ export function normalizeImageMime(value: string): AllowedImageMime | null {
 
 export function extensionForMime(mime: AllowedImageMime): string {
   return EXTENSION_BY_MIME[mime];
+}
+
+/**
+ * Decimal megabytes for user-facing copy (`52,428,800` → `"52.4 MB"`).
+ *
+ * `apps/web` formats the same numbers through `@/lib/format-bytes`; this is the
+ * server's copy of those rules (MB keeps one decimal place, a trailing `.0` is
+ * dropped) because the two apps share no runtime module — only
+ * `@roamlog/contracts`. Removing the duplication means moving the helper into
+ * that package, which is a wider change than this one.
+ *
+ * Display only: every threshold comparison stays in raw bytes.
+ */
+export function formatMegabytes(bytes: number): string {
+  const megabytes = bytes / 1_000_000;
+  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`;
 }
 
 export function assertSupportedImage(mimeType: string, size: number): AllowedImageMime {
@@ -162,7 +194,7 @@ export function assertSupportedMotion(args: {
   if (!Number.isInteger(args.sizeBytes) || args.sizeBytes <= 0 || args.sizeBytes > MAX_MOTION_BYTES) {
     throw new BadRequestException({
       code: "MEDIA_MOTION_TOO_LARGE",
-      message: "Live Photo motion clips must be between 1 byte and 50 MB.",
+      message: `Live Photo motion clips must be between 1 byte and ${formatMegabytes(MAX_MOTION_BYTES)}.`,
     });
   }
   if (
