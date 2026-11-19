@@ -11,7 +11,7 @@ FAIL=0
 declare -a RESULTS=()
 
 gate() { # name, command
-  local name="$1" cmd="$2" log="$OUT/${name}.log"
+  local name="$1" cmd="$2" log="$OUT/${1}.log"
   printf '\n=== %s ===\n' "$name"
   local start; start=$(date +%s)
   bash -lc "$cmd" >"$log" 2>&1
@@ -44,15 +44,25 @@ ADMIN_DB='postgresql://postgres@127.0.0.1:55444/roamlog_local?schema=public'
 echo "== 0. CodeGraph freshness =="
 codegraph status 2>/dev/null | tail -2 || echo "codegraph status unavailable"
 
+echo "== 0b. apply migrations to the shared local database =="
+# Twice now a committed migration was never applied here, and the symptom looked
+# like a code bug (public share 500, then the trips list 500). Never assume.
+gate db-migrate-shared "DATABASE_URL='$ADMIN_DB' pnpm db:migrate"
+
 echo "== 1. static: typecheck + lint + generated contracts =="
 gate typecheck-all   "pnpm typecheck"
-gate lint-all        "pnpm lint"
+gate lint-all        "pnpm lint --force"
 gate contracts-check "pnpm contracts:check"
 
 echo "== 2. tests =="
 gate test-contracts "pnpm --filter @roamlog/contracts test"
-gate test-db        "ROAMLOG_TEST_DATABASE_URL='$ADMIN_DB' pnpm --filter @roamlog/db test"
-gate test-api       "DATABASE_URL='$ADMIN_DB' ROAMLOG_TEST_DATABASE_URL='$ADMIN_DB' pnpm --filter @roamlog/api test"
+TEST_DB_SCHEMA="accept_$(date +%s)"
+# Some db suites (seed.integration) assume the schema is already migrated and do
+# not run migrations themselves, so a bare schema makes them fail for the wrong
+# reason. Migrate it first.
+gate db-migrate-test-schema "DATABASE_URL='postgresql://postgres@127.0.0.1:55444/roamlog_local?schema=${TEST_DB_SCHEMA}' pnpm db:migrate"
+gate test-db        "ROAMLOG_TEST_DATABASE_URL='postgresql://postgres@127.0.0.1:55444/roamlog_local?schema=${TEST_DB_SCHEMA}' pnpm --filter @roamlog/db test"
+gate test-api       "DATABASE_URL='$ADMIN_DB' pnpm --filter @roamlog/api test"
 gate test-web       "pnpm --filter @roamlog/web test"
 gate test-admin     "pnpm --filter @roamlog/admin test"
 gate test-apimocks  "pnpm --filter @roamlog/api-mocks test"
@@ -73,8 +83,8 @@ contains "artifact-fixtures" "(?i)demo-store|demoFixtureState|legacy-mock" apps/
 
 echo "== 5. contract/implementation drift =="
 # These endpoints have a strict response schema; a mismatch means clients parse a lie.
-gate drift-health "curl -sf -m 10 http://127.0.0.1:4000/v1/health | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(!('version' in j)||!('uptimeSeconds' in j)||j.status!=='ok'){console.error('health drift:',JSON.stringify(j));process.exit(1)}console.log('health ok')})\""
-gate drift-ready  "curl -sf -m 10 http://127.0.0.1:4000/v1/ready  | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(!['ok','degraded','unavailable'].includes(j.status)){console.error('ready drift:',j.status);process.exit(1)}for(const k of ['database','redis','storage']){if(!(k in j.checks)){console.error('ready missing check:',k);process.exit(1)}}console.log('ready ok:',j.status)})\""
+gate drift-health "curl -s -m 10 http://127.0.0.1:4000/v1/health | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(!('version' in j)||!('uptimeSeconds' in j)||j.status!=='ok'){console.error('health drift:',JSON.stringify(j));process.exit(1)}console.log('health ok')})\""
+gate drift-ready  "curl -s -m 10 http://127.0.0.1:4000/v1/ready  | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(!['ok','degraded','unavailable'].includes(j.status)){console.error('ready drift:',j.status);process.exit(1)}for(const k of ['database','redis','storage']){if(!(k in j.checks)){console.error('ready missing check:',k);process.exit(1)}}console.log('ready ok:',j.status)})\""
 
 echo "== 6. migrations apply to a clean database =="
 gate migrate-clean "DATABASE_URL='postgresql://postgres@127.0.0.1:55444/roamlog_clean_gate?schema=public' pnpm db:migrate"

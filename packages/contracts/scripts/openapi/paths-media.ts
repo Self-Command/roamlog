@@ -3,6 +3,8 @@ import type { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import * as c from "../../src/index";
 import { registerOperation } from "./helpers";
 
+const MotionParamsSchema = c.WorkspaceParamsSchema.extend({ mediaId: c.UuidV7Schema });
+
 export function registerMediaPaths(registry: OpenAPIRegistry): void {
   registerOperation(registry, {
     method: "post",
@@ -13,6 +15,32 @@ export function registerMediaPaths(registry: OpenAPIRegistry): void {
     params: c.WorkspaceParamsSchema,
     body: c.MediaPresignRequestSchema,
     response: c.MediaPresignResponseSchema,
+    idempotent: true,
+  });
+  // Live Photo: a still and its paired motion clip share one Media row, so the
+  // motion endpoints hang off the media id rather than being a second upload.
+  registerOperation(registry, {
+    method: "post",
+    path: "/v1/workspaces/{workspaceId}/media/{mediaId}/motion/presign",
+    operationId: "presignMediaMotion",
+    tag: "Media",
+    summary: "Presign an upload for the motion clip of a Live Photo",
+    params: MotionParamsSchema,
+    body: c.MediaMotionPresignRequestSchema,
+    status: 200,
+    response: c.MediaMotionPresignResponseSchema,
+    idempotent: true,
+  });
+  registerOperation(registry, {
+    method: "post",
+    path: "/v1/workspaces/{workspaceId}/media/{mediaId}/motion",
+    operationId: "completeMediaMotionUpload",
+    tag: "Media",
+    summary: "Attach the uploaded motion clip to its Live Photo",
+    params: MotionParamsSchema,
+    body: c.CompleteMediaMotionRequestSchema,
+    status: 200,
+    response: c.MediaSchema,
     idempotent: true,
   });
   registerOperation(registry, {

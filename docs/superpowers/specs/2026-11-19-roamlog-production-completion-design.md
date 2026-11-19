@@ -217,20 +217,33 @@ TripPlanDraft = {
 - **契约 schema**：模型输出后走现有 Zod 复检，跨字段规则在这里兜底；
 - 校验失败 → 把 Zod 错误回灌重试 **1 次**，仍失败 → `AI_SCHEMA_INVALID`。
 
-**关键设计 4：AI 不直接写库，但草稿有完整落地路径**
+**关键设计 4：AI 通过工具调用操作产品（不是产出待填草稿）**
 
-已确认要做到「完整能力」，因此新增一条**事务提交**端点：
+参考 Notion MCP（2026-11 官方文档，实测可读）：其官方案例是「一句话建整套结构」，工具为细粒度动作，且**工具以调用者身份运行**、先展示再落库。Roamlog 照此设计。
 
-```
-POST /v1/workspaces/{workspaceId}/trips/from-plan
-  body: TripPlanDraft
-  → 201 Trip（含 stops / days / packing / budgetPlan 一次性落库）
-  → 409 版本/重名冲突 · 422 PLAN_INVALID（含逐项错误）
-```
-- 服务端用现有契约逐段复检（`CreateTripRequest` / `CreateStopRequest` / `CreatePackingItemRequest` + 新增 `ItineraryDay`），**整份草稿在一个事务里创建**，任一失败全部回滚。
-- 草稿**不落库**：客户端持有（`localStorage`），提交时整份回传；服务端不信任草稿内容，一律复检后再写。
-- 幂等：请求带 `Idempotency-Key`，重复提交返回同一 trip。
-- 用户也可选择「只填入表单」而不直接创建——两条路径共享同一份 `TripPlanDraft`。
+第一版工具集（**只读 + 只增，绝不提供删除/改权限/改设置**）：
+
+| 工具 | 副作用 |
+|---|---|
+| `places.search` | 只读 |
+| `trips.get` / `stops.list` | 只读 |
+| `trips.create` | 增 |
+| `stops.add` | 增 |
+| `itinerary.addDay` | 增 |
+| `packing.add` | 增 |
+| `budget.setSummary` | 改（仅该 trip 的预算摘要） |
+
+**两阶段执行（服务端强制，不依赖模型自觉）**
+1. `POST /v1/workspaces/{w}/ai/chat` —— 只允许调用**只读工具**收集信息，产出 `{ runId, message, plannedCalls[] }`。**此阶段绝不写库。**
+2. `POST /v1/workspaces/{w}/ai/runs/{runId}/execute` —— 用户确认后，按提交的子集顺序**真实执行**；逐条复检授权与校验；部分失败不回滚已成功的；`Idempotency-Key` + `runId` 一次性（Redis 15 分钟）。
+
+**身份与授权**：所有工具以**会话用户的身份**执行，复用 `WorkspaceMembershipAccess` 与既有对象级授权；模型**不得**指定 `workspaceId`/`userId`；多余参数丢弃。
+
+**循环上限** 8 轮，超限 `AI_LOOP_LIMIT`；每次工具调用写审计 `ai.tool_call`（`{runId, tool, ok, entityId, durationMs}`，不含入参全文）。
+
+**后续（本轮不做，已入路线）**
+- `Memories`：用户偏好（"喜欢咖啡馆与古寺"、预算习惯），跨会话复用。
+- `Skills`：可复用的旅行风格模板（亲子/徒步/美食），workspace 内共享。
 
 **幻觉治理（必须做）**
 1. 服务端先调 Places 取候选（≤12 条），把候选（名称/id/国家）注入 prompt；
