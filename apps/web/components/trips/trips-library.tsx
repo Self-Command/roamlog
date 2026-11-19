@@ -2,7 +2,6 @@
 
 import type { Trip, TripStatus } from "@roamlog/contracts";
 import {
-  Badge,
   Button,
   EmptyState,
   ErrorState,
@@ -16,7 +15,6 @@ import { Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 
-import { useDataMode } from "@/lib/data-provider";
 import { useMeQuery, useTripsQuery, useWorkspaceBySlug } from "@/lib/query";
 
 import { TripCard } from "./trip-card";
@@ -50,7 +48,6 @@ interface TripsLibraryProps {
 }
 
 export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
-  const mode = useDataMode();
   const meQuery = useMeQuery();
   const { workspace, workspacesQuery } = useWorkspaceBySlug(workspaceSlug);
   const tripsQuery = useTripsQuery(workspace?.id, { limit: 100 });
@@ -116,11 +113,7 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
       <PageHeader
         eyebrow={`${workspace.name.toUpperCase()} / TRIP LIBRARY`}
         title="旅行库"
-        description={
-          mode === "mock"
-            ? `按状态、地点和标签整理 ${trips.length} 趟本地演示旅行；仅用于开发演示。`
-            : `按状态、地点和标签整理 ${trips.length} 趟真实旅行。卡片只展示旅行自身已保存的封面、预算与天数。`
-        }
+        description={`按状态、地点和标签整理 ${trips.length} 趟真实旅行。卡片只展示旅行自身已保存的封面、预算与天数。`}
         actions={
           <Button asChild variant="primary">
             <Link href={`/w/${workspaceSlug}/trips/new`}>
@@ -130,15 +123,6 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
           </Button>
         }
       />
-
-      {mode === "mock" ? (
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <Badge tone="green">本地演示数据（非真实）</Badge>
-          <span className="text-xs text-muted">
-            当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。
-          </span>
-        </div>
-      ) : null}
 
       <section className="mt-8 rounded-card border border-hairline-strong bg-surface-1 p-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">

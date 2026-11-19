@@ -5,7 +5,6 @@ import { ArrowRight, KeyRound } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { authErrorMessage, resetPassword } from "@/lib/api/auth";
-import { useDataMode } from "@/lib/data-provider";
 import { validatePassword } from "@/lib/validation";
 
 interface ResetErrors {
@@ -14,7 +13,6 @@ interface ResetErrors {
 }
 
 export function ResetPasswordForm({ token }: { token?: string }) {
-  const mode = useDataMode();
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [errors, setErrors] = useState<ResetErrors>({});
@@ -37,11 +35,6 @@ export function ResetPasswordForm({ token }: { token?: string }) {
     setErrors(nextErrors);
     if (nextErrors.password || nextErrors.confirmation) {
       setNotice(null);
-      return;
-    }
-
-    if (mode === "mock") {
-      setNotice("重置表单已通过本地校验。真实密码更新将在身份后端接入后启用。");
       return;
     }
 

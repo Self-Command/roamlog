@@ -9,8 +9,6 @@ import {
 } from "@roamlog/contracts";
 import { demoFixtureState } from "@roamlog/api-mocks/fixtures";
 
-import { renderWithDemo } from "@/test/demo-render";
-
 import { PublicSharePage } from "./public-share-page";
 import { ShareArticle } from "./share-article";
 import { ShareLinkDialog } from "./share-link-dialog";
@@ -541,7 +539,7 @@ describe("ShareLinkDialog", () => {
     };
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(createdByApi, 201)));
 
-    renderWithDemo(<ShareLinkDialog tripId={createdByApi.tripId} />);
+    render(<ShareLinkDialog tripId={createdByApi.tripId} />);
 
     await user.click(screen.getByRole("button", { name: "分享" }));
     expect(screen.getByRole("heading", { name: "公开分享这趟旅行" })).toBeInTheDocument();

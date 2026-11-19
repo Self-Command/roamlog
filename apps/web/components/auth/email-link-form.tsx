@@ -9,7 +9,6 @@ import {
   requestPasswordReset,
   sendVerificationEmail,
 } from "@/lib/api/auth";
-import { useDataMode } from "@/lib/data-provider";
 import { validateEmail } from "@/lib/validation";
 
 interface EmailLinkFormProps {
@@ -25,7 +24,6 @@ export function EmailLinkForm({
   defaultValue = "",
   intent = "reset",
 }: EmailLinkFormProps) {
-  const mode = useDataMode();
   const [email, setEmail] = useState(defaultValue);
   const [error, setError] = useState<string>();
   const [sent, setSent] = useState(false);
@@ -37,11 +35,6 @@ export function EmailLinkForm({
     const nextError = validateEmail(email);
     setError(nextError);
     if (nextError) return;
-
-    if (mode === "mock") {
-      setSent(true);
-      return;
-    }
 
     setSubmitting(true);
     setRequestError(null);

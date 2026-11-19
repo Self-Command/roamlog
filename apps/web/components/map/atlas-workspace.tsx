@@ -23,7 +23,6 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { useDataMode } from "@/lib/data-provider";
 import {
   formatDateRange,
   getTripStatusLabel,
@@ -55,19 +54,7 @@ function AtlasLoading() {
   );
 }
 
-function DemoDataNotice() {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Badge tone="green">本地演示数据（非真实）</Badge>
-      <span className="text-xs text-muted">
-        当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。
-      </span>
-    </div>
-  );
-}
-
 export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
-  const mode = useDataMode();
   const {
     workspace,
     workspacesQuery,
@@ -183,11 +170,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
       <PageHeader
         eyebrow={`ATLAS / ${filteredTrips.length} TRIPS · ${countries.size} COUNTRIES`}
         title="世界足迹"
-        description={
-          mode === "mock"
-            ? "本地演示停靠点仅用于开发预览；没有坐标时显示空状态，不会生成占位标记。"
-            : "只使用停靠点中带经纬度的真实坐标；没有坐标的停靠点不会出现在地图上。"
-        }
+        description="只使用停靠点中带经纬度的真实坐标；没有坐标的停靠点不会出现在地图上。"
         actions={
           <div className="flex items-center rounded-control border border-hairline-strong bg-surface-1 p-1">
             <Button
@@ -215,11 +198,6 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
           </div>
         }
       />
-      {mode === "mock" ? (
-        <div className="mt-6">
-          <DemoDataNotice />
-        </div>
-      ) : null}
     </>
   );
 
@@ -247,7 +225,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
             <span className="size-1.5 rounded-pill bg-accent-orange" />
             <p className="type-eyebrow text-body">WORLD / FOOTPRINT</p>
             <span className="ml-auto hidden font-mono text-[8px] uppercase tracking-[0.08em] text-stone sm:inline">
-              {points.length} STOPS · {mode === "mock" ? "DEMO STOPS" : "REAL COORDINATES"}
+              {points.length} STOPS · REAL COORDINATES
             </span>
           </div>
 

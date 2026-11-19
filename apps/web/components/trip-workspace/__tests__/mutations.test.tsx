@@ -30,7 +30,6 @@ const routerState = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh
 
 vi.mock("@/lib/data-provider", () => ({
   useDataAdapter: () => adapterState.adapter,
-  useDataMode: () => "api",
 }));
 
 vi.mock("next/navigation", () => ({

@@ -18,7 +18,7 @@ export function ItineraryList({ items }: { items: ItineraryItem[] }) {
     return (
       <EmptyState
         title="还没有排定行程"
-        description="行程条目接入写接口后会出现在这里。当前 fixtures 只覆盖首尔与京都的部分安排。"
+        description="行程条目接入写接口后会出现在这里；没有来源为空的行程不会被凭空补齐。"
       />
     );
   }

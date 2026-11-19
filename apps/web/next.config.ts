@@ -4,7 +4,7 @@ const apiUrl = process.env.API_URL ?? "http://localhost:4000";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@roamlog/api-mocks", "@roamlog/contracts", "@roamlog/ui"],
+  transpilePackages: ["@roamlog/contracts", "@roamlog/ui"],
   async rewrites() {
     return [
       {

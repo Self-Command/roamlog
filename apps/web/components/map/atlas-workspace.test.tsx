@@ -8,13 +8,11 @@ import { renderWithQuery } from "@/test/query-harness";
 import { AtlasWorkspace } from "./atlas-workspace";
 
 const harness = vi.hoisted(() => ({
-  mode: "api" as "api" | "mock",
   adapter: undefined as unknown as import("@/lib/api").DataAdapter,
 }));
 
 vi.mock("@/lib/data-provider", () => ({
   useDataAdapter: () => harness.adapter,
-  useDataMode: () => harness.mode,
 }));
 
 const TRIP_A = "0198f000-0000-7000-8000-000000000011";
@@ -45,11 +43,10 @@ function trips() {
 
 describe("AtlasWorkspace data truthfulness", () => {
   beforeEach(() => {
-    harness.mode = "api";
     harness.adapter = createFakeAdapter();
   });
 
-  it("plots only real stop coordinates in api mode", async () => {
+  it("plots only real stop coordinates", async () => {
     harness.adapter = createFakeAdapter({
       trips: trips(),
       stops: [
@@ -80,7 +77,6 @@ describe("AtlasWorkspace data truthfulness", () => {
     expect(screen.queryByText("首尔，晚秋与夜航")).not.toBeInTheDocument();
     expect(screen.queryByText("冰岛环岛手记")).not.toBeInTheDocument();
     expect(screen.queryByText(/FIXTURE COORDINATES/)).not.toBeInTheDocument();
-    expect(screen.queryByText("本地演示数据（非真实）")).not.toBeInTheDocument();
   });
 
   it("shows an empty state without fixture markers when no stop has coordinates", async () => {
@@ -131,23 +127,5 @@ describe("AtlasWorkspace data truthfulness", () => {
     await user.type(screen.getByRole("searchbox", { name: "搜索旅行足迹" }), "巴黎");
     expect(screen.getAllByText("巴黎周末").length).toBeGreaterThan(0);
     expect(screen.queryByText("京都慢行")).not.toBeInTheDocument();
-  });
-
-  it("shows the local demo notice only in mock mode", async () => {
-    harness.mode = "mock";
-    harness.adapter = createFakeAdapter({
-      trips: [
-        makeTrip({
-          id: TRIP_A,
-          title: "演示旅行",
-        }),
-      ],
-      stops: [makeStop({ tripId: TRIP_A })],
-    });
-
-    renderWithQuery(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
-
-    expect(await screen.findByText("本地演示数据（非真实）")).toBeInTheDocument();
-    expect(screen.getByText(/本地 MSW fixtures/)).toBeInTheDocument();
   });
 });

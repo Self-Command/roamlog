@@ -15,7 +15,6 @@ import {
 import { CalendarDays, ChevronRight, MapPin, Route, Sparkles } from "lucide-react";
 import Link from "next/link";
 
-import { useDataMode } from "@/lib/data-provider";
 import { useItineraryQuery, useMeQuery, useTripsQuery, useWorkspaceBySlug } from "@/lib/query";
 import {
   daysUntil,
@@ -62,7 +61,6 @@ function DashboardLoading() {
 }
 
 export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
-  const mode = useDataMode();
   const meQuery = useMeQuery();
   const { workspace, workspacesQuery } = useWorkspaceBySlug(workspaceSlug);
   const tripsQuery = useTripsQuery(workspace?.id);
@@ -127,17 +125,6 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
           </Button>
         }
       />
-
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        {mode === "mock" ? (
-          <>
-            <Badge tone="green">本地演示数据（非真实）</Badge>
-            <span className="text-xs text-muted">
-              当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。
-            </span>
-          </>
-        ) : null}
-      </div>
 
       <section
         aria-label="旅行统计"

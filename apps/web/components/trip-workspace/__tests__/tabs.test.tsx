@@ -34,7 +34,6 @@ const adapterState = vi.hoisted(() => ({
 
 vi.mock("@/lib/data-provider", () => ({
   useDataAdapter: () => adapterState.adapter,
-  useDataMode: () => "api",
 }));
 
 const TRIP_ID = "0198f000-0000-7000-8000-0000000000a1";

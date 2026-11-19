@@ -13,7 +13,6 @@ import {
 import { ArrowUpRight, CalendarDays, Compass, Search, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { useDataMode } from "@/lib/data-provider";
 import { useSearchQuery } from "@/lib/query";
 
 interface CommandPaletteProps {
@@ -31,7 +30,6 @@ export function CommandPalette({
   workspaceId,
   nextTrip,
 }: CommandPaletteProps) {
-  const mode = useDataMode();
   const [query, setQuery] = useState("");
   const commands = useMemo(
     () => [
@@ -69,11 +67,7 @@ export function CommandPalette({
       <DialogContent className="max-w-xl p-0">
         <DialogHeader className="mb-0 border-b border-hairline px-5 py-4 pr-14">
           <DialogTitle className="font-serif text-2xl">搜索与快捷命令</DialogTitle>
-          <DialogDescription>
-            {mode === "api"
-              ? "命令面板同时搜索真实 API 的旅行、日志与评论。"
-              : "命令面板目前是本地骨架，只连接到已存在的页面与 mock 旅行数据。"}
-          </DialogDescription>
+          <DialogDescription>命令面板同时搜索真实 API 的旅行、日志与评论。</DialogDescription>
         </DialogHeader>
 
         <div className="border-b border-hairline px-4 py-3">
@@ -94,15 +88,13 @@ export function CommandPalette({
         </div>
 
         <div className="space-y-1 p-2">
-          {mode === "api" ? (
-            <CommandSearchResults
-              workspaceSlug={workspaceSlug}
-              workspaceId={workspaceId}
-              query={query.trim()}
-              open={open}
-              onNavigate={() => onOpenChange(false)}
-            />
-          ) : null}
+          <CommandSearchResults
+            workspaceSlug={workspaceSlug}
+            workspaceId={workspaceId}
+            query={query.trim()}
+            open={open}
+            onNavigate={() => onOpenChange(false)}
+          />
           {visibleCommands.length > 0 ? (
             visibleCommands.map((command) => {
               const Icon = command.icon;

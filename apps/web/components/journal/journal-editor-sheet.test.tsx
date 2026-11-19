@@ -13,7 +13,6 @@ const entry = demoEntries[0] as JournalEntry;
 
 function repository(overrides: Partial<JournalEntryRepository> = {}): JournalEntryRepository {
   return {
-    mode: "api",
     getEntry: vi.fn(async () => entry),
     createEntry: vi.fn(async (_tripId, payload) => ({
       ...entry,

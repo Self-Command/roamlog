@@ -43,8 +43,8 @@
 | 范围                   | 状态         | 说明                                                                                                                                            |
 | ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | v1 功能面              | 已实现       | Workspace、旅行、日志、行程、地图、预算、打包、分享、导出、通知、搜索与 Admin 模块均已落地。                                                    |
-| Web mock 模式          | 可用         | 开发/测试环境使用 MSW + contract fixtures，适合界面评审和确定性 E2E；不是真实协作。                                                             |
-| Web API 模式           | 核心路径可用 | Dashboard、旅行、旅行详情、日志、成员、设置、分享等页面调用真实 API；部分高级视图仍在 API 模式补全。                                            |
+| Web 数据源             | 真实 API     | 数据源固定为真实 API，mock/fixture 模式已移除；确定性 E2E 使用 Playwright 夹具，不进应用 bundle。                                               |
+| Web 核心路径           | 核心路径可用 | Dashboard、旅行、旅行详情、日志、成员、设置、分享等页面调用真实 API；部分高级视图仍在补全。                                                     |
 | Admin API 模式         | 可用         | 登录、2FA、用户/Workspace/内容、审计、邮件、队列、功能开关与系统健康可连接真实 API。                                                            |
 | 本地 staging gate      | PASS         | 2026-11-17 在本机真实 PostgreSQL/Redis/MinIO/Mailpit 上通过 E2E、Admin 操作、k6 与安全门禁；证据见 [release gate](STG_RELEASE_GATE_REPORT.md)。 |
 | 媒体 / 邮件 / 导出链路 | PASS         | 真实入队、失败重试、Worker、私有对象存储与签名下载均取得本地证据；见 [full-chain report](STG_FULL_CHAIN_REPORT.md)。                            |

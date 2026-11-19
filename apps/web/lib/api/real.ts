@@ -69,7 +69,7 @@ import {
 import { ApiError, errorFromResponse } from "./errors";
 import { invalidResponse } from "./errors";
 import { unwrap, unwrapMessage } from "./shared";
-import type { DataAdapter, DataMode, SessionInfo } from "./types";
+import type { DataAdapter, SessionInfo } from "./types";
 
 function queryParams<T extends object>(params: T | undefined): Record<string, unknown> | undefined {
   if (!params) return undefined;
@@ -130,8 +130,6 @@ async function session(signal?: AbortSignal): Promise<SessionInfo | null> {
 }
 
 const realAdapter = {
-  mode: "api" as DataMode,
-
   async fetchMe(signal) {
     return unwrap(await getMeRequest({ signal }), MeResponseSchema, "/v1/me");
   },

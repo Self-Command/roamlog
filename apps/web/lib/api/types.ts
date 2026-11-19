@@ -34,17 +34,6 @@ import type {
   WorkspaceWithRole,
 } from "@roamlog/contracts";
 
-/**
- * Data-source discriminator kept on the adapter contract.
- *
- * The web app only ever resolves `"api"` at runtime. `"mock"` stays in the
- * union so the fixture adapter still satisfies `DataAdapter` until the
- * B-stage cleanup removes it.
- *
- * TODO(b-stage): drop this discriminator together with the fixture adapter.
- */
-export type DataMode = "api" | "mock";
-
 export interface TripListParams {
   status?: string;
   q?: string;
@@ -133,8 +122,6 @@ export interface SessionInfo {
 }
 
 export interface DataAdapter {
-  readonly mode: DataMode;
-
   fetchMe(signal?: AbortSignal): Promise<User>;
   fetchSession(signal?: AbortSignal): Promise<SessionInfo | null>;
   fetchMyWorkspaces(signal?: AbortSignal): Promise<WorkspaceWithRole[]>;

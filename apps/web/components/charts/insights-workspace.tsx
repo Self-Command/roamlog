@@ -12,8 +12,6 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { useDataMode } from "@/lib/data-provider";
-
 import { useInsightsData } from "./insights-data";
 import {
   aggregateTripStats,
@@ -50,19 +48,7 @@ function InsightsLoading() {
   );
 }
 
-function DemoDataNotice() {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Badge tone="green">本地演示数据（非真实）</Badge>
-      <span className="text-xs text-muted">
-        当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。
-      </span>
-    </div>
-  );
-}
-
 export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
-  const mode = useDataMode();
   const [notice, setNotice] = useState<string | null>(null);
   const {
     workspace,
@@ -153,11 +139,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
       <PageHeader
         eyebrow={`INSIGHTS / ${stats.years.length ? `${stats.years[0]}—${stats.years.at(-1)}` : "NO DATA"}`}
         title="旅行洞察"
-        description={
-          mode === "mock"
-            ? "年度旅行、支出、分类与记录热力图来自本地演示数据，仅用于开发预览。"
-            : "年度旅行、支出、分类与记录热力图，全部来自当前工作区的真实数据；无法计算的指标会明确标注。"
-        }
+        description="年度旅行、支出、分类与记录热力图，全部来自当前工作区的真实数据；无法计算的指标会明确标注。"
         actions={
           <Button
             type="button"
@@ -171,11 +153,6 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
           </Button>
         }
       />
-      {mode === "mock" ? (
-        <div className="mt-6">
-          <DemoDataNotice />
-        </div>
-      ) : null}
       {notice ? (
         <p
           role="status"

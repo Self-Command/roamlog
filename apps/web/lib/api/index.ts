@@ -8,12 +8,7 @@ import {
 import { realAdapterInstance } from "./real";
 import type { DataAdapter } from "./types";
 
-/**
- * The web app has exactly one data source: the real API.
- *
- * TODO(b-stage): drop the retired fixture adapter module and this indirection
- * once the mock fixtures package is test-only.
- */
+/** The web app has exactly one data source: the real API. */
 export function getDataAdapter(): DataAdapter {
   return realAdapterInstance;
 }

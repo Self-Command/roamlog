@@ -8,13 +8,11 @@ import { renderWithQuery } from "@/test/query-harness";
 import { TripsLibrary } from "./trips-library";
 
 const harness = vi.hoisted(() => ({
-  mode: "api" as "api" | "mock",
   adapter: undefined as unknown as import("@/lib/api").DataAdapter,
 }));
 
 vi.mock("@/lib/data-provider", () => ({
   useDataAdapter: () => harness.adapter,
-  useDataMode: () => harness.mode,
 }));
 
 const TRIP_A = "0198f000-0000-7000-8000-000000000011";
@@ -22,7 +20,6 @@ const TRIP_B = "0198f000-0000-7000-8000-000000000012";
 
 describe("TripsLibrary data truthfulness", () => {
   beforeEach(() => {
-    harness.mode = "api";
     harness.adapter = createFakeAdapter();
   });
 
@@ -100,16 +97,5 @@ describe("TripsLibrary data truthfulness", () => {
     await user.type(screen.getByRole("textbox", { name: "搜索旅行" }), "巴黎");
     expect(screen.getByText("巴黎周末")).toBeInTheDocument();
     expect(screen.queryByText("京都慢行")).not.toBeInTheDocument();
-  });
-
-  it("labels local demo data in mock mode", async () => {
-    harness.mode = "mock";
-    harness.adapter = createFakeAdapter();
-
-    renderWithQuery(<TripsLibrary workspaceSlug="roamlog-crew" />);
-
-    expect(await screen.findByText("本地演示数据（非真实）")).toBeInTheDocument();
-    expect(screen.getByText(/本地演示旅行/)).toBeInTheDocument();
-    expect(screen.queryByText(/趟真实旅行/)).not.toBeInTheDocument();
   });
 });

@@ -5,7 +5,6 @@ import { ArrowRight, UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { authErrorMessage, signUp } from "@/lib/api/auth";
-import { useDataMode } from "@/lib/data-provider";
 import { validateEmail, validatePassword, validateRequired } from "@/lib/validation";
 
 interface RegisterErrors {
@@ -15,7 +14,6 @@ interface RegisterErrors {
 }
 
 export function RegisterForm() {
-  const mode = useDataMode();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,11 +33,6 @@ export function RegisterForm() {
     setErrors(nextErrors);
     if (nextErrors.name || nextErrors.email || nextErrors.password) {
       setNotice(null);
-      return;
-    }
-
-    if (mode === "mock") {
-      setNotice("注册表单已通过本地校验。真实账号创建与邮箱验证将在身份后端接入后启用。");
       return;
     }
 
@@ -63,9 +56,7 @@ export function RegisterForm() {
         创建旅行档案
       </h1>
       <p className="mt-4 text-sm leading-6 text-muted">
-        {mode === "api"
-          ? "注册后会发送验证邮件。完成邮箱验证后即可创建 Workspace 或接受邀请。"
-          : "注册后会创建个人 Workspace。当前 mock 预览不会创建真实账号或发送验证邮件。"}
+        注册后会发送验证邮件。完成邮箱验证后即可创建 Workspace 或接受邀请。
       </p>
 
       <form noValidate onSubmit={handleSubmit} className="mt-8 space-y-5">

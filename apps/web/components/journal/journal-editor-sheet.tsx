@@ -598,8 +598,7 @@ export function JournalEditorSheet({
             {canEdit ? (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4">
                 <p className="max-w-md text-[10px] leading-5 text-muted">
-                  自动保存使用乐观版本检查；评论会进入真实 API
-                  {repository.mode === "mock" ? "（当前为本地演示数据）" : ""}。
+                  自动保存使用乐观版本检查；评论会进入真实 API。
                 </p>
                 <Button
                   type="submit"

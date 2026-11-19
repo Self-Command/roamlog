@@ -8,13 +8,11 @@ import { renderWithQuery } from "@/test/query-harness";
 import { InsightsWorkspace } from "./insights-workspace";
 
 const harness = vi.hoisted(() => ({
-  mode: "api" as "api" | "mock",
   adapter: undefined as unknown as import("@/lib/api").DataAdapter,
 }));
 
 vi.mock("@/lib/data-provider", () => ({
   useDataAdapter: () => harness.adapter,
-  useDataMode: () => harness.mode,
 }));
 
 const TRIP_A = "0198f000-0000-7000-8000-000000000011";
@@ -47,11 +45,10 @@ function realTrips() {
 
 describe("InsightsWorkspace data truthfulness", () => {
   beforeEach(() => {
-    harness.mode = "api";
     harness.adapter = createFakeAdapter();
   });
 
-  it("renders the insufficient-data empty state in api mode and no fixture numbers", async () => {
+  it("renders the insufficient-data empty state without invented numbers", async () => {
     renderWithQuery(<InsightsWorkspace workspaceSlug="roamlog-crew" />);
 
     expect(await screen.findByText("还没有足够的旅行数据")).toBeInTheDocument();
@@ -60,7 +57,6 @@ describe("InsightsWorkspace data truthfulness", () => {
     expect(screen.queryByText(/¥50,312/)).not.toBeInTheDocument();
     expect(screen.queryByText("MSW DEVELOPMENT DATA")).not.toBeInTheDocument();
     expect(screen.queryByText(/没有生产后端写入/)).not.toBeInTheDocument();
-    expect(screen.queryByText("本地演示数据（非真实）")).not.toBeInTheDocument();
   });
 
   it("aggregates trips, entries and expenses from the api adapter", async () => {
@@ -107,17 +103,6 @@ describe("InsightsWorkspace data truthfulness", () => {
     expect(screen.getByText(/5,000/)).toBeInTheDocument();
     expect(screen.getByText("路线距离")).toBeInTheDocument();
     expect(screen.getAllByText("尚未接入").length).toBeGreaterThan(0);
-    expect(screen.queryByText("本地演示数据（非真实）")).not.toBeInTheDocument();
-  });
-
-  it("shows the local demo notice only in mock mode", async () => {
-    harness.mode = "mock";
-    harness.adapter = createFakeAdapter();
-
-    renderWithQuery(<InsightsWorkspace workspaceSlug="roamlog-crew" />);
-
-    expect(await screen.findByText("本地演示数据（非真实）")).toBeInTheDocument();
-    expect(screen.getByText(/本地 MSW fixtures/)).toBeInTheDocument();
   });
 
   it("surfaces a retryable error when records fail to load", async () => {

@@ -7,22 +7,19 @@ import { renderWithQuery } from "@/test/query-harness";
 import { DashboardPage } from "./dashboard-page";
 
 const harness = vi.hoisted(() => ({
-  mode: "api" as "api" | "mock",
   adapter: undefined as unknown as import("@/lib/api").DataAdapter,
 }));
 
 vi.mock("@/lib/data-provider", () => ({
   useDataAdapter: () => harness.adapter,
-  useDataMode: () => harness.mode,
 }));
 
 describe("DashboardPage data truthfulness", () => {
   beforeEach(() => {
-    harness.mode = "api";
     harness.adapter = createFakeAdapter();
   });
 
-  it("renders a real empty state and no fixture numbers in api mode", async () => {
+  it("renders a real empty state with no invented numbers", async () => {
     renderWithQuery(<DashboardPage workspaceSlug="roamlog-crew" />);
 
     expect(await screen.findByText("还没有旅行")).toBeInTheDocument();
@@ -31,7 +28,6 @@ describe("DashboardPage data truthfulness", () => {
     expect(screen.queryByText("¥18,800")).not.toBeInTheDocument();
     expect(screen.queryByText("MSW DEVELOPMENT DATA")).not.toBeInTheDocument();
     expect(screen.queryByText(/没有生产后端写入/)).not.toBeInTheDocument();
-    expect(screen.queryByText("本地演示数据（非真实）")).not.toBeInTheDocument();
   });
 
   it("aggregates real trips returned by the api adapter", async () => {
@@ -70,25 +66,5 @@ describe("DashboardPage data truthfulness", () => {
     expect(screen.getByText("DAYS ON THE ROAD")).toBeInTheDocument();
     expect(screen.getByText("8")).toBeInTheDocument();
     expect(screen.getAllByText(/12,345/).length).toBeGreaterThan(0);
-    expect(screen.queryByText("本地演示数据（非真实）")).not.toBeInTheDocument();
-  });
-
-  it("shows the local demo notice only in mock mode", async () => {
-    harness.mode = "mock";
-    harness.adapter = createFakeAdapter({
-      trips: [
-        makeTrip({
-          id: "0198f000-0000-7000-8000-000000000013",
-          title: "演示旅行",
-        }),
-      ],
-    });
-
-    renderWithQuery(<DashboardPage workspaceSlug="roamlog-crew" />);
-
-    expect(await screen.findByText("本地演示数据（非真实）")).toBeInTheDocument();
-    expect(screen.getByText(/本地 MSW fixtures/)).toBeInTheDocument();
-    expect(screen.queryByText("MSW DEVELOPMENT DATA")).not.toBeInTheDocument();
-    expect(screen.queryByText(/没有生产后端写入/)).not.toBeInTheDocument();
   });
 });

@@ -55,6 +55,33 @@ describe("app routes carry no data-mode switch", () => {
   });
 });
 
+/** Every source file under the given app directories, recursively. */
+function walkAll(dirs: string[]): string[] {
+  const files: string[] = [];
+  const stack = dirs.map((dir) => join(process.cwd(), dir));
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    for (const entry of readdirSync(current)) {
+      const full = join(current, entry);
+      if (statSync(full).isDirectory()) stack.push(full);
+      else files.push(full);
+    }
+  }
+  return files;
+}
+
+describe("no dead mock surface", () => {
+  it("has no dead mock branches and no DataMode type", () => {
+    for (const file of walkAll(["components", "lib"])) {
+      if (file.includes(".test.")) continue;
+      const src = readFileSync(file, "utf8");
+      expect(src, file).not.toMatch(/mode\s*===\s*["']mock["']/);
+      expect(src, file).not.toMatch(/useDataMode|DataMode/);
+      expect(src, file).not.toMatch(/本地演示数据|LIVE API/);
+    }
+  });
+});
+
 describe("the retired demo boundary is gone", () => {
   it("has no legacy-mock directory", () => {
     expect(existsSync(join(process.cwd(), "components/legacy-mock"))).toBe(false);
