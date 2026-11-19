@@ -297,6 +297,10 @@ export class ShareLinksService {
       sources.push({
         id,
         key,
+        // Each row is signed against the bucket it was written to, so a public
+        // share created before a storage-bucket change keeps resolving to its
+        // objects instead of 404ing in the newly configured bucket.
+        bucket: rowBucket(record.bucket),
         status,
         variants: record.variants,
         motion: motionSource(record.motion),
@@ -566,6 +570,9 @@ function coverMediaSources(
     sources.push({
       id,
       key: typeof row.key === "string" ? row.key : "",
+      // Same rule as the gallery: a cover is signed against its own bucket, so
+      // the public page keeps showing it after the configured bucket changes.
+      bucket: rowBucket(row.bucket),
       status: typeof row.status === "string" ? row.status : "",
       variants: row.variants,
       tripId: typeof row.tripId === "string" ? row.tripId : null,
@@ -575,6 +582,19 @@ function coverMediaSources(
     });
   }
   return sources;
+}
+
+/**
+ * Bucket recorded on a media row, or `null` when the row predates the bucket
+ * column (or carries an empty value).
+ *
+ * `null` deliberately keeps the pre-existing fallback: {@link MediaUrlService}
+ * then signs against the currently configured bucket and emits one throttled
+ * `media.bucket_missing` warning. The value never reaches the public payload —
+ * it is only passed to the signer.
+ */
+function rowBucket(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function numberOrNull(value: unknown): number | null {
