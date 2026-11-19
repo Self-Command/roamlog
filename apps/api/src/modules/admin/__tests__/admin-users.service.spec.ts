@@ -47,17 +47,29 @@ describe("AdminUsersService", () => {
         },
         twoFactor: { deleteMany: vi.fn(), count: vi.fn() },
         invitation: { updateMany: vi.fn() },
+        emailLog: { findFirst: vi.fn() },
         $transaction: vi.fn(),
       },
     };
     const audit = { record: vi.fn().mockResolvedValue({ id: "audit" }) };
+    const auth = {
+      handleWebRequest: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ status: true }), { status: 200 }),
+      ),
+    };
+    const config = { apiUrl: "http://127.0.0.1:4000", adminUrl: "http://localhost:3001" };
     prisma.client.workspaceMember.findMany.mockResolvedValue([]);
     prisma.client.session.findMany.mockResolvedValue([]);
     prisma.client.session.groupBy.mockResolvedValue([]);
     prisma.client.comment.count.mockResolvedValue(0);
     prisma.client.media.count.mockResolvedValue(0);
-    const service = new AdminUsersService(prisma as never, audit as never);
-    return { prisma, audit, service };
+    const service = new AdminUsersService(
+      prisma as never,
+      audit as never,
+      auth as never,
+      config as never,
+    );
+    return { prisma, audit, auth, service };
   }
 
   it("lets support suspend a user and records an audit entry", async () => {
@@ -135,7 +147,9 @@ describe("AdminUsersService", () => {
     expect(result.platformRole).toBe("admin");
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
-        metadata: expect.objectContaining({ platformRole: "admin" }),
+        metadata: expect.objectContaining({
+          changedFields: ["platformRole"],
+        }),
       }),
     );
   });
@@ -376,6 +390,200 @@ describe("AdminUsersService", () => {
     expect(prisma.client.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ OR: expect.any(Array) }) }),
     );
+  });
+
+  it("lets a super_admin edit name, email, locale and timezone and resets email verification", async () => {
+    const { prisma, audit, auth, service } = setup();
+    const record = makeUserRecord(USER_VIEWER_ID, {
+      platformRole: "user",
+      email: "old@roamlog.test",
+      emailVerified: true,
+      name: "Old Name",
+    });
+    prisma.client.user.findUnique.mockResolvedValueOnce(record).mockResolvedValueOnce(null);
+    prisma.client.user.update.mockResolvedValue(
+      makeUserRecord(USER_VIEWER_ID, {
+        platformRole: "user",
+        email: "new@roamlog.test",
+        emailVerified: false,
+        name: "New Name",
+        locale: "en-US",
+        timezone: "Europe/Berlin",
+      }),
+    );
+    prisma.client.emailLog.findFirst.mockResolvedValue({ status: "sent" });
+    prisma.client.workspaceMember.count.mockResolvedValue(0);
+    prisma.client.trip.count.mockResolvedValue(0);
+    prisma.client.journalEntry.count.mockResolvedValue(0);
+    prisma.client.session.count.mockResolvedValue(0);
+
+    const result = await service.update(
+      makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }),
+      USER_VIEWER_ID,
+      {
+        name: "New Name",
+        email: "New@Roamlog.test",
+        locale: "en-US",
+        timezone: "Europe/Berlin",
+      },
+    );
+
+    expect(prisma.client.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: USER_VIEWER_ID },
+        data: {
+          name: "New Name",
+          email: "new@roamlog.test",
+          emailVerified: false,
+          locale: "en-US",
+          timezone: "Europe/Berlin",
+        },
+      }),
+    );
+    expect(auth.handleWebRequest).toHaveBeenCalledTimes(1);
+    expect(result.delivery).toBe("sent");
+    expect(result.emailVerified).toBe(false);
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.user.updated",
+        targetId: USER_VIEWER_ID,
+        metadata: {
+          changedFields: ["name", "email", "locale", "timezone"],
+          emailVerificationSent: true,
+        },
+      }),
+    );
+    // Audit metadata must never carry the changed values themselves.
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.not.objectContaining({
+          email: expect.anything(),
+          name: expect.anything(),
+        }),
+      }),
+    );
+  });
+
+  it("keeps the profile change when the verification email fails and reports delivery failed", async () => {
+    const { prisma, audit, auth, service } = setup();
+    prisma.client.user.findUnique
+      .mockResolvedValueOnce(
+        makeUserRecord(USER_VIEWER_ID, {
+          email: "old@roamlog.test",
+          emailVerified: true,
+        }),
+      )
+      .mockResolvedValueOnce(null);
+    prisma.client.user.update.mockResolvedValue(
+      makeUserRecord(USER_VIEWER_ID, {
+        email: "new@roamlog.test",
+        emailVerified: false,
+      }),
+    );
+    auth.handleWebRequest.mockRejectedValue(new Error("smtp offline"));
+    prisma.client.workspaceMember.count.mockResolvedValue(0);
+    prisma.client.trip.count.mockResolvedValue(0);
+    prisma.client.journalEntry.count.mockResolvedValue(0);
+    prisma.client.session.count.mockResolvedValue(0);
+
+    const result = await service.update(
+      makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }),
+      USER_VIEWER_ID,
+      { email: "new@roamlog.test" },
+    );
+
+    expect(prisma.client.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ email: "new@roamlog.test", emailVerified: false }),
+      }),
+    );
+    expect(result.delivery).toBe("failed");
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { changedFields: ["email"], emailVerificationSent: false },
+      }),
+    );
+  });
+
+  it("rejects an email that another account already uses with EMAIL_TAKEN", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findUnique
+      .mockResolvedValueOnce(makeUserRecord(USER_VIEWER_ID, { email: "old@roamlog.test" }))
+      .mockResolvedValueOnce({ id: USER_OWNER_ID });
+
+    await expect(
+      service.update(makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }), USER_VIEWER_ID, {
+        email: "taken@roamlog.test",
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "EMAIL_TAKEN" }),
+    });
+    expect(prisma.client.user.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to demote the last super_admin", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findUnique.mockResolvedValue(
+      makeUserRecord(USER_OWNER_ID, { platformRole: "super_admin" }),
+    );
+    prisma.client.user.count.mockResolvedValue(1);
+
+    await expect(
+      service.update(makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }), USER_OWNER_ID, {
+        platformRole: "admin",
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "LAST_SUPER_ADMIN" }),
+    });
+    expect(prisma.client.user.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to let a super_admin demote themselves", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findUnique.mockResolvedValue(
+      makeUserRecord(USER_ADMIN_ID, { platformRole: "super_admin" }),
+    );
+    prisma.client.user.count.mockResolvedValue(4);
+
+    await expect(
+      service.update(makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }), USER_ADMIN_ID, {
+        platformRole: "admin",
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "SELF_DEMOTION_FORBIDDEN" }),
+    });
+  });
+
+  it("rejects an invalid locale or timezone before touching the database", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findUnique.mockResolvedValue(makeUserRecord(USER_VIEWER_ID));
+
+    await expect(
+      service.update(makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }), USER_VIEWER_ID, {
+        locale: "x",
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(
+      service.update(makeActor(USER_ADMIN_ID, { platformRole: "super_admin" }), USER_VIEWER_ID, {
+        timezone: "../../etc/passwd",
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.client.user.update).not.toHaveBeenCalled();
+  });
+
+  it("forbids support and admin from editing profile fields", async () => {
+    const { prisma, service } = setup();
+    prisma.client.user.findUnique.mockResolvedValue(makeUserRecord(USER_VIEWER_ID));
+
+    for (const role of ["support", "admin"] as const) {
+      await expect(
+        service.update(makeActor(USER_ADMIN_ID, { platformRole: role }), USER_VIEWER_ID, {
+          name: "Renamed",
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    }
+    expect(prisma.client.user.update).not.toHaveBeenCalled();
   });
 
   it("rejects CSV export for support", async () => {

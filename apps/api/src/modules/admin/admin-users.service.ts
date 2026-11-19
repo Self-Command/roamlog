@@ -8,12 +8,15 @@ import {
   AdminUserDetailSchema,
   AdminUserExportQuerySchema,
   AdminUserQuerySchema,
+  AdminUserUpdateResponseSchema,
   UpdateAdminUserRequestSchema,
   type AdminUserDetail,
   type AdminUserExportQuery,
   type AdminUserPage,
   type AdminUserQuery,
+  type AdminUserUpdateResponse,
   type ForceLogoutResponse,
+  type PlatformRole,
   type ResetTwoFactorResponse,
   type UpdateAdminUserRequest,
 } from "@roamlog/contracts";
@@ -22,7 +25,9 @@ import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
 import { cursorId, toCursorPage } from "../../common/services/cursor-page.js";
 import { presentUser } from "../../common/services/user-presenter.js";
 import { parseRequest } from "../../common/services/request-validation.js";
+import { AppConfigService } from "../../config/app-config.service.js";
 import { AuditService } from "../audit/audit.service.js";
+import { AuthService } from "../auth/auth.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { assertAdminAction } from "./admin-access.js";
 import { CSV_BOM, csvHeader, csvRow } from "./admin-csv.js";
@@ -30,6 +35,13 @@ import { userSelect } from "./admin-selects.js";
 
 const CSV_MAX_ROWS = 50_000;
 const CSV_BATCH_SIZE = 500;
+const PLATFORM_ROLE_RANK: Record<PlatformRole, number> = {
+  user: 0,
+  support: 1,
+  analyst: 2,
+  admin: 3,
+  super_admin: 4,
+};
 const USER_CSV_COLUMNS = [
   "id",
   "email",
@@ -64,6 +76,8 @@ export class AdminUsersService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(AppConfigService) private readonly config: AppConfigService,
   ) {}
 
   async list(actor: AuthenticatedActor, rawQuery: unknown): Promise<AdminUserPage> {
@@ -146,24 +160,70 @@ export class AdminUsersService {
     actor: AuthenticatedActor,
     id: string,
     rawBody: unknown,
-  ): Promise<AdminUserDetail> {
+  ): Promise<AdminUserUpdateResponse> {
     const body = parseRequest(UpdateAdminUserRequestSchema, rawBody);
     const record = await this.requireUser(id);
-    this.assertUserMutation(actor, record, body);
+    const changedFields = changedUserFields(record, body);
+    const emailChanged = changedFields.includes("email");
+    const roleChanged = changedFields.includes("platformRole");
 
-    if (
-      body.platformRole &&
-      record.platformRole === "super_admin" &&
-      body.platformRole !== "super_admin"
-    ) {
-      await this.assertAnotherSuperAdmin();
+    if (changedFields.some((field) => USER_PROFILE_FIELDS.has(field))) {
+      assertAdminAction(actor, "admin:users:update");
+    }
+    if (roleChanged && body.platformRole) {
+      assertAdminAction(actor, "admin:users:change-role");
+      // An actor must never be able to talk themselves out of their own access
+      // level; promotions still flow through another super_admin.
+      if (
+        id === actor.user.id &&
+        PLATFORM_ROLE_RANK[body.platformRole] < PLATFORM_ROLE_RANK[record.platformRole as PlatformRole]
+      ) {
+        throw new ConflictException({
+          code: "SELF_DEMOTION_FORBIDDEN",
+          message: "You cannot demote your own platform role.",
+        });
+      }
+      if (record.platformRole === "super_admin") {
+        await this.assertAnotherSuperAdmin();
+      }
+    }
+    this.assertStatusMutation(actor, body);
+
+    if (changedFields.length === 0) {
+      // A no-op PATCH must not write an audit row or resend a verification email.
+      return AdminUserUpdateResponseSchema.parse(await this.detail(record));
+    }
+
+    const nextEmail = body.email?.trim().toLowerCase();
+    if (emailChanged && nextEmail) {
+      const conflict = await this.prisma.client.user.findUnique({
+        where: { email: nextEmail },
+        select: { id: true },
+      });
+      if (conflict && conflict.id !== id) {
+        throw emailTaken();
+      }
     }
 
     const data: Record<string, unknown> = {};
-    if (body.platformRole) {
+    if (changedFields.includes("name") && body.name !== undefined) {
+      data.name = body.name;
+    }
+    if (emailChanged && nextEmail) {
+      data.email = nextEmail;
+      // A changed address is unverified until the owner proves it again.
+      data.emailVerified = false;
+    }
+    if (changedFields.includes("locale") && body.locale !== undefined) {
+      data.locale = body.locale;
+    }
+    if (changedFields.includes("timezone") && body.timezone !== undefined) {
+      data.timezone = body.timezone;
+    }
+    if (roleChanged && body.platformRole !== undefined) {
       data.platformRole = body.platformRole;
     }
-    if (body.status) {
+    if (changedFields.includes("status") && body.status !== undefined) {
       data.status = body.status;
       if (body.status === "active") {
         data.deletedAt = null;
@@ -173,11 +233,24 @@ export class AdminUsersService {
       }
     }
 
-    const updated = await this.prisma.client.user.update({
-      where: { id },
-      data,
-      select: userSelect,
-    });
+    let updated: UserDetailSource;
+    try {
+      updated = await this.prisma.client.user.update({
+        where: { id },
+        data,
+        select: userSelect,
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw emailTaken();
+      }
+      throw error;
+    }
+
+    // Delivery failures never roll the profile change back: the operator still
+    // gets the new email, and the audit records that the mail did not go out.
+    const delivery = emailChanged ? await this.sendVerificationEmail(updated) : undefined;
+
     await this.audit.record({
       actorId: actor.user.id,
       actorType: "admin",
@@ -187,14 +260,16 @@ export class AdminUsersService {
       ip: actor.ip ?? undefined,
       userAgent: actor.userAgent ?? undefined,
       metadata: {
-        ...(body.status ? { status: body.status, previousStatus: record.status } : {}),
-        ...(body.platformRole
-          ? { platformRole: body.platformRole, previousPlatformRole: record.platformRole }
-          : {}),
+        changedFields: [...changedFields],
+        ...(emailChanged ? { emailVerificationSent: delivery === "sent" } : {}),
       },
     });
 
-    return this.detail(updated);
+    const detail = await this.detail(updated);
+    return AdminUserUpdateResponseSchema.parse({
+      ...detail,
+      ...(delivery ? { delivery } : {}),
+    });
   }
 
   async forceLogout(actor: AuthenticatedActor, id: string): Promise<ForceLogoutResponse> {
@@ -385,24 +460,49 @@ export class AdminUsersService {
     };
   }
 
-  private assertUserMutation(
+  /**
+   * Ask Better Auth to issue a fresh verification link for the new address. The
+   * existing auth-options callback renders and sends it through
+   * `EmailDeliveryService`, so the Admin API never duplicates mail HTML or
+   * token signing. The real delivery outcome is read back from `EmailLog`
+   * because the provider may swallow SMTP errors into a 200 response.
+   */
+  private async sendVerificationEmail(record: UserDetailSource): Promise<"sent" | "failed"> {
+    try {
+      const response = await this.auth.handleWebRequest(
+        new Request(new URL("/v1/auth/send-verification-email", this.config.apiUrl), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: this.config.adminUrl,
+          },
+          body: JSON.stringify({ email: record.email }),
+        }),
+      );
+      if (!response.ok) {
+        return "failed";
+      }
+      const log = await this.prisma.client.emailLog.findFirst({
+        where: { userId: record.id, template: "auth.verify-email" },
+        orderBy: { createdAt: "desc" },
+        select: { status: true },
+      });
+      return log?.status === "sent" ? "sent" : "failed";
+    } catch {
+      return "failed";
+    }
+  }
+
+  private assertStatusMutation(
     actor: AuthenticatedActor,
-    record: UserDetailSource,
     body: UpdateAdminUserRequest,
   ): void {
-    if (body.platformRole !== undefined) {
-      assertAdminAction(actor, "admin:users:change-role");
-    }
     if (body.status === "suspended") {
       assertAdminAction(actor, "admin:users:suspend");
     } else if (body.status === "active") {
       assertAdminAction(actor, "admin:users:restore");
     } else if (body.status === "deleted") {
       assertAdminAction(actor, "admin:users:delete");
-    }
-
-    if (record.deletedAt === null && body.status === "active") {
-      return;
     }
   }
 
@@ -417,6 +517,53 @@ export class AdminUsersService {
       });
     }
   }
+}
+
+const USER_PROFILE_FIELDS = new Set(["name", "email", "locale", "timezone"]);
+
+function changedUserFields(
+  record: UserDetailSource,
+  body: UpdateAdminUserRequest,
+): string[] {
+  const changed: string[] = [];
+  if (body.name !== undefined && body.name !== record.name) {
+    changed.push("name");
+  }
+  if (
+    body.email !== undefined &&
+    body.email.trim().toLowerCase() !== record.email.toLowerCase()
+  ) {
+    changed.push("email");
+  }
+  if (body.locale !== undefined && body.locale !== record.locale) {
+    changed.push("locale");
+  }
+  if (body.timezone !== undefined && body.timezone !== record.timezone) {
+    changed.push("timezone");
+  }
+  if (body.platformRole !== undefined && body.platformRole !== record.platformRole) {
+    changed.push("platformRole");
+  }
+  if (body.status !== undefined && body.status !== record.status) {
+    changed.push("status");
+  }
+  return changed;
+}
+
+function emailTaken(): ConflictException {
+  return new ConflictException({
+    code: "EMAIL_TAKEN",
+    message: "Another account already uses this email address.",
+  });
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
 }
 
 function iso(value: Date | string): string {

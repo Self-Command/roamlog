@@ -415,6 +415,9 @@ export const ADMIN_ACTIONS = [
   "admin:system:read",
   "admin:settings:read",
   "admin:settings:write",
+  "admin:users:update",
+  "admin:permissions:read",
+  "admin:permissions:write",
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -475,3 +478,82 @@ export function canPlatform(role: string, action: string): boolean {
   }
   return platformRoleActions[role as PlatformRole].has(action as AdminAction);
 }
+
+/**
+ * Code-owned role → action matrix, in stable `ADMIN_ACTIONS` order.
+ *
+ * This is the single source of truth the Admin permission-matrix endpoint reads;
+ * database overrides are layered on top of it and never replace it. Do not copy
+ * these role lists into another module: derive UI and API output from here.
+ */
+export const PLATFORM_ROLE_ACTIONS: Record<PlatformRole, readonly AdminAction[]> = {
+  user: ADMIN_ACTIONS.filter((action) => platformRoleActions.user.has(action)),
+  support: ADMIN_ACTIONS.filter((action) => platformRoleActions.support.has(action)),
+  analyst: ADMIN_ACTIONS.filter((action) => platformRoleActions.analyst.has(action)),
+  admin: ADMIN_ACTIONS.filter((action) => platformRoleActions.admin.has(action)),
+  super_admin: ADMIN_ACTIONS.filter((action) => platformRoleActions.super_admin.has(action)),
+};
+
+/**
+ * Human-readable descriptions for the permission matrix. The action list itself
+ * is derived from `ADMIN_ACTIONS`; this map only adds labels.
+ */
+export const ADMIN_ACTION_DESCRIPTIONS: Record<AdminAction, string> = {
+  "admin:metrics:read": "读取平台指标与趋势",
+  "admin:users:read": "读取用户列表与详情",
+  "admin:users:suspend": "暂停用户账户",
+  "admin:users:restore": "恢复用户账户",
+  "admin:users:delete": "软删除用户账户",
+  "admin:users:force-logout": "强制撤销用户会话",
+  "admin:users:reset-2fa": "重置用户双因素认证",
+  "admin:users:change-role": "修改用户平台角色",
+  "admin:workspaces:read": "读取工作区列表与详情",
+  "admin:workspaces:suspend": "暂停工作区",
+  "admin:workspaces:restore": "恢复工作区",
+  "admin:workspaces:delete": "软删除工作区",
+  "admin:content:read": "读取审核内容",
+  "admin:content:delete": "下架内容",
+  "admin:content:restore": "恢复内容",
+  "admin:media:read": "读取媒体资产",
+  "admin:media:delete": "删除媒体资产",
+  "admin:audit:read": "读取审计日志",
+  "admin:audit:export": "导出审计日志",
+  "admin:flags:read": "读取功能开关",
+  "admin:flags:update": "创建、修改与删除功能开关",
+  "admin:emails:read": "读取邮件投递记录",
+  "admin:emails:resend": "重发邮件",
+  "admin:jobs:read": "读取队列任务",
+  "admin:jobs:retry": "重试失败任务",
+  "admin:jobs:manage": "暂停、恢复与清空队列",
+  "admin:system:read": "读取系统健康状态",
+  "admin:settings:read": "读取平台设置",
+  "admin:settings:write": "写入平台设置",
+  "admin:users:update": "编辑用户资料（姓名、邮箱、语言与时区）",
+  "admin:permissions:read": "读取平台权限矩阵",
+  "admin:permissions:write": "修改平台权限矩阵覆盖层",
+};
+
+/**
+ * Security-sensitive actions that the permission-matrix UI must never grant.
+ * The platform-only permission actions and profile-edit action stay here too, so
+ * the matrix can never widen the super_admin-only surface.
+ */
+export const NON_GRANTABLE_ADMIN_ACTIONS: readonly string[] = [
+  "admin:users:delete",
+  "admin:users:change-role",
+  "admin:users:reset-2fa",
+  "admin:users:update",
+  "admin:settings:write",
+  "admin:workspaces:transfer",
+  "admin:permissions:read",
+  "admin:permissions:write",
+];
+
+const nonGrantableActionSet = new Set<string>(NON_GRANTABLE_ADMIN_ACTIONS);
+
+export function isGrantableAdminAction(action: string): boolean {
+  return adminActionSet.has(action) && !nonGrantableActionSet.has(action);
+}
+
+export const ADMIN_GRANTABLE_ACTIONS: readonly AdminAction[] =
+  ADMIN_ACTIONS.filter(isGrantableAdminAction);

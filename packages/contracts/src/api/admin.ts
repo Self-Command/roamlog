@@ -26,9 +26,10 @@ import { InvitationSchema } from "../entities/invitation";
 import { JournalEntrySchema } from "../entities/journal";
 import { MediaSchema } from "../entities/media";
 import { TripSchema } from "../entities/trip";
+import { IanaTimeZoneSchema } from "../entities/trip";
 import { UserSchema } from "../entities/user";
 import { WorkspaceSchema } from "../entities/workspace";
-import { PlatformRoleSchema, WorkspaceRoleSchema } from "../permissions";
+import { ADMIN_ACTIONS, PlatformRoleSchema, WorkspaceRoleSchema } from "../permissions";
 import { MessageResponseSchema } from "./common";
 
 /**
@@ -161,6 +162,12 @@ export type AdminUserCsvResponse = z.infer<typeof AdminUserCsvResponseSchema>;
 
 export const UpdateAdminUserRequestSchema = z
   .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    email: EmailSchema.optional(),
+    // Reuse the profile field schema so admin edits accept exactly what the
+    // user-facing profile accepts instead of inventing a second locale format.
+    locale: UserSchema.shape.locale.optional(),
+    timezone: IanaTimeZoneSchema.optional(),
     status: AccountStatusSchema.optional(),
     platformRole: PlatformRoleSchema.optional(),
   })
@@ -169,6 +176,59 @@ export const UpdateAdminUserRequestSchema = z
     message: "At least one admin user field is required.",
   });
 export type UpdateAdminUserRequest = z.infer<typeof UpdateAdminUserRequestSchema>;
+
+/**
+ * The user detail after a PATCH, plus the outcome of the verification email that
+ * an email change triggers. `delivery` is absent when the email did not change.
+ */
+export const AdminUserUpdateResponseSchema = AdminUserDetailSchema.extend({
+  delivery: z.enum(["sent", "failed"]).optional(),
+});
+export type AdminUserUpdateResponse = z.infer<typeof AdminUserUpdateResponseSchema>;
+
+export const AdminActionSchema = z.enum(ADMIN_ACTIONS);
+export type AdminActionName = z.infer<typeof AdminActionSchema>;
+
+export const AdminPermissionActionSchema = z
+  .object({
+    action: AdminActionSchema,
+    description: z.string().min(1).max(500),
+    grantable: z.boolean(),
+  })
+  .strict();
+export type AdminPermissionAction = z.infer<typeof AdminPermissionActionSchema>;
+
+export const AdminPermissionRoleSchema = z
+  .object({
+    role: PlatformRoleSchema,
+    actions: z.array(AdminActionSchema),
+  })
+  .strict();
+export type AdminPermissionRole = z.infer<typeof AdminPermissionRoleSchema>;
+
+export const AdminPermissionsResponseSchema = z
+  .object({
+    roles: z.array(AdminPermissionRoleSchema),
+    actions: z.array(AdminPermissionActionSchema),
+  })
+  .strict();
+export type AdminPermissionsResponse = z.infer<typeof AdminPermissionsResponseSchema>;
+
+export const AdminPermissionChangeSchema = z
+  .object({
+    role: PlatformRoleSchema,
+    action: AdminActionSchema,
+    granted: z.boolean(),
+  })
+  .strict();
+export type AdminPermissionChange = z.infer<typeof AdminPermissionChangeSchema>;
+
+export const UpdateAdminPermissionsRequestSchema = z
+  .object({
+    changes: z.array(AdminPermissionChangeSchema).min(1).max(200),
+  })
+  .strict();
+export type UpdateAdminPermissionsRequest = z.infer<typeof UpdateAdminPermissionsRequestSchema>;
 
 export const ForceLogoutResponseSchema = z
   .object({ revokedSessions: z.number().int().nonnegative() })

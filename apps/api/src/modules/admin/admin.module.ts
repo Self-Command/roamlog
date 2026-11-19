@@ -15,6 +15,8 @@ import { AdminJobsService } from "./admin-jobs.service.js";
 import { AdminMediaService } from "./admin-media.service.js";
 import { AdminMetricsService } from "./admin-metrics.service.js";
 import { AdminOperationsController } from "./admin-operations.controller.js";
+import { AdminPermissionsController } from "./admin-permissions.controller.js";
+import { AdminPermissionsService } from "./admin-permissions.service.js";
 import { AdminQueueService } from "./admin-queue.service.js";
 import { AdminSystemService } from "./admin-system.service.js";
 import { AdminUsersController } from "./admin-users.controller.js";
@@ -37,6 +39,7 @@ import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
     AdminWorkspacesController,
     AdminContentController,
     AdminOperationsController,
+    AdminPermissionsController,
   ],
   providers: [
     AdminGuard,
@@ -45,6 +48,7 @@ import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
     AdminMetricsService,
     AdminSystemService,
     AdminUsersService,
+    AdminPermissionsService,
     AdminWorkspacesService,
     AdminContentService,
     AdminMediaService,
