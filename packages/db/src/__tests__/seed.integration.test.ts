@@ -17,6 +17,27 @@ integration("seedDemoData against PostgreSQL", () => {
   const prisma = createPrismaClient({ connectionString: testDatabaseUrl });
   const data = buildSeedDataset();
 
+  /**
+   * Row counts for every tenant *outside* the seeded workspace, in the same
+   * order and shape the old hard-coded `[0, 0, 0, 0, 0]` literal used. Two
+   * snapshots of this vector are compared, so the seed is judged on what it
+   * changed instead of on rows that were already in the database.
+   */
+  const countRowsOutsideSeedWorkspace = () =>
+    Promise.all([
+      prisma.workspaceMember.count({
+        where: { NOT: { workspaceId: data.workspace.id } },
+      }),
+      prisma.trip.count({ where: { NOT: { workspaceId: data.workspace.id } } }),
+      prisma.journalEntry.count({
+        where: { NOT: { workspaceId: data.workspace.id } },
+      }),
+      prisma.media.count({ where: { NOT: { workspaceId: data.workspace.id } } }),
+      prisma.expense.count({
+        where: { NOT: { workspaceId: data.workspace.id } },
+      }),
+    ]);
+
   beforeAll(async () => {
     await prisma.$connect();
   });
@@ -26,6 +47,14 @@ integration("seedDemoData against PostgreSQL", () => {
   });
 
   it("seeds twice without duplicates and keeps the workspace tenant fence intact", async () => {
+    // This suite runs against a real, shared database that already holds data
+    // from local development and earlier runs, so "other workspaces have zero
+    // rows" is not something the seed can satisfy. The tenant fence is proven
+    // differently: the seed must not add or delete a single row outside its own
+    // workspace. The baseline is taken before the first seed and compared after
+    // the second, so any cross-tenant write in either run is caught.
+    const otherWorkspacesBefore = await countRowsOutsideSeedWorkspace();
+
     await seedDemoData(prisma, { quiet: true });
     const firstCounts = {
       members: await prisma.workspaceMember.count({
@@ -118,19 +147,10 @@ integration("seedDemoData against PostgreSQL", () => {
     });
     expect(owners).toEqual([{ userId: data.workspace.ownerId }]);
 
-    const scopedCounts = await Promise.all([
-      prisma.workspaceMember.count({
-        where: { NOT: { workspaceId: data.workspace.id } },
-      }),
-      prisma.trip.count({ where: { NOT: { workspaceId: data.workspace.id } } }),
-      prisma.journalEntry.count({
-        where: { NOT: { workspaceId: data.workspace.id } },
-      }),
-      prisma.media.count({ where: { NOT: { workspaceId: data.workspace.id } } }),
-      prisma.expense.count({
-        where: { NOT: { workspaceId: data.workspace.id } },
-      }),
-    ]);
-    expect(scopedCounts).toEqual([0, 0, 0, 0, 0]);
+    const otherWorkspacesAfter = await countRowsOutsideSeedWorkspace();
+    expect(
+      otherWorkspacesAfter,
+      `seedDemoData added or removed rows outside workspace ${data.workspace.id}`,
+    ).toEqual(otherWorkspacesBefore);
   });
 });
