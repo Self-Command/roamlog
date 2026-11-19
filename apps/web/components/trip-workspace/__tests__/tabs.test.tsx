@@ -101,10 +101,33 @@ describe("行程 tab（真实 stops）", () => {
 
     expect(await screen.findByText("京都")).toBeInTheDocument();
     expect(screen.getByText("日本 · JP")).toBeInTheDocument();
+    // No persisted address yet: the city/country line is the fallback location.
+    expect(screen.getByText("京都 · 日本")).toBeInTheDocument();
     expect(screen.getByText(/35\.0116, 135\.7681/)).toBeInTheDocument();
     expect(screen.getByText("Photon")).toBeInTheDocument();
     expect(screen.getByText(/ORDER 0 · VERSION 1/)).toBeInTheDocument();
     expect(calls).toEqual([{ method: "GET", url: `/v1/trips/${TRIP_ID}/stops`, body: undefined }]);
+  });
+
+  it("显示已落库的地点 address，刷新后仍在", async () => {
+    stubFetch([
+      route("GET", `/v1/trips/${TRIP_ID}/stops`, [
+        makeStop({
+          id: STOP_ID,
+          city: "京都",
+          country: "日本",
+          countryCode: "JP",
+          address: "京都市, 京都府, 日本",
+          bbox: [135.6, 34.85, 135.93, 35.17],
+          order: 0,
+        }),
+      ]),
+    ]);
+
+    renderTab(<StopsTab tripId={TRIP_ID} />, { trip: TRIP, workspace: EDITOR });
+
+    expect(await screen.findByText("京都市, 京都府, 日本")).toBeInTheDocument();
+    expect(screen.queryByText("京都 · 日本")).not.toBeInTheDocument();
   });
 
   it("空状态是真实空态，不编造节点", async () => {

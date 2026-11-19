@@ -1,5 +1,6 @@
 import type {
   CreateTripRequest,
+  GeoBbox,
   Place,
   Trip,
   TripStatus,
@@ -39,8 +40,10 @@ export interface TripFormOrigin {
   lng: number | null;
   countryCode: string | null;
   timeZone: string | null;
-  /** In-session display only: `Trip` has no address column yet. */
+  /** Formatted provider address, persisted on `Trip.originAddress`. */
   address: string | null;
+  /** `[west, south, east, north]`, persisted on `Trip.originBbox`. */
+  bbox: GeoBbox | null;
 }
 
 export interface TripFormValues {
@@ -181,9 +184,10 @@ export function valuesFromTrip(trip: Trip): TripFormValues {
           lng: trip.originLng,
           countryCode: trip.originCountryCode,
           timeZone: trip.timeZone,
-          // `Trip` persists coordinates, not a formatted address, so an edited
-          // trip cannot restore the provider's address here.
-          address: null,
+          // Persisted since the 0006 migration: an edited trip restores the
+          // provider address and box instead of looking like nothing was saved.
+          address: trip.originAddress,
+          bbox: trip.originBbox,
         }
       : null,
     originQuery: originName,
@@ -344,6 +348,8 @@ function originPayload(values: TripFormValues) {
     originLat: values.origin?.lat ?? null,
     originLng: values.origin?.lng ?? null,
     originCountryCode: values.origin?.countryCode ?? null,
+    originAddress: values.origin?.address ?? null,
+    originBbox: values.origin?.bbox ?? null,
     timeZone: values.origin?.timeZone ?? null,
   };
 }
@@ -408,6 +414,8 @@ export function buildUpdateTripRequest(
     (currentOrigin?.originLat ?? null) !== initialTrip.originLat ||
     (currentOrigin?.originLng ?? null) !== initialTrip.originLng ||
     (currentOrigin?.originCountryCode ?? null) !== initialTrip.originCountryCode ||
+    (currentOrigin?.originAddress ?? null) !== initialTrip.originAddress ||
+    !sameBbox(currentOrigin?.originBbox ?? null, initialTrip.originBbox ?? null) ||
     (currentOrigin?.timeZone ?? null) !== initialTrip.timeZone;
   if (originChanged) {
     if (currentOrigin) {
@@ -415,6 +423,8 @@ export function buildUpdateTripRequest(
       patch.originLat = currentOrigin.originLat;
       patch.originLng = currentOrigin.originLng;
       patch.originCountryCode = currentOrigin.originCountryCode;
+      patch.originAddress = currentOrigin.originAddress;
+      patch.originBbox = currentOrigin.originBbox;
       patch.timeZone = currentOrigin.timeZone;
     } else {
       // `origin` cannot be an empty string in the contract; the API normalizes
@@ -423,6 +433,8 @@ export function buildUpdateTripRequest(
       patch.originLat = null;
       patch.originLng = null;
       patch.originCountryCode = null;
+      patch.originAddress = null;
+      patch.originBbox = null;
       patch.timeZone = null;
     }
   }
@@ -453,6 +465,12 @@ export function buildUpdateTripRequest(
 
 function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** Both null, or four identical numbers in `[west, south, east, north]` order. */
+function sameBbox(left: GeoBbox | null, right: GeoBbox | null): boolean {
+  if (left === null || right === null) return left === right;
+  return left.every((value, index) => value === right[index]);
 }
 
 function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
@@ -499,6 +517,8 @@ function mapServerField(field: string | undefined): TripFormField | null {
     case "originLat":
     case "originLng":
     case "originCountryCode":
+    case "originAddress":
+    case "originBbox":
     case "timeZone":
       return "origin";
     case "countryCodes":

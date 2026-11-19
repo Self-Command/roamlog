@@ -125,6 +125,11 @@ function StopRow({
           <Badge tone={stop.provider ? "blue" : "neutral"}>{providerLabel(stop.provider)}</Badge>
         </div>
         <p className="mt-1 text-[11px] leading-5 text-muted">
+          {/* The persisted place address survives a refresh; without one the
+              city/country line above is the only location we can honestly show. */}
+          {stop.address ?? `${stop.city} · ${stop.country}`}
+        </p>
+        <p className="mt-1 text-[11px] leading-5 text-muted">
           {formatDateRange(stop.startDate, stop.endDate)}
           <span className="mx-1.5 text-stone">/</span>
           <span className="font-mono text-[10px]">

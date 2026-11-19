@@ -260,6 +260,7 @@ export function TripForm(props: TripFormProps) {
           countryCode: place.countryCode ?? null,
           timeZone: place.timeZone ?? null,
           address: place.address ?? null,
+          bbox: place.bbox ?? null,
         }
       : {
           name: option.label,
@@ -269,6 +270,7 @@ export function TripForm(props: TripFormProps) {
           countryCode: option.meta ?? null,
           timeZone: null,
           address: null,
+          bbox: null,
         };
     updateFields({ origin, originQuery: origin.name }, ["origin"]);
   }
@@ -286,6 +288,7 @@ export function TripForm(props: TripFormProps) {
           countryCode: null,
           timeZone: null,
           address: null,
+          bbox: null,
         },
         originQuery: name,
       },

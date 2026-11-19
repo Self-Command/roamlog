@@ -141,7 +141,8 @@ describe("buildCreateTripRequest", () => {
           lng: 121.4737,
           countryCode: "CN",
           timeZone: "Asia/Shanghai",
-          address: null,
+          address: "上海市, 中国",
+          bbox: [121.3, 31.1, 121.6, 31.4],
         },
         originQuery: "上海",
         destinations: [" 京都 ", "大阪"],
@@ -163,6 +164,8 @@ describe("buildCreateTripRequest", () => {
       originLat: 31.2304,
       originLng: 121.4737,
       originCountryCode: "CN",
+      originAddress: "上海市, 中国",
+      originBbox: [121.3, 31.1, 121.6, 31.4],
       timeZone: "Asia/Shanghai",
       destinations: ["京都", "大阪"],
       countryCodes: ["CN", "JP"],
@@ -186,6 +189,7 @@ describe("buildCreateTripRequest", () => {
           countryCode: null,
           timeZone: null,
           address: null,
+          bbox: null,
         },
         originQuery: "家门口",
       }),
@@ -253,9 +257,71 @@ describe("buildUpdateTripRequest", () => {
       originLat: null,
       originLng: null,
       originCountryCode: null,
+      originAddress: null,
+      originBbox: null,
       timeZone: null,
       countryCodes: ["JP"],
     });
+  });
+
+  it("echoes the persisted origin address and bbox back into the form", () => {
+    const trip = makeRoundTrip({
+      origin: "京都",
+      originLat: 35.0116,
+      originLng: 135.7681,
+      originCountryCode: "JP",
+      originAddress: "京都市, 京都府, 日本",
+      originBbox: [135.55, 34.87, 135.87, 35.32],
+      timeZone: "Asia/Tokyo",
+    });
+
+    const values = valuesFromTrip(trip);
+    // The edit form must show what was saved, otherwise the address looks lost.
+    expect(values.origin?.address).toBe("京都市, 京都府, 日本");
+    expect(values.origin?.bbox).toEqual([135.55, 34.87, 135.87, 35.32]);
+    // And an unchanged trip must not emit a patch that would rewrite them.
+    expect(buildUpdateTripRequest(values, trip)).toBeNull();
+  });
+
+  it("patch 里带上 originAddress/originBbox，清空时发 null", () => {
+    const trip = makeRoundTrip({
+      origin: "京都",
+      originLat: 35.0116,
+      originLng: 135.7681,
+      originCountryCode: "JP",
+      originAddress: "京都市, 京都府, 日本",
+      originBbox: [135.55, 34.87, 135.87, 35.32],
+      timeZone: "Asia/Tokyo",
+    });
+    const values = valuesFromTrip(trip);
+    const picked = {
+      ...values,
+      origin: {
+        name: "大阪",
+        provider: "geoapify" as const,
+        lat: 34.6937,
+        lng: 135.5023,
+        countryCode: "JP",
+        timeZone: "Asia/Tokyo",
+        address: "大阪市, 大阪府, 日本",
+        bbox: [135.13, 34.53, 135.68, 34.87] as [number, number, number, number],
+      },
+    };
+    expect(buildUpdateTripRequest(picked, trip)).toMatchObject({
+      version: trip.version,
+      origin: "大阪",
+      originAddress: "大阪市, 大阪府, 日本",
+      originBbox: [135.13, 34.53, 135.68, 34.87],
+    });
+
+    const cleared = buildUpdateTripRequest(
+      {
+        ...values,
+        origin: { ...values.origin!, address: null, bbox: null },
+      },
+      trip,
+    );
+    expect(cleared).toMatchObject({ version: trip.version, originAddress: null, originBbox: null });
   });
 
   it("sends destinations and learned country codes when the route changes", () => {

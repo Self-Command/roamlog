@@ -216,6 +216,9 @@ export function TripWorkspaceHeader({
             <span className="mt-1 block font-mono text-[11px] text-stone">
               {coordinateLabel(trip)}
             </span>
+            {trip.originAddress ? (
+              <span className="mt-1 block type-meta text-muted">{trip.originAddress}</span>
+            ) : null}
           </MetaPair>
 
           <MetaPair label="目的地">

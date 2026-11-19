@@ -164,6 +164,8 @@ describe("TripForm create", () => {
       originLat: KYOTO.lat,
       originLng: KYOTO.lng,
       originCountryCode: "JP",
+      originAddress: "京都市, 京都府, 日本",
+      originBbox: [135.6, 34.85, 135.93, 35.17],
       timeZone: "Asia/Tokyo",
       destinations: ["金泽"],
       countryCodes: ["JP"],
@@ -283,6 +285,49 @@ describe("TripForm edit", () => {
       />,
     );
 
+    const title = screen.getByLabelText(/旅行标题/);
+    await user.clear(title);
+    await user.type(title, "冬季京都");
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith({ version: 4, title: "冬季京都" });
+  });
+
+  it("restores the saved origin address and bbox instead of looking unsaved", async () => {
+    const trip = makeTrip({
+      version: 4,
+      countryCodes: ["CN", "JP"],
+      origin: "京都",
+      originLat: 35.0116,
+      originLng: 135.7681,
+      originCountryCode: "JP",
+      originAddress: "京都市, 京都府, 日本",
+      originBbox: [135.6, 34.85, 135.93, 35.17],
+      timeZone: "Asia/Tokyo",
+    });
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    // The edit form shows the persisted address, so a refresh does not look like
+    // the selection was lost.
+    expect(await screen.findByText("京都市, 京都府, 日本")).toBeInTheDocument();
+    // The restored origin also keeps its timezone, so the field looks complete.
+    expect(screen.getAllByText("Asia/Tokyo").length).toBeGreaterThan(0);
+
+    // Echoing it must not fabricate a change: only the title travels.
     const title = screen.getByLabelText(/旅行标题/);
     await user.clear(title);
     await user.type(title, "冬季京都");
