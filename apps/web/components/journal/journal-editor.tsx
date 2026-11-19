@@ -2,21 +2,30 @@
 
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
+import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
+import TaskItem from "@tiptap/extension-task-item";
+import TaskList from "@tiptap/extension-task-list";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
   Bold,
   Code2,
+  Columns3,
   Heading2,
   ImagePlus,
   Italic,
   Link2,
   Link2Off,
   List,
+  ListChecks,
   ListOrdered,
   Pilcrow,
   Quote,
   Redo2,
+  Rows3,
+  Table as TableIcon,
+  Table2,
+  Trash2,
   Undo2,
 } from "lucide-react";
 import { useState } from "react";
@@ -103,6 +112,14 @@ export function JournalEditor({
       }),
       Image.configure({ inline: false, allowBase64: true }),
       Placeholder.configure({ placeholder }),
+      // Ported from https://tiptap.dev/docs/editor/extensions/nodes/table (+ /table-row, /table-header, /table-cell).
+      Table.configure({ resizable: false, allowTableNodeSelection: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      // Ported from https://tiptap.dev/docs/editor/extensions/nodes/task-list and /task-item.
+      TaskList,
+      TaskItem.configure({ nested: true }),
     ],
     editorProps: {
       attributes: {
@@ -205,11 +222,69 @@ export function JournalEditor({
             <ListOrdered aria-hidden="true" className="size-4" />
           </ToolbarButton>
           <ToolbarButton
+            label="任务列表"
+            pressed={editor.isActive("taskList")}
+            onClick={() => editor.chain().focus().toggleTaskList().run()}
+          >
+            <ListChecks aria-hidden="true" className="size-4" />
+          </ToolbarButton>
+          <ToolbarButton
             label="引用"
             pressed={editor.isActive("blockquote")}
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
           >
             <Quote aria-hidden="true" className="size-4" />
+          </ToolbarButton>
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
+          <ToolbarButton
+            label="插入表格"
+            onClick={() =>
+              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+            }
+          >
+            <TableIcon aria-hidden="true" className="size-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="上方插入行"
+            disabled={!editor.can().addRowBefore()}
+            onClick={() => editor.chain().focus().addRowBefore().run()}
+          >
+            <Rows3 aria-hidden="true" className="size-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="下方插入行"
+            disabled={!editor.can().addRowAfter()}
+            onClick={() => editor.chain().focus().addRowAfter().run()}
+          >
+            <Rows3 aria-hidden="true" className="size-4 rotate-180" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="删除当前行"
+            disabled={!editor.can().deleteRow()}
+            onClick={() => editor.chain().focus().deleteRow().run()}
+          >
+            <Trash2 aria-hidden="true" className="size-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="左侧插入列"
+            disabled={!editor.can().addColumnBefore()}
+            onClick={() => editor.chain().focus().addColumnBefore().run()}
+          >
+            <Columns3 aria-hidden="true" className="size-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="右侧插入列"
+            disabled={!editor.can().addColumnAfter()}
+            onClick={() => editor.chain().focus().addColumnAfter().run()}
+          >
+            <Columns3 aria-hidden="true" className="size-4 rotate-180" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="删除当前列"
+            disabled={!editor.can().deleteColumn()}
+            onClick={() => editor.chain().focus().deleteColumn().run()}
+          >
+            <Table2 aria-hidden="true" className="size-4" />
           </ToolbarButton>
           <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
           <ToolbarButton
@@ -286,7 +361,7 @@ export function JournalEditor({
 
       <EditorContent
         editor={editor}
-        className="[&_.journal-prose]:relative [&_.journal-prose]:outline-none [&_.journal-prose_p.is-editor-empty:first-child::before]:pointer-events-none [&_.journal-prose_p.is-editor-empty:first-child::before]:float-left [&_.journal-prose_p.is-editor-empty:first-child::before]:h-0 [&_.journal-prose_p.is-editor-empty:first-child::before]:text-stone [&_.journal-prose_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.journal-prose_h2]:mt-5 [&_.journal-prose_h2]:font-serif [&_.journal-prose_h2]:text-2xl [&_.journal-prose_h2]:tracking-[-0.02em] [&_.journal-prose_h2]:text-ink [&_.journal-prose_h3]:mt-4 [&_.journal-prose_h3]:font-serif [&_.journal-prose_h3]:text-xl [&_.journal-prose_h3]:text-ink [&_.journal-prose_p]:my-2 [&_.journal-prose_ul]:my-2 [&_.journal-prose_ul]:list-disc [&_.journal-prose_ul]:pl-5 [&_.journal-prose_ol]:my-2 [&_.journal-prose_ol]:list-decimal [&_.journal-prose_ol]:pl-5 [&_.journal-prose_blockquote]:my-3 [&_.journal-prose_blockquote]:border-l-2 [&_.journal-prose_blockquote]:border-hairline-strong [&_.journal-prose_blockquote]:pl-4 [&_.journal-prose_blockquote]:text-muted [&_.journal-prose_pre]:my-3 [&_.journal-prose_pre]:overflow-x-auto [&_.journal-prose_pre]:rounded-control [&_.journal-prose_pre]:border [&_.journal-prose_pre]:border-hairline [&_.journal-prose_pre]:bg-black/40 [&_.journal-prose_pre]:p-3 [&_.journal-prose_pre]:font-mono [&_.journal-prose_pre]:text-xs [&_.journal-prose_a]:text-accent-blue [&_.journal-prose_a]:underline [&_.journal-prose_img]:my-3 [&_.journal-prose_img]:max-w-full [&_.journal-prose_img]:rounded-control [&_.journal-prose_img]:border [&_.journal-prose_img]:border-hairline"
+        className="[&_.journal-prose]:relative [&_.journal-prose]:outline-none [&_.journal-prose_p.is-editor-empty:first-child::before]:pointer-events-none [&_.journal-prose_p.is-editor-empty:first-child::before]:float-left [&_.journal-prose_p.is-editor-empty:first-child::before]:h-0 [&_.journal-prose_p.is-editor-empty:first-child::before]:text-stone [&_.journal-prose_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.journal-prose_h2]:mt-5 [&_.journal-prose_h2]:font-serif [&_.journal-prose_h2]:text-2xl [&_.journal-prose_h2]:tracking-[-0.02em] [&_.journal-prose_h2]:text-ink [&_.journal-prose_h3]:mt-4 [&_.journal-prose_h3]:font-serif [&_.journal-prose_h3]:text-xl [&_.journal-prose_h3]:text-ink [&_.journal-prose_p]:my-2 [&_.journal-prose_ul]:my-2 [&_.journal-prose_ul]:list-disc [&_.journal-prose_ul]:pl-5 [&_.journal-prose_table]:my-3 [&_.journal-prose_table]:w-full [&_.journal-prose_table]:table-fixed [&_.journal-prose_table]:overflow-hidden [&_.journal-prose_table]:rounded-control [&_.journal-prose_table]:border [&_.journal-prose_table]:border-hairline-strong [&_.journal-prose_th]:border [&_.journal-prose_th]:border-hairline [&_.journal-prose_th]:bg-surface-2 [&_.journal-prose_th]:px-3 [&_.journal-prose_th]:py-2 [&_.journal-prose_th]:text-left [&_.journal-prose_th]:align-top [&_.journal-prose_th]:text-[13px] [&_.journal-prose_th]:font-medium [&_.journal-prose_th]:text-ink [&_.journal-prose_td]:border [&_.journal-prose_td]:border-hairline [&_.journal-prose_td]:px-3 [&_.journal-prose_td]:py-2 [&_.journal-prose_td]:align-top [&_.journal-prose_td]:text-body [&_.journal-prose_.selectedCell]:bg-accent-blue\/10 [&_.journal-prose_.tableWrapper]:my-3 [&_.journal-prose_.tableWrapper]:overflow-x-auto [&_.journal-prose_ul[data-type=taskList]]:my-2 [&_.journal-prose_ul[data-type=taskList]]:list-none [&_.journal-prose_ul[data-type=taskList]]:pl-0 [&_.journal-prose_li[data-checked]]:my-1 [&_.journal-prose_li[data-checked]]:flex [&_.journal-prose_li[data-checked]]:items-start [&_.journal-prose_li[data-checked]]:gap-2 [&_.journal-prose_li[data-type=taskItem]>label]:mt-[3px] [&_.journal-prose_li[data-type=taskItem]>label]:flex [&_.journal-prose_li[data-type=taskItem]>label]:shrink-0 [&_.journal-prose_li[data-type=taskItem]>label]:items-center [&_.journal-prose_li[data-type=taskItem]>div]:min-w-0 [&_.journal-prose_li[data-type=taskItem]>div]:flex-1 [&_.journal-prose_li[data-type=taskItem]_p]:my-0 [&_.journal-prose_li[data-type=taskItem]_input[type=checkbox]]:size-[15px] [&_.journal-prose_li[data-type=taskItem]_input[type=checkbox]]:cursor-pointer [&_.journal-prose_li[data-type=taskItem]_input[type=checkbox]]:accent-accent-blue [&_.journal-prose_li[data-checked=true]>div]:text-stone [&_.journal-prose_li[data-checked=true]>div]:line-through [&_.journal-prose_ol]:my-2 [&_.journal-prose_ol]:list-decimal [&_.journal-prose_ol]:pl-5 [&_.journal-prose_blockquote]:my-3 [&_.journal-prose_blockquote]:border-l-2 [&_.journal-prose_blockquote]:border-hairline-strong [&_.journal-prose_blockquote]:pl-4 [&_.journal-prose_blockquote]:text-muted [&_.journal-prose_pre]:my-3 [&_.journal-prose_pre]:overflow-x-auto [&_.journal-prose_pre]:rounded-control [&_.journal-prose_pre]:border [&_.journal-prose_pre]:border-hairline [&_.journal-prose_pre]:bg-black/40 [&_.journal-prose_pre]:p-3 [&_.journal-prose_pre]:font-mono [&_.journal-prose_pre]:text-xs [&_.journal-prose_a]:text-accent-blue [&_.journal-prose_a]:underline [&_.journal-prose_img]:my-3 [&_.journal-prose_img]:max-w-full [&_.journal-prose_img]:rounded-control [&_.journal-prose_img]:border [&_.journal-prose_img]:border-hairline"
       />
     </div>
   );
