@@ -50,11 +50,11 @@ export function toAdminApiFailure(
   return {
     code: `HTTP_${status}`,
     status,
-    title: status === 401 ? "Session required" : "Admin API request failed",
+    title: status === 401 ? "需要登录" : "后台 API 请求失败",
     detail:
       status === 401
-        ? "The Admin session is missing or has expired. Sign in again to continue."
-        : "The Admin API returned an unexpected response.",
+        ? "后台会话缺失或已过期，请重新登录后继续。"
+        : "后台 API 返回了异常响应。",
     degraded,
   };
 }

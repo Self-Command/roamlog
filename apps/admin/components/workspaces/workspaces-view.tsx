@@ -14,6 +14,8 @@ import type {
   AccountStatus,
   AdminWorkspaceDetail,
   AdminWorkspaceListItem,
+  TripStatus,
+  TripVisibility,
   WorkspacePlan,
   WorkspaceRole,
 } from "@roamlog/contracts";
@@ -43,6 +45,15 @@ import {
 import { AdminMutationError } from "../../lib/admin-api-error";
 import type { AdminConsoleRole } from "../../lib/admin-types";
 import { formatBytes, formatDateTime } from "../../lib/format";
+import {
+  ACCOUNT_STATUS_LABELS,
+  INVITATION_STATUS_LABELS,
+  TRIP_STATUS_LABELS,
+  TRIP_VISIBILITY_LABELS,
+  WORKSPACE_DENSITY_LABELS,
+  WORKSPACE_PLAN_LABELS,
+  WORKSPACE_ROLE_LABELS,
+} from "../../lib/labels";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { BulkSelectionBar } from "../admin-ui/bulk-selection-bar";
@@ -96,7 +107,6 @@ const DEFAULT_FILTERS: StoredWorkspaceFilters = {
   plan: "all",
   sort: "createdAt:desc",
 };
-const PLAN_LABELS: Record<WorkspacePlan, string> = { free: "Free", pro: "Pro", team: "Team" };
 function isBulkWorkspaceAction(action: WorkspaceAction): action is BulkWorkspaceAction {
   return (
     action.kind === "bulk-suspend" ||
@@ -148,51 +158,51 @@ const actionCopy: Record<
 > = {
   suspend: {
     title: "暂停工作区",
-    description: "Workspace 成员将暂时无法访问旅行与协作内容。恢复后会保留全部数据。",
+    description: "工作区成员将暂时无法访问旅行与协作内容。恢复后会保留全部数据。",
     confirmLabel: "确认暂停",
     action: "admin.workspace.suspend",
   },
   restore: {
     title: "恢复工作区",
-    description: "Workspace 将重新对成员开放，操作由后端执行并写入审计。",
+    description: "工作区将重新对成员开放，操作由后端执行并写入审计。",
     confirmLabel: "确认恢复",
     action: "admin.workspace.restore",
   },
   delete: {
     title: "删除工作区",
-    description: "Workspace 进入软删除状态，管理员可在后续运营页恢复。",
+    description: "工作区进入软删除状态，管理员可在后续运营页恢复。",
     confirmLabel: "确认删除",
     action: "admin.workspace.delete",
   },
   "change-plan": {
     title: "变更套餐",
     description:
-      "套餐由后端写入 Workspace.plan 并记录审计。当前权限模型以 admin:workspaces:delete 动作约束该变更。",
+      "套餐由后端写入数据库并记录审计。当前权限模型以 admin:workspaces:delete 动作约束该变更。",
     confirmLabel: "确认变更",
     action: "admin.workspace.change-plan",
   },
   "transfer-owner": {
     title: "转移所有权",
     description:
-      "新 Owner 必须是当前活跃成员；后端会在同一事务内调整双方 Workspace 角色并写入审计。",
+      "新所有者必须是当前活跃成员；后端会在同一事务内调整双方工作区角色并写入审计。",
     confirmLabel: "确认转移",
     action: "admin.workspace.transfer-owner",
   },
   "bulk-suspend": {
     title: "批量暂停工作区",
-    description: "所选 Workspace 会暂停访问，操作由后端执行并写入审计。",
+    description: "所选工作区会暂停访问，操作由后端执行并写入审计。",
     confirmLabel: "确认批量暂停",
     action: "admin.workspace.bulk-suspend",
   },
   "bulk-restore": {
     title: "批量恢复工作区",
-    description: "所选 Workspace 会恢复访问，操作由后端执行并写入审计。",
+    description: "所选工作区会恢复访问，操作由后端执行并写入审计。",
     confirmLabel: "确认批量恢复",
     action: "admin.workspace.bulk-restore",
   },
   "bulk-delete": {
     title: "批量删除工作区",
-    description: "所选 Workspace 进入软删除状态，操作由后端执行并写入审计。",
+    description: "所选工作区进入软删除状态，操作由后端执行并写入审计。",
     confirmLabel: "确认批量删除",
     action: "admin.workspace.bulk-delete",
   },
@@ -386,7 +396,7 @@ export function WorkspacesView({
       return;
     }
 
-    setStatusMessage("未连接 Admin API，操作未提交。");
+    setStatusMessage("未连接后台 API，操作未提交。");
     setPendingAction(null);
   }
 
@@ -405,10 +415,10 @@ export function WorkspacesView({
           "roamlog-admin-workspaces.csv",
         );
       }
-      setStatusMessage("Workspace CSV 已按当前筛选导出。");
+      setStatusMessage("工作区 CSV 已按当前筛选导出。");
     } catch (error) {
       setStatusMessage(
-        mutationFailureMessage(error, "导出失败，请检查 Admin API 与会话后重试。"),
+        mutationFailureMessage(error, "导出失败，请检查后台 API 与会话后重试。"),
       );
     } finally {
       setIsExporting(false);
@@ -441,7 +451,7 @@ export function WorkspacesView({
   const recentTrips: ReadonlyArray<{
     id: string;
     title: string;
-    status: string;
+    status: TripStatus;
     updatedAt: string;
   }> | undefined =
     trips.data === undefined || trips.data === null
@@ -456,6 +466,12 @@ export function WorkspacesView({
   const invitations = detail.data?.invitations;
   const ownerName = detailData?.owner.name ?? detailWorkspace?.owner?.name;
   const ownerEmail = detailData?.owner.email ?? detailWorkspace?.owner?.email;
+  const defaultVisibility: TripVisibility =
+    detailData?.settings.defaultVisibility ??
+    detailWorkspace?.settings.defaultVisibility ??
+    "workspace";
+  const density =
+    detailData?.settings.density ?? detailWorkspace?.settings.density ?? "comfortable";
 
   function openPlanAction(workspace: AdminWorkspaceListItem) {
     setNextPlan(workspace.plan);
@@ -480,7 +496,7 @@ export function WorkspacesView({
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="TRUST & SAFETY / WORKSPACES"
+        eyebrow="信任与安全 / 工作区"
         title="工作区"
         description="按服务端搜索与筛选读取租户体量、成员、套餐与所有权，并执行受平台角色约束的运营操作。"
         readOnly={readOnly}
@@ -494,7 +510,7 @@ export function WorkspacesView({
                 isExporting
                   ? "正在生成 CSV"
                   : !canExport
-                    ? "仅 admin 及以上可导出 Workspace CSV（后端动作 admin:workspaces:delete）"
+                    ? "仅管理员及以上可导出工作区 CSV（后端动作 admin:workspaces:delete）"
                     : "按当前搜索与筛选导出全部匹配工作区（服务端 CSV）"
               }
               onClick={() => void handleExport()}
@@ -534,9 +550,9 @@ export function WorkspacesView({
             onChange={(event) => changeStatus(event.currentTarget.value as "all" | AccountStatus)}
           >
             <option value="all">全部状态</option>
-            <option value="active">Active</option>
-            <option value="suspended">已暂停</option>
-            <option value="deleted">已删除</option>
+            <option value="active">{ACCOUNT_STATUS_LABELS.active}</option>
+            <option value="suspended">{ACCOUNT_STATUS_LABELS.suspended}</option>
+            <option value="deleted">{ACCOUNT_STATUS_LABELS.deleted}</option>
           </Select>
         </label>
         <label className="w-full md:w-40">
@@ -547,9 +563,9 @@ export function WorkspacesView({
             onChange={(event) => changePlanFilter(event.currentTarget.value as "all" | WorkspacePlan)}
           >
             <option value="all">全部套餐</option>
-            <option value="free">Free</option>
-            <option value="pro">Pro</option>
-            <option value="team">Team</option>
+            <option value="free">{WORKSPACE_PLAN_LABELS.free}</option>
+            <option value="pro">{WORKSPACE_PLAN_LABELS.pro}</option>
+            <option value="team">{WORKSPACE_PLAN_LABELS.team}</option>
           </Select>
         </label>
         <label className="w-full md:w-44">
@@ -577,7 +593,7 @@ export function WorkspacesView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          Analyst 只能查看工作区数据；暂停、套餐与所有权操作保持可见但不可用。
+          分析员只能查看工作区数据；暂停、套餐与所有权操作保持可见但不可用。
         </div>
       ) : null}
 
@@ -625,9 +641,9 @@ export function WorkspacesView({
       <section className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1">
         <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
           <div>
-            <h2 className="text-[13px] font-medium text-ink">Workspace 列表</h2>
+            <h2 className="text-[13px] font-medium text-ink">工作区列表</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              tenants / server page {pageIndex + 1}
+              租户 / 服务端分页 第 {pageIndex + 1} 页
             </p>
           </div>
         </div>
@@ -648,7 +664,7 @@ export function WorkspacesView({
           </div>
         ) : api.isLoading && !api.data ? (
           <p role="status" className="m-4 text-[12px] text-muted">
-            正在读取 Workspace 列表…
+            正在读取工作区列表…
           </p>
         ) : visibleWorkspaces.length === 0 ? (
           <EmptyState
@@ -659,7 +675,7 @@ export function WorkspacesView({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1140px] border-collapse text-left text-[12px]">
-              <caption className="sr-only">Workspace 平台列表</caption>
+              <caption className="sr-only">工作区平台列表</caption>
               <thead>
                 <tr className="border-b border-hairline font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
                   <th scope="col" className="w-10 px-3 py-2.5">
@@ -685,7 +701,7 @@ export function WorkspacesView({
                     状态
                   </th>
                   <th scope="col" className="px-3 py-2.5 font-normal">
-                    Owner
+                    所有者
                   </th>
                   <th scope="col" className="px-3 py-2.5 font-normal">
                     成员
@@ -759,7 +775,7 @@ export function WorkspacesView({
                       ) : (
                         <span
                           className="font-mono text-[10px] text-muted"
-                          title="列表响应未提供 Owner；需要 GET /v1/admin/workspaces 返回 owner"
+                          title="列表响应未提供所有者；需要 GET /v1/admin/workspaces 返回 owner"
                         >
                           未接入
                         </span>
@@ -896,7 +912,7 @@ export function WorkspacesView({
           {detailWorkspace ? (
             <>
               <SheetHeader>
-                <p className="type-eyebrow">WORKSPACE DETAIL</p>
+                <p className="type-eyebrow">工作区详情</p>
                 <SheetTitle>{detailWorkspace.name}</SheetTitle>
                 <SheetDescription>{detailWorkspace.slug}</SheetDescription>
               </SheetHeader>
@@ -908,7 +924,7 @@ export function WorkspacesView({
 
               {detail.error ? (
                 <div role="alert" className="mt-4 rounded-control border border-accent-red/25 p-3">
-                  <p className="type-eyebrow text-accent-red">DETAIL ERROR</p>
+                  <p className="type-eyebrow text-accent-red">详情加载失败</p>
                   <p className="mt-1 text-[11px] leading-5 text-body">{detail.error.detail}</p>
                   <Button variant="ghost" size="sm" className="mt-2" onClick={() => detail.refetch()}>
                     重试详情
@@ -936,7 +952,7 @@ export function WorkspacesView({
               </dl>
 
               <div className="mt-6 rounded-control border border-hairline bg-surface-1 p-3">
-                <p className="type-eyebrow">Owner</p>
+                <p className="type-eyebrow">所有者</p>
                 <p className="mt-2 text-sm text-ink">{ownerName ?? "未接入"}</p>
                 <p className="mt-1 font-mono text-[9px] text-muted">
                   {ownerEmail ?? "需要 GET /v1/admin/workspaces/:id 返回 owner"}
@@ -979,7 +995,7 @@ export function WorkspacesView({
                       ? detailLoading
                         ? "读取中"
                         : "未接入"
-                      : `${members.length} records`}
+                      : `${members.length} 条记录`}
                   </span>
                 </div>
                 {members === undefined ? (
@@ -1000,9 +1016,9 @@ export function WorkspacesView({
                           <p className="truncate font-mono text-[9px] text-muted">{member.email}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <Badge tone="slate">{member.role}</Badge>
+                          <Badge tone="slate">{WORKSPACE_ROLE_LABELS[member.role]}</Badge>
                           {member.status === "suspended" ? (
-                            <Badge tone="yellow">Suspended</Badge>
+                            <Badge tone="yellow">{ACCOUNT_STATUS_LABELS.suspended}</Badge>
                           ) : null}
                         </div>
                       </li>
@@ -1023,7 +1039,7 @@ export function WorkspacesView({
                       ? detailLoading
                         ? "读取中"
                         : "未接入"
-                      : `${invitations.length} records`}
+                      : `${invitations.length} 条记录`}
                   </span>
                 </div>
                 {invitations === undefined ? (
@@ -1046,7 +1062,7 @@ export function WorkspacesView({
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <Badge tone="slate">{invitation.role}</Badge>
+                          <Badge tone="slate">{WORKSPACE_ROLE_LABELS[invitation.role]}</Badge>
                           <Badge
                             tone={
                               invitation.acceptedAt
@@ -1057,10 +1073,10 @@ export function WorkspacesView({
                             }
                           >
                             {invitation.acceptedAt
-                              ? "Accepted"
+                              ? INVITATION_STATUS_LABELS.accepted
                               : invitation.revokedAt
-                                ? "Revoked"
-                                : "Pending"}
+                                ? INVITATION_STATUS_LABELS.revoked
+                                : INVITATION_STATUS_LABELS.pending}
                           </Badge>
                         </div>
                       </li>
@@ -1081,7 +1097,7 @@ export function WorkspacesView({
                       ? trips.isLoading
                         ? "读取中"
                         : "未接入"
-                      : `${recentTrips.length} records`}
+                      : `${recentTrips.length} 条记录`}
                   </span>
                 </div>
                 {trips.error ? (
@@ -1105,7 +1121,7 @@ export function WorkspacesView({
                           </p>
                         </div>
                         <Badge tone={trip.status === "completed" ? "green" : "blue"}>
-                          {trip.status}
+                          {TRIP_STATUS_LABELS[trip.status]}
                         </Badge>
                       </li>
                     ))}
@@ -1116,7 +1132,7 @@ export function WorkspacesView({
               </section>
 
               <div className="mt-6 rounded-control border border-hairline bg-surface-1 p-3">
-                <p className="type-eyebrow">Workspace settings</p>
+                <p className="type-eyebrow">工作区设置</p>
                 <div className="mt-2 flex items-center justify-between gap-3 text-[12px]">
                   <span className="text-muted">时区</span>
                   <span className="font-mono text-[10px] text-body">
@@ -1126,11 +1142,8 @@ export function WorkspacesView({
                 <div className="mt-2 flex items-center justify-between gap-3 text-[12px]">
                   <span className="text-muted">可见性 / 密度</span>
                   <span className="font-mono text-[10px] text-body">
-                    {(detailData?.settings.defaultVisibility ??
-                      detailWorkspace.settings.defaultVisibility) ?? "workspace"}{" "}
-                    /{" "}
-                    {(detailData?.settings.density ?? detailWorkspace.settings.density) ??
-                      "comfortable"}
+                    {TRIP_VISIBILITY_LABELS[defaultVisibility]} /{" "}
+                    {WORKSPACE_DENSITY_LABELS[density]}
                   </span>
                 </div>
               </div>
@@ -1144,7 +1157,7 @@ export function WorkspacesView({
                     title={
                       canManageContract
                         ? "变更套餐并写入审计"
-                        : "仅 admin 及以上可变更套餐（后端动作 admin:workspaces:delete）"
+                        : "仅管理员及以上可变更套餐（后端动作 admin:workspaces:delete）"
                     }
                     onClick={() => openPlanAction(detailWorkspace)}
                   >
@@ -1155,7 +1168,7 @@ export function WorkspacesView({
                     disabled={!canTransfer || !transferCandidates?.length}
                     title={
                       !canTransfer
-                        ? "仅 admin 及以上可转移所有权（后端动作 admin:workspaces:transfer）"
+                        ? "仅管理员及以上可转移所有权（后端动作 admin:workspaces:transfer）"
                         : transferCandidates?.length
                           ? "转移给活跃成员"
                           : "需要成员详情中存在其他活跃成员"
@@ -1189,16 +1202,16 @@ export function WorkspacesView({
         onConfirm={confirmAction}
         roleOptions={
           pendingAction?.kind === "change-plan"
-            ? Object.entries(PLAN_LABELS).map(([value, label]) => ({ value, label }))
+            ? Object.entries(WORKSPACE_PLAN_LABELS).map(([value, label]) => ({ value, label }))
             : pendingAction?.kind === "transfer-owner"
               ? (transferCandidates ?? []).map((member) => ({
                   value: member.userId,
-                  label: `${member.name} · ${member.role}`,
+                  label: `${member.name} · ${WORKSPACE_ROLE_LABELS[member.role]}`,
                 }))
               : undefined
         }
         roleLabel={
-          pendingAction?.kind === "transfer-owner" ? "新 Owner" : "新套餐"
+          pendingAction?.kind === "transfer-owner" ? "新所有者" : "新套餐"
         }
         roleValue={
           pendingAction?.kind === "transfer-owner" ? nextOwnerId : nextPlan

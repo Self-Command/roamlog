@@ -36,6 +36,12 @@ import {
 
 import type { AdminConsoleRole } from "../../lib/admin-types";
 import { formatDateTime, formatRelativeTime } from "../../lib/format";
+import {
+  MODERATION_ACTION_LABELS,
+  REPORT_REASON_LABELS,
+  REPORT_STATUS_LABELS,
+  REPORT_TARGET_TYPE_LABELS,
+} from "../../lib/labels";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import {
@@ -46,40 +52,11 @@ import {
   type AdminReportsParams,
 } from "./reports-data";
 
-const statusLabels: Record<ReportStatus, string> = {
-  open: "待处理",
-  in_review: "处理中",
-  resolved: "已裁决",
-  dismissed: "已驳回",
-};
-
 const statusTones: Record<ReportStatus, "orange" | "blue" | "green" | "slate"> = {
   open: "orange",
   in_review: "blue",
   resolved: "green",
   dismissed: "slate",
-};
-
-const targetTypeLabels: Record<ReportTargetType, string> = {
-  trip: "旅行",
-  entry: "日志",
-  comment: "评论",
-  media: "媒体",
-};
-
-const reasonLabels: Record<ReportReason, string> = {
-  spam: "垃圾广告",
-  harassment: "骚扰 / 人身攻击",
-  private_info: "泄露隐私",
-  illegal: "违法内容",
-  other: "其他",
-};
-
-const actionLabels: Record<ModerationActionKind, string> = {
-  remove: "下架内容",
-  restore: "恢复内容",
-  warn: "警告作者",
-  dismiss: "驳回举报",
 };
 
 type StatusFilter = "all" | ReportStatus;
@@ -91,7 +68,7 @@ const TAB_ORDER: StatusFilter[] = ["all", "open", "in_review", "resolved", "dism
 function ReporterLine({ report }: { report: AdminReportItem }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-      <p className="text-[12px] text-ink">{reasonLabels[report.reason]}</p>
+      <p className="text-[12px] text-ink">{REPORT_REASON_LABELS[report.reason]}</p>
       <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-stone">
         举报人 {report.reporterId.slice(-8)}
       </span>
@@ -164,7 +141,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="TRUST & SAFETY / CONTENT"
+        eyebrow="信任与安全 / 内容"
         title="内容审核"
         description="真实举报队列：用户提交的举报在这里按状态、内容类型与原因筛选，裁决会写审计并重新拉取列表。"
         readOnly={readOnly}
@@ -189,7 +166,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          Analyst 可查看举报队列与内容快照；裁决操作保持可见但不可用。
+          分析员可查看举报队列与内容快照；裁决操作保持可见但不可用。
         </div>
       ) : null}
 
@@ -203,7 +180,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
         <TabsList aria-label="举报状态">
           {TAB_ORDER.map((value) => (
             <TabsTrigger key={value} value={value}>
-              {value === "all" ? "全部" : statusLabels[value]}
+              {value === "all" ? "全部" : REPORT_STATUS_LABELS[value]}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -238,7 +215,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
             }}
           >
             <option value="all">全部类型</option>
-            {Object.entries(targetTypeLabels).map(([value, label]) => (
+            {Object.entries(REPORT_TARGET_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -256,7 +233,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
             }}
           >
             <option value="all">全部原因</option>
-            {Object.entries(reasonLabels).map(([value, label]) => (
+            {Object.entries(REPORT_REASON_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -335,12 +312,12 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
                 <tr key={report.id} className="border-b border-hairline last:border-0">
                   <td className="px-4 py-3">
                     <div className="flex items-start gap-2">
-                      <Badge tone="neutral">{targetTypeLabels[report.targetType]}</Badge>
+                      <Badge tone="neutral">{REPORT_TARGET_TYPE_LABELS[report.targetType]}</Badge>
                       <div className="min-w-0">
                         <p className="max-w-md truncate text-[13px] text-ink">{report.target.title}</p>
                         <p className="mt-1 font-mono text-[10px] text-muted">
                           {report.target.authorName} · {report.target.workspaceName} ·{" "}
-                          {reasonLabels[report.reason]}
+                          {REPORT_REASON_LABELS[report.reason]}
                         </p>
                       </div>
                     </div>
@@ -353,7 +330,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
                     <p className="font-mono text-[10px] text-stone">{formatDateTime(report.lastReportedAt)}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge tone={statusTones[report.status]}>{statusLabels[report.status]}</Badge>
+                    <Badge tone={statusTones[report.status]}>{REPORT_STATUS_LABELS[report.status]}</Badge>
                     {report.target.moderatedAt ? (
                       <p className="mt-1 font-mono text-[10px] text-accent-orange">已下架</p>
                     ) : null}
@@ -440,13 +417,13 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
             <div className="space-y-6">
               <div>
                 <p className="type-eyebrow">
-                  {targetTypeLabels[selected.targetType]} · REPORT {selected.id.slice(-8)}
+                  {REPORT_TARGET_TYPE_LABELS[selected.targetType]} · 举报 {selected.id.slice(-8)}
                 </p>
                 <h2 className="mt-2 font-serif text-2xl leading-tight tracking-[-0.02em] text-ink">
                   {selected.target.title}
                 </h2>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Badge tone={statusTones[selected.status]}>{statusLabels[selected.status]}</Badge>
+                  <Badge tone={statusTones[selected.status]}>{REPORT_STATUS_LABELS[selected.status]}</Badge>
                   <span className="font-mono text-[10px] text-muted">
                     {selected.target.authorName} · {selected.target.workspaceName}
                   </span>
@@ -505,7 +482,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
                         </p>
                       ) : null}
                       <div className="mt-1.5 flex items-center gap-2">
-                        <Badge tone={statusTones[report.status]}>{statusLabels[report.status]}</Badge>
+                        <Badge tone={statusTones[report.status]}>{REPORT_STATUS_LABELS[report.status]}</Badge>
                         {report.id === selected.id ? (
                           <span className="font-mono text-[10px] text-stone">当前举报</span>
                         ) : null}
@@ -525,7 +502,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
                   <ol className="mt-3 space-y-2">
                     {detail.data!.actions.map((action) => (
                       <li key={action.id} className="flex flex-wrap items-baseline gap-x-2 rounded-card border border-hairline px-3 py-2">
-                        <Badge tone="slate">{actionLabels[action.action]}</Badge>
+                        <Badge tone="slate">{MODERATION_ACTION_LABELS[action.action]}</Badge>
                         <span className="text-[12px] text-body">{action.note ?? "（无备注）"}</span>
                         <span className="ml-auto font-mono text-[10px] text-stone">
                           {formatDateTime(action.createdAt)}
@@ -595,12 +572,12 @@ function ResolveForm({
             disabled={disabled}
             onChange={(event) => setAction(event.currentTarget.value as ModerationActionKind)}
           >
-            <option value="remove">下架内容（remove）</option>
+            <option value="remove">{MODERATION_ACTION_LABELS.remove}</option>
             <option value="restore" disabled={!canRestore}>
-              恢复内容（restore）
+              {MODERATION_ACTION_LABELS.restore}
             </option>
-            <option value="warn">警告作者（warn）</option>
-            <option value="dismiss">驳回举报（dismiss）</option>
+            <option value="warn">{MODERATION_ACTION_LABELS.warn}</option>
+            <option value="dismiss">{MODERATION_ACTION_LABELS.dismiss}</option>
           </Select>
         </label>
         <label>

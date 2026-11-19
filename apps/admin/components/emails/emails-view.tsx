@@ -15,6 +15,7 @@ import {
   type AdminMutationPort,
 } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
+import { EMAIL_STATUS_LABELS } from "../../lib/labels";
 import type { AdminEmailRecord } from "../../lib/admin-ops-types";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
@@ -25,15 +26,6 @@ interface EmailsViewProps {
   emails: readonly AdminEmailRecord[];
   mutations?: AdminMutationPort;
 }
-
-const emailStatusLabels: Record<EmailStatus, string> = {
-  queued: "Queued",
-  sent: "Sent",
-  delivered: "Delivered",
-  bounced: "Bounced",
-  complained: "Complained",
-  failed: "Failed",
-};
 
 const emailStatusTones: Record<EmailStatus, "neutral" | "blue" | "green" | "red" | "yellow"> = {
   queued: "neutral",
@@ -68,15 +60,6 @@ const metricIcons = {
   complained: ShieldAlert,
   failed: MailWarning,
 } as const;
-
-const metricLabels: Record<EmailStatus, string> = {
-  sent: "已发送",
-  queued: "排队中",
-  delivered: "已送达",
-  bounced: "退信",
-  complained: "投诉",
-  failed: "失败",
-};
 
 const metricTones: Record<EmailStatus, "neutral" | "blue" | "green" | "red" | "orange"> = {
   sent: "blue",
@@ -165,9 +148,9 @@ export function EmailsView({
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="DELIVERY / EMAIL"
+        eyebrow="投递 / 邮件"
         title="邮件"
-        description="检查 Resend 投递状态、退信与投诉；只有 failed / bounced 的邮件可以重发。收件人一律脱敏展示。"
+        description="检查 Resend 投递状态、退信与投诉；只有失败 / 退信的邮件可以重发。收件人一律脱敏展示。"
         readOnly={readOnly}
       />
 
@@ -180,7 +163,7 @@ export function EmailsView({
             className="mt-1.5 h-9"
             type="search"
             value={query}
-            placeholder="email 或模板"
+            placeholder="邮箱或模板"
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
@@ -192,12 +175,12 @@ export function EmailsView({
             onChange={(event) => setStatus(event.currentTarget.value as "all" | EmailStatus)}
           >
             <option value="all">全部状态</option>
-            <option value="delivered">Delivered</option>
-            <option value="queued">Queued</option>
-            <option value="sent">Sent</option>
-            <option value="bounced">Bounced</option>
-            <option value="complained">Complained</option>
-            <option value="failed">Failed</option>
+            <option value="delivered">{EMAIL_STATUS_LABELS.delivered}</option>
+            <option value="queued">{EMAIL_STATUS_LABELS.queued}</option>
+            <option value="sent">{EMAIL_STATUS_LABELS.sent}</option>
+            <option value="bounced">{EMAIL_STATUS_LABELS.bounced}</option>
+            <option value="complained">{EMAIL_STATUS_LABELS.complained}</option>
+            <option value="failed">{EMAIL_STATUS_LABELS.failed}</option>
           </Select>
         </label>
         <label className="w-full md:w-48">
@@ -226,7 +209,7 @@ export function EmailsView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          Analyst 可读取投递日志与失败原因；重发保持可见但禁用。
+          分析员可读取投递日志与失败原因；重发保持可见但禁用。
         </div>
       ) : null}
 
@@ -252,7 +235,7 @@ export function EmailsView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">投递日志</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              resend delivery state
+              Resend 投递状态
             </p>
           </div>
           
@@ -312,7 +295,7 @@ export function EmailsView({
                       <td className="px-3 py-2 font-mono text-[10px] text-body">{email.template}</td>
                       <td className="px-3 py-2">
                         <Badge tone={emailStatusTones[email.status]}>
-                          {emailStatusLabels[email.status]}
+                          {EMAIL_STATUS_LABELS[email.status]}
                         </Badge>
                       </td>
                       <td className="max-w-[240px] px-3 py-2">
@@ -331,7 +314,7 @@ export function EmailsView({
                             aria-label={
                               resendable
                                 ? `重发邮件至 ${masked}`
-                                : `不可重发 ${masked}：当前状态 ${emailStatusLabels[email.status]}`
+                                : `不可重发 ${masked}：当前状态 ${EMAIL_STATUS_LABELS[email.status]}`
                             }
                             disabled={!canResend || !resendable}
                             title={
@@ -339,7 +322,7 @@ export function EmailsView({
                                 ? "当前角色不可重发邮件"
                                 : resendable
                                   ? "重新加入发送队列"
-                                  : `仅 failed / bounced 可重发，当前为 ${emailStatusLabels[email.status]}`
+                                  : `仅失败 / 退信可重发，当前为 ${EMAIL_STATUS_LABELS[email.status]}`
                             }
                             onClick={() => resendEmail(email)}
                           >
@@ -366,7 +349,7 @@ export function EmailsView({
         <div>
           <h2 className="text-[12px] font-medium text-ink">测试邮件入口未接入</h2>
           <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
-            当前 Admin API 没有测试邮件端点，因此页面不再显示“测试邮件”按钮。补齐
+            当前后台 API 没有测试邮件端点，因此页面不再显示“测试邮件”按钮。补齐
             <code className="mx-1 font-mono">POST /v1/admin/emails/test</code>
             与固定模板、频率限制后才会上线该能力。
           </p>
@@ -382,7 +365,7 @@ function metricCards(counts: Record<EmailStatus, number>, sourceNote: string) {
       {METRIC_ORDER.map((key) => (
         <AdminMetricCard
           key={key}
-          label={metricLabels[key]}
+          label={EMAIL_STATUS_LABELS[key]}
           value={String(counts[key])}
           detail={sourceNote}
           tone={metricTones[key]}

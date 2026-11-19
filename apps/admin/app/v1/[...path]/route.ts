@@ -60,9 +60,9 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     return NextResponse.json(
       {
         type: "https://roamlog.app/errors/api-unavailable",
-        title: "Admin API unavailable",
+        title: "后台 API 不可用",
         status: 503,
-        detail: "The Admin API could not be reached. Check that the API is running.",
+        detail: "无法连接后台 API，请检查 API 是否正在运行。",
         code: "ADMIN_API_UNAVAILABLE",
       },
       { status: 503 },

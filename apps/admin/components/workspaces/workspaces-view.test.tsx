@@ -160,7 +160,7 @@ describe("WorkspacesView", () => {
     await user.click(confirm);
 
     // Without a mutation port the console refuses the write instead of faking it.
-    expect(screen.getByRole("status")).toHaveTextContent("未连接 Admin API");
+    expect(screen.getByRole("status")).toHaveTextContent("未连接后台 API");
   });
 
   it("keeps workspace destructive actions disabled for analysts", async () => {
@@ -210,9 +210,9 @@ describe("WorkspacesView", () => {
     await user.click(within(row).getByRole("button", { name: "工作区详情" }));
 
     expect(await screen.findByText(editor.name)).toBeInTheDocument();
-    expect(screen.getByText("editor")).toBeInTheDocument();
+    expect(screen.getByText("编辑者")).toBeInTheDocument();
     expect(screen.getByText("invitee@roamlog.test")).toBeInTheDocument();
-    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText("待处理")).toBeInTheDocument();
     expect(screen.getAllByText("1 MB").length).toBeGreaterThan(1);
     expect(
       fetchMock.mock.calls.some(([input]) => String(input).includes(`/v1/admin/workspaces/${workspaceId}`)),
@@ -278,7 +278,7 @@ describe("WorkspacesView", () => {
     await user.click(screen.getByRole("button", { name: "转移所有权" }));
 
     const dialog = screen.getByRole("dialog", { name: "转移所有权" });
-    expect(within(dialog).getByLabelText("新 Owner")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("新所有者")).toBeInTheDocument();
     await user.type(within(dialog).getByLabelText("输入工作区名称确认"), "Roamlog Crew");
     await user.click(within(dialog).getByRole("button", { name: "确认转移" }));
 

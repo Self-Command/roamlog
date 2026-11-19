@@ -4,6 +4,7 @@ import { Command, Menu, Search } from "lucide-react";
 
 import { Avatar, Badge, IconButton } from "@roamlog/ui";
 
+import { ADMIN_ROLE_LABELS } from "../../lib/labels";
 import { cn } from "./cn";
 import { getBreadcrumbs } from "./admin-nav";
 import { resolveAdminEnvironment } from "./admin-environment";
@@ -106,7 +107,7 @@ export function AdminTopbar({
             <div className="hidden xl:block">
               <p className="text-[11px] leading-none text-ink">{session.name}</p>
               <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.08em] text-muted">
-                {session.role}
+                {ADMIN_ROLE_LABELS[session.role]}
               </p>
             </div>
           </div>

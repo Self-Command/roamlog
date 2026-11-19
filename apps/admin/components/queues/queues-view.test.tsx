@@ -65,7 +65,7 @@ describe("QueuesView", () => {
     expect(screen.getByRole("button", { name: "暂停队列 media-processing" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "清空队列 media-processing" })).toBeDisabled();
     expect(
-      screen.getByText(/暂停、恢复与清空队列仅 super_admin 可执行/),
+      screen.getByText(/暂停、恢复与清空队列仅超级管理员可执行/),
     ).toBeInTheDocument();
   });
 
@@ -184,8 +184,8 @@ describe("QueuesView", () => {
       />,
     );
 
-    // 12.4 + 8.1 + 0.7 + 3.6 = 24.8 jobs/min, and four queues are shown.
-    expect(screen.getAllByText("24.8 jobs/min").length).toBeGreaterThan(0);
+    // 12.4 + 8.1 + 0.7 + 3.6 = 24.8 任务/分钟，并展示四个队列。
+    expect(screen.getAllByText("24.8 任务/分钟").length).toBeGreaterThan(0);
     expect(screen.getByText("跨 4 个队列（Redis 发现）")).toBeInTheDocument();
   });
 

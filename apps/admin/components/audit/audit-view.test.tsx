@@ -66,7 +66,7 @@ const API_AUDIT_ENTRIES: readonly AuditLog[] = [
 ];
 
 function actorOptions(): HTMLOptionElement[] {
-  return [...screen.getByLabelText<HTMLSelectElement>("Actor").options];
+  return [...screen.getByLabelText<HTMLSelectElement>("操作者").options];
 }
 
 function actorOptionLabels(): string[] {
@@ -92,7 +92,7 @@ describe("AuditView", () => {
     render(<AuditView role="support" entries={sampleAuditLogs} />);
 
     expect(screen.getByRole("button", { name: "导出 CSV" })).toBeDisabled();
-    expect(screen.getByText("仅 Analyst 及以上角色可导出审计 CSV。")).toBeInTheDocument();
+    expect(screen.getByText("仅分析员及以上角色可导出审计 CSV。")).toBeInTheDocument();
   });
 
   it("exports the current filters through the Admin API in API mode", async () => {
@@ -111,7 +111,7 @@ describe("AuditView", () => {
 
     expect(exportCsv).toHaveBeenCalledWith(expect.objectContaining({ sort: "createdAt:desc" }));
     expect(createObjectURL).toHaveBeenCalled();
-    expect(await screen.findByText("已从 Admin API 导出审计 CSV。")).toBeInTheDocument();
+    expect(await screen.findByText("已从后台 API 导出审计 CSV。")).toBeInTheDocument();
     click.mockRestore();
   });
 
@@ -120,9 +120,9 @@ describe("AuditView", () => {
 
     expect(actorOptionLabels()).toEqual([
       "全部操作者",
-      "System worker",
-      "actor 000000aa",
-      "actor 000000bb",
+      "系统任务进程",
+      "操作者 000000aa",
+      "操作者 000000bb",
     ]);
     expect(actorOptionValues()).toEqual(["all", "system", API_ACTOR_ALPHA, API_ACTOR_BETA]);
     expect(screen.queryByText("林知夏")).not.toBeInTheDocument();
@@ -132,7 +132,7 @@ describe("AuditView", () => {
   it("offers only the generic actor options when API mode has no loaded entries", () => {
     render(<AuditView role="analyst" entries={[]} />);
 
-    expect(actorOptionLabels()).toEqual(["全部操作者", "System worker"]);
+    expect(actorOptionLabels()).toEqual(["全部操作者", "系统任务进程"]);
     expect(actorOptionValues()).toEqual(["all", "system"]);
     expect(screen.queryByText("林知夏")).not.toBeInTheDocument();
   });
@@ -144,14 +144,14 @@ describe("AuditView", () => {
       <AuditView role="analyst" entries={API_AUDIT_ENTRIES} />,
     );
 
-    const select = screen.getByLabelText<HTMLSelectElement>("Actor");
+    const select = screen.getByLabelText<HTMLSelectElement>("操作者");
     await user.selectOptions(select, API_ACTOR_ALPHA);
     expect(select.value).toBe(API_ACTOR_ALPHA);
 
     rerender(<AuditView role="analyst" entries={[]} />);
 
     expect(actorOptionValues()).toEqual(["all", "system", API_ACTOR_ALPHA]);
-    expect(actorOptionLabels()).toEqual(["全部操作者", "System worker", "actor 000000aa"]);
-    expect(screen.getByLabelText<HTMLSelectElement>("Actor").value).toBe(API_ACTOR_ALPHA);
+    expect(actorOptionLabels()).toEqual(["全部操作者", "系统任务进程", "操作者 000000aa"]);
+    expect(screen.getByLabelText<HTMLSelectElement>("操作者").value).toBe(API_ACTOR_ALPHA);
   });
 });

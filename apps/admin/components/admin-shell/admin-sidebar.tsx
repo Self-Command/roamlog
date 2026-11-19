@@ -50,7 +50,7 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
         </span>
         <div className="min-w-0">
           <p className="font-serif text-[19px] leading-none tracking-[-0.03em] text-ink">Roamlog</p>
-          <p className="type-eyebrow mt-1 text-[8px] text-ash">platform ops</p>
+          <p className="type-eyebrow mt-1 text-[8px] text-ash">平台运维</p>
         </div>
       </div>
 
@@ -58,7 +58,7 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
         <div className="border-b border-hairline px-3 py-3">
           <div className="flex items-center justify-between rounded-control border border-hairline bg-surface-1 px-2.5 py-2">
             <span className="font-mono text-[9px] uppercase tracking-[0.11em] text-muted">
-              Environment
+              环境
             </span>
             <Badge tone="slate" aria-label={`环境 ${environment}`}>
               {environment}
@@ -140,7 +140,7 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
             </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <Badge tone="neutral">{session.role}</Badge>
+            <Badge tone="neutral">{ADMIN_ROLE_LABELS[session.role]}</Badge>
           </div>
           <div className="mt-3">
             <span className="type-eyebrow">平台角色</span>

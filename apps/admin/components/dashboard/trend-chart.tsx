@@ -58,7 +58,7 @@ export function TrendChart({ data }: TrendChartProps) {
           工作区
         </span>
         <span className="ml-auto font-mono text-[9px] uppercase text-stone">
-          {data.length} {data.length === 1 ? "SNAPSHOT" : "DAYS"}
+          {data.length} {data.length === 1 ? "个快照" : "天"}
         </span>
       </div>
       <div className="overflow-hidden rounded-control border border-hairline bg-black/30">
@@ -68,7 +68,7 @@ export function TrendChart({ data }: TrendChartProps) {
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           className="h-auto w-full"
         >
-          <title>用户与工作区 12 日趋势图</title>
+          <title>用户与工作区趋势图</title>
           <defs>
             <linearGradient id="admin-users-area" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--accent-blue)" stopOpacity="0.16" />

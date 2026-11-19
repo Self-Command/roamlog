@@ -12,6 +12,7 @@ import {
   Input,
 } from "@roamlog/ui";
 
+import { SEARCH_RESULT_TYPE_LABELS } from "../../lib/labels";
 import { ADMIN_NAV_GROUPS } from "./admin-nav";
 
 interface AdminCommandPaletteProps {
@@ -66,7 +67,7 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
         <DialogHeader className="border-b border-hairline px-5 py-4">
           <DialogTitle className="text-xl">全局搜索</DialogTitle>
           <DialogDescription>
-            输入关键词跳转到后台页面；用户与 Workspace 实体搜索请使用对应列表页的筛选。
+            输入关键词跳转到后台页面；用户与工作区实体搜索请使用对应列表页的筛选。
           </DialogDescription>
         </DialogHeader>
         <div className="border-b border-hairline px-5 py-4">
@@ -112,7 +113,7 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
                       </span>
                     </span>
                     <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.1em] text-stone">
-                      {result.type}
+                      {SEARCH_RESULT_TYPE_LABELS[result.type]}
                     </span>
                   </a>
                 );

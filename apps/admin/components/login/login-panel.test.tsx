@@ -24,7 +24,7 @@ describe("LoginPanel", () => {
     render(<LoginPanel />);
 
     expect(screen.getByLabelText(/管理员邮箱/)).toHaveValue("demo@roamlog.local");
-    expect(screen.getByText("DEMO PREFILL")).toBeInTheDocument();
+    expect(screen.getByText("演示预填")).toBeInTheDocument();
     expect(screen.getByText(/NEXT_PUBLIC_ADMIN_DEMO=1/)).toBeInTheDocument();
   });
 

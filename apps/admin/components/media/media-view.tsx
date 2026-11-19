@@ -11,6 +11,7 @@ import type { AdminConsoleRole } from "../../lib/admin-types";
 import { AdminMutationError } from "../../lib/admin-api-error";
 import type { AdminMutationPort } from "../../lib/admin-data-source";
 import { formatBytes, formatDateTime } from "../../lib/format";
+import { MEDIA_STATUS_LABELS } from "../../lib/labels";
 import type { AdminMediaItem } from "../../lib/admin-ops-types";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
@@ -22,13 +23,6 @@ interface MediaViewProps {
   media: readonly AdminMediaItem[];
   mutations?: AdminMutationPort;
 }
-
-const mediaStatusLabels: Record<MediaStatus, string> = {
-  pending: "Pending",
-  processing: "Processing",
-  ready: "Ready",
-  failed: "Failed",
-};
 
 const mediaStatusTones: Record<MediaStatus, "neutral" | "blue" | "green" | "red"> = {
   pending: "neutral",
@@ -106,10 +100,10 @@ export function MediaView({
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="CONTENT & ASSETS / MEDIA"
+        eyebrow="内容与资产 / 媒体"
         title="媒体库"
         description={
-          "检查存储用量、处理状态与孤儿对象。用量与删除由真实 Admin API 提供。"}
+          "检查存储用量、处理状态与孤儿对象。用量与删除由真实后台 API 提供。"}
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -152,12 +146,12 @@ export function MediaView({
 
       <AdminFilterBar>
         <label className="min-w-0 flex-1">
-          <span className="type-eyebrow">搜索文件 / Workspace</span>
+          <span className="type-eyebrow">搜索文件 / 工作区</span>
           <Input
             className="mt-1.5 h-9"
             type="search"
             value={query}
-            placeholder="文件名或 Workspace"
+            placeholder="文件名或工作区"
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
@@ -169,9 +163,10 @@ export function MediaView({
             onChange={(event) => setStatus(event.currentTarget.value as "all" | MediaStatus)}
           >
             <option value="all">全部状态</option>
-            <option value="ready">Ready</option>
-            <option value="processing">Processing</option>
-            <option value="failed">Failed</option>
+            <option value="pending">{MEDIA_STATUS_LABELS.pending}</option>
+            <option value="ready">{MEDIA_STATUS_LABELS.ready}</option>
+            <option value="processing">{MEDIA_STATUS_LABELS.processing}</option>
+            <option value="failed">{MEDIA_STATUS_LABELS.failed}</option>
           </Select>
         </label>
         <div className="flex items-center gap-3 rounded-control border border-hairline px-3 py-2">
@@ -193,7 +188,7 @@ export function MediaView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          Analyst 可查看媒体用量与孤儿检测结果；删除操作保持可见但不可用。
+          分析员可查看媒体用量与孤儿检测结果；删除操作保持可见但不可用。
         </div>
       ) : null}
 
@@ -229,7 +224,7 @@ export function MediaView({
                     </p>
                   </div>
                   <Badge tone={mediaStatusTones[item.status]}>
-                    {mediaStatusLabels[item.status]}
+                    {MEDIA_STATUS_LABELS[item.status]}
                   </Badge>
                 </div>
                 <p className="mt-2 min-h-8 text-[10px] leading-4 text-muted">
@@ -237,7 +232,7 @@ export function MediaView({
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
                   <Badge tone={item.usage === "orphan" ? "yellow" : "slate"}>
-                    {item.usage === "orphan" ? "Orphan" : "Linked"}
+                    {item.usage === "orphan" ? "孤儿" : "已关联"}
                   </Badge>
                   <span className="font-mono text-[8px] text-muted">
                     {formatDateTime(item.createdAt)}

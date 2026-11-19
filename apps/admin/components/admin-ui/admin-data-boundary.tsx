@@ -12,7 +12,7 @@ function AdminPreparingView() {
   return (
     <div role="status" aria-live="polite" className="space-y-4">
       <div className="rounded-card border border-hairline-strong bg-surface-1 px-4 py-3">
-        <p className="type-eyebrow">ADMIN / PREPARING VIEW</p>
+        <p className="type-eyebrow">后台 / 准备视图</p>
         <p className="mt-1 text-[12px] text-muted">正在准备后台视图。</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -32,7 +32,7 @@ function AdminDataLoading() {
     <div role="status" aria-live="polite" className="space-y-4">
       <div className="flex items-center justify-between rounded-card border border-hairline-strong bg-surface-1 px-4 py-3">
         <div>
-          <p className="type-eyebrow">LOADING</p>
+          <p className="type-eyebrow">加载中</p>
           <p className="mt-1 text-[12px] text-muted">正在读取后台数据。</p>
         </div>
         <RefreshCw aria-hidden="true" className="size-4 animate-spin text-muted" />
@@ -93,9 +93,9 @@ function AdminDataContent<T>({
           <div className="min-w-0">
             <p className="type-eyebrow text-accent-red">
               {twoFactorRequired
-                ? "2FA ENROLLMENT REQUIRED"
+                ? "需要绑定 2FA"
                 : accessDenied
-                  ? "PLATFORM ACCESS DENIED"
+                  ? "平台访问被拒绝"
                   : "加载失败"}
             </p>
             <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">
@@ -107,13 +107,13 @@ function AdminDataContent<T>({
             </h2>
             <p className="mt-2 text-[12px] leading-6 text-muted">
               {twoFactorRequired
-                ? "后端要求平台管理员完成 TOTP 注册与验证。完成前，Admin API 会持续返回 ADMIN_2FA_REQUIRED。"
+                ? "后端要求平台管理员完成 TOTP 注册与验证。完成前，后台 API 会持续返回 ADMIN_2FA_REQUIRED。"
                 : "后台数据暂时无法读取，请稍后重试；多次失败请联系平台管理员。"}
             </p>
             <details className="mt-3 font-mono text-[9px] text-stone">
               <summary className="cursor-pointer select-none">错误详情</summary>
               <p className="mt-1 break-all">
-                {resource.error.code} · HTTP {resource.error.status || "network"} ·{" "}
+                {resource.error.code} · HTTP {resource.error.status || "网络错误"} ·{" "}
                 {resource.error.detail}
               </p>
             </details>
@@ -150,7 +150,7 @@ function AdminDataContent<T>({
       <EmptyState
         icon={AlertTriangle}
         title="没有可显示的数据"
-        description="Admin API 返回了空结果，请检查后端状态后重试。"
+        description="后台 API 返回了空结果，请检查后端状态后重试。"
         className="rounded-card border border-hairline-strong bg-surface-1"
       />
     );

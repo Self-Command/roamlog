@@ -24,14 +24,7 @@ import {
   useAdminPermissionsUpdate,
 } from "../../../lib/admin-users-permissions";
 import { AdminPageHeader } from "../../../components/admin-ui/admin-page-header";
-
-const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
-  user: "User",
-  support: "Support",
-  analyst: "Analyst",
-  admin: "Admin",
-  super_admin: "Super admin",
-};
+import { PLATFORM_ROLE_LABELS } from "../../../lib/labels";
 
 const LOCKED_TOOLTIP = "安全敏感，界面不可授予";
 
@@ -118,9 +111,9 @@ export function PermissionsView({ role }: PermissionsViewProps) {
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="TRUST & SAFETY / PERMISSIONS"
+        eyebrow="信任与安全 / 权限"
         title="权限矩阵"
-        description="平台角色 × Admin 动作的可视化矩阵。代码矩阵是默认值，数据库只保存差异；安全敏感动作保持锁定，不能通过界面授予。"
+        description="平台角色 × 管理员动作的可视化矩阵。代码矩阵是默认值，数据库只保存差异；安全敏感动作保持锁定，不能通过界面授予。"
         readOnly={!canWrite}
       />
 
@@ -129,7 +122,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           <ShieldCheck aria-hidden="true" className="size-4 text-muted" />
           <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
             {data
-              ? `${roles.length} roles · ${actions.length} actions · 代码矩阵 + DB diff`
+              ? `${roles.length} 个角色 · ${actions.length} 项动作 · 代码矩阵 + 数据库差异`
               : "读取平台权限矩阵"}
           </p>
         </div>
@@ -148,7 +141,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           <Button
             size="sm"
             disabled={!canWrite || changes.length === 0 || saving}
-            title={canWrite ? "保存权限矩阵变更" : "仅 super_admin 可修改权限矩阵"}
+            title={canWrite ? "保存权限矩阵变更" : "仅超级管理员可修改权限矩阵"}
             onClick={() => setConfirmOpen(true)}
           >
             {saving ? "保存中…" : "保存变更"}
@@ -162,7 +155,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <Lock aria-hidden="true" className="size-4" />
-          当前平台角色为只读：仅 super_admin 可修改权限矩阵。
+          当前平台角色为只读：仅超级管理员可修改权限矩阵。
         </div>
       ) : null}
 
@@ -171,13 +164,13 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           <p className="type-eyebrow text-accent-red">加载失败</p>
           <p className="mt-1 text-[12px] text-body">
             {resource.error.code === "ADMIN_ACTION_FORBIDDEN"
-              ? "仅 super_admin 可读取权限矩阵。"
+              ? "仅超级管理员可读取权限矩阵。"
               : "读取权限矩阵失败，请稍后重试。"}
           </p>
           <details className="mt-2 font-mono text-[9px] text-muted">
             <summary className="cursor-pointer select-none">错误详情</summary>
             <p className="mt-1 break-all">
-              {resource.error.code} · HTTP {resource.error.status || "network"} ·{" "}
+              {resource.error.code} · HTTP {resource.error.status || "网络错误"} ·{" "}
               {resource.error.detail}
             </p>
           </details>
@@ -190,20 +183,20 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           正在读取权限矩阵…
         </p>
       ) : !data ? (
-        <EmptyState title="没有权限矩阵数据" description="稍后重试或检查 Admin API。" />
+        <EmptyState title="没有权限矩阵数据" description="稍后重试或检查后台 API。" />
       ) : (
         <section className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1">
           <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
             <div>
               <h2 className="text-[13px] font-medium text-ink">角色 × 动作</h2>
               <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                grantable=false → 锁图标，界面不可授予
+                不可授予 → 显示锁图标，界面不可授予
               </p>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] border-collapse text-left text-[12px]">
-              <caption className="sr-only">平台角色与 Admin 动作权限矩阵</caption>
+              <caption className="sr-only">平台角色与管理员动作权限矩阵</caption>
               <thead>
                 <tr className="border-b border-hairline font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
                   <th scope="col" className="min-w-[320px] px-4 py-2.5 font-normal">
@@ -256,11 +249,11 @@ export function PermissionsView({ role }: PermissionsViewProps) {
                               title={LOCKED_TOOLTIP}
                             >
                               <span
-                                aria-label={`${roleEntry.role} · ${actionEntry.action} · ${LOCKED_TOOLTIP}`}
+                                aria-label={`${PLATFORM_ROLE_LABELS[roleEntry.role]} · ${actionEntry.action} · ${LOCKED_TOOLTIP}`}
                                 className="inline-flex items-center gap-1 font-mono text-[10px] text-muted"
                               >
                                 <Lock aria-hidden="true" className="size-3.5" />
-                                {granted ? "YES" : "NO"}
+                                {granted ? "是" : "否"}
                               </span>
                             </td>
                           );
@@ -275,13 +268,13 @@ export function PermissionsView({ role }: PermissionsViewProps) {
                             }
                           >
                             <Checkbox
-                              aria-label={`${roleEntry.role} · ${actionEntry.action}`}
+                              aria-label={`${PLATFORM_ROLE_LABELS[roleEntry.role]} · ${actionEntry.action}`}
                               checked={granted}
                               disabled={!canWrite}
                               title={
                                 canWrite
                                   ? "切换后需二次确认并保存"
-                                  : "仅 super_admin 可修改权限矩阵"
+                                  : "仅超级管理员可修改权限矩阵"
                               }
                               onCheckedChange={(checked) =>
                                 toggle(roleEntry.role, actionEntry.action, checked === true)
@@ -311,7 +304,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <p className="type-eyebrow text-accent-red">二次确认 / PERMISSION WRITE</p>
+            <p className="type-eyebrow text-accent-red">二次确认 / 权限写入</p>
             <DialogTitle>保存权限矩阵变更</DialogTitle>
             <DialogDescription>
               将写入 {changes.length} 项覆盖并记录审计。安全敏感动作不在可编辑范围内。
@@ -320,7 +313,8 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           <ul className="max-h-64 space-y-1.5 overflow-y-auto font-mono text-[10px] text-body">
             {changes.map((change) => (
               <li key={`${change.role}:${change.action}`}>
-                {change.granted ? "GRANT" : "REVOKE"} · {change.role} · {change.action}
+                {change.granted ? "授予" : "撤销"} · {PLATFORM_ROLE_LABELS[change.role]} ·{" "}
+                {change.action}
               </li>
             ))}
           </ul>

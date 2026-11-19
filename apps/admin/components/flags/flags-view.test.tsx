@@ -55,7 +55,7 @@ describe("FlagsView", () => {
 
     await user.click(screen.getByRole("button", { name: "新建功能开关" }));
     const dialog = screen.getByRole("dialog", { name: "新建功能开关" });
-    await user.type(within(dialog).getByLabelText(/开关 key/), "share.password.v2");
+    await user.type(within(dialog).getByLabelText(/开关标识/), "share.password.v2");
     await user.type(within(dialog).getByLabelText(/^描述/), "分享密码 v2");
     fireEvent.change(within(dialog).getByLabelText("灰度比例（0-100）"), {
       target: { value: "20" },
@@ -74,12 +74,12 @@ describe("FlagsView", () => {
 
     await user.click(screen.getByRole("button", { name: "新建功能开关" }));
     const dialog = screen.getByRole("dialog", { name: "新建功能开关" });
-    const keyInput = within(dialog).getByLabelText(/开关 key/);
+    const keyInput = within(dialog).getByLabelText(/开关标识/);
     await user.type(keyInput, "share-password-v1");
     await user.type(within(dialog).getByLabelText(/^描述/), "duplicate");
     await user.click(within(dialog).getByRole("button", { name: "创建开关" }));
 
-    expect(within(dialog).getByText(/key 已存在/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/标识已存在/)).toBeInTheDocument();
 
     await user.clear(keyInput);
     await user.type(keyInput, "Bad Key!");
@@ -104,7 +104,7 @@ describe("FlagsView", () => {
 
     await user.click(screen.getByRole("button", { name: "新建功能开关" }));
     const dialog = screen.getByRole("dialog", { name: "新建功能开关" });
-    await user.type(within(dialog).getByLabelText(/开关 key/), "api.created.flag");
+    await user.type(within(dialog).getByLabelText(/开关标识/), "api.created.flag");
     await user.type(within(dialog).getByLabelText(/^描述/), "created via API");
     await user.click(within(dialog).getByRole("button", { name: "创建开关" }));
 
@@ -127,7 +127,7 @@ describe("FlagsView", () => {
     const dialog = screen.getByRole("dialog", { name: "删除功能开关" });
     const confirm = within(dialog).getByRole("button", { name: "确认删除" });
     expect(confirm).toBeDisabled();
-    await user.type(within(dialog).getByLabelText("输入开关 key 确认"), "map-style-dark-v2");
+    await user.type(within(dialog).getByLabelText("输入开关标识确认"), "map-style-dark-v2");
     await user.click(confirm);
 
     expect(screen.queryByRole("article", { name: /map-style-dark-v2/ })).not.toBeInTheDocument();

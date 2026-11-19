@@ -6,6 +6,7 @@ import {
   type AdminSettingsResponse,
   type SettingValue,
   type SystemSettingGroup,
+  type SystemSettingValueType,
 } from "@roamlog/contracts";
 
 /**
@@ -26,6 +27,83 @@ export const SETTINGS_GROUP_SUMMARIES: Record<SystemSettingGroup, string> = {
   places: "地点搜索提供商、语言、缓存与配额。",
   limits: "账户级请求速率限制。",
 };
+
+/**
+ * `/admin/settings` owns only these four system-level groups. Service groups
+ * are edited on their own pages under `/admin/services/*`.
+ */
+export const SYSTEM_SETTINGS_GROUPS = [
+  "general",
+  "seo",
+  "theme",
+  "limits",
+] as const satisfies readonly SystemSettingGroup[];
+
+export const SERVICE_SETTINGS_PAGES = {
+  ai: {
+    group: "ai",
+    title: "AI 服务",
+    description: "配置 AI 规划调用的服务商、基础地址、模型、超时与配额。",
+  },
+  storage: {
+    group: "storage",
+    title: "存储服务",
+    description: "配置 S3 兼容对象存储的端点、桶、区域与签名凭据。",
+  },
+  places: {
+    group: "places",
+    title: "地图服务",
+    description: "配置地点搜索服务商、语言、缓存与每日配额。",
+  },
+  mail: {
+    group: "mail",
+    title: "发信服务",
+    description: "配置事务邮件的服务商、发件地址与发送凭据。",
+  },
+  media: {
+    group: "media",
+    title: "媒体处理",
+    description: "配置客户端图片压缩目标与上传边界。",
+  },
+} as const satisfies Record<
+  string,
+  { group: SystemSettingGroup; title: string; description: string }
+>;
+export type ServicePageKey = keyof typeof SERVICE_SETTINGS_PAGES;
+
+/** Display names for the contract's field types; the wire values never change. */
+export const SETTING_TYPE_LABELS: Record<SystemSettingValueType, string> = {
+  string: "文本",
+  number: "数字",
+  boolean: "开关",
+  json: "JSON",
+  secret: "密钥",
+};
+
+/** Display-only labels for enum option values; stored values stay untouched. */
+export const SETTING_OPTION_LABELS: Readonly<Record<string, string>> = {
+  light: "浅色",
+  dark: "深色",
+  system: "跟随系统",
+  white: "白色",
+  amber: "琥珀色",
+  blue: "蓝色",
+  emerald: "翡翠色",
+  rose: "玫瑰色",
+  "zh-CN": "简体中文",
+  en: "英语",
+  resend: "Resend",
+  smtp: "SMTP",
+  geoapify: "Geoapify",
+  photon: "Photon",
+  tencent: "腾讯地图",
+  local: "本地数据",
+  map_pin: "手动选点",
+};
+
+export function settingOptionLabel(option: string): string {
+  return SETTING_OPTION_LABELS[option] ?? option;
+}
 
 export type SettingsConsumptionStatus = "frontend" | "backend" | "unwired";
 
@@ -59,7 +137,7 @@ export const SETTINGS_CONSUMPTION: Record<SystemSettingGroup, SettingsConsumptio
   general: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
   seo: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
   theme: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
-  mail: { status: "backend", label: "后端已消费，worker 仍读环境变量" },
+  mail: { status: "backend", label: "后端已消费，任务进程仍读环境变量" },
   storage: {
     status: "backend",
     label: "后端已消费（API 运行期读取；保存前会跑连通性探测）",
@@ -67,10 +145,10 @@ export const SETTINGS_CONSUMPTION: Record<SystemSettingGroup, SettingsConsumptio
   media: {
     status: "frontend",
     label:
-      "前端已消费 4/6 个键（maxEdge、quality、targetBytes、maxUploadBytes）；keepOriginal 与 livePhotoEnabled 未接入（不生效）",
+      "前端已消费 4/6 个键（最长边、质量、目标字节、最大上传字节）；保留原图与实况照片未接入（不生效）",
   },
-  ai: { status: "backend", label: "后端已消费（AiModule 运行期读取）" },
-  places: { status: "backend", label: "后端已消费（PlacesModule 运行期读取）" },
+  ai: { status: "backend", label: "后端已消费（AI 模块运行期读取）" },
+  places: { status: "backend", label: "后端已消费（地点模块运行期读取）" },
   limits: {
     status: "unwired",
     label: "部分接入（搜索限流已生效；上传限流未接入，仍读环境变量）",
@@ -97,8 +175,17 @@ export function normalizeSettingsGroup(value: unknown): SystemSettingGroup {
     : "general";
 }
 
+const SERVICE_GROUP_HREFS: Partial<Record<SystemSettingGroup, string>> = {
+  ai: "/admin/services/ai",
+  storage: "/admin/services/storage",
+  places: "/admin/services/places",
+  mail: "/admin/services/mail",
+  media: "/admin/services/media",
+};
+
+/** Where a group is edited in the rebuilt IA: its own service page or the four-group system page. */
 export function settingsGroupHref(group: SystemSettingGroup): string {
-  return `/admin/settings?group=${group}`;
+  return SERVICE_GROUP_HREFS[group] ?? "/admin/settings";
 }
 
 export function firstGroupInResponse(response: AdminSettingsResponse): SystemSettingGroup {
@@ -260,9 +347,10 @@ export function localSettingError(
 
   if (item.type === "string") {
     const text = typeof draft === "string" ? draft : "";
-    // A nullable setting is the only contract-visible reason an empty string is
-    // legal; everything else carries a min(1) schema on the API.
-    if (text.length === 0 && item.default !== null) {
+    // A nullable setting is one contract-visible reason an empty string is
+    // legal; the other is a code default of "" (the API validates every
+    // non-null default against its own schema, so such a key accepts empty).
+    if (text.length === 0 && item.default !== null && item.default !== "") {
       return "不能为空。";
     }
     return null;

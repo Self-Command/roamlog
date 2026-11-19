@@ -145,7 +145,7 @@ function findVersion(byteLength: number): number {
       return version;
     }
   }
-  throw new Error("QR payload is too large.");
+  throw new Error("二维码内容过大。");
 }
 
 function appendBits(target: number[], value: number, length: number): void {

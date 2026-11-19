@@ -8,6 +8,14 @@ import type { AdminConsoleRole } from "../../lib/admin-types";
 import type { AdminSystemSnapshotDetail } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import {
+  ENVIRONMENT_LABELS,
+  HEALTH_STATUS_LABELS,
+  JOB_STATUS_LABELS,
+  MIGRATION_STATUS_LABELS,
+  QUEUE_STATE_LABELS,
+  WORKER_STATUS_LABELS,
+} from "../../lib/labels";
+import {
   formatUptime,
   type AdminSystemSnapshot,
 } from "../../lib/admin-ops-types";
@@ -25,18 +33,6 @@ const checkTones = {
   down: "red",
 } as const;
 
-const checkLabels = {
-  up: "Operational",
-  degraded: "Degraded",
-  down: "Down",
-} as const;
-
-const workerLabels = {
-  up: "Healthy",
-  degraded: "Degraded",
-  down: "Down",
-} as const;
-
 const workerTones = {
   up: "green",
   degraded: "yellow",
@@ -45,7 +41,7 @@ const workerTones = {
 
 const signalSources = {
   "consumer-clients": "Redis CLIENT LIST（阻塞消费者）+ 队列计数",
-  "activity-derived": "最近一次任务完成/失败时间 + 队列 active 数",
+  "activity-derived": "最近一次任务完成/失败时间 + 队列运行数",
   unavailable: "未接入",
 } as const;
 
@@ -76,14 +72,16 @@ export function SystemView({
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="PLATFORM / SYSTEM"
+        eyebrow="平台 / 系统"
         title="系统健康"
         description="只展示 /v1/admin/system 实际返回的检查项；无法观测的项目标记为「未接入」。"
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
             <p className="type-eyebrow">环境</p>
-            <p className="mt-1 font-mono text-[10px] uppercase text-body">{snapshot.environment}</p>
+            <p className="mt-1 font-mono text-[10px] text-body">
+              {ENVIRONMENT_LABELS[snapshot.environment] ?? snapshot.environment}
+            </p>
           </div>
         }
       />
@@ -95,7 +93,7 @@ export function SystemView({
           detail={
             notWired(snapshot.apiVersion)
               ? "需要 ROAMLOG_API_VERSION"
-              : `Worker 版本 ${
+              : `任务进程版本 ${
                   notWired(snapshot.workerVersion) ? "未接入" : snapshot.workerVersion
                 }`
           }
@@ -105,7 +103,7 @@ export function SystemView({
         <AdminMetricCard
           label="Node.js"
           value={snapshot.nodeVersion}
-          detail="server runtime"
+          detail="服务器运行时"
           tone="neutral"
           icon={GitCommitHorizontal}
         />
@@ -122,7 +120,7 @@ export function SystemView({
           detail={
             notWired(snapshot.buildTime)
               ? "需要 ROAMLOG_BUILD_TIME（不再用容器启动时间替代）"
-              : "build metadata"
+              : "构建元数据"
           }
           tone="orange"
           icon={Activity}
@@ -135,13 +133,13 @@ export function SystemView({
             <div>
               <h2 className="text-[13px] font-medium text-ink">依赖健康检查</h2>
               <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                readiness probes
+                就绪探针
               </p>
             </div>
             <Badge tone={upChecks === snapshot.checks.length ? "green" : "yellow"}>
               {snapshot.checks.length === 0
                 ? "未接入"
-                : `${upChecks} / ${snapshot.checks.length} up`}
+                : `${upChecks} / ${snapshot.checks.length} 正常`}
             </Badge>
           </div>
           <div className="grid gap-px bg-hairline sm:grid-cols-2">
@@ -149,7 +147,7 @@ export function SystemView({
               <article key={check.name} className="bg-surface-1 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-[12px] font-medium text-ink">{check.name}</h3>
-                  <Badge tone={checkTones[check.status]}>{checkLabels[check.status]}</Badge>
+                  <Badge tone={checkTones[check.status]}>{HEALTH_STATUS_LABELS[check.status]}</Badge>
                 </div>
                 <p className="mt-3 font-serif text-2xl leading-none text-ink">
                   {check.latencyMs === null ? "—" : `${check.latencyMs} ms`}
@@ -162,8 +160,8 @@ export function SystemView({
 
         <aside className="space-y-4">
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">WORKER / OBSERVED SIGNAL</p>
-            <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">后台 Worker</h2>
+            <p className="type-eyebrow">任务进程 / 观测信号</p>
+            <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">后台任务进程</h2>
             <dl className="mt-3 space-y-2 text-[11px]">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted">版本</dt>
@@ -179,12 +177,12 @@ export function SystemView({
                 <dt className="text-muted">状态</dt>
                 <dd>
                   {!workerObservable ? (
-                    <Badge tone="slate" title="缺少 Worker heartbeat，无法证明存活或死亡">
+                    <Badge tone="slate" title="缺少任务进程心跳，无法证明存活或不可用">
                       未接入
                     </Badge>
                   ) : (
                     <Badge tone={workerTones[snapshot.workerStatus]}>
-                      {workerLabels[snapshot.workerStatus]}
+                      {WORKER_STATUS_LABELS[snapshot.workerStatus]}
                     </Badge>
                   )}
                 </dd>
@@ -201,12 +199,12 @@ export function SystemView({
             <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
               推导口径：{workerDerivation}
               {workerSignal?.lastJobStatus
-                ? ` · 最近 ${workerSignal.lastJobStatus} @ ${workerSignal.lastJobQueue ?? "?"}`
+                ? ` · 最近${JOB_STATUS_LABELS[workerSignal.lastJobStatus]} @ ${workerSignal.lastJobQueue ?? "?"}`
                 : ""}
             </p>
             {!workerObservable ? (
               <p className="mt-2 text-[9px] leading-4 text-muted">
-                Worker 未写入 heartbeat，也没有可观测的阻塞消费者或近期任务；需要 Worker
+                任务进程未写入心跳，也没有可观测的阻塞消费者或近期任务；需要在任务进程
                 侧新增心跳键（如 <code className="font-mono">roamlog:worker:heartbeat</code>）
                 才能给出可信的健康判定。
               </p>
@@ -216,7 +214,7 @@ export function SystemView({
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="type-eyebrow">QUEUE / REDIS DISCOVERY</p>
+                <p className="type-eyebrow">队列 / Redis 发现</p>
                 <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">队列注册</h2>
               </div>
               <Layers aria-hidden="true" className="size-4 text-accent-blue" />
@@ -238,9 +236,11 @@ export function SystemView({
                     <li key={queue.name} className="flex items-center justify-between gap-2">
                       <span className="truncate font-mono text-[10px] text-body">{queue.name}</span>
                       <span className="flex items-center gap-2 font-mono text-[9px] text-muted">
-                        <span>w{queue.waiting}</span>
-                        <span>a{queue.active}</span>
-                        {queue.paused ? <Badge tone="yellow">Paused</Badge> : null}
+                        <span>等待 {queue.waiting}</span>
+                        <span>运行 {queue.active}</span>
+                        {queue.paused ? (
+                          <Badge tone="yellow">{QUEUE_STATE_LABELS.paused}</Badge>
+                        ) : null}
                       </span>
                     </li>
                   ))}
@@ -259,12 +259,12 @@ export function SystemView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">数据库迁移</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              prisma migrate status
+              Prisma 迁移状态
             </p>
           </div>
           <Badge tone={snapshot.migrations.length > 0 ? "green" : "yellow"}>
             {snapshot.migrations.length > 0
-              ? "Latest applied"
+              ? "最新已应用"
               : "未接入"}
           </Badge>
         </div>
@@ -274,16 +274,16 @@ export function SystemView({
             <thead>
               <tr className="border-b border-hairline font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
                 <th scope="col" className="px-3 py-2.5 font-normal">
-                  Version
+                  版本
                 </th>
                 <th scope="col" className="px-3 py-2.5 font-normal">
-                  Name
+                  名称
                 </th>
                 <th scope="col" className="px-3 py-2.5 font-normal">
-                  Applied at
+                  应用时间
                 </th>
                 <th scope="col" className="px-3 py-2.5 font-normal">
-                  Status
+                  状态
                 </th>
               </tr>
             </thead>
@@ -306,7 +306,7 @@ export function SystemView({
                     </td>
                     <td className="px-3 py-2">
                       <Badge tone={migration.status === "applied" ? "green" : "yellow"}>
-                        {migration.status === "applied" ? "Applied" : "Pending"}
+                        {MIGRATION_STATUS_LABELS[migration.status]}
                       </Badge>
                     </td>
                   </tr>

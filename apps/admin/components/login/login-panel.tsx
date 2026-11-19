@@ -11,6 +11,7 @@ import {
   type AdminAuthTransport,
 } from "../../lib/admin-auth";
 import { getAdminPostLoginPath } from "../../lib/admin-paths";
+import { PLATFORM_ROLE_LABELS } from "../../lib/labels";
 
 interface LoginPanelProps {
   onAuthenticated?: () => void;
@@ -61,25 +62,25 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                 <p className="font-serif text-xl leading-none tracking-[-0.03em] text-ink">
                   Roamlog
                 </p>
-                <p className="type-eyebrow mt-1 text-[8px] text-ash">platform control</p>
+                <p className="type-eyebrow mt-1 text-[8px] text-ash">平台控制</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {demoEnabled ? <Badge tone="orange">DEMO PREFILL</Badge> : null}
-              <Badge tone="green">SECURE AUTH</Badge>
+              {demoEnabled ? <Badge tone="orange">演示预填</Badge> : null}
+              <Badge tone="green">安全认证</Badge>
             </div>
           </header>
 
           <div className="flex flex-1 items-center py-12">
             <div className="w-full max-w-[420px]">
-              <p className="type-eyebrow">RESTRICTED / ADMIN</p>
+              <p className="type-eyebrow">受限 / 管理员</p>
               <h1 className="mt-3 font-serif text-[clamp(2.35rem,1.9rem+1.4vw,3.25rem)] leading-[1.05] tracking-[-0.04em] text-ink">
                 {step === "credentials" ? "进入平台控制台" : "双因素认证"}
               </h1>
               <p className="mt-4 max-w-sm text-[13px] leading-6 text-muted">
                 {step === "credentials"
-                  ? "访问用户、Workspace、审计和运营工具。所有后台操作均按平台角色与审计规则约束。"
-                  : "输入验证器应用中的 6 位 TOTP 验证码完成 Better Auth challenge。"}
+                  ? "访问用户、工作区、审计和运营工具。所有后台操作均按平台角色与审计规则约束。"
+                  : "输入验证器应用中的 6 位 TOTP 验证码，完成 Better Auth 验证。"}
               </p>
 
               <Separator className="my-7" />
@@ -126,7 +127,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     required
                     hint={
                       demoEnabled
-                        ? "DEMO：已通过 NEXT_PUBLIC_ADMIN_DEMO=1 预填演示邮箱，请勿用于生产。"
+                        ? "演示：已通过 NEXT_PUBLIC_ADMIN_DEMO=1 预填演示邮箱，请勿用于生产。"
                         : undefined
                     }
                   >
@@ -142,7 +143,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     id="admin-password"
                     label="密码"
                     required
-                    hint="通过同源 /v1/auth 代理登录，session cookie 为 httpOnly。"
+                    hint="通过同源 /v1/auth 代理登录，会话 Cookie 为 httpOnly。"
                   >
                     <Input
                       autoComplete="current-password"
@@ -263,16 +264,16 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-4">
             <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-              Better Auth / same-origin /v1 proxy
+              Better Auth / 同源 /v1 代理
             </p>
-            <p className="font-mono text-[9px] text-stone">ADMIN :3001</p>
+            <p className="font-mono text-[9px] text-stone">后台 :3001</p>
           </footer>
         </section>
 
         <aside className="hidden border-l border-hairline bg-surface-deep px-7 py-10 lg:flex lg:flex-col">
           <div className="flex items-center justify-between">
-            <p className="type-eyebrow">Access boundary</p>
-            <Badge tone="green">2FA REQUIRED</Badge>
+            <p className="type-eyebrow">访问边界</p>
+            <Badge tone="green">需要 2FA</Badge>
           </div>
           <h2 className="mt-4 font-serif text-3xl leading-tight tracking-[-0.035em] text-ink">
             为运营操作保留证据
@@ -283,10 +284,10 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
 
           <div className="mt-8 divide-y divide-hairline border-y border-hairline">
             {[
-              ["Support", "查看用户/Workspace；暂停、恢复、重发邮件"],
-              ["Analyst", "只读指标、审计和队列；可导出审计 CSV"],
-              ["Admin", "运营删除/恢复、2FA 重置、队列重试"],
-              ["Super admin", "平台角色、功能开关、队列管理"],
+              [PLATFORM_ROLE_LABELS.support, "查看用户/工作区；暂停、恢复、重发邮件"],
+              [PLATFORM_ROLE_LABELS.analyst, "只读指标、审计和队列；可导出审计 CSV"],
+              [PLATFORM_ROLE_LABELS.admin, "运营删除/恢复、2FA 重置、队列重试"],
+              [PLATFORM_ROLE_LABELS.super_admin, "平台角色、功能开关、队列管理"],
             ].map(([role, capability]) => (
               <div key={role} className="py-4">
                 <div className="flex items-center gap-2">
@@ -299,15 +300,15 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
           </div>
 
           <div className="mt-auto rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">Environment</p>
+            <p className="type-eyebrow">环境</p>
             <div className="mt-3 space-y-2 font-mono text-[9px] text-muted">
               <div className="flex justify-between gap-3">
                 <span>API</span>
-                <span className="text-accent-green">SAME-ORIGIN PROXY</span>
+                <span className="text-accent-green">同源代理</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span>Audit writes</span>
-                <span className="text-ink">BACKEND</span>
+                <span>审计写入</span>
+                <span className="text-ink">后端</span>
               </div>
             </div>
           </div>

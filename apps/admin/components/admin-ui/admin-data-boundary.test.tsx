@@ -44,7 +44,7 @@ describe("AdminDataBoundary", () => {
 
     render(<AdminDataBoundary resource={resource}>{() => <p>secret data</p>}</AdminDataBoundary>);
 
-    expect(screen.getByRole("alert")).toHaveTextContent("2FA ENROLLMENT REQUIRED");
+    expect(screen.getByRole("alert")).toHaveTextContent("需要绑定 2FA");
     expect(screen.getAllByText(/ADMIN_2FA_REQUIRED/).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "绑定验证器" })).toBeInTheDocument();
     expect(screen.queryByText("secret data")).not.toBeInTheDocument();

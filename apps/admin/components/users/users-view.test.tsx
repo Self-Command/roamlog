@@ -124,7 +124,7 @@ describe("UsersView", () => {
 
     expect(screen.queryByRole("dialog", { name: "暂停账户" })).not.toBeInTheDocument();
     // Without a mutation port the console refuses the write instead of faking it.
-    expect(screen.getByRole("status")).toHaveTextContent("未连接 Admin API");
+    expect(screen.getByRole("status")).toHaveTextContent("未连接后台 API");
   });
 
   it("keeps every destructive user action visible but disabled for analysts", async () => {

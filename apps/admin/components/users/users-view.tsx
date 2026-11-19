@@ -52,6 +52,12 @@ import {
 } from "../../lib/admin-users";
 import { ADMIN_ROLE_LABELS, ADMIN_CONSOLE_ROLES, type AdminConsoleRole } from "../../lib/admin-types";
 import { formatDateTime } from "../../lib/format";
+import {
+  ACCOUNT_STATUS_LABELS,
+  EMAIL_VERIFICATION_STATUS_LABELS,
+  PLATFORM_ROLE_LABELS,
+  WORKSPACE_ROLE_LABELS,
+} from "../../lib/labels";
 
 import { cn } from "../admin-shell/cn";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
@@ -179,7 +185,7 @@ const userActionCopy: Record<
   },
   "change-role": {
     title: "修改平台角色",
-    description: "平台角色与 Workspace 角色完全独立，变更将影响整个后台能力范围。",
+    description: "平台角色与工作区角色完全独立，变更将影响整个后台能力范围。",
     confirmLabel: "确认修改",
     action: "admin.user.change-role",
   },
@@ -417,7 +423,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
       return;
     }
 
-    setStatusMessage("未连接 Admin API，操作未提交。");
+    setStatusMessage("未连接后台 API，操作未提交。");
     setPendingAction(null);
   }
 
@@ -439,7 +445,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
       setStatusMessage("用户 CSV 已按当前筛选导出。");
     } catch (error) {
       setStatusMessage(
-        mutationFailureMessage(error, "导出失败，请检查 Admin API 与会话后重试。"),
+        mutationFailureMessage(error, "导出失败，请检查后台 API 与会话后重试。"),
       );
     } finally {
       setIsExporting(false);
@@ -519,7 +525,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
       return;
     }
     if (!profiles) {
-      setProfileError("未连接 Admin API，资料未提交。");
+      setProfileError("未连接后台 API，资料未提交。");
       return;
     }
 
@@ -590,7 +596,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="TRUST & SAFETY / USERS"
+        eyebrow="信任与安全 / 用户"
         title="用户"
         description="按服务端搜索、状态与平台角色筛选账户，查看真实体量并执行带审计的受控操作。"
         readOnly={readOnly}
@@ -603,7 +609,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
               isExporting
                 ? "正在生成 CSV"
                 : !canExport
-                  ? "仅 admin 及以上可导出用户 CSV（后端动作 admin:users:delete）"
+                  ? "仅管理员及以上可导出用户 CSV（后端动作 admin:users:delete）"
                   : "按当前搜索与筛选导出全部匹配用户（服务端 CSV）"
             }
             onClick={() => void handleExport()}
@@ -620,7 +626,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
           <Input
             className="mt-1.5 h-9"
             type="search"
-            placeholder="姓名、邮箱或 Workspace"
+            placeholder="姓名、邮箱或工作区"
             value={query}
             onChange={(event) => changeQuery(event.currentTarget.value)}
           />
@@ -633,9 +639,9 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
             onChange={(event) => changeStatus(event.currentTarget.value as "all" | AccountStatus)}
           >
             <option value="all">全部状态</option>
-            <option value="active">Active</option>
-            <option value="suspended">已暂停</option>
-            <option value="deleted">已删除</option>
+            <option value="active">{ACCOUNT_STATUS_LABELS.active}</option>
+            <option value="suspended">{ACCOUNT_STATUS_LABELS.suspended}</option>
+            <option value="deleted">{ACCOUNT_STATUS_LABELS.deleted}</option>
           </Select>
         </label>
         <label className="w-full md:w-44">
@@ -646,11 +652,11 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
             onChange={(event) => changeRole(event.currentTarget.value as "all" | PlatformRole)}
           >
             <option value="all">全部角色</option>
-            <option value="user">User</option>
-            <option value="support">Support</option>
-            <option value="analyst">Analyst</option>
-            <option value="admin">Admin</option>
-            <option value="super_admin">Super admin</option>
+            <option value="user">{PLATFORM_ROLE_LABELS.user}</option>
+            <option value="support">{PLATFORM_ROLE_LABELS.support}</option>
+            <option value="analyst">{PLATFORM_ROLE_LABELS.analyst}</option>
+            <option value="admin">{PLATFORM_ROLE_LABELS.admin}</option>
+            <option value="super_admin">{PLATFORM_ROLE_LABELS.super_admin}</option>
           </Select>
         </label>
         <label className="w-full md:w-44">
@@ -678,7 +684,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          Analyst 可查看全部用户数据，但所有破坏性操作保持可见且禁用。
+          分析员可查看全部用户数据，但所有破坏性操作保持可见且禁用。
         </div>
       ) : null}
 
@@ -724,7 +730,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
           <div>
             <h2 className="text-[13px] font-medium text-ink">平台账户</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              users / server page {pageIndex + 1}
+              用户 / 服务端分页 第 {pageIndex + 1} 页
             </p>
           </div>
         </div>
@@ -838,7 +844,9 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                       <AccountStatusBadge status={user.status} />
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
-                      {user.emailVerified ? "VERIFIED" : "PENDING"}
+                      {user.emailVerified
+                        ? EMAIL_VERIFICATION_STATUS_LABELS.verified
+                        : EMAIL_VERIFICATION_STATUS_LABELS.pending}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
                       {typeof user.activeSessionCount === "number" ? (
@@ -868,7 +876,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                           size="sm"
                           aria-label="修改平台角色"
                           disabled={!canChangeRole || user.status === "deleted"}
-                          title={canChangeRole ? "修改平台角色" : "仅 super_admin 可修改平台角色"}
+                          title={canChangeRole ? "修改平台角色" : "仅超级管理员可修改平台角色"}
                           onClick={() => openAction({ kind: "change-role", user })}
                         >
                           <MoreHorizontal aria-hidden="true" />
@@ -966,7 +974,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
           {detailUser ? (
             <>
               <SheetHeader>
-                <p className="type-eyebrow">USER DETAIL</p>
+                <p className="type-eyebrow">用户详情</p>
                 <SheetTitle>{detailUser.name}</SheetTitle>
                 <SheetDescription>{detailUser.email}</SheetDescription>
               </SheetHeader>
@@ -974,7 +982,9 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                 <PlatformRoleBadge role={detailUser.platformRole} />
                 <AccountStatusBadge status={detailUser.status} />
                 <Badge tone={detailUser.emailVerified ? "green" : "yellow"}>
-                  {detailUser.emailVerified ? "Email verified" : "Email pending"}
+                  {detailUser.emailVerified
+                    ? `邮箱${EMAIL_VERIFICATION_STATUS_LABELS.verified}`
+                    : `邮箱${EMAIL_VERIFICATION_STATUS_LABELS.pending}`}
                 </Badge>
               </div>
 
@@ -986,7 +996,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                   title={
                     canEditProfile
                       ? "编辑姓名、邮箱、语言、时区与平台角色"
-                      : "仅 super_admin 可编辑用户资料"
+                      : "仅超级管理员可编辑用户资料"
                   }
                   onClick={startEditingProfile}
                 >
@@ -995,7 +1005,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                 </Button>
                 {!canEditProfile ? (
                   <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                    只读 · 仅 super_admin 可编辑
+                    只读 · 仅超级管理员可编辑
                   </span>
                 ) : null}
               </div>
@@ -1066,16 +1076,16 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                           )
                         }
                       >
-                        <option value="user">User</option>
-                        <option value="support">Support</option>
-                        <option value="analyst">Analyst</option>
-                        <option value="admin">Admin</option>
-                        <option value="super_admin">Super admin</option>
+                        <option value="user">{PLATFORM_ROLE_LABELS.user}</option>
+                        <option value="support">{PLATFORM_ROLE_LABELS.support}</option>
+                        <option value="analyst">{PLATFORM_ROLE_LABELS.analyst}</option>
+                        <option value="admin">{PLATFORM_ROLE_LABELS.admin}</option>
+                        <option value="super_admin">{PLATFORM_ROLE_LABELS.super_admin}</option>
                       </Select>
                     </FormField>
                   </div>
                   <p className="text-[11px] leading-5 text-muted">
-                    修改邮箱会把验证状态重置为 PENDING 并触发一次验证邮件；邮件失败不会回滚资料修改。
+                    修改邮箱会把验证状态重置为待验证，并触发一次验证邮件；邮件失败不会回滚资料修改。
                   </p>
                   {profileError ? (
                     <p role="alert" className="text-[11px] leading-5 text-accent-red">
@@ -1123,7 +1133,9 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                   ["最近活跃", formatDateTime(detailData?.lastActiveAt ?? detailUser.lastActiveAt)],
                   [
                     "邮箱验证",
-                    (detailData?.emailVerified ?? detailUser.emailVerified) ? "VERIFIED" : "PENDING",
+                    (detailData?.emailVerified ?? detailUser.emailVerified)
+                      ? EMAIL_VERIFICATION_STATUS_LABELS.verified
+                      : EMAIL_VERIFICATION_STATUS_LABELS.pending,
                   ],
                   [
                     "2FA",
@@ -1152,7 +1164,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
 
               {detail.error ? (
                 <div role="alert" className="mt-4 rounded-control border border-accent-red/25 p-3">
-                  <p className="type-eyebrow text-accent-red">DETAIL ERROR</p>
+                  <p className="type-eyebrow text-accent-red">详情加载失败</p>
                   <p className="mt-1 text-[11px] leading-5 text-body">{detail.error.detail}</p>
                   <Button variant="ghost" size="sm" className="mt-2" onClick={() => detail.refetch()}>
                     重试详情
@@ -1162,7 +1174,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
 
               <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline bg-hairline">
                 {[
-                  ["Workspace", detailData?.workspaceCount],
+                  ["工作区", detailData?.workspaceCount],
                   ["旅行", detailData?.tripCount],
                   ["日志", detailData?.entryCount],
                   ["活跃会话", detailData?.activeSessionCount],
@@ -1196,7 +1208,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                         ? detailLoading
                           ? "读取中"
                           : "未接入"
-                        : `${sessions.length} records`}
+                        : `${sessions.length} 条记录`}
                     </span>
                   </div>
                   {sessions === undefined ? (
@@ -1226,20 +1238,20 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                 <section aria-labelledby="user-memberships-heading">
                   <div className="flex items-center justify-between gap-3">
                     <h3 id="user-memberships-heading" className="type-eyebrow">
-                      Workspace 成员关系
+                      工作区成员关系
                     </h3>
                     <span className="font-mono text-[9px] text-muted">
                       {memberships === undefined
                         ? detailLoading
                           ? "读取中"
                           : "未接入"
-                        : `${memberships.length} records`}
+                        : `${memberships.length} 条记录`}
                     </span>
                   </div>
                   {memberships === undefined ? (
                     <p className="mt-2 text-[11px] leading-5 text-muted">
                       {detailLoading
-                        ? "正在读取 Workspace 成员关系…"
+                        ? "正在读取工作区成员关系…"
                         : "未接入：需要 GET /v1/admin/users/:id 返回 workspaces[]（workspaceId、workspaceName、role、status、joinedAt）。"}
                     </p>
                   ) : memberships.length > 0 ? (
@@ -1258,16 +1270,16 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5">
-                            <Badge tone="slate">{membership.role}</Badge>
+                            <Badge tone="slate">{WORKSPACE_ROLE_LABELS[membership.role]}</Badge>
                             {membership.status === "suspended" ? (
-                              <Badge tone="yellow">Suspended</Badge>
+                              <Badge tone="yellow">{ACCOUNT_STATUS_LABELS.suspended}</Badge>
                             ) : null}
                           </div>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-[11px] text-muted">没有 Workspace 成员关系。</p>
+                    <p className="mt-2 text-[11px] text-muted">没有工作区成员关系。</p>
                   )}
                 </section>
               </div>
@@ -1288,7 +1300,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                   <Button
                     variant="ghost"
                     disabled={!canResetTwoFactor}
-                    title={canResetTwoFactor ? "重置双因素认证" : "仅 admin 及以上可重置 2FA"}
+                    title={canResetTwoFactor ? "重置双因素认证" : "仅管理员及以上可重置 2FA"}
                     onClick={() => {
                       openAction({ kind: "reset-2fa", user: detailUser });
                     }}
@@ -1297,7 +1309,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  操作会发送真实 Admin mutation，并由后端权限与审计规则约束；成功后列表与详情会自动刷新。
+                  操作会发送真实后台变更，并由后端权限与审计规则约束；成功后列表与详情会自动刷新。
                 </p>
               </div>
             </>

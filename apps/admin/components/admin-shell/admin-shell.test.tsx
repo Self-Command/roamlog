@@ -132,7 +132,7 @@ describe("AdminShell", () => {
 
     expect(screen.getByRole("navigation", { name: "管理后台主导航" })).toBeInTheDocument();
     expect(screen.getByText("平台概览")).toBeInTheDocument();
-    expect(screen.getByText("信任与安全")).toBeInTheDocument();
+    expect(screen.getAllByText("信任与安全").length).toBeGreaterThan(0);
     expect(screen.getByText("数据与运营")).toBeInTheDocument();
 
     const usersLink = screen.getByRole("link", { name: "用户" });
@@ -159,7 +159,7 @@ describe("AdminShell", () => {
     expect(screen.queryByText(/条未读/)).not.toBeInTheDocument();
 
     expect(screen.getAllByText(SUPPORT_SESSION.name)).not.toHaveLength(0);
-    expect(screen.getAllByText("support").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("支持人员").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "用户列表" })).toBeInTheDocument();
   });
 
@@ -172,7 +172,7 @@ describe("AdminShell", () => {
       </AdminShell>,
     );
 
-    expect(screen.getAllByText("STAGING").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("预发布环境").length).toBeGreaterThan(0);
     expect(screen.queryByText("LOCAL")).not.toBeInTheDocument();
   });
 
@@ -188,7 +188,7 @@ describe("AdminShell", () => {
     expect(screen.getAllByText("Ops Admin")).not.toHaveLength(0);
     expect(screen.getAllByText("ops@roamlog.test")).not.toHaveLength(0);
     expect(screen.queryByRole("combobox", { name: /平台角色/ })).not.toBeInTheDocument();
-    expect(screen.getAllByText("Admin").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("管理员").length).toBeGreaterThan(0);
     const header = screen.getByRole("banner");
     const sidebar = screen.getByRole("complementary", { name: "管理后台侧栏" });
     expect(within(header).queryByText(/2FA/i)).not.toBeInTheDocument();

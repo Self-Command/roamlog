@@ -17,6 +17,12 @@ import type {
 import type { AdminConsoleRole } from "../../lib/admin-types";
 import type { AdminDashboardData } from "../../lib/admin-types";
 import { formatBytes, formatCount, formatDateTime } from "../../lib/format";
+import {
+  AUDIT_ACTOR_TYPE_LABELS,
+  DATA_SOURCE_STATUS_LABELS,
+  EMAIL_STATUS_LABELS,
+  auditTargetTypeLabel,
+} from "../../lib/labels";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { AdminMetricCard } from "./admin-metric-card";
 import { TrendChart } from "./trend-chart";
@@ -58,7 +64,7 @@ function DashboardSourceNotice({
         <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-red" />
         <div className="min-w-0 space-y-2">
           <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-accent-red">
-            DATA SOURCE ERROR{state.error?.code ? ` · ${state.error.code}` : ""}
+            数据源错误{state.error?.code ? ` · ${state.error.code}` : ""}
           </p>
           <p className="text-[11px] leading-5 text-body">
             {state.error?.detail ?? `${subject}加载失败，请重试。`}
@@ -93,10 +99,10 @@ export function DashboardView({ role, data }: DashboardViewProps) {
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        eyebrow="PLATFORM / OVERVIEW"
+        eyebrow="平台 / 总览"
         title="平台总览"
         description={
-          "运营指标、后台队列与邮件健康。数字来自真实 Admin API；仅有当前快照时趋势显示单点。"}
+          "运营指标、后台队列与邮件健康。数字来自真实后台 API；仅有当前快照时趋势显示单点。"}
         readOnly={role === "analyst"}
         actions={
           <div className="text-right">
@@ -122,7 +128,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
               label="用户总数"
               value={formatCount(data.metrics.users.total)}
               detail={`${formatCount(data.metrics.users.active)} 活跃账户`}
-              change={`+${data.metrics.users.new24h}/24h`}
+              change={`+${data.metrics.users.new24h}/24 小时`}
               tone="blue"
               icon={Users}
             />
@@ -130,14 +136,14 @@ export function DashboardView({ role, data }: DashboardViewProps) {
               label="工作区"
               value={formatCount(data.metrics.workspaces.total)}
               detail={`${formatCount(data.metrics.workspaces.active)} 正常运营`}
-              change={`+${data.metrics.workspaces.new24h}/24h`}
+              change={`+${data.metrics.workspaces.new24h}/24 小时`}
               tone="green"
               icon={Building2}
             />
             <AdminMetricCard
               label="旅行"
               value={formatCount(data.metrics.trips)}
-              detail="跨全部 Workspace"
+              detail="跨全部工作区"
               tone="neutral"
               icon={Plane}
             />
@@ -158,7 +164,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
             <AdminMetricCard
               label="失败任务"
               value={String(failedJobs)}
-              detail="media / email / export"
+              detail="媒体 / 邮件 / 导出"
               change={failedJobs > 0 ? "需处理" : "清空"}
               tone={failedJobs > 0 ? "red" : "green"}
               icon={AlertTriangle}
@@ -176,7 +182,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">GROWTH / 12 DAYS</p>
+              <p className="type-eyebrow">增长 / 12 天</p>
               <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">
                 用户与工作区趋势
               </h2>
@@ -196,7 +202,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">AUDIT / LATEST</p>
+              <p className="type-eyebrow">审计 / 最新</p>
               <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">
                 最近审计事件
               </h2>
@@ -216,7 +222,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
                     <div className="min-w-0">
                       <p className="truncate font-mono text-[10px] text-body">{entry.action}</p>
                       <p className="mt-1 truncate text-[11px] text-muted">
-                        {entry.targetType} / {entry.targetId.slice(-8)}
+                        {auditTargetTypeLabel(entry.targetType)} / {entry.targetId.slice(-8)}
                       </p>
                     </div>
                     <div className="text-right">
@@ -224,7 +230,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
                         {formatDateTime(entry.createdAt)}
                       </p>
                       <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.08em] text-muted">
-                        {entry.actorType}
+                        {AUDIT_ACTOR_TYPE_LABELS[entry.actorType]}
                       </p>
                     </div>
                   </li>
@@ -250,14 +256,14 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">BULLMQ / HEALTH</p>
+              <p className="type-eyebrow">BullMQ / 健康度</p>
               <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">队列健康</h2>
             </div>
             {metricsReady ? (
-              <Badge tone={failedJobs > 0 ? "red" : "green"}>{failedJobs} failed</Badge>
+              <Badge tone={failedJobs > 0 ? "red" : "green"}>{failedJobs} 个失败</Badge>
             ) : (
               <Badge tone={metricsSource.status === "error" ? "red" : "neutral"}>
-                {metricsSource.status}
+                {DATA_SOURCE_STATUS_LABELS[metricsSource.status]}
               </Badge>
             )}
           </div>
@@ -272,7 +278,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <span className="font-mono text-[10px] text-body">{queue.name}</span>
                         <span className="font-mono text-[9px] text-muted">
-                          {queue.waiting} wait · {queue.active} active · {queue.failed} failed
+                          {queue.waiting} 等待 · {queue.active} 运行 · {queue.failed} 失败
                         </span>
                       </div>
                       <Progress
@@ -301,38 +307,37 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">RESEND / DELIVERY</p>
+              <p className="type-eyebrow">Resend / 投递</p>
               <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">邮件健康</h2>
             </div>
             {emailsReady ? (
               <Badge tone={deliveryRate > 99 ? "green" : "yellow"}>
-                {deliveryRate.toFixed(2)}% delivered
+                {deliveryRate.toFixed(2)}% 已送达
               </Badge>
             ) : (
               <Badge tone={emailsSource.status === "error" ? "red" : "neutral"}>
-                {emailsSource.status}
+                {DATA_SOURCE_STATUS_LABELS[emailsSource.status]}
               </Badge>
             )}
           </div>
           {emailsReady ? (
             <>
               <dl className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-control border border-hairline bg-hairline sm:grid-cols-5">
-                {[
-                  ["Delivered", delivered],
-                  ["Queued", data.emailHealth.queued],
-                  ["Bounced", data.emailHealth.bounced],
-                  ["Complained", data.emailHealth.complained],
-                  ["Failed", data.emailHealth.failed],
-                ].map(([label, value]) => (
-                  <div key={label} className="bg-surface-1 px-3 py-4">
-                    <dt className="type-eyebrow">{label}</dt>
-                    <dd className="mt-2 font-serif text-xl text-ink">
-                      {typeof value === "number" && label === "Delivered"
-                        ? new Intl.NumberFormat("en-US").format(value)
-                        : value}
-                    </dd>
-                  </div>
-                ))}
+                {(
+                  ["delivered", "queued", "bounced", "complained", "failed"] as const
+                ).map((key) => {
+                  const value = data.emailHealth[key];
+                  return (
+                    <div key={key} className="bg-surface-1 px-3 py-4">
+                      <dt className="type-eyebrow">{EMAIL_STATUS_LABELS[key]}</dt>
+                      <dd className="mt-2 font-serif text-xl text-ink">
+                        {key === "delivered"
+                          ? new Intl.NumberFormat("zh-CN").format(value)
+                          : value}
+                      </dd>
+                    </div>
+                  );
+                })}
               </dl>
               <p className="mt-4 text-[11px] leading-5 text-muted">
                 退信与投诉保留在邮件日志中；邮件页可重发失败邮件，队列页可检查投递任务的失败详情。

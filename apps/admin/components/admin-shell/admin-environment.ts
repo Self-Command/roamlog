@@ -1,3 +1,5 @@
+import { ENVIRONMENT_LABELS } from "../../lib/labels";
+
 /**
  * The Admin Shell must never invent a deployment environment. The badge is
  * derived only from build/runtime configuration:
@@ -13,11 +15,11 @@
 function knownEnvironmentLabel(value: string): string | null {
   switch (value) {
     case "production":
-      return "PRODUCTION";
+      return ENVIRONMENT_LABELS.production;
     case "staging":
-      return "STAGING";
+      return ENVIRONMENT_LABELS.staging;
     case "development":
-      return "DEVELOPMENT";
+      return ENVIRONMENT_LABELS.development;
     default:
       return null;
   }

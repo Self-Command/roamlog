@@ -14,9 +14,9 @@ describe("SystemView", () => {
     expect(screen.getByText("0003_export_cleanup")).toBeInTheDocument();
     expect(screen.getByText("Redis")).toBeInTheDocument();
     expect(screen.getByText("S3 / MinIO")).toBeInTheDocument();
-    expect(screen.getByText("后台 Worker")).toBeInTheDocument();
-    expect(screen.getByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("3 / 4 up")).toBeInTheDocument();
+    expect(screen.getByText("后台任务进程")).toBeInTheDocument();
+    expect(screen.getByText("健康")).toBeInTheDocument();
+    expect(screen.getByText("3 / 4 正常")).toBeInTheDocument();
   });
 
   it("drops the previously hardcoded queue/Redis panel", () => {
@@ -49,9 +49,9 @@ describe("SystemView", () => {
 
     render(<SystemView role="admin" snapshot={snapshot} />);
 
-    expect(screen.queryByText("Down")).not.toBeInTheDocument();
+    expect(screen.queryByText("不可用")).not.toBeInTheDocument();
     expect(screen.getAllByText("未接入").length).toBeGreaterThan(1);
-    expect(screen.getByText(/需要 Worker/)).toBeInTheDocument();
+    expect(screen.getByText(/需要.*任务进程/)).toBeInTheDocument();
     expect(screen.getByText(/需要 ROAMLOG_API_VERSION/)).toBeInTheDocument();
     expect(screen.getByText(/需要 ROAMLOG_BUILD_TIME/)).toBeInTheDocument();
     expect(screen.getByText(/没有可识别的 BullMQ 队列键/)).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("SystemView", () => {
 
     render(<SystemView role="admin" snapshot={snapshot} />);
 
-    expect(screen.getByText("Healthy")).toBeInTheDocument();
+    expect(screen.getByText("健康")).toBeInTheDocument();
     expect(screen.getAllByText(/阻塞消费者/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Redis CLIENT LIST/)).toBeInTheDocument();
     expect(screen.getByText("email")).toBeInTheDocument();

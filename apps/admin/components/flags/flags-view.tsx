@@ -83,13 +83,13 @@ const EMPTY_CREATE_DRAFT: CreateFlagDraft = {
 function validateCreateDraft(draft: CreateFlagDraft, existing: readonly AdminFlagRecord[]): string {
   const key = draft.key.trim();
   if (key.length < 2 || key.length > 80) {
-    return "key 长度必须为 2-80 个字符。";
+    return "标识长度必须为 2-80 个字符。";
   }
   if (!FLAG_KEY_PATTERN.test(key)) {
-    return "key 只能使用小写字母、数字，以及 . _ - 分隔（且必须以字母开头）。";
+    return "标识只能使用小写字母、数字，以及 . _ - 分隔（且必须以字母开头）。";
   }
   if (existing.some((flag) => flag.key === key)) {
-    return "该 key 已存在，功能开关 key 必须唯一。";
+    return "该标识已存在，功能开关标识必须唯一。";
   }
   if (!draft.description.trim()) {
     return "描述不能为空。";
@@ -332,20 +332,20 @@ export function FlagsView({
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="PLATFORM / FEATURE FLAGS"
+        eyebrow="平台 / 功能开关"
         title="功能开关"
-        description="管理全局开关、灰度比例和 Workspace 白名单。仅 super_admin 可创建、修改或删除，写入由后端审计。"
+        description="管理全局开关、灰度比例和工作区白名单。仅超级管理员可创建、修改或删除，写入由后端审计。"
         readOnly={readOnly}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="green">{enabledCount} enabled</Badge>
-            <Badge tone="neutral">{fullRolloutCount} full rollout</Badge>
+            <Badge tone="green">{enabledCount} 个已启用</Badge>
+            <Badge tone="neutral">{fullRolloutCount} 个全量发布</Badge>
             <Button
               variant="outline"
               size="sm"
               aria-label="新建功能开关"
               disabled={!canUpdate}
-              title={canUpdate ? "新建功能开关" : "仅 super_admin 可创建功能开关"}
+              title={canUpdate ? "新建功能开关" : "仅超级管理员可创建功能开关"}
               onClick={openCreate}
             >
               <Plus aria-hidden="true" />
@@ -362,8 +362,8 @@ export function FlagsView({
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
           {readOnly
-            ? "Analyst 可查看开关与灰度状态；所有修改控件保持可见但禁用。"
-            : "功能开关、平台角色和队列操作均为 super_admin 专属能力。"}
+            ? "分析员可查看开关与灰度状态；所有修改控件保持可见但禁用。"
+            : "功能开关、平台角色和队列操作均为超级管理员专属能力。"}
         </div>
       ) : null}
 
@@ -388,15 +388,15 @@ export function FlagsView({
             title="还没有功能开关"
             description={
               canUpdate
-                ? "创建第一个开关：key 全局唯一，灰度比例 0-100，可叠加 Workspace 白名单。"
-                : "当前没有功能开关。创建需要 super_admin 角色。"
+                ? "创建第一个开关：标识全局唯一，灰度比例 0-100，可叠加工作区白名单。"
+                : "当前没有功能开关。创建需要超级管理员角色。"
             }
             action={
               <Button
                 variant="outline"
                 size="sm"
                 disabled={!canUpdate}
-                title={canUpdate ? "新建第一个功能开关" : "仅 super_admin 可创建功能开关"}
+                title={canUpdate ? "新建第一个功能开关" : "仅超级管理员可创建功能开关"}
                 onClick={openCreate}
               >
                 <Plus aria-hidden="true" />
@@ -431,13 +431,13 @@ export function FlagsView({
                     {flag.description}
                   </p>
                   <p className="mt-2 font-mono text-[8px] text-stone">
-                    updated by {flag.updatedByName} · {formatDateTime(flag.updatedAt)}
+                    更新者 {flag.updatedByName} · {formatDateTime(flag.updatedAt)}
                   </p>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-3 rounded-control border border-hairline bg-surface-deep px-3 py-2">
                   <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                    Global
+                    全局
                   </span>
                   <Switch
                     aria-label={`${flag.key} 启用`}
@@ -446,7 +446,7 @@ export function FlagsView({
                     onCheckedChange={(checked) => updateDraft(flag.key, { enabled: checked })}
                   />
                   <Badge tone={draft.enabled ? "green" : "neutral"}>
-                    {draft.enabled ? "Enabled" : "Off"}
+                    {draft.enabled ? "已启用" : "已关闭"}
                   </Badge>
                 </div>
               </div>
@@ -458,7 +458,7 @@ export function FlagsView({
                       htmlFor={`rollout-${flag.key}`}
                       className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted"
                     >
-                      Rollout percentage
+                      灰度比例
                     </label>
                     <span className="font-serif text-2xl leading-none text-ink">
                       {draft.rolloutPercentage}%
@@ -492,10 +492,10 @@ export function FlagsView({
                 <div>
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-                      Workspace allowlist
+                      工作区白名单
                     </p>
                     <span className="font-mono text-[9px] text-body">
-                      {draft.workspaceAllowlist.length} selected
+                      {draft.workspaceAllowlist.length} 个已选
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -542,7 +542,7 @@ export function FlagsView({
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-3">
                 <span className="font-mono text-[8px] text-stone">
-                  rules / {draft.enabled ? "active" : "inactive"} / allowlist{" "}
+                  规则 / {draft.enabled ? "启用" : "停用"} / 白名单{" "}
                   {draft.workspaceAllowlist.length}
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -551,7 +551,7 @@ export function FlagsView({
                     size="sm"
                     aria-label={`删除开关 ${flag.key}`}
                     disabled={!canUpdate}
-                    title={canUpdate ? "删除该功能开关" : "仅 super_admin 可删除功能开关"}
+                    title={canUpdate ? "删除该功能开关" : "仅超级管理员可删除功能开关"}
                     onClick={() => setDeleteTarget(flag)}
                   >
                     <Trash2 aria-hidden="true" />
@@ -562,7 +562,7 @@ export function FlagsView({
                     size="sm"
                     aria-label="保存配置"
                     disabled={!canUpdate || !dirty}
-                    title={canUpdate ? "保存开关配置" : "仅 super_admin 可修改功能开关"}
+                    title={canUpdate ? "保存开关配置" : "仅超级管理员可修改功能开关"}
                     onClick={() => saveFlag(flag)}
                   >
                     <Save aria-hidden="true" />
@@ -584,9 +584,9 @@ export function FlagsView({
         <div>
           <h2 className="text-[12px] font-medium text-ink">灰度与白名单同时生效</h2>
           <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
-            全局关闭时任何白名单都不生效；开启后，白名单 Workspace 始终命中，其余 Workspace
+            全局关闭时任何白名单都不生效；开启后，白名单工作区始终命中，其余工作区
             按百分比参与灰度。
-            {"本页的创建、保存与删除都会调用真实 Admin flag mutation，并在后端写入审计。"}
+            {"本页的创建、保存与删除都会调用真实后台功能开关变更，并在后端写入审计。"}
           </p>
         </div>
       </section>
@@ -594,14 +594,14 @@ export function FlagsView({
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <p className="type-eyebrow">FEATURE FLAG / CREATE</p>
+            <p className="type-eyebrow">功能开关 / 新建</p>
             <DialogTitle>新建功能开关</DialogTitle>
             <DialogDescription>
-              key 创建后不可修改；灰度百分比必须在 0-100 之间，key 必须全局唯一。
+              标识创建后不可修改；灰度百分比必须在 0-100 之间，标识必须全局唯一。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <FormField id="flag-key" label="开关 key" required error={createError || undefined}>
+            <FormField id="flag-key" label="开关标识" required error={createError || undefined}>
               <Input
                 autoComplete="off"
                 placeholder="share-password-v2"
@@ -640,7 +640,7 @@ export function FlagsView({
                   }
                 />
                 <Badge tone={createDraft.enabled ? "green" : "neutral"}>
-                  {createDraft.enabled ? "Enabled" : "Off"}
+                  {createDraft.enabled ? "已启用" : "已关闭"}
                 </Badge>
               </div>
             </div>
@@ -663,7 +663,7 @@ export function FlagsView({
             </FormField>
             <div>
               <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-                Workspace 白名单（可选）
+                工作区白名单（可选）
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {workspaces.map((workspace) => {
@@ -714,9 +714,9 @@ export function FlagsView({
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="删除功能开关"
-        description="删除后开关将立即对所有 Workspace 失效，且无法恢复；操作会写入后端审计。"
+        description="删除后开关将立即对所有工作区失效，且无法恢复；操作会写入后端审计。"
         targetName={deleteTarget?.key ?? ""}
-        confirmationLabel="输入开关 key 确认"
+        confirmationLabel="输入开关标识确认"
         confirmActionLabel="确认删除"
         onConfirm={deleteFlag}
       />

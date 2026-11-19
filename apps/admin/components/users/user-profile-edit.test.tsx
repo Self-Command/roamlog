@@ -171,7 +171,7 @@ describe("UsersView profile editing", () => {
     await userEvent.click(within(row).getByRole("button", { name: "详情" }));
     const editButton = await screen.findByRole("button", { name: "编辑资料" });
     expect(editButton).toBeDisabled();
-    expect(screen.getByText(/仅 super_admin 可编辑/)).toBeInTheDocument();
+    expect(screen.getByText(/仅超级管理员可编辑/)).toBeInTheDocument();
   });
 
   it("refuses to fake a save when no profile port is connected", async () => {
@@ -188,6 +188,6 @@ describe("UsersView profile editing", () => {
     await events.type(nameInput, "未提交");
     await events.click(screen.getByRole("button", { name: "保存资料" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("未连接 Admin API");
+    expect(await screen.findByRole("alert")).toHaveTextContent("未连接后台 API");
   });
 });

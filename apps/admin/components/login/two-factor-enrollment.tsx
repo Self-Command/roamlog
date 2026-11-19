@@ -91,12 +91,12 @@ export function TwoFactorEnrollmentPanel({
   return (
     <div className="mx-auto max-w-3xl space-y-5 py-4">
       <header>
-        <p className="type-eyebrow">SECURITY / TOTP ENROLLMENT</p>
+        <p className="type-eyebrow">安全 / TOTP 注册</p>
         <h1 className="mt-2 font-serif text-[clamp(2rem,1.6rem+1vw,2.75rem)] leading-tight tracking-[-0.04em] text-ink">
           为平台管理员启用 2FA
         </h1>
         <p className="mt-3 max-w-2xl text-[13px] leading-6 text-muted">
-          平台角色由后端 session 决定。完成 TOTP 绑定与验证前，所有 Admin API 请求都会返回{" "}
+          平台角色由后端会话决定。完成 TOTP 绑定与验证前，所有后台 API 请求都会返回{" "}
           <code className="font-mono text-[11px] text-body">ADMIN_2FA_REQUIRED</code>。
         </p>
       </header>
@@ -144,12 +144,12 @@ export function TwoFactorEnrollmentPanel({
         <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-5">
             <div className="flex items-center justify-between gap-2">
-              <p className="type-eyebrow">SCAN TOTP</p>
-              <Badge tone="green">LOCAL QR</Badge>
+              <p className="type-eyebrow">扫描 TOTP</p>
+              <Badge tone="green">本地二维码</Badge>
             </div>
             <TOTPQRCode uri={enrollment.totpUri} />
             <p className="mt-3 text-[10px] leading-5 text-muted">
-              QR 在浏览器本地生成，TOTP secret 不会发送给第三方二维码服务。
+              二维码在浏览器本地生成，TOTP 密钥不会发送给第三方二维码服务。
             </p>
             <a
               href={enrollment.totpUri}
@@ -163,7 +163,7 @@ export function TwoFactorEnrollmentPanel({
             <div className="rounded-card border border-hairline-strong bg-surface-1 p-5">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="type-eyebrow">BACKUP CODES</p>
+                  <p className="type-eyebrow">备用码</p>
                   <h2 className="mt-1 text-[13px] font-medium text-ink">保存一次性备用码</h2>
                 </div>
                 <Button
@@ -205,7 +205,7 @@ export function TwoFactorEnrollmentPanel({
                 id="enrollment-totp"
                 label="验证器 6 位验证码"
                 required
-                hint="完成验证后，平台管理员 session 才能通过 Admin 2FA guard。"
+                hint="完成验证后，平台管理员会话才能通过后台 2FA 校验。"
               >
                 <Input
                   autoComplete="one-time-code"

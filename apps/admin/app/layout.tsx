@@ -42,10 +42,10 @@ const notoSans = Noto_Sans_SC({
 
 export const metadata: Metadata = {
   title: {
-    default: "Roamlog Admin",
-    template: "%s · Roamlog Admin",
+    default: "Roamlog 管理后台",
+    template: "%s · Roamlog 管理后台",
   },
-  description: "Roamlog platform operations console.",
+  description: "Roamlog 平台运营控制台。",
   robots: {
     index: false,
     follow: false,

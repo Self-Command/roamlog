@@ -11,6 +11,7 @@ import { Badge, Button, EmptyState, Input, Select } from "@roamlog/ui";
 import { AdminMutationError } from "../../lib/admin-api-error";
 import type { AdminConsoleRole } from "../../lib/admin-types";
 import { formatDateTime } from "../../lib/format";
+import { AUDIT_ACTOR_TYPE_LABELS, auditTargetTypeLabel } from "../../lib/labels";
 import { AdminFilterBar } from "../admin-ui/admin-filter-bar";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 
@@ -20,12 +21,6 @@ interface AuditViewProps {
   exportCsv?: (params: ExportAdminAuditCsvParams) => Promise<string>;
 }
 
-const actorTypeLabels: Record<AuditLog["actorType"], string> = {
-  user: "User",
-  admin: "Admin",
-  system: "System",
-};
-
 interface AuditActorOption {
   value: string;
   label: string;
@@ -33,9 +28,9 @@ interface AuditActorOption {
 
 function actorName(actorId: string | null, actorType: AuditLog["actorType"]): string {
   if (actorType === "system") {
-    return "System worker";
+    return "系统任务进程";
   }
-  return actorId ? `actor ${actorId.slice(-8)}` : "未知操作者";
+  return actorId ? `操作者 ${actorId.slice(-8)}` : "未知操作者";
 }
 
 function escapeCsvValue(value: string): string {
@@ -183,7 +178,7 @@ targetTypeFilter,
         };
         const csv = await exportCsv(params);
         downloadCsv(csv);
-        setStatusMessage(`已从 Admin API 导出审计 CSV。`);
+        setStatusMessage(`已从后台 API 导出审计 CSV。`);
       } catch (error) {
         setStatusMessage(
           error instanceof AdminMutationError
@@ -210,10 +205,10 @@ targetTypeFilter,
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="TRUST & SAFETY / AUDIT"
+        eyebrow="信任与安全 / 审计"
         title="审计日志"
         description={
-          "只追加的管理后台操作记录，读取真实 Admin API。"}
+          "只追加的管理后台操作记录，读取真实后台 API。"}
         readOnly={role === "analyst"}
         actions={
           <div className="flex flex-col items-end gap-1">
@@ -223,7 +218,7 @@ targetTypeFilter,
               disabled={!canExport || isExporting}
               title={
                 canExport
-                  ? "从 Admin API 导出当前筛选结果为 CSV": "仅 Analyst 及以上角色可导出"
+                  ? "从后台 API 导出当前筛选结果为 CSV": "仅分析员及以上角色可导出"
               }
               onClick={exportAuditCsv}
             >
@@ -232,7 +227,7 @@ targetTypeFilter,
             </Button>
             {!canExport ? (
               <p className="font-mono text-[9px] text-muted">
-                仅 Analyst 及以上角色可导出审计 CSV。
+                仅分析员及以上角色可导出审计 CSV。
               </p>
             ) : null}
           </div>
@@ -241,7 +236,7 @@ targetTypeFilter,
 
       <AdminFilterBar>
         <label className="min-w-0 flex-1">
-          <span className="type-eyebrow">搜索 action / target</span>
+          <span className="type-eyebrow">搜索动作 / 目标</span>
           <Input
             className="mt-1.5 h-9"
             type="search"
@@ -251,7 +246,7 @@ targetTypeFilter,
           />
         </label>
         <label className="w-full md:w-36">
-          <span className="type-eyebrow">Actor type</span>
+          <span className="type-eyebrow">操作者类型</span>
           <Select
             className="mt-1.5 h-9"
             value={actorType}
@@ -260,20 +255,20 @@ targetTypeFilter,
             }
           >
             <option value="all">全部类型</option>
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-            <option value="system">System</option>
+            <option value="user">{AUDIT_ACTOR_TYPE_LABELS.user}</option>
+            <option value="admin">{AUDIT_ACTOR_TYPE_LABELS.admin}</option>
+            <option value="system">{AUDIT_ACTOR_TYPE_LABELS.system}</option>
           </Select>
         </label>
         <label className="w-full md:w-40">
-          <span className="type-eyebrow">Actor</span>
+          <span className="type-eyebrow">操作者</span>
           <Select
             className="mt-1.5 h-9"
             value={actorFilter}
             onChange={(event) => setActorFilter(event.currentTarget.value)}
           >
             <option value="all">全部操作者</option>
-            <option value="system">System worker</option>
+            <option value="system">系统任务进程</option>
             {actorOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -282,7 +277,7 @@ targetTypeFilter,
           </Select>
         </label>
         <label className="w-full md:w-36">
-          <span className="type-eyebrow">Target type</span>
+          <span className="type-eyebrow">目标类型</span>
           <Select
             className="mt-1.5 h-9"
             value={targetTypeFilter}
@@ -291,7 +286,7 @@ targetTypeFilter,
             <option value="all">全部目标</option>
             {targetTypeOptions.map((targetType) => (
               <option key={targetType} value={targetType}>
-                {targetType}
+                {auditTargetTypeLabel(targetType)}
               </option>
             ))}
           </Select>
@@ -325,7 +320,7 @@ targetTypeFilter,
           />
         </label>
         <span className="flex h-9 items-center border-l border-hairline pl-3 font-mono text-[10px] text-muted max-md:hidden">
-          {filteredEntries.length} events
+          {filteredEntries.length} 条事件
         </span>
       </AdminFilterBar>
 
@@ -333,9 +328,9 @@ targetTypeFilter,
         <section className="rounded-card border border-hairline-strong bg-surface-1">
           <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
             <div>
-              <h2 className="text-[13px] font-medium text-ink">Audit timeline</h2>
+              <h2 className="text-[13px] font-medium text-ink">审计时间线</h2>
               <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                immutable / newest first
+                不可篡改 / 最新在前
               </p>
             </div>
           </div>
@@ -344,7 +339,7 @@ targetTypeFilter,
             <EmptyState
               icon={FileSearch}
               title="没有匹配审计事件"
-              description="调整关键词、actor 类型或日期范围后再试。"
+              description="调整关键词、操作者类型或日期范围后再试。"
               className="m-4"
             />
           ) : (
@@ -372,15 +367,16 @@ targetTypeFilter,
                         <span className="text-body">
                           {actorName(entry.actorId, entry.actorType)}
                         </span>{" "}
-                        对 {entry.targetType} / {entry.targetId.slice(-8)} 执行了操作
+                        对 {auditTargetTypeLabel(entry.targetType)} / {entry.targetId.slice(-8)}{" "}
+                        执行了操作
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Badge tone={entry.actorType === "system" ? "slate" : "blue"}>
-                          {actorTypeLabels[entry.actorType]}
+                          {AUDIT_ACTOR_TYPE_LABELS[entry.actorType]}
                         </Badge>
                         {entry.workspaceId ? (
                           <span className="font-mono text-[8px] text-muted">
-                            workspace {entry.workspaceId.slice(-8)}
+                            工作区 {entry.workspaceId.slice(-8)}
                           </span>
                         ) : null}
                         {entry.ip ? (
@@ -398,29 +394,29 @@ targetTypeFilter,
         <aside className="space-y-4">
           {null}
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">Immutability</p>
+            <p className="type-eyebrow">不可篡改性</p>
             <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">只追加审计</h2>
             <p className="mt-2 text-[11px] leading-5 text-muted">
               管理器不可编辑或删除审计事件。当前页面不提供任何修改入口，只提供筛选与 CSV 导出。
             </p>
           </section>
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">Event coverage</p>
+            <p className="type-eyebrow">事件覆盖</p>
             <dl className="mt-3 space-y-2 text-[11px]">
               <div className="flex justify-between gap-3">
-                <dt className="text-muted">Admin actions</dt>
+                <dt className="text-muted">管理员操作</dt>
                 <dd className="font-mono text-body">
                   {sourceEntries.filter((entry) => entry.actorType === "admin").length}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-muted">System actions</dt>
+                <dt className="text-muted">系统操作</dt>
                 <dd className="font-mono text-body">
                   {sourceEntries.filter((entry) => entry.actorType === "system").length}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-muted">User actions</dt>
+                <dt className="text-muted">用户操作</dt>
                 <dd className="font-mono text-body">
                   {sourceEntries.filter((entry) => entry.actorType === "user").length}
                 </dd>

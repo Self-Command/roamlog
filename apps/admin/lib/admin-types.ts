@@ -52,12 +52,7 @@ export interface AdminNotification {
   tone: "neutral" | "yellow" | "red";
 }
 
-export const ADMIN_ROLE_LABELS: Record<AdminConsoleRole, string> = {
-  support: "Support",
-  analyst: "Analyst",
-  admin: "Admin",
-  super_admin: "Super admin",
-};
+export { ADMIN_ROLE_LABELS } from "./labels";
 
 export const ADMIN_CONSOLE_ROLES: AdminConsoleRole[] = [
   "support",

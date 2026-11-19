@@ -25,6 +25,11 @@ import {
 } from "../../lib/admin-data-source";
 import { formatDateTime } from "../../lib/format";
 import {
+  JOB_STATUS_LABELS,
+  QUEUE_STATE_LABELS,
+  WORKER_STATUS_LABELS,
+} from "../../lib/labels";
+import {
   type AdminFailedJob,
   type AdminQueueSummary,
 } from "../../lib/admin-ops-types";
@@ -94,21 +99,21 @@ export function QueuesView({
     pendingAction?.kind === "retry"
       ? {
           title: "重试任务",
-          description: "任务将重新进入等待队列，并保留原有 job id 用于幂等检查。",
+          description: "任务将重新进入等待队列，并保留原有任务 ID 用于幂等检查。",
           confirmLabel: "确认重试",
           label: "输入任务 ID 确认",
         }
       : pendingAction?.kind === "pause"
         ? {
             title: "暂停队列",
-            description: "暂停后 Worker 不再消费该队列的新任务，已在执行的任务会完成。",
+            description: "暂停后任务进程不再消费该队列的新任务，已在执行的任务会完成。",
             confirmLabel: "确认暂停",
             label: "输入队列名称确认",
           }
         : pendingAction?.kind === "resume"
           ? {
               title: "恢复队列",
-              description: "队列恢复后 Worker 将重新消费等待中的任务。",
+              description: "队列恢复后任务进程将重新消费等待中的任务。",
               confirmLabel: "确认恢复",
               label: "输入队列名称确认",
             }
@@ -197,9 +202,9 @@ export function QueuesView({
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="DELIVERY / BULLMQ"
+        eyebrow="投递 / BullMQ"
         title="队列"
-        description="检查各队列等待、活跃与失败任务，查看失败原因；暂停、恢复与清空仅 super_admin 可执行。"
+        description="检查各队列等待、运行与失败任务，查看失败原因；暂停、恢复与清空仅超级管理员可执行。"
         readOnly={readOnly}
         actions={
           <div className="flex items-center gap-2 rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -234,7 +239,7 @@ export function QueuesView({
         <AdminMetricCard
           label="已暂停"
           value={String(pausedQueues)}
-          detail="Worker 不消费已暂停队列"
+          detail="任务进程不消费已暂停队列"
           tone={pausedQueues > 0 ? "orange" : "neutral"}
           icon={Pause}
         />
@@ -243,7 +248,7 @@ export function QueuesView({
           value={Number.isFinite(throughput) ? throughput.toFixed(1) : "未接入"}
           detail={
             Number.isFinite(throughput)
-              ? "5 分钟窗口内 BullMQ 完成时间戳推算 · jobs/min"
+              ? "5 分钟窗口内 BullMQ 完成时间戳推算 · 任务/分钟"
               : "Redis 无法提供完成窗口"
           }
           tone="green"
@@ -259,7 +264,7 @@ export function QueuesView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          失败任务读取与重试按角色权限开放；暂停、恢复与清空队列仅 super_admin 可执行。
+          失败任务读取与重试按角色权限开放；暂停、恢复与清空队列仅超级管理员可执行。
         </div>
       ) : null}
 
@@ -268,7 +273,7 @@ export function QueuesView({
           <EmptyState
             icon={RotateCcw}
             title="未发现队列"
-            description="Redis 中没有可识别的 BullMQ 队列状态键。队列列表来自 Redis 扫描，不再使用硬编码清单；Worker 尚未注册队列时这里保持为空。"
+            description="Redis 中没有可识别的 BullMQ 队列状态键。队列列表来自 Redis 扫描，不再使用硬编码清单；任务进程尚未注册队列时这里保持为空。"
             className="sm:col-span-2"
           />
         ) : null}
@@ -276,14 +281,14 @@ export function QueuesView({
           // The badge reports the queue state that is actually observable; a
           // queue is never labelled "healthy" from counters alone.
           const queueState = queue.paused
-            ? { label: "Paused", tone: "yellow" as const }
+            ? { label: QUEUE_STATE_LABELS.paused, tone: "yellow" as const }
             : queue.failed > 0
-              ? { label: "Needs review", tone: "red" as const }
+              ? { label: QUEUE_STATE_LABELS.needs_review, tone: "red" as const }
               : queue.active > 0
-                ? { label: "Processing", tone: "blue" as const }
+                ? { label: QUEUE_STATE_LABELS.processing, tone: "blue" as const }
                 : queue.waiting > 0
-                  ? { label: "Backlog", tone: "orange" as const }
-                  : { label: "Idle", tone: "neutral" as const };
+                  ? { label: QUEUE_STATE_LABELS.backlog, tone: "orange" as const }
+                  : { label: QUEUE_STATE_LABELS.idle, tone: "neutral" as const };
 
           return (
           <article
@@ -303,10 +308,10 @@ export function QueuesView({
 
             <dl className="mt-4 grid grid-cols-4 gap-px overflow-hidden rounded-control border border-hairline bg-hairline">
               {[
-                ["Wait", queue.waiting],
-                ["Active", queue.active],
-                ["Failed", queue.failed],
-                ["Done", queue.completed],
+                ["等待", queue.waiting],
+                ["运行", queue.active],
+                ["失败", queue.failed],
+                ["完成", queue.completed],
               ].map(([label, value]) => (
                 <div key={label} className="bg-surface-1 px-2 py-2.5">
                   <dt className="type-eyebrow text-[8px]">{label}</dt>
@@ -317,7 +322,7 @@ export function QueuesView({
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
               <span className="font-mono text-[9px] text-muted">
-                {formatThroughput(queue.throughputPerMinute)} · 5 min window
+                {formatThroughput(queue.throughputPerMinute)} · 5 分钟窗口
               </span>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button
@@ -325,7 +330,7 @@ export function QueuesView({
                   size="sm"
                   aria-label={`清空队列 ${queue.name}`}
                   disabled={!canManageQueue || queue.failed === 0}
-                  title={canManageQueue ? "清空该队列的失败任务" : "仅 super_admin 可清空队列"}
+                  title={canManageQueue ? "清空该队列的失败任务" : "仅超级管理员可清空队列"}
                   onClick={() => setPendingAction({ kind: "clear", queue })}
                 >
                   清空
@@ -340,7 +345,7 @@ export function QueuesView({
                       ? queue.paused
                         ? "恢复队列"
                         : "暂停队列"
-                      : "仅 super_admin 可暂停或恢复队列"
+                      : "仅超级管理员可暂停或恢复队列"
                   }
                   onClick={() =>
                     setPendingAction({
@@ -364,10 +369,10 @@ export function QueuesView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">失败任务</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              failed / dead-letter review
+              失败 / 死信复核
             </p>
           </div>
-          <Badge tone={jobRecords.length > 0 ? "red" : "green"}>{jobRecords.length} jobs</Badge>
+          <Badge tone={jobRecords.length > 0 ? "red" : "green"}>{jobRecords.length} 个任务</Badge>
         </div>
 
         {jobRecords.length === 0 ? (
@@ -384,13 +389,13 @@ export function QueuesView({
               <thead>
                 <tr className="border-b border-hairline font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
                   <th scope="col" className="px-3 py-2.5 font-normal">
-                    Job
+                    任务
                   </th>
                   <th scope="col" className="px-3 py-2.5 font-normal">
-                    Queue
+                    队列
                   </th>
                   <th scope="col" className="px-3 py-2.5 font-normal">
-                    Attempts
+                    尝试次数
                   </th>
                   <th scope="col" className="px-3 py-2.5 font-normal">
                     失败原因
@@ -470,13 +475,13 @@ export function QueuesView({
           {detailJob ? (
             <>
               <SheetHeader>
-                <p className="type-eyebrow">FAILED JOB / {detailJob.queue}</p>
+                <p className="type-eyebrow">失败任务 / {detailJob.queue}</p>
                 <SheetTitle>{detailJob.id}</SheetTitle>
                 <SheetDescription>{detailJob.name}</SheetDescription>
               </SheetHeader>
               <div className="flex flex-wrap gap-2">
-                <Badge tone="red">Failed</Badge>
-                <Badge tone="neutral">{detailJob.attempts} attempts</Badge>
+                <Badge tone="red">{JOB_STATUS_LABELS.failed}</Badge>
+                <Badge tone="neutral">{detailJob.attempts} 次尝试</Badge>
                 <Badge tone="slate">
                   {queueByJob.get(detailJob.queue)?.label ?? detailJob.queue}
                 </Badge>
@@ -487,7 +492,7 @@ export function QueuesView({
                   <p className="mt-2 text-[12px] leading-5 text-body">{detailJob.failedReason}</p>
                 </div>
                 <div className="rounded-control border border-hairline bg-surface-1 p-3">
-                  <p className="type-eyebrow">Payload summary</p>
+                  <p className="type-eyebrow">负载摘要</p>
                   <p className="mt-2 break-words font-mono text-[10px] text-body">
                     {detailJob.payloadSummary}
                   </p>
@@ -544,15 +549,9 @@ const workerTones = {
   down: "red",
 } as const;
 
-const workerLabels = {
-  up: "Healthy",
-  degraded: "Degraded",
-  down: "Down",
-} as const;
-
 const signalSources = {
   "consumer-clients": "Redis CLIENT LIST 中阻塞在 BullMQ BZPOPMIN 的消费者 + 队列计数",
-  "activity-derived": "最近一次任务完成/失败时间 + 队列 active 数",
+  "activity-derived": "最近一次任务完成/失败时间 + 队列运行数",
   unavailable: "未接入",
 } as const;
 
@@ -568,10 +567,10 @@ function QueueWorkerPanel() {
   if (resource.isLoading && !snapshot) {
     return (
       <section
-        aria-label="Worker 消费端"
+        aria-label="任务进程消费端"
         className="rounded-card border border-hairline bg-surface-1 p-4 font-mono text-[10px] text-muted"
       >
-        读取 Worker 观测信号…
+        读取任务进程观测信号…
       </section>
     );
   }
@@ -579,14 +578,14 @@ function QueueWorkerPanel() {
   if (!snapshot) {
     return (
       <section
-        aria-label="Worker 消费端"
+        aria-label="任务进程消费端"
         className="flex items-start gap-3 rounded-card border border-hairline bg-surface-1 p-4"
       >
         <Waypoints aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-slate" />
         <div>
-          <h2 className="text-[12px] font-medium text-ink">Worker 消费端</h2>
+          <h2 className="text-[12px] font-medium text-ink">任务进程消费端</h2>
           <p className="mt-1 text-[10px] leading-5 text-muted">
-            未接入：/v1/admin/system 没有返回 Worker 信号，无法判断消费者是否存活。
+            未接入：/v1/admin/system 没有返回任务进程信号，无法判断消费者是否存活。
           </p>
         </div>
       </section>
@@ -598,20 +597,20 @@ function QueueWorkerPanel() {
 
   return (
     <section
-      aria-label="Worker 消费端"
+      aria-label="任务进程消费端"
       className="rounded-card border border-hairline-strong bg-surface-1 p-4"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="type-eyebrow">WORKER / OBSERVED SIGNAL</p>
-          <h2 className="mt-1 font-serif text-lg tracking-[-0.02em] text-ink">Worker 消费端</h2>
+          <p className="type-eyebrow">任务进程 / 观测信号</p>
+          <h2 className="mt-1 font-serif text-lg tracking-[-0.02em] text-ink">任务进程消费端</h2>
         </div>
         {observable ? (
           <Badge tone={workerTones[snapshot.workerStatus]}>
-            {workerLabels[snapshot.workerStatus]}
+            {WORKER_STATUS_LABELS[snapshot.workerStatus]}
           </Badge>
         ) : (
-          <Badge tone="slate" title="缺少 Worker heartbeat，无法证明存活或死亡">
+          <Badge tone="slate" title="缺少任务进程心跳，无法证明存活或不可用">
             未接入
           </Badge>
         )}
@@ -633,14 +632,14 @@ function QueueWorkerPanel() {
       <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
         推导口径：{signal ? signalSources[signal.signal] : "未接入"}
         {signal?.lastJobStatus
-          ? ` · 最近 ${signal.lastJobStatus} @ ${signal.lastJobQueue ?? "?"}`
+          ? ` · 最近${JOB_STATUS_LABELS[signal.lastJobStatus]} @ ${signal.lastJobQueue ?? "?"}`
           : ""}
       </p>
       {!observable ? (
         <p className="mt-2 text-[9px] leading-4 text-muted">
-          队列健康不再由计数推导：需要 Worker 写入 heartbeat 键，或由 Worker 侧暴露 BullMQ
-          <code className="mx-1 font-mono">getWorkers()</code>（当前版本的 Worker 不设置 CLIENT
-          SETNAME，按连接名匹配会永久误报 DOWN）。
+          队列健康不再由计数推导：需要任务进程写入心跳键，或由任务进程侧暴露 BullMQ
+          <code className="mx-1 font-mono">getWorkers()</code>（当前版本的任务进程不设置 CLIENT
+          SETNAME，按连接名匹配会永久误报不可用）。
         </p>
       ) : null}
     </section>

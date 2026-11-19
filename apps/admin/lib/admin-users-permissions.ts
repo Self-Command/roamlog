@@ -45,9 +45,9 @@ async function readPermissionsMatrix(): Promise<AdminPermissionsResponse> {
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "Admin API response did not match the contract",
+      title: "后台 API 响应不符合契约",
       detail:
-        error instanceof Error ? error.message : "The permission matrix could not be parsed.",
+        error instanceof Error ? error.message : "无法解析权限矩阵响应。",
       degraded: [],
     });
   }
@@ -65,11 +65,11 @@ export function useAdminPermissionsMatrix(): AdminPermissionsResource {
       : {
           code: "ADMIN_API_NETWORK",
           status: 0,
-          title: "Admin API unavailable",
+          title: "后台 API 不可用",
           detail:
             query.error instanceof Error
               ? query.error.message
-              : "The permission matrix request could not be completed.",
+              : "无法完成权限矩阵请求。",
           degraded: [],
         }
     : null;
@@ -118,13 +118,13 @@ export function useAdminPermissionsUpdate(): {
 
 export function describeAdminPermissionsError(error: unknown): string {
   if (!(error instanceof AdminMutationError)) {
-    return "保存失败，请检查 Admin API 与会话后重试。";
+    return "保存失败，请检查后台 API 与会话后重试。";
   }
   switch (error.failure.code) {
     case "PERMISSION_NOT_GRANTABLE":
       return "该动作属于安全敏感权限，界面不可授予。";
     case "ADMIN_ACTION_FORBIDDEN":
-      return "仅 super_admin 可修改权限矩阵。";
+      return "仅超级管理员可修改权限矩阵。";
     case "ADMIN_2FA_REQUIRED":
       return "后台操作要求先完成双因素认证。";
     case "UNAUTHENTICATED":

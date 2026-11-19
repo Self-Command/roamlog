@@ -86,7 +86,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     return (
       <div role="status" className="flex min-h-dvh items-center justify-center bg-canvas">
         <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
-          Verifying platform session
+          正在验证平台会话
         </p>
       </div>
     );
@@ -96,7 +96,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     return (
       <div role="status" className="flex min-h-dvh items-center justify-center bg-canvas px-4">
         <div className="w-full max-w-md rounded-card border border-hairline-strong bg-surface-1 p-6">
-          <p className="type-eyebrow">ADMIN SESSION</p>
+          <p className="type-eyebrow">管理员会话</p>
           <h1 className="mt-2 font-serif text-2xl text-ink">会话已过期</h1>
           <p className="mt-2 text-[12px] leading-6 text-muted">
             正在跳转到登录页，登录后会回到当前路径。
@@ -116,7 +116,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
         <div className="w-full max-w-md rounded-card border border-accent-red/25 bg-surface-1 p-6">
-          <p className="type-eyebrow text-accent-red">SESSION ERROR</p>
+          <p className="type-eyebrow text-accent-red">会话错误</p>
           <h1 className="mt-2 font-serif text-2xl text-ink">无法校验后台会话</h1>
           <p className="mt-2 text-[12px] leading-6 text-muted">
             后台 API 暂时不可用，未确认会话状态，因此不会跳转登录。
@@ -137,7 +137,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
         <div className="w-full max-w-md rounded-card border border-accent-red/25 bg-surface-1 p-6">
-          <p className="type-eyebrow text-accent-red">SESSION ERROR</p>
+          <p className="type-eyebrow text-accent-red">会话错误</p>
           <h1 className="mt-2 font-serif text-2xl text-ink">后台会话校验失败</h1>
           <p className="mt-2 text-[12px] leading-6 text-muted">
             {me.data ? `HTTP ${me.data.status} · ` : ""}请重新登录或检查 API。
@@ -151,10 +151,10 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
         <div className="w-full max-w-md rounded-card border border-accent-red/25 bg-surface-1 p-6">
-          <p className="type-eyebrow text-accent-red">PLATFORM ACCESS DENIED</p>
+          <p className="type-eyebrow text-accent-red">平台访问被拒绝</p>
           <h1 className="mt-2 font-serif text-2xl text-ink">当前账户没有后台权限</h1>
           <p className="mt-2 text-[12px] leading-6 text-muted">
-            平台角色以后端 session 为准；前端不会自行提升权限。
+            平台角色以后端会话为准；前端不会自行提升权限。
           </p>
         </div>
       </div>
@@ -165,7 +165,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
         <div className="w-full max-w-md rounded-card border border-accent-red/25 bg-surface-1 p-6">
-          <p className="type-eyebrow text-accent-red">SESSION ERROR</p>
+          <p className="type-eyebrow text-accent-red">会话错误</p>
           <h1 className="mt-2 font-serif text-2xl text-ink">无法读取账户信息</h1>
           <p className="mt-2 text-[12px] leading-6 text-muted">
             `/v1/me` 未返回可用的管理员账户。

@@ -67,7 +67,7 @@ describe("PermissionsView", () => {
     );
     renderWithClient(<PermissionsView role="super_admin" />);
 
-    expect(await screen.findByRole("table", { name: "平台角色与 Admin 动作权限矩阵" })).toBeInTheDocument();
+    expect(await screen.findByRole("table", { name: "平台角色与管理员动作权限矩阵" })).toBeInTheDocument();
     expect(screen.getByText("admin:users:delete")).toBeInTheDocument();
     expect(screen.getByText("admin:users:update")).toBeInTheDocument();
     // One lock per role for each non-grantable action.
@@ -75,9 +75,9 @@ describe("PermissionsView", () => {
     const nonGrantable = MATRIX.actions.filter((action) => !action.grantable).length;
     expect(locks).toHaveLength(nonGrantable * MATRIX.roles.length);
 
-    const grantable = screen.getByRole("checkbox", { name: "support · admin:flags:update" });
+    const grantable = screen.getByRole("checkbox", { name: "支持人员 · admin:flags:update" });
     expect(grantable).toBeEnabled();
-    expect(screen.queryByRole("checkbox", { name: "support · admin:users:delete" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "支持人员 · admin:users:delete" })).toBeNull();
   });
 
   it("requires a second confirmation and re-reads the matrix after saving", async () => {
@@ -92,14 +92,14 @@ describe("PermissionsView", () => {
     renderWithClient(<PermissionsView role="super_admin" />);
 
     const checkbox = await screen.findByRole("checkbox", {
-      name: "support · admin:flags:update",
+      name: "支持人员 · admin:flags:update",
     });
     await events.click(checkbox);
     expect(screen.getByText("1 项待保存")).toBeInTheDocument();
 
     await events.click(screen.getByRole("button", { name: "保存变更" }));
     const dialog = await screen.findByRole("dialog", { name: "保存权限矩阵变更" });
-    expect(within(dialog).getByText(/GRANT · support · admin:flags:update/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/授予 · 支持人员 · admin:flags:update/)).toBeInTheDocument();
 
     // Nothing is written before the explicit confirmation.
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
@@ -128,7 +128,7 @@ describe("PermissionsView", () => {
     renderWithClient(<PermissionsView role="super_admin" />);
 
     await events.click(
-      await screen.findByRole("checkbox", { name: "support · admin:flags:update" }),
+      await screen.findByRole("checkbox", { name: "支持人员 · admin:flags:update" }),
     );
     await events.click(screen.getByRole("button", { name: "保存变更" }));
     const dialog = await screen.findByRole("dialog", { name: "保存权限矩阵变更" });
@@ -146,10 +146,10 @@ describe("PermissionsView", () => {
     renderWithClient(<PermissionsView role="analyst" />);
 
     const checkbox = await screen.findByRole("checkbox", {
-      name: "support · admin:flags:update",
+      name: "支持人员 · admin:flags:update",
     });
     expect(checkbox).toBeDisabled();
     expect(screen.getByRole("button", { name: "保存变更" })).toBeDisabled();
-    expect(screen.getByText(/仅 super_admin 可修改权限矩阵/)).toBeInTheDocument();
+    expect(screen.getByText(/仅超级管理员可修改权限矩阵/)).toBeInTheDocument();
   });
 });

@@ -63,9 +63,9 @@ export async function patchAdminUserProfile(
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "Admin API response did not match the contract",
+      title: "后台 API 响应不符合契约",
       detail:
-        error instanceof Error ? error.message : "The updated user response could not be parsed.",
+        error instanceof Error ? error.message : "无法解析更新后的用户响应。",
       degraded: [],
     });
   }
@@ -128,19 +128,19 @@ export function validateAdminUserProfileForm(
  */
 export function describeAdminUserEditError(error: unknown): string {
   if (!(error instanceof AdminMutationError)) {
-    return "保存失败，请检查 Admin API 与会话后重试。";
+    return "保存失败，请检查后台 API 与会话后重试。";
   }
   switch (error.failure.code) {
     case "EMAIL_TAKEN":
       return "该邮箱已被其他账户占用，请换一个邮箱。";
     case "LAST_SUPER_ADMIN":
-      return "不能降级最后一个 super_admin，请先指定新的 super_admin。";
+      return "不能降级最后一个超级管理员，请先指定新的超级管理员。";
     case "SELF_DEMOTION_FORBIDDEN":
       return "不能降低自己的平台角色。";
     case "VALIDATION_ERROR":
       return "字段校验失败，请检查姓名、邮箱、语言与时区格式。";
     case "ADMIN_ACTION_FORBIDDEN":
-      return "当前平台角色无权编辑用户资料（仅 super_admin）。";
+      return "当前平台角色无权编辑用户资料（仅超级管理员）。";
     case "USER_NOT_FOUND":
       return "该用户不存在或已被移除。";
     case "ADMIN_2FA_REQUIRED":

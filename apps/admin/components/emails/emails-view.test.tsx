@@ -30,7 +30,7 @@ describe("EmailsView", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent("已重新加入队列");
-    expect(within(bouncedRow).getByText("Queued")).toBeInTheDocument();
+    expect(within(bouncedRow).getByText("排队中")).toBeInTheDocument();
   });
 
   it("keeps resend disabled for analysts", () => {
@@ -48,12 +48,12 @@ describe("EmailsView", () => {
 
     const sentRow = screen
       .getAllByRole("row", { name: "邮件 m***@example.invalid" })
-      .find((row) => within(row).queryByText("Sent"));
+      .find((row) => within(row).queryByText("已发送"));
     expect(sentRow).toBeDefined();
 
     const button = within(sentRow as HTMLElement).getByRole("button");
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", expect.stringContaining("仅 failed / bounced 可重发"));
+    expect(button).toHaveAttribute("title", expect.stringContaining("仅失败 / 退信可重发"));
   });
 
   it("never renders a full recipient address", () => {

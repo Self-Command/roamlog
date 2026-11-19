@@ -102,9 +102,9 @@ function networkFailure(error: unknown): AdminApiFailure {
   return {
     code: "ADMIN_API_NETWORK",
     status: 0,
-    title: "Admin API unavailable",
+    title: "后台 API 不可用",
     detail:
-      error instanceof Error ? error.message : "The Admin API request could not be completed.",
+      error instanceof Error ? error.message : "无法完成后台 API 请求。",
     degraded: [],
   };
 }
@@ -226,8 +226,8 @@ async function adminJsonRequest<T>(
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "Admin API response was not JSON",
-      detail: "The Admin API returned an empty or malformed response.",
+      title: "后台 API 响应不是 JSON",
+      detail: "后台 API 返回了空响应或格式错误的响应。",
       degraded: [],
     });
   }
@@ -238,8 +238,8 @@ async function adminJsonRequest<T>(
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "Admin API response did not match the contract",
-      detail: error instanceof Error ? error.message : "The Admin API response could not be parsed.",
+      title: "后台 API 响应不符合契约",
+      detail: error instanceof Error ? error.message : "无法解析后台 API 响应。",
       degraded: [],
     });
   }
@@ -691,7 +691,7 @@ export function mapAdminQueues(
 }
 
 export function formatThroughput(value: number): string {
-  return Number.isFinite(value) ? `${value.toFixed(1)} jobs/min` : "未接入";
+  return Number.isFinite(value) ? `${value.toFixed(1)} 任务/分钟` : "未接入";
 }
 
 /**
