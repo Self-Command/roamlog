@@ -590,6 +590,10 @@ export const demoStops: Stop[] = stopSeeds.map((stop, index) =>
     id: fixtureId(500 + index),
     workspaceId: WORKSPACE_ID,
     notes: `${stop.city} 的停留与路线。`,
+    // The contract keeps the place address and bbox required-but-nullable;
+    // seeds without a picked place carry them as explicit nulls.
+    address: null,
+    bbox: null,
     order: index,
     version: 1,
     createdById: USER_ID,
