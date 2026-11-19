@@ -106,6 +106,33 @@ describe("createAiPlan", () => {
     });
   });
 
+  it("keeps the server's warnings on the parsed plan", async () => {
+    const plan = {
+      ...makePlan(),
+      plannedCalls: [],
+      warnings: [
+        {
+          code: "PAST_DATE",
+          message: "计划日期早于今天，已忽略该调用",
+          subject: "trips.create",
+        },
+        {
+          code: "A_CODE_THIS_CLIENT_DOES_NOT_KNOW",
+          message: "这条建议暂时无法处理，已跳过。",
+          subject: "stops.add",
+        },
+      ],
+    };
+    fetchMock.mockResolvedValue(makeResponse(plan, 201));
+
+    const result = await createAiPlan(WORKSPACE_ID, { message: "京都一周" });
+
+    // A future mapper must not be able to return only `plannedCalls` here:
+    // the warnings are the only explanation the panel can show.
+    expect(result.plannedCalls).toEqual([]);
+    expect(result.warnings).toEqual(plan.warnings);
+  });
+
   it("rejects a response that does not match the contract", async () => {
     fetchMock.mockResolvedValue(makeResponse({ runId: "not-a-run" }, 201));
 

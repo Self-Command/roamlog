@@ -3,6 +3,7 @@ import {
   AiRunExecuteResponseSchema,
   type AiChatResponse,
   type AiPlanHint,
+  type AiPlanWarning,
   type AiRunExecuteResponse,
   type AiToolCall,
 } from "@roamlog/contracts";
@@ -204,15 +205,28 @@ export interface AiPlanInput {
   hints?: AiPlanHint;
 }
 
+/**
+ * The plan the UI receives, parsed from the wire envelope.
+ *
+ * `warnings` is declared here explicitly even though the contract already
+ * carries it: this is the field that explains why a planned action is missing,
+ * and naming it on the result type keeps a future hand-written mapper from
+ * returning only `plannedCalls` and silently dropping the reason. The function
+ * below returns the parsed envelope itself — it never re-shapes it.
+ */
+export interface AiPlanResult extends AiChatResponse {
+  warnings?: AiPlanWarning[];
+}
+
 /** Plans a trip. Read-only tools only — this must never write product data. */
 export async function createAiPlan(
   workspaceId: string,
   input: AiPlanInput,
-): Promise<AiChatResponse> {
+): Promise<AiPlanResult> {
   const body: AiPlanInput = { message: input.message };
   if (input.hints) body.hints = input.hints;
 
-  return postJson(
+  return postJson<AiPlanResult>(
     `/v1/workspaces/${encodeURIComponent(workspaceId)}/ai/chat`,
     body,
     AiChatResponseSchema,

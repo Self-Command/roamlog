@@ -8,16 +8,24 @@ import {
 } from "@roamlog/ui";
 import type {
   AiChatResponse,
+  AiPlanWarning,
   AiRunExecuteResponse,
   AiToolCall,
   AiToolResult,
 } from "@roamlog/contracts";
-import { ArrowUpRight, Check, CircleAlert, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, Check, ChevronRight, CircleAlert, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 import type { AiRequestError } from "@/lib/api/ai";
 
-import { describePlannedCall, executionFailureCopy, toolFailureCopy, toolLabel } from "./copy";
+import {
+  describePlanWarning,
+  describePlannedCall,
+  executionFailureCopy,
+  toolFailureCopy,
+  toolLabel,
+} from "./copy";
 
 /**
  * The right-hand plan panel: every action the model wants to take, one
@@ -35,6 +43,8 @@ export interface PlanPanelProps {
   onRequestExecute: () => void;
   onDiscard: () => void;
   onRestart: () => void;
+  /** Puts the previous request back in the composer. Never auto-sends it. */
+  onRevise: () => void;
   executing: boolean;
   planning: boolean;
   result: AiRunExecuteResponse | null;
@@ -75,7 +85,71 @@ function PanelHeader({
   );
 }
 
-function PanelEmpty({ planning }: { planning: boolean }) {
+/**
+ * Non-fatal notes: the server dropped a call instead of queueing it. This is a
+ * partial omission, not a failure, so the block is neutral (never red) and
+ * still explains every dropped action in the server's own words.
+ */
+function PlanWarnings({ warnings }: { warnings: AiPlanWarning[] }) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <section
+      aria-label="被忽略的操作提示"
+      className="border-b border-hairline bg-surface-2/40 px-4 py-3"
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1"
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={
+            open
+              ? "size-3 shrink-0 rotate-90 text-stone transition-transform"
+              : "size-3 shrink-0 text-stone transition-transform"
+          }
+        />
+        <span className="text-sm text-stone">{warnings.length} 条提示</span>
+        <span className="type-meta ml-auto shrink-0">部分操作已忽略</span>
+      </button>
+
+      {open ? (
+        <ul className="mt-3 space-y-2">
+          {warnings.map((warning, index) => {
+            const copy = describePlanWarning(warning);
+            return (
+              <li
+                key={`${warning.code}-${index}`}
+                className="rounded-control border border-hairline bg-black/20 px-3 py-2.5"
+              >
+                {copy.action ? (
+                  <p className="text-xs leading-5 text-stone">{copy.action}</p>
+                ) : null}
+                <p className="mt-0.5 break-words text-sm leading-6 text-body">{copy.message}</p>
+                {copy.explanation ? (
+                  <p className="mt-1 text-xs leading-5 text-stone">{copy.explanation}</p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+function PanelEmpty({
+  planning,
+  warningCount,
+  onRevise,
+}: {
+  planning: boolean;
+  warningCount: number;
+  onRevise: () => void;
+}) {
   if (planning) {
     return (
       <div className="space-y-4 px-4 py-5" aria-hidden="true">
@@ -87,6 +161,27 @@ function PanelEmpty({ planning }: { planning: boolean }) {
           </div>
         ))}
         <p className="pt-2 text-xs leading-5 text-muted">正在整理计划，尚未写入任何内容。</p>
+      </div>
+    );
+  }
+
+  // A plan exists and every proposed call was rejected by validation. Saying
+  // only 「没有可执行的计划」 would hide the reason the user needs to fix.
+  if (warningCount > 0) {
+    return (
+      <div className="px-5 py-8">
+        <span className="flex size-10 items-center justify-center rounded-pill border border-hairline-strong bg-surface-2 text-stone">
+          <TriangleAlert aria-hidden="true" className="size-4" />
+        </span>
+        <p className="mt-4 font-serif text-xl leading-tight tracking-[-0.02em] text-ink">
+          已生成建议，但全部被校验拦下
+        </p>
+        <p className="mt-2 text-xs leading-5 text-stone">
+          助手给出了操作建议，但没有一条通过校验，具体原因见上方「{warningCount} 条提示」。工作区没有被写入任何内容。
+        </p>
+        <Button type="button" variant="outline" size="sm" className="mt-4" onClick={onRevise}>
+          修改需求重新规划
+        </Button>
       </div>
     );
   }
@@ -251,6 +346,7 @@ export function PlanPanel({
   onRequestExecute,
   onDiscard,
   onRestart,
+  onRevise,
   executing,
   planning,
   result,
@@ -259,6 +355,7 @@ export function PlanPanel({
   workspaceSlug,
 }: PlanPanelProps) {
   const calls = plan?.plannedCalls ?? [];
+  const warnings = plan?.warnings ?? [];
   const selectedCount = selected.filter(Boolean).length;
   const expiresAt = plan ? formatExpiry(plan.expiresAt) : null;
   const terminalFailure = runFailure ? !runFailure.retryable : false;
@@ -294,7 +391,15 @@ export function PlanPanel({
           </div>
         ) : null}
 
-        {calls.length === 0 ? <PanelEmpty planning={planning} /> : null}
+        {warnings.length > 0 ? <PlanWarnings warnings={warnings} /> : null}
+
+        {calls.length === 0 ? (
+          <PanelEmpty
+            planning={planning}
+            warningCount={warnings.length}
+            onRevise={onRevise}
+          />
+        ) : null}
 
         {calls.length > 0 && !result ? (
           <ul aria-label="待确认的操作">
@@ -364,8 +469,10 @@ export function PlanPanel({
 
       {plan && !result && calls.length === 0 ? (
         <footer className="shrink-0 border-t border-hairline p-4">
-          <p className="text-xs leading-5 text-muted">
-            这次没有需要写入的操作。可以继续描述新的计划。
+          <p className="text-xs leading-5 text-stone">
+            {warnings.length > 0
+              ? "修改需求后重新发送，就能生成新的计划；现在没有写入任何内容。"
+              : "这次没有需要写入的操作。可以继续描述新的计划。"}
           </p>
           <button
             type="button"

@@ -1,4 +1,4 @@
-import type { AiChatResponse, AiRunExecuteResponse } from "@roamlog/contracts";
+import type { AiChatResponse, AiPlanWarning, AiRunExecuteResponse } from "@roamlog/contracts";
 import { AiChatResponseSchema } from "@roamlog/contracts";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -71,6 +71,24 @@ function makeExecution(
     summary: "2 action(s) applied.",
     ...overrides,
   };
+}
+
+function makeWarning(overrides: Partial<AiPlanWarning> = {}): AiPlanWarning {
+  return {
+    code: "PAST_DATE",
+    message: "计划日期早于今天，已忽略该调用",
+    subject: "trips.create",
+    ...overrides,
+  };
+}
+
+function emptyPlanWith(warnings: AiPlanWarning[]): AiChatResponse {
+  return makePlan({
+    message: "计划已整理。",
+    plannedCalls: [],
+    readOnlyTrace: [],
+    warnings,
+  });
 }
 
 const planMock = vi.mocked(createAiPlan);
@@ -381,5 +399,102 @@ describe("AI console: failure copy", () => {
     await user.click(screen.getByText("还没有计划"));
     expect(planMock).not.toHaveBeenCalled();
     expect(executeMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("AI console: plan warnings", () => {
+  async function send(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText("旅行需求"), PROMPT);
+    await user.click(screen.getByRole("button", { name: "发送" }));
+  }
+
+  it("renders one warning with a human action name and an explicit past-date explanation", async () => {
+    planMock.mockResolvedValue(emptyPlanWith([makeWarning()]));
+
+    const user = userEvent.setup();
+    renderConsole();
+    await send(user);
+
+    const toggle = await screen.findByRole("button", { name: /1 条提示/u });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("创建旅行")).toBeInTheDocument();
+    expect(screen.getByText("计划日期早于今天，已忽略该调用")).toBeInTheDocument();
+    expect(
+      screen.getByText("这些日期早于今天，已忽略。请给出未来的日期。"),
+    ).toBeInTheDocument();
+
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/PAST_DATE|plannedCalls|warnings|JSON/u);
+  });
+
+  it("lists three warnings behind an expandable count", async () => {
+    planMock.mockResolvedValue(
+      emptyPlanWith([
+        makeWarning(),
+        makeWarning({ subject: "stops.add", message: "第二个被忽略的调用" }),
+        makeWarning({ subject: "itinerary.addDay", message: "第三个被忽略的调用" }),
+      ]),
+    );
+
+    const user = userEvent.setup();
+    renderConsole();
+    await send(user);
+
+    const toggle = await screen.findByRole("button", { name: /3 条提示/u });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("第二个被忽略的调用")).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("第二个被忽略的调用")).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(screen.getByText("第二个被忽略的调用")).toBeInTheDocument();
+  });
+
+  it("does not render a warning block when the server sent none", async () => {
+    const user = userEvent.setup();
+    await planTrip(user);
+
+    expect(screen.queryByRole("button", { name: /条提示/u })).not.toBeInTheDocument();
+    expect(screen.queryByText(/被校验拦下/u)).not.toBeInTheDocument();
+  });
+
+  it("points an empty plan at the warnings and restores the draft without re-sending", async () => {
+    planMock.mockResolvedValue(emptyPlanWith([makeWarning()]));
+
+    const user = userEvent.setup();
+    renderConsole();
+    await send(user);
+
+    expect(await screen.findByText("已生成建议，但全部被校验拦下")).toBeInTheDocument();
+    expect(screen.getByText(/见上方「1 条提示」/u)).toBeInTheDocument();
+    expect(screen.queryByText(/已创建/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/已保存/u)).not.toBeInTheDocument();
+    expect(screen.queryByText("还没有计划")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "计划已生成，但 1 项操作被校验拦下，原因已在计划面板说明。",
+    );
+
+    expect(planMock).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "修改需求重新规划" }));
+    expect(planMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("旅行需求")).toHaveValue(PROMPT);
+  });
+
+  it("renders an unknown warning code from the server message alone", async () => {
+    const unknownMessage = "这条建议暂时无法处理，已跳过。";
+    planMock.mockResolvedValue(
+      emptyPlanWith([makeWarning({ code: "FUTURE_WARNING_CODE", message: unknownMessage })]),
+    );
+
+    const user = userEvent.setup();
+    renderConsole();
+    await send(user);
+
+    expect(await screen.findByText(unknownMessage)).toBeInTheDocument();
+    // No invented coaching for an unknown code — only the server's sentence.
+    expect(screen.queryByText(/这些日期早于今天/u)).not.toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/FUTURE_WARNING_CODE|PAST_DATE/u);
   });
 });

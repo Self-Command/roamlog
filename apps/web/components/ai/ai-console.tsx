@@ -243,6 +243,7 @@ export function AiConsole({ workspaceId, workspaceSlug, role }: AiConsoleProps) 
 
   const turnCounter = useRef(0);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const pendingPlan =
     plan !== null && result === null && plan.plannedCalls.length > 0;
@@ -308,10 +309,15 @@ export function AiConsole({ workspaceId, workspaceSlug, role }: AiConsoleProps) 
           trace: response.readOnlyTrace,
         },
       ]);
+      const warningCount = response.warnings?.length ?? 0;
       setAnnouncement(
         response.plannedCalls.length === 0
-          ? "计划已生成，没有需要写入的操作。"
-          : `计划已生成，共 ${response.plannedCalls.length} 项操作待确认。`,
+          ? warningCount > 0
+            ? `计划已生成，但 ${warningCount} 项操作被校验拦下，原因已在计划面板说明。`
+            : "计划已生成，没有需要写入的操作。"
+          : warningCount > 0
+            ? `计划已生成，共 ${response.plannedCalls.length} 项操作待确认，另有 ${warningCount} 项被忽略。`
+            : `计划已生成，共 ${response.plannedCalls.length} 项操作待确认。`,
       );
     } catch (cause) {
       const failure = toAiRequestError(cause);
@@ -385,6 +391,19 @@ export function AiConsole({ workspaceId, workspaceSlug, role }: AiConsoleProps) 
   function startOver() {
     resetPlanState();
     setAnnouncement("可以开始新的计划。");
+  }
+
+  /**
+   * Puts the previous request back in the composer so the traveller can fix
+   * the part the server rejected (usually the dates) and send again. It never
+   * calls `send()` on its own: retrying the identical rejected request would
+   * burn a planning turn and fail the same way.
+   */
+  function reviseRequest() {
+    const previous = [...turns].reverse().find((turn) => turn.role === "user");
+    if (previous) setDraft(previous.text);
+    setAnnouncement("已把上一次的需求放回输入框，修改后重新发送即可。");
+    composerRef.current?.focus();
   }
 
   const canSubmit =
@@ -500,6 +519,7 @@ export function AiConsole({ workspaceId, workspaceSlug, role }: AiConsoleProps) 
             </label>
             <Textarea
               id="ai-message"
+              ref={composerRef}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleComposerKeyDown}
@@ -534,6 +554,7 @@ export function AiConsole({ workspaceId, workspaceSlug, role }: AiConsoleProps) 
           onRequestExecute={requestExecute}
           onDiscard={discardPlan}
           onRestart={startOver}
+          onRevise={reviseRequest}
           executing={executing}
           planning={planning}
           result={result}

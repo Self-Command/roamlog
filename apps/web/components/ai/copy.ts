@@ -1,5 +1,10 @@
 import type { AiFailureKind } from "@/lib/api/ai";
-import { isReadOnlyAiTool, type AiToolCall, type AiToolName } from "@roamlog/contracts";
+import {
+  isReadOnlyAiTool,
+  type AiPlanWarning,
+  type AiToolCall,
+  type AiToolName,
+} from "@roamlog/contracts";
 
 /**
  * All user-facing copy for the AI page lives here.
@@ -31,6 +36,12 @@ const PACKING_CATEGORIES: Readonly<Record<string, string>> = {
 
 export function toolLabel(tool: AiToolName): string {
   return TOOL_LABELS[tool];
+}
+
+const TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(TOOL_LABELS));
+
+function knownTool(value: string): AiToolName | undefined {
+  return TOOL_NAMES.has(value) ? (value as AiToolName) : undefined;
 }
 
 export function isWriteCall(call: AiToolCall): boolean {
@@ -201,6 +212,42 @@ export function describePlannedCall(call: AiToolCall): PlannedCallCopy {
       return { label, headline: "一个旅行操作", details, write: isWriteCall(call) };
     }
   }
+}
+
+export interface PlanWarningCopy {
+  /** Human action name, e.g. 「创建旅行」. Absent when the subject is not a tool. */
+  action?: string;
+  /** What the server said, already written for travellers. */
+  message: string;
+  /** Extra coaching for a known code, e.g. what to do about a past date. */
+  explanation?: string;
+}
+
+function warningExplanation(code: string): string | undefined {
+  switch (code) {
+    case "PAST_DATE":
+      return "这些日期早于今天，已忽略。请给出未来的日期。";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Turns one non-fatal plan warning into user copy.
+ *
+ * The warning `code` is never rendered. A known code adds a concrete next step;
+ * an unknown code still shows the server's message, which is already written
+ * for a traveller. The `subject` is mapped to an action only when it is one of
+ * the tools this UI knows, so a future or argument-shaped subject cannot leak
+ * a raw identifier into the panel.
+ */
+export function describePlanWarning(warning: AiPlanWarning): PlanWarningCopy {
+  const tool = knownTool(warning.subject);
+  return {
+    action: tool ? toolLabel(tool) : undefined,
+    message: warning.message,
+    explanation: warningExplanation(warning.code),
+  };
 }
 
 /**
