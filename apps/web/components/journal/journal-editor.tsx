@@ -39,6 +39,8 @@ const IMAGE_PLACEHOLDER =
     '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><rect width="960" height="540" fill="#111113"/><path d="M0 0h960v540H0z" fill="none" stroke="#2a2a2e"/><text x="480" y="260" fill="#8b8b90" font-family="monospace" font-size="22" text-anchor="middle">IMAGE PLACEHOLDER</text><text x="480" y="292" fill="#5e5e64" font-family="monospace" font-size="13" text-anchor="middle">replace with an uploaded photo</text></svg>',
   );
 
+import { JournalAiRewrite, type JournalAiRewriteProps } from "./journal-ai-rewrite";
+
 export interface JournalEditorValue {
   contentJson: JsonObject;
   contentHtml: string;
@@ -52,6 +54,12 @@ interface JournalEditorProps {
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
+  /**
+   * The AI rewrite entry, rendered at the end of the formatting toolbar. The
+   * editor owns the instance, so the control receives it here instead of the
+   * sheet having to thread a ref.
+   */
+  aiRewrite?: Omit<JournalAiRewriteProps, "editor">;
 }
 
 interface ToolbarButtonProps {
@@ -93,6 +101,7 @@ export function JournalEditor({
   placeholder = "今天发生了什么？写下雨声、路名和没说完的话。",
   ariaLabel = "日志正文",
   className,
+  aiRewrite,
 }: JournalEditorProps) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
@@ -331,6 +340,12 @@ export function JournalEditor({
           >
             <Redo2 aria-hidden="true" className="size-4" />
           </ToolbarButton>
+          {aiRewrite ? (
+            <>
+              <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
+              <JournalAiRewrite editor={editor} {...aiRewrite} />
+            </>
+          ) : null}
         </div>
       )}
 

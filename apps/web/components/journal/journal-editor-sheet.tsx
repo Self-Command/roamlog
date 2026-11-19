@@ -195,6 +195,15 @@ export function JournalEditorSheet({
     () => draftKey(entryId, activeTripId || "unassigned"),
     [activeTripId, entryId],
   );
+  // The AI endpoint is scoped by workspace, and the sheet only knows a trip. The
+  // entry carries its own workspace; a brand-new entry borrows the trip's.
+  const aiWorkspaceId = useMemo(
+    () =>
+      entry?.workspaceId ??
+      pickerTrips.find((candidate) => candidate.id === activeTripId)?.workspaceId ??
+      null,
+    [activeTripId, entry?.workspaceId, pickerTrips],
+  );
 
   const applyEntry = useCallback((next: JournalEntry) => {
     setEntryId(next.id);
@@ -593,6 +602,11 @@ export function JournalEditorSheet({
                 }}
                 readOnly={isReadOnly}
                 ariaLabel="日志正文"
+                aiRewrite={{
+                  workspaceId: aiWorkspaceId,
+                  tripId: activeTripId || undefined,
+                  readOnly: isReadOnly,
+                }}
               />
             </div>
 
