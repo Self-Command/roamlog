@@ -237,3 +237,34 @@ describe("StorageService key validation", () => {
     );
   });
 });
+describe("StorageService settings-driven clients", () => {
+  it("presigns against the factory's current public endpoint and bucket", async () => {
+    const internal = { send: vi.fn() } as unknown as S3Client;
+    const signing = new S3Client({
+      region: "us-east-1",
+      endpoint: "https://current-media.example.com",
+      forcePathStyle: true,
+      credentials: { accessKeyId: "access", secretAccessKey: "secret" },
+    });
+    const factory = {
+      signingEndpoint: "https://current-media.example.com",
+      get: vi.fn(async () => ({
+        version: "v2",
+        internal,
+        public: signing,
+        bucket: "factory-bucket",
+        forcePathStyle: true,
+        signingEndpoint: "https://current-media.example.com",
+        settings: settings({ publicEndpoint: "https://current-media.example.com" }),
+      })),
+    };
+    const service = new StorageService(settings(), createLogger(), undefined, undefined, factory);
+
+    const read = await service.createSignedReadUrl("ws/2026/11/media/original.jpg");
+
+    expect(service.signingEndpoint).toBe("https://current-media.example.com");
+    expect(new URL(read.url).host).toBe("current-media.example.com");
+    expect(new URL(read.url).pathname.startsWith("/factory-bucket/")).toBe(true);
+    expect(factory.get).toHaveBeenCalledTimes(1);
+  });
+});

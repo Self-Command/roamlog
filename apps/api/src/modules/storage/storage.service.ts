@@ -4,16 +4,22 @@ import {
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
-  S3Client,
-  type S3ClientConfig,
+  type S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, ServiceUnavailableException } from "@nestjs/common";
 
 import { withTimeout } from "../../common/utils/with-timeout.js";
 import type { StorageSettings } from "../../config/storage-settings.js";
 import type { PinoLoggerService } from "../observability/pino-logger.service.js";
+import {
+  createS3Client,
+  normalizedEndpoint,
+  resolveSigningEndpoint,
+} from "./storage-clients.js";
+import type { StorageClientBundle } from "./storage-client.factory.js";
 
+export { createS3Client } from "./storage-clients.js";
 export type { StorageSettings } from "../../config/storage-settings.js";
 
 export interface PresignedUpload {
@@ -44,38 +50,17 @@ const MAX_SIGNED_URL_TTL_SECONDS = 604_800;
 
 export { MAX_SIGNED_URL_TTL_SECONDS };
 
-/**
- * Builds an S3 client. `endpoint` overrides `settings.endpoint` so the signing
- * client can point at the browser-facing origin while the internal client keeps
- * talking to the container network.
- */
-export function createS3Client(settings: StorageSettings, endpoint?: string): S3Client {
-  const clientConfig: S3ClientConfig = {
-    endpoint: endpoint ?? settings.endpoint,
-    region: settings.region,
-    forcePathStyle: settings.forcePathStyle,
-    credentials: {
-      accessKeyId: settings.accessKey,
-      secretAccessKey: settings.secretKey,
-    },
-  };
-
-  return new S3Client(clientConfig);
+/** The minimal seam `StorageService` needs from {@link StorageClientFactory}. */
+export interface StorageClientProvider {
+  get(): Promise<StorageClientBundle>;
+  readonly signingEndpoint: string;
 }
 
-function normalizedEndpoint(value: string): string {
-  return value.trim().replace(/\/+$/u, "");
-}
-
-/**
- * Endpoint the browser will actually request. Falls back to the internal
- * endpoint when no public origin is configured (local development, staging),
- * which keeps the previous single-endpoint behaviour intact.
- */
-function resolveSigningEndpoint(settings: StorageSettings): string {
-  const configured = settings.publicEndpoint?.trim();
-  const endpoint = configured && configured.length > 0 ? configured : settings.endpoint;
-  return normalizedEndpoint(endpoint);
+interface ClientBundle {
+  readonly internal: S3Client;
+  readonly signing: S3Client;
+  readonly bucket: string;
+  readonly ttl: { signedUrlTtlSeconds: number; mediaSignedUrlTtlSeconds?: number };
 }
 
 function hasControlCharacter(value: string): boolean {
@@ -117,42 +102,95 @@ function normalizedTtl(requested: number | undefined, fallback: number): number 
  * `https://media.example.com` (the signature no longer matches the canonical
  * request). The service therefore keeps:
  *
- * - `client` — talks to `settings.endpoint` (container-internal) for every
+ * - `internal` — talks to `settings.endpoint` (container-internal) for every
  *   server-side call: HEAD, DELETE, bucket health.
- * - `signingClient` — builds presigned GET/PUT URLs against
+ * - `signing` — builds presigned GET/PUT URLs against
  *   `settings.publicEndpoint` (the browser-facing origin). The reverse proxy in
  *   front of MinIO must forward the original `Host` header, or validation fails
  *   again.
+ *
+ * When a factory is injected (Nest runtime), both clients and the bucket come
+ * from the current settings version on every operation, so an admin change to
+ * `storage.*` takes effect without a restart. Direct construction keeps the
+ * original static behaviour (tests, scripts).
  */
 @Injectable()
 export class StorageService {
-  private readonly client: S3Client;
-  private readonly signingClient: S3Client;
-
-  /** Origin used for presigning; exposed for diagnostics and tests. */
-  readonly signingEndpoint: string;
+  private readonly staticBundle: ClientBundle | null;
 
   constructor(
     private readonly settings: StorageSettings,
     private readonly logger: PinoLoggerService,
     client?: S3Client,
     signingClient?: S3Client,
+    private readonly factory?: StorageClientProvider,
   ) {
-    this.client = client ?? createS3Client(settings);
-    this.signingEndpoint = resolveSigningEndpoint(settings);
-    this.signingClient = signingClient ?? createS3Client(settings, this.signingEndpoint);
-    this.logger.debug(
-      {
-        endpoint: normalizedEndpoint(settings.endpoint),
-        signingEndpoint: this.signingEndpoint,
-      },
-      "storage.clients_ready",
-    );
+    if (factory) {
+      this.staticBundle = null;
+    } else {
+      const internal = client ?? createS3Client(settings);
+      const signingEndpoint = resolveSigningEndpoint(settings);
+      this.staticBundle = {
+        internal,
+        signing: signingClient ?? createS3Client(settings, signingEndpoint),
+        bucket: settings.bucket,
+        ttl: {
+          signedUrlTtlSeconds: settings.signedUrlTtlSeconds,
+          mediaSignedUrlTtlSeconds: settings.mediaSignedUrlTtlSeconds,
+        },
+      };
+      this.logger.debug(
+        {
+          endpoint: normalizedEndpoint(settings.endpoint),
+          signingEndpoint,
+        },
+        "storage.clients_ready",
+      );
+    }
+  }
+
+  /** Origin used for presigning; always the *current* browser-facing origin. */
+  get signingEndpoint(): string {
+    if (this.factory) {
+      return this.factory.signingEndpoint;
+    }
+    return resolveSigningEndpoint(this.settings);
   }
 
   /** Default lifetime for media URLs (`MEDIA_SIGNED_URL_TTL_SECONDS` first). */
   private get defaultTtlSeconds(): number {
-    return this.settings.mediaSignedUrlTtlSeconds ?? this.settings.signedUrlTtlSeconds;
+    const settings = this.factory ? undefined : this.settings;
+    return settings?.mediaSignedUrlTtlSeconds ?? settings?.signedUrlTtlSeconds ?? 900;
+  }
+
+  private async bundle(): Promise<ClientBundle> {
+    if (this.factory) {
+      const current = await this.factory.get();
+      return {
+        internal: current.internal,
+        signing: current.public,
+        bucket: current.bucket,
+        ttl: {
+          signedUrlTtlSeconds: current.settings.signedUrlTtlSeconds,
+          ...(current.settings.mediaSignedUrlTtlSeconds !== undefined
+            ? { mediaSignedUrlTtlSeconds: current.settings.mediaSignedUrlTtlSeconds }
+            : {}),
+        },
+      };
+    }
+    if (!this.staticBundle) {
+      throw new ServiceUnavailableException({
+        code: "STORAGE_UNAVAILABLE",
+        message: "Object storage is not configured.",
+      });
+    }
+    return this.staticBundle;
+  }
+
+  private ttlFor(bundle: ClientBundle, requested: number | undefined): number {
+    const fallback =
+      bundle.ttl.mediaSignedUrlTtlSeconds ?? bundle.ttl.signedUrlTtlSeconds ?? this.defaultTtlSeconds;
+    return normalizedTtl(requested, fallback);
   }
 
   async createPresignedUpload(
@@ -161,15 +199,16 @@ export class StorageService {
     expiresInSeconds?: number,
   ): Promise<PresignedUpload> {
     assertStorageKey(key);
-    const expiresIn = normalizedTtl(expiresInSeconds, this.defaultTtlSeconds);
+    const bundle = await this.bundle();
+    const expiresIn = this.ttlFor(bundle, expiresInSeconds);
     const command = new PutObjectCommand({
-      Bucket: this.settings.bucket,
+      Bucket: bundle.bucket,
       Key: key,
       ContentType: contentType,
     });
-    const url = await getSignedUrl(this.signingClient, command, { expiresIn });
+    const url = await getSignedUrl(bundle.signing, command, { expiresIn });
     this.logger.debug(
-      { bucket: this.settings.bucket, key, signingEndpoint: this.signingEndpoint },
+      { bucket: bundle.bucket, key, signingEndpoint: this.signingEndpoint },
       "storage.upload_url_created",
     );
 
@@ -186,9 +225,10 @@ export class StorageService {
 
   async completeUpload(key: string): Promise<CompletedUpload> {
     assertStorageKey(key);
-    const result = await this.client.send(
+    const bundle = await this.bundle();
+    const result = await bundle.internal.send(
       new HeadObjectCommand({
-        Bucket: this.settings.bucket,
+        Bucket: bundle.bucket,
         Key: key,
       }),
     );
@@ -203,11 +243,12 @@ export class StorageService {
 
   async createSignedReadUrl(key: string, expiresInSeconds?: number): Promise<SignedReadUrl> {
     assertStorageKey(key);
-    const expiresIn = normalizedTtl(expiresInSeconds, this.defaultTtlSeconds);
+    const bundle = await this.bundle();
+    const expiresIn = this.ttlFor(bundle, expiresInSeconds);
     const url = await getSignedUrl(
-      this.signingClient,
+      bundle.signing,
       new GetObjectCommand({
-        Bucket: this.settings.bucket,
+        Bucket: bundle.bucket,
         Key: key,
       }),
       { expiresIn },
@@ -222,18 +263,20 @@ export class StorageService {
 
   async deleteObject(key: string): Promise<void> {
     assertStorageKey(key);
-    await this.client.send(
+    const bundle = await this.bundle();
+    await bundle.internal.send(
       new DeleteObjectCommand({
-        Bucket: this.settings.bucket,
+        Bucket: bundle.bucket,
         Key: key,
       }),
     );
-    this.logger.debug({ bucket: this.settings.bucket, key }, "storage.object_deleted");
+    this.logger.debug({ bucket: bundle.bucket, key }, "storage.object_deleted");
   }
 
   async checkHealth(): Promise<void> {
+    const bundle = await this.bundle();
     await withTimeout(
-      this.client.send(new HeadBucketCommand({ Bucket: this.settings.bucket })),
+      bundle.internal.send(new HeadBucketCommand({ Bucket: bundle.bucket })),
       2_500,
       "Storage readiness check timed out",
     );
