@@ -6,6 +6,14 @@ export interface AdminApiFailure {
   title: string;
   detail: string;
   degraded: string[];
+  /**
+   * Raw `probe` object from a `422 SETTINGS_PROBE_FAILED` body (target, code,
+   * checks). Kept as `unknown` because that endpoint-level shape is not part of
+   * the shared contract; `apps/admin/components/settings/probe-error-copy.ts`
+   * parses it into a typed `SettingsProbe`. Dropping it here would silently
+   * degrade the settings console back to a generic "rejected" message.
+   */
+  probe?: unknown;
 }
 
 function isProblemDetails(value: unknown): value is ProblemDetails {
@@ -28,12 +36,14 @@ export function toAdminApiFailure(
     .filter(Boolean);
 
   if (isProblemDetails(data)) {
+    const probe = (data as { probe?: unknown }).probe;
     return {
       code: data.code,
       status: data.status || status,
       title: data.title,
       detail: data.detail ?? data.title,
       degraded,
+      ...(probe === undefined ? {} : { probe }),
     };
   }
 

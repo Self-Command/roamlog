@@ -23,6 +23,9 @@ interface SettingFieldProps {
   revealSecondsLeft: number | null;
   revealError: string | null;
   error: string | null;
+  /** Inline note for a field the last probe proved to be missing (e.g. a
+   * credential the server needs before it can run the save probe). */
+  note?: string | null;
   onChange: (value: SettingDraftValue) => void;
   onSecretChange: (value: string) => void;
   onRequestReveal: () => void;
@@ -51,10 +54,12 @@ function FieldHeading({
   item,
   ids,
   error,
+  note,
 }: {
   item: AdminSettingItem;
   ids: ReturnType<typeof fieldIds>;
   error: string | null;
+  note?: string | null;
 }) {
   const consumption = settingFieldConsumption(item.key);
   return (
@@ -97,6 +102,15 @@ function FieldHeading({
           className="mt-2 rounded-control border border-accent-yellow/25 bg-accent-yellow/5 px-2.5 py-2 text-[10px] leading-4 text-accent-yellow"
         >
           由环境变量锁定，界面不可改。
+        </p>
+      ) : null}
+      {note ? (
+        <p
+          role="note"
+          data-setting-note={item.key}
+          className="mt-2 rounded-control border border-accent-red/25 bg-accent-red/5 px-2.5 py-2 text-[10px] leading-4 text-accent-red"
+        >
+          {note}
         </p>
       ) : null}
       {error ? (
@@ -309,6 +323,7 @@ export function SettingField(props: SettingFieldProps) {
     revealSecondsLeft,
     revealError,
     error,
+    note,
     onChange,
     onSecretChange,
     onRequestReveal,
@@ -420,7 +435,7 @@ export function SettingField(props: SettingFieldProps) {
       className={shellClasses(Boolean(error), item.envLocked)}
     >
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <FieldHeading item={item} ids={ids} error={error} />
+        <FieldHeading item={item} ids={ids} error={error} note={note} />
         <div className="w-full shrink-0 xl:max-w-[380px]">{control}</div>
       </div>
     </article>

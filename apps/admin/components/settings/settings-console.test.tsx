@@ -113,6 +113,49 @@ const mailItems: AdminSettingItem[] = [
   }),
 ];
 
+const storageItems: AdminSettingItem[] = [
+  makeItem({
+    key: "storage.endpoint",
+    type: "string",
+    label: "S3 endpoint",
+    group: "storage",
+    default: null,
+    value: "http://localhost:9000",
+  }),
+  makeItem({
+    key: "storage.publicEndpoint",
+    type: "string",
+    label: "Public endpoint",
+    group: "storage",
+    default: null,
+    value: "",
+  }),
+  makeItem({
+    key: "storage.bucket",
+    type: "string",
+    label: "Bucket",
+    group: "storage",
+    default: "roamlog",
+    value: "roamlog",
+  }),
+  makeItem({
+    key: "storage.accessKey",
+    type: "string",
+    label: "Access key",
+    group: "storage",
+    default: null,
+    value: "",
+  }),
+  makeItem({
+    key: "storage.secretKey",
+    type: "secret",
+    label: "Secret key",
+    group: "storage",
+    default: null,
+    secret: { hasValue: false, last4: null },
+  }),
+];
+
 const mediaItems: AdminSettingItem[] = [
   makeItem({
     key: "media.maxEdge",
@@ -263,6 +306,7 @@ function responseOf(): AdminSettingsResponse {
       { group: "media", label: "Media", items: mediaItems },
       { group: "ai", label: "AI", items: aiItems },
       { group: "places", label: "Places", items: placesItems },
+      { group: "storage", label: "Storage", items: storageItems },
     ],
     generatedAt: "2026-11-19T05:00:00.000Z",
   };
@@ -300,23 +344,33 @@ function createApi(initial: AdminSettingsResponse) {
 }
 
 async function renderConsole(
-  initialGroup: "general" | "mail" | "media" | "ai" | "places" = "general",
+  initialGroup: "general" | "mail" | "media" | "ai" | "places" | "storage" = "general",
   role: "super_admin" | "analyst" = "super_admin",
 ) {
   const fake = createApi(responseOf());
   render(<SettingsConsole role={role} initialGroup={initialGroup} api={fake.api} />);
-  const heading =
-    initialGroup === "mail"
-      ? "Mail"
-      : initialGroup === "media"
-        ? "Media"
-        : initialGroup === "ai"
-          ? "AI"
-          : initialGroup === "places"
-            ? "Places"
-            : "General";
-  await screen.findByRole("heading", { name: heading });
+  const headings: Record<typeof initialGroup, string> = {
+    general: "General",
+    mail: "Mail",
+    media: "Media",
+    ai: "AI",
+    places: "Places",
+    storage: "Storage",
+  };
+  await screen.findByRole("heading", { name: headings[initialGroup] });
   return fake;
+}
+
+/** 422 SETTINGS_PROBE_FAILED as the API client now surfaces it. */
+function probeFailure(probe: unknown, detail = "The settings save probe failed.") {
+  return new AdminSettingsError({
+    code: "SETTINGS_PROBE_FAILED",
+    status: 422,
+    title: "Configuration rejected",
+    detail,
+    degraded: [],
+    probe,
+  });
 }
 
 afterEach(() => {
@@ -727,5 +781,185 @@ describe("SettingsConsole", () => {
     const field = screen.getByRole("article", { name: "设置项 Site title" });
     expect(within(field).getByText(/当前值来源：数据库/)).toBeInTheDocument();
     expect(screen.getByText(/最近写入：/)).toBeInTheDocument();
+  });
+
+  it("explains a blocked storage save instead of a generic rejection", async () => {
+    const user = userEvent.setup();
+    const fake = await renderConsole("storage");
+    fake.update.mockRejectedValue(
+      probeFailure(
+        {
+          target: "storage",
+          code: "STORAGE_ENDPOINT_UNREACHABLE",
+          checks: [{ name: "HeadBucket", ok: false, ms: 117 }],
+        },
+        "The endpoint could not be reached (ECONNREFUSED). Check the endpoint.",
+      ),
+    );
+
+    const endpoint = screen.getByLabelText("S3 endpoint");
+    await user.clear(endpoint);
+    await user.type(endpoint, "http://127.0.0.1:19999");
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
+
+    // role=alert is what makes a screen reader announce the block immediately.
+    const alert = await screen.findByRole("alert");
+    const headline = alert.querySelector("[data-probe-headline]");
+    expect(headline).toHaveTextContent(
+      "存储服务无法连接：检查 endpoint 与网络（当前 endpoint: http://127.0.0.1:19999）",
+    );
+    expect(headline?.textContent).not.toContain("STORAGE_ENDPOINT_UNREACHABLE");
+    expect(screen.queryByText("Configuration rejected")).not.toBeInTheDocument();
+
+    // The step that failed is visible, with its measured latency.
+    const checkRows = alert.querySelectorAll("[data-probe-check-ok]");
+    expect(checkRows).toHaveLength(1);
+    expect(checkRows[0]).toHaveTextContent("✗ HeadBucket 117ms");
+
+    // Raw code/target/failedAt live in a collapsed technical details block.
+    const technical = alert.querySelector("details[data-probe-technical]");
+    expect(technical).not.toBeNull();
+    expect(technical).not.toHaveAttribute("open");
+    expect(
+      within(technical as HTMLElement).getByText("STORAGE_ENDPOINT_UNREACHABLE"),
+    ).toBeInTheDocument();
+    expect(within(technical as HTMLElement).getByText("HeadBucket")).toBeInTheDocument();
+
+    // The retry action stays ghost/outline; the save button is the only white primary.
+    const retry = within(alert).getByRole("button", { name: "重试保存" });
+    expect(retry.className).not.toContain("bg-ink");
+    expect(screen.getByRole("button", { name: "保存更改" }).className).toContain("bg-ink");
+
+    // Nothing was reset: the draft that failed is still on screen.
+    expect(endpoint).toHaveValue("http://127.0.0.1:19999");
+  });
+
+  it("lists every probe step, including the ones that passed", async () => {
+    const user = userEvent.setup();
+    const fake = await renderConsole("storage");
+    fake.update.mockRejectedValue(
+      probeFailure({
+        target: "storage",
+        code: "STORAGE_READ_MISMATCH",
+        checks: [
+          { name: "HeadBucket", ok: true, ms: 95 },
+          { name: "PutObject", ok: false },
+        ],
+      }),
+    );
+
+    await user.type(screen.getByLabelText("Bucket"), "-tmp");
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
+
+    const alert = await screen.findByRole("alert");
+    const rows = alert.querySelectorAll("[data-probe-check-ok]");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveAttribute("data-probe-check-ok", "true");
+    expect(rows[0]).toHaveTextContent("✓ HeadBucket 95ms");
+    expect(rows[1]).toHaveAttribute("data-probe-check-ok", "false");
+    expect(rows[1]).toHaveTextContent("✗ PutObject —");
+    expect(
+      (rows[1] as HTMLElement).querySelector(".text-accent-red"),
+    ).not.toBeNull();
+
+    // Unknown storage code falls back to the bucket/permission hint.
+    expect(alert).toHaveTextContent("Bucket 不存在或无权访问：检查 bucket 名称与权限");
+  });
+
+  it("marks missing credentials inline and clears the note once the field is filled", async () => {
+    const user = userEvent.setup();
+    const fake = await renderConsole("storage");
+    fake.update.mockRejectedValue(
+      probeFailure({ target: "storage", code: "MISSING_CREDENTIALS", checks: [] }),
+    );
+
+    await user.type(screen.getByLabelText("Bucket"), "-tmp");
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("缺少访问凭据：请先填写 Access Key 与 Secret Key");
+
+    const accessField = screen.getByRole("article", { name: "设置项 Access key" });
+    const secretField = screen.getByRole("article", { name: "设置项 Secret key" });
+    expect(within(accessField).getByRole("note")).toHaveTextContent(
+      "保存探测缺少访问凭据：请填写 Access Key。",
+    );
+    expect(within(secretField).getByRole("note")).toHaveTextContent(
+      "保存探测缺少访问凭据：请填写 Secret Key。",
+    );
+
+    await user.type(screen.getByLabelText("设置新值 Secret key"), "sk_test_value");
+    expect(within(secretField).queryByRole("note")).not.toBeInTheDocument();
+    expect(within(accessField).getByRole("note")).toBeInTheDocument();
+    expect(screen.getByLabelText("设置新值 Secret key")).toHaveValue("sk_test_value");
+  });
+
+  it("explains an SMTP auth rejection on the mail group", async () => {
+    const user = userEvent.setup();
+    const fake = await renderConsole("mail");
+    fake.update.mockRejectedValue(
+      probeFailure({
+        target: "mail",
+        code: "AUTH_FAILED",
+        checks: [],
+      }),
+    );
+
+    const port = screen.getByLabelText("SMTP port");
+    fireEvent.change(port, { target: { value: "2526" } });
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "SMTP 认证被拒：检查用户名与应用专用密码（不是账号登录密码）",
+    );
+    expect(alert).toHaveTextContent("保存被拦截 · 邮件");
+    expect(port).toHaveValue(2526);
+  });
+
+  it("shows the server detail for an unknown probe code without using the raw code", async () => {
+    const user = userEvent.setup();
+    const fake = await renderConsole("mail");
+    const detail = "The SMTP transport timed out after 10 seconds.";
+    fake.update.mockRejectedValue(
+      probeFailure({ target: "mail", code: "SMTP_TIMEOUT_UNKNOWN", checks: [] }, detail),
+    );
+
+    fireEvent.change(screen.getByLabelText("SMTP port"), { target: { value: "2526" } });
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
+
+    const alert = await screen.findByRole("alert");
+    const headline = alert.querySelector("[data-probe-headline]");
+    expect(headline).toHaveTextContent(detail);
+    expect(headline?.textContent).not.toContain("SMTP_TIMEOUT_UNKNOWN");
+
+    const technical = alert.querySelector("details[data-probe-technical]");
+    expect(technical).not.toHaveAttribute("open");
+    expect(within(technical as HTMLElement).getByText("SMTP_TIMEOUT_UNKNOWN")).toBeInTheDocument();
+  });
+
+  it("explains an unavailable probe service and keeps every typed value", async () => {
+    const user = userEvent.setup();
+    const fake = await renderConsole("mail");
+    fake.update.mockRejectedValue(
+      probeFailure(
+        { target: "mail", code: "PROBE_UNAVAILABLE", checks: [] },
+        "The settings probe is temporarily unavailable.",
+      ),
+    );
+
+    const port = screen.getByLabelText("SMTP port");
+    fireEvent.change(port, { target: { value: "2526" } });
+    const secret = screen.getByLabelText("设置新值 Resend API key");
+    await user.type(secret, "re_typed_secret_1234");
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("探测服务不可用，配置未保存。可稍后重试");
+    expect(port).toHaveValue(2526);
+    expect(secret).toHaveValue("re_typed_secret_1234");
+    expect(fake.update).toHaveBeenCalledWith(
+      expect.arrayContaining([{ key: "mail.resendApiKey", value: "re_typed_secret_1234" }]),
+    );
   });
 });

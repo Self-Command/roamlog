@@ -51,6 +51,15 @@ import { settingsGroupConsumption } from "./settings-consumption";
 import { formatDateTime } from "../../lib/format";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
 import { cn } from "../admin-shell/cn";
+import { ProbeErrorBlock } from "./probe-error-block";
+import {
+  isSettingsProbeFailure,
+  probeCopyFor,
+  probeFallbackCopy,
+  settingsProbeFromError,
+  type ProbeCopy,
+  type SettingsProbe,
+} from "./probe-error-copy";
 import { SettingField } from "./setting-field";
 
 interface SettingsConsoleProps {
@@ -64,6 +73,33 @@ interface ConsoleBanner {
   title: string;
   detail?: string;
   action?: "save" | "reload";
+  /** Set when a save was blocked by the live storage/mail probe. */
+  probe?: { probe: SettingsProbe; copy: ProbeCopy };
+}
+
+/** Current text draft for a key, falling back to the last server value. */
+function settingText(
+  response: AdminSettingsResponse | null,
+  values: Record<string, SettingDraftValue>,
+  key: string,
+): string | null {
+  const draft = values[key];
+  if (typeof draft === "string" && draft.trim().length > 0) {
+    return draft.trim();
+  }
+  if (!response) {
+    return null;
+  }
+  for (const group of response.groups) {
+    for (const item of group.items) {
+      if (item.key !== key) {
+        continue;
+      }
+      const value = item.value;
+      return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+    }
+  }
+  return null;
 }
 
 interface RevealedSecret {
@@ -146,6 +182,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   const [banner, setBanner] = useState<ConsoleBanner | null>(null);
+  const [probeNotes, setProbeNotes] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<string | null>(null);
 
   const [revealed, setRevealed] = useState<RevealedSecret | null>(null);
@@ -187,6 +224,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
       setSecretDrafts({});
       setServerErrors({});
       setBanner(null);
+      setProbeNotes({});
     } catch (error) {
       setLoadError(failureOf(error));
     } finally {
@@ -262,6 +300,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
 
   function changeValue(key: string, value: SettingDraftValue) {
     setValues((current) => ({ ...current, [key]: value }));
+    clearProbeNote(key);
     setServerErrors((current) => {
       if (!current[key]) {
         return current;
@@ -274,7 +313,20 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
 
   function changeSecret(key: string, value: string) {
     setSecretDrafts((current) => ({ ...current, [key]: value }));
+    clearProbeNote(key);
     setServerErrors((current) => {
+      if (!current[key]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  /** A credential note disappears once the operator starts filling that field. */
+  function clearProbeNote(key: string) {
+    setProbeNotes((current) => {
       if (!current[key]) {
         return current;
       }
@@ -288,6 +340,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
     applyDrafts(items, true);
     setServerErrors({});
     setBanner(null);
+    setProbeNotes({});
     setRevealed(null);
     setToast("已放弃当前分组的未保存修改。");
   }
@@ -305,6 +358,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
     setGroup(next);
     setServerErrors({});
     setBanner(null);
+    setProbeNotes({});
     setRevealErrors({});
     if (typeof window !== "undefined") {
       window.history.replaceState(window.history.state, "", settingsGroupHref(next));
@@ -326,6 +380,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
 
     setSaving(true);
     setBanner(null);
+    setProbeNotes({});
     setServerErrors({});
 
     let updatedCount: number;
@@ -334,8 +389,30 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
       updatedCount = result.updated.length;
     } catch (error) {
       const failure = failureOf(error);
-      if (error instanceof AdminSettingsError && error.status === 422) {
+      const probe = settingsProbeFromError(error);
+      if (probe) {
+        // The save was blocked by a live probe: explain the exact step instead
+        // of "configuration rejected". Nothing was written and the drafts stay.
+        const copy = probeCopyFor(probe, {
+          endpoint: settingText(response, values, "storage.endpoint"),
+          provider: settingText(response, values, "mail.provider"),
+          detail: failure.detail,
+        });
+        setServerErrors({});
+        setProbeNotes({ ...copy.credentialNotes });
+        setBanner({
+          tone: "error",
+          title: copy.headline,
+          detail: failure.detail,
+          probe: { probe, copy },
+        });
+      } else if (isSettingsProbeFailure(failure)) {
+        const copy = probeFallbackCopy(failure.detail);
+        setProbeNotes({});
+        setBanner({ tone: "error", title: copy.headline, detail: copy.body });
+      } else if (error instanceof AdminSettingsError && error.status === 422) {
         setServerErrors(error.errorsByField);
+        setProbeNotes({});
         setBanner({
           tone: "error",
           title: "有字段未通过服务端校验",
@@ -344,6 +421,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
         });
       } else {
         const permission = permissionText(failure);
+        setProbeNotes({});
         setBanner({
           tone: "error",
           title: permission ?? "保存失败，可重试",
@@ -379,6 +457,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
     applyDrafts(groupItems(fresh, group), true);
     setRevealed(null);
     setBanner(null);
+    setProbeNotes({});
     setServerErrors({});
     setToast(`已保存并重新读取 ${updatedCount} 项设置。`);
     setSaving(false);
@@ -393,6 +472,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
     }
     setRefreshing(true);
     setBanner(null);
+    setProbeNotes({});
     try {
       const data = await api.list();
       setResponse(data);
@@ -602,7 +682,15 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
         </div>
       ) : null}
 
-      {banner ? (
+      {banner?.probe ? (
+        <ProbeErrorBlock
+          probe={banner.probe.probe}
+          copy={banner.probe.copy}
+          serverDetail={banner.detail}
+          retrying={saving}
+          onRetry={() => void save()}
+        />
+      ) : banner ? (
         <div
           role="alert"
           className={cn(
@@ -695,6 +783,7 @@ export function SettingsConsole({ role, initialGroup, api }: SettingsConsoleProp
               revealSecondsLeft={revealed?.key === item.key ? revealSeconds : null}
               revealError={revealErrors[item.key] ?? null}
               error={errors[item.key] ?? null}
+              note={probeNotes[item.key] ?? null}
               onChange={(value) => changeValue(item.key, value)}
               onSecretChange={(value) => changeSecret(item.key, value)}
               onRequestReveal={() => requestReveal(item)}
