@@ -30,25 +30,17 @@ import {
   type TwoFactorAuthTransport,
   type TwoFactorEnrollment,
 } from "@/lib/api/auth";
-import type { DataMode } from "@/lib/data-mode";
 
 import { TotpQr } from "./totp-qr";
 
 type SecurityPanel = "none" | "enroll-password" | "enrollment" | "disable" | "regenerate";
 
 interface TwoFactorSecurityViewProps {
-  mode?: DataMode;
   auth?: TwoFactorAuthTransport;
   initialSession?: SecuritySession;
 }
 
-const demoSession: SecuritySession = {
-  authenticated: false,
-  twoFactorEnabled: false,
-};
-
 export function TwoFactorSecurityView({
-  mode = "mock",
   auth = twoFactorAuthTransport,
   initialSession,
 }: TwoFactorSecurityViewProps) {
@@ -70,10 +62,6 @@ export function TwoFactorSecurityView({
       setSession(initialSession);
       return;
     }
-    if (mode === "mock") {
-      setSession(demoSession);
-      return;
-    }
 
     let cancelled = false;
     setSession(undefined);
@@ -91,11 +79,11 @@ export function TwoFactorSecurityView({
     return () => {
       cancelled = true;
     };
-  }, [auth, initialSession, mode]);
+  }, [auth, initialSession]);
 
-  const authenticated = mode === "api" && session?.authenticated === true;
+  const authenticated = session?.authenticated === true;
   const enabled = authenticated && session?.twoFactorEnabled === true;
-  const loading = mode === "api" && session === undefined;
+  const loading = session === undefined;
   const secret = useMemo(() => {
     if (!enrollment) return "";
     try {
@@ -250,7 +238,7 @@ export function TwoFactorSecurityView({
     );
   }
 
-  if (mode === "api" && loadError) {
+  if (loadError) {
     return (
       <SecurityFrame>
         <div className="surface-card max-w-xl p-6">
@@ -273,8 +261,8 @@ export function TwoFactorSecurityView({
         <div>
           <div className="flex items-center gap-2">
             <p className="type-eyebrow">ACCOUNT / SECURITY</p>
-            <Badge tone={mode === "api" ? (enabled ? "green" : "neutral") : "yellow"}>
-              {mode === "api" ? (enabled ? "2FA ACTIVE" : "2FA OFF") : "DEMO MODE"}
+            <Badge tone={enabled ? "green" : "neutral"}>
+              {enabled ? "2FA ACTIVE" : "2FA OFF"}
             </Badge>
           </div>
           <h1 className="mt-3 font-serif text-[clamp(2.1rem,1.7rem+1.2vw,3.25rem)] leading-none tracking-[-0.04em] text-ink">
@@ -295,9 +283,7 @@ export function TwoFactorSecurityView({
 
       <Separator className="my-6" />
 
-      {mode === "mock" ? (
-        <MockNotice />
-      ) : !authenticated ? (
+      {!authenticated ? (
         <section className="surface-card max-w-2xl p-6">
           <div className="flex items-center gap-2">
             <LockKeyhole aria-hidden="true" className="size-4 text-muted" />
@@ -744,60 +730,6 @@ function SecurityFrame({ children }: { children: React.ReactNode }) {
         <div className="mt-10">{children}</div>
       </div>
     </main>
-  );
-}
-
-function MockNotice() {
-  return (
-    <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="surface-card p-6">
-        <div className="flex items-center gap-2">
-          <p className="type-eyebrow">DEMO / MOCK MODE</p>
-          <Badge tone="yellow">NO REAL ENROLLMENT</Badge>
-        </div>
-        <h2 className="mt-3 font-serif text-3xl tracking-[-0.03em] text-ink">
-          演示模式不注册真实 TOTP
-        </h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-          当前 Web 使用 mock 数据模式，此页面不会调用 Better
-          Auth，也不会伪造已启用状态、二维码、secret 或备用码。真实注册仅在 API 模式且已登录时开放。
-        </p>
-        <div className="mt-5 divide-y divide-hairline border-y border-hairline">
-          {[
-            ["不会生成", "TOTP URI / 本地 QR / secret"],
-            ["不会保存", "备用码 / localStorage 安全状态"],
-            ["如何验证", "切换 NEXT_PUBLIC_DATA_MODE=api，登录后访问 /settings/security"],
-          ].map(([label, value]) => (
-            <div key={label} className="flex flex-col gap-1 py-3 sm:flex-row sm:justify-between">
-              <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                {label}
-              </span>
-              <span className="text-[11px] text-body">{value}</span>
-            </div>
-          ))}
-        </div>
-        <a
-          href="/login"
-          className="mt-5 inline-flex h-9 items-center rounded-control border border-hairline-strong px-4 text-[12px] text-ink outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ink"
-        >
-          返回演示登录
-        </a>
-      </div>
-      <aside className="surface-card p-5">
-        <p className="type-eyebrow">DEMO BOUNDARY</p>
-        <h3 className="mt-2 font-serif text-2xl text-ink">2FA 开关</h3>
-        <div className="mt-4 flex items-center justify-between gap-4 rounded-control border border-hairline p-3">
-          <div>
-            <p className="text-[12px] text-ink">两步验证</p>
-            <p className="mt-0.5 text-[10px] text-muted">真实状态未知 · 不可切换</p>
-          </div>
-          <Switch checked={false} disabled aria-label="演示模式不可切换两步验证" />
-        </div>
-        <p className="mt-4 text-[10px] leading-5 text-stone">
-          mock 页面明确保持禁用，避免把本地演示误认为真实账号保护。
-        </p>
-      </aside>
-    </section>
   );
 }
 

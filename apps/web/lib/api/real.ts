@@ -66,12 +66,10 @@ import {
   updateWorkspaceMember as updateWorkspaceMemberRequest,
 } from "@roamlog/api-client";
 
-import type { DataMode } from "@/lib/data-mode";
-
 import { ApiError, errorFromResponse } from "./errors";
 import { invalidResponse } from "./errors";
 import { unwrap, unwrapMessage } from "./shared";
-import type { DataAdapter, SessionInfo } from "./types";
+import type { DataAdapter, DataMode, SessionInfo } from "./types";
 
 function queryParams<T extends object>(params: T | undefined): Record<string, unknown> | undefined {
   if (!params) return undefined;

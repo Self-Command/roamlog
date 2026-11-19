@@ -11,8 +11,6 @@ import {
 } from "@roamlog/api-mocks/fixtures";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { resolveDataMode } from "@/lib/data-mode";
-
 import { ApiError } from "./errors";
 import { realAdapterInstance } from "./real";
 
@@ -37,13 +35,6 @@ afterEach(() => {
 });
 
 describe("live API adapter", () => {
-  it("defaults to mock mode and only opts into api explicitly", () => {
-    expect(resolveDataMode(undefined)).toBe("mock");
-    expect(resolveDataMode("mock")).toBe("mock");
-    expect(resolveDataMode("api")).toBe("api");
-    expect(resolveDataMode(" API ")).toBe("api");
-  });
-
   it("loads me, workspaces, trips, entries, itinerary, comments, notifications, activity and search", async () => {
     const workspace = demoWorkspaces[0]!;
     const trip = demoFixtureState.trips[0]!;

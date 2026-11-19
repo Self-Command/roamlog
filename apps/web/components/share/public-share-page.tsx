@@ -9,23 +9,9 @@ import { Button, ErrorState, FormField, Input, Skeleton } from "@roamlog/ui";
 import { Link2Off, LockKeyhole, RefreshCcw } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { DATA_MODE } from "@/lib/data-mode";
 import { getPublicTrip } from "@roamlog/api-client";
 
-import type { DemoShareResolution } from "@/components/legacy-mock/share/demo-share";
-
 import { ShareArticle } from "./share-article";
-
-/**
- * Fixture boundary: demo share payloads come from a lazy-loaded legacy module,
- * so an api build never ships fixture data. The real share path below stays
- * statically imported.
- */
-const isApiBuild = process.env.NEXT_PUBLIC_DATA_MODE === "api";
-
-const loadDemoShare = isApiBuild
-  ? undefined
-  : () => import("@/components/legacy-mock/share/demo-share");
 
 type ShareScreen =
   | { kind: "loading" }
@@ -42,27 +28,6 @@ export function PublicSharePage({ token }: { token: string }) {
   useEffect(() => {
     let active = true;
     setScreen({ kind: "loading" });
-
-    if (DATA_MODE === "mock") {
-      if (!loadDemoShare) return;
-      loadDemoShare()
-        .then(({ resolveDemoShare }) => {
-          if (!active) return;
-          setScreen(resolutionToScreen(resolveDemoShare(token)));
-        })
-        .catch(() => {
-          if (!active) return;
-          setScreen({
-            kind: "error",
-            title: "演示分享没有加载",
-            description: "本地演示模块不可用，请刷新页面后重试。",
-            retryable: true,
-          });
-        });
-      return () => {
-        active = false;
-      };
-    }
 
     getPublicTrip(token, undefined, { credentials: "include" })
       .then((response) => {
@@ -116,15 +81,6 @@ export function PublicSharePage({ token }: { token: string }) {
   async function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!password.trim() || pending) return;
-
-    if (DATA_MODE === "mock") {
-      if (!loadDemoShare) return;
-      const { resolveDemoShare } = await loadDemoShare();
-      const resolution = resolveDemoShare(token, password);
-      setScreen(resolutionToScreen(resolution));
-      if (resolution.status === "invalid-password") setPassword("");
-      return;
-    }
 
     setPending(true);
     try {
@@ -287,31 +243,4 @@ function ShareGate({
   );
 }
 
-function resolutionToScreen(resolution: DemoShareResolution): ShareScreen {
-  switch (resolution.status) {
-    case "ready":
-      return { kind: "ready", data: resolution.data };
-    case "password":
-      return { kind: "password" };
-    case "invalid-password":
-      return { kind: "password", invalid: true };
-    case "expired":
-      return {
-        kind: "error",
-        title: "这个分享链接已过期",
-        description: "分享者设置了有效期。请请求一个新的链接，旧链接不会恢复访问。",
-      };
-    case "revoked":
-      return {
-        kind: "error",
-        title: "这个分享链接已被撤销",
-        description: "分享者收回了访问权限。如果你仍需要查看，请联系分享者重新创建链接。",
-      };
-    case "not-found":
-      return {
-        kind: "error",
-        title: "找不到这个分享",
-        description: "链接不完整、已过期或被撤销。请向分享者确认地址。",
-      };
-  }
-}
+

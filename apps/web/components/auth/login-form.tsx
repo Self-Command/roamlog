@@ -12,8 +12,6 @@ import {
   type SignInResult,
   type TwoFactorAuthTransport,
 } from "@/lib/api/auth";
-import type { DataMode } from "@/lib/data-mode";
-import { useDataMode } from "@/lib/data-provider";
 import { validateEmail, validatePassword } from "@/lib/validation";
 
 interface LoginErrors {
@@ -25,18 +23,14 @@ type LoginStep = "credentials" | "challenge";
 type ChallengeFactor = "totp" | "backup-code";
 
 interface LoginFormViewProps {
-  mode?: DataMode;
   auth?: TwoFactorAuthTransport;
   onAuthenticated?: () => void;
 }
 
 export function LoginFormView({
-  mode: modeOverride,
   auth = twoFactorAuthTransport,
   onAuthenticated,
 }: LoginFormViewProps) {
-  const contextMode = useDataMode();
-  const mode = modeOverride ?? contextMode;
   const [step, setStep] = useState<LoginStep>("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -70,11 +64,6 @@ export function LoginFormView({
     setErrors(nextErrors);
     if (nextErrors.email || nextErrors.password) {
       setNotice(null);
-      return;
-    }
-
-    if (mode === "mock") {
-      setNotice("表单校验通过。真实认证将在身份后端接入后启用。");
       return;
     }
 
@@ -289,9 +278,7 @@ export function LoginFormView({
           回到你的旅行档案
         </h1>
         <p className="mt-4 text-sm leading-6 text-muted">
-          {mode === "api"
-            ? "登录后会进入 Workspace 总览。会话由 Better Auth 的 httpOnly cookie 维护。"
-            : "登录后会进入 Workspace 总览。当前是 mock 预览，不会发起真实认证请求。"}
+          登录后会进入 Workspace 总览。会话由 Better Auth 的 httpOnly cookie 维护。
         </p>
       </div>
 

@@ -36,7 +36,6 @@ describe("TwoFactorSecurityView", () => {
 
     render(
       <TwoFactorSecurityView
-        mode="api"
         auth={auth}
         initialSession={{
           authenticated: true,
@@ -71,7 +70,6 @@ describe("TwoFactorSecurityView", () => {
 
     render(
       <TwoFactorSecurityView
-        mode="api"
         auth={auth}
         initialSession={{
           authenticated: true,
@@ -100,7 +98,6 @@ describe("TwoFactorSecurityView", () => {
 
     render(
       <TwoFactorSecurityView
-        mode="api"
         auth={auth}
         initialSession={{
           authenticated: true,
@@ -120,14 +117,19 @@ describe("TwoFactorSecurityView", () => {
     expect(screen.getAllByText(/每个码只能成功使用一次/).length).toBeGreaterThan(0);
   });
 
-  it("keeps mock mode explicit and never claims a real enrollment", () => {
+  it("never renders a demo enrollment surface", () => {
     const auth = transport();
-    render(<TwoFactorSecurityView mode="mock" auth={auth} />);
+    render(
+      <TwoFactorSecurityView
+        auth={auth}
+        initialSession={{ authenticated: false, twoFactorEnabled: false }}
+      />,
+    );
 
-    expect(screen.getByRole("heading", { name: "演示模式不注册真实 TOTP" })).toBeInTheDocument();
-    expect(screen.getByText("NO REAL ENROLLMENT")).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "演示模式不可切换两步验证" })).toBeDisabled();
-    expect(auth.enableTwoFactor).not.toHaveBeenCalled();
+    expect(screen.queryByText(/演示模式不注册真实 TOTP/)).not.toBeInTheDocument();
+    expect(screen.queryByText("DEMO MODE")).not.toBeInTheDocument();
+    expect(screen.queryByText("NO REAL ENROLLMENT")).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: /演示模式不可切换两步验证/ })).toBeNull();
     expect(auth.getSecuritySession).not.toHaveBeenCalled();
   });
 });

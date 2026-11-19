@@ -24,15 +24,6 @@ import {
 import { Check, Copy, Link2, Share2, TriangleAlert } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import { DATA_MODE } from "@/lib/data-mode";
-
-/** Fixture boundary: demo share registration is lazy-loaded and absent from api builds. */
-const isApiBuild = process.env.NEXT_PUBLIC_DATA_MODE === "api";
-
-const loadDemoShare = isApiBuild
-  ? undefined
-  : () => import("@/components/legacy-mock/share/demo-share");
-
 const EXPIRY_OPTIONS = [
   { value: "7", label: "7 天后" },
   { value: "30", label: "30 天后" },
@@ -95,37 +86,6 @@ export function ShareLinkDialog({
     const input = buildRequest();
     setPending(true);
     try {
-      if (DATA_MODE === "mock") {
-        if (!loadDemoShare) {
-          setError("演示分享模块不可用。");
-          return;
-        }
-        const { registerMockShare } = await loadDemoShare();
-        const token = `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-        registerMockShare(token, {
-          password: input.password,
-          showBudget: input.showBudget ?? false,
-          expiresAt: input.expiresAt,
-        });
-        setCreated({
-          id: token,
-          workspaceId: tripId,
-          tripId,
-          createdById: tripId,
-          expiresAt: input.expiresAt ?? null,
-          revokedAt: null,
-          hasPassword: Boolean(input.password),
-          allowIndex: false,
-          showBudget: Boolean(input.showBudget),
-          lastAccessedAt: null,
-          accessCount: 0,
-          createdAt: new Date().toISOString(),
-          token,
-          url: `${window.location.origin}/share/${token}`,
-        });
-        return;
-      }
-
       const response = await createShareLink(tripId, input, {
         credentials: "include",
       });

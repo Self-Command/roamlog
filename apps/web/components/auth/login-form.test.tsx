@@ -47,17 +47,18 @@ describe("LoginFormView", () => {
     expect(password).toHaveAttribute("aria-invalid", "true");
   });
 
-  it("confirms local validation without pretending to authenticate", async () => {
+  it("submits valid credentials to the auth transport", async () => {
     const user = userEvent.setup();
-    render(<LoginFormView />);
+    const auth = transport();
+    const onAuthenticated = vi.fn();
+    render(<LoginFormView auth={auth} onAuthenticated={onAuthenticated} />);
 
     await user.type(screen.getByLabelText("邮箱"), "lin.mo@roamlog.local");
     await user.type(screen.getByLabelText("密码"), "roamlog-demo");
     await user.click(screen.getByRole("button", { name: "登录" }));
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "表单校验通过。真实认证将在身份后端接入后启用。",
-    );
+    expect(auth.signIn).toHaveBeenCalledWith("lin.mo@roamlog.local", "roamlog-demo");
+    expect(onAuthenticated).toHaveBeenCalledOnce();
   });
 
   it("moves from credentials to the TOTP challenge when Better Auth redirects", async () => {
@@ -70,7 +71,7 @@ describe("LoginFormView", () => {
     });
     const onAuthenticated = vi.fn();
 
-    render(<LoginFormView mode="api" auth={auth} onAuthenticated={onAuthenticated} />);
+    render(<LoginFormView auth={auth} onAuthenticated={onAuthenticated} />);
 
     await user.type(screen.getByLabelText("邮箱"), "lin.mo@roamlog.local");
     await user.type(screen.getByLabelText("密码"), "roamlog-demo");
@@ -98,7 +99,7 @@ describe("LoginFormView", () => {
     });
     const onAuthenticated = vi.fn();
 
-    render(<LoginFormView mode="api" auth={auth} onAuthenticated={onAuthenticated} />);
+    render(<LoginFormView auth={auth} onAuthenticated={onAuthenticated} />);
 
     await user.type(screen.getByLabelText("邮箱"), "lin.mo@roamlog.local");
     await user.type(screen.getByLabelText("密码"), "roamlog-demo");
@@ -121,7 +122,7 @@ describe("LoginFormView", () => {
     });
     const onAuthenticated = vi.fn();
 
-    render(<LoginFormView mode="api" auth={auth} onAuthenticated={onAuthenticated} />);
+    render(<LoginFormView auth={auth} onAuthenticated={onAuthenticated} />);
 
     await user.type(screen.getByLabelText("邮箱"), "lin.mo@roamlog.local");
     await user.type(screen.getByLabelText("密码"), "roamlog-demo");

@@ -1,15 +1,163 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { PublicMedia, PublicTripResponse } from "@roamlog/contracts";
+import {
+  PublicTripResponseSchema,
+  type PublicMedia,
+  type PublicTripResponse,
+} from "@roamlog/contracts";
+import { demoFixtureState } from "@roamlog/api-mocks/fixtures";
 
 import { renderWithDemo } from "@/test/demo-render";
 
-import { buildDemoPublicTrip } from "@/components/legacy-mock/share/demo-share";
 import { PublicSharePage } from "./public-share-page";
 import { ShareArticle } from "./share-article";
 import { ShareLinkDialog } from "./share-link-dialog";
+
+/**
+ * Local, schema-valid public payload built from the shared test fixtures.
+ *
+ * The retired `legacy-mock/share/demo-share` builder was removed with the mock
+ * data mode; this test helper keeps the same public-trip shape so the
+ * production `PublicTripResponseSchema` still validates it.
+ */
+function buildDemoPublicTrip({
+  tripId,
+  showBudget = true,
+}: {
+  tripId?: string;
+  showBudget?: boolean;
+} = {}): PublicTripResponse {
+  const trip =
+    demoFixtureState.trips.find((candidate) => candidate.id === tripId) ??
+    [...demoFixtureState.trips]
+      .filter((candidate) =>
+        demoFixtureState.entries.some((entry) => entry.tripId === candidate.id),
+      )
+      .sort(
+        (left, right) =>
+          demoFixtureState.entries.filter((entry) => entry.tripId === right.id).length -
+          demoFixtureState.entries.filter((entry) => entry.tripId === left.id).length,
+      )[0] ??
+    demoFixtureState.trips[0]!;
+
+  const stops = demoFixtureState.stops
+    .filter((stop) => stop.tripId === trip.id)
+    .sort((left, right) => left.order - right.order);
+  const entries = demoFixtureState.entries
+    .filter((entry) => entry.tripId === trip.id)
+    .sort((left, right) => right.date.localeCompare(left.date));
+  const media = demoFixtureState.media.filter((item) => item.tripId === trip.id);
+  const expenses = demoFixtureState.expenses.filter((expense) => expense.tripId === trip.id);
+
+  return PublicTripResponseSchema.parse({
+    trip: {
+      id: trip.id,
+      title: trip.title,
+      summary: trip.summary,
+      status: trip.status,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      durationDays: trip.durationDays,
+      coverMediaId: trip.coverMediaId,
+      cover: trip.cover,
+      origin: trip.origin,
+      destinations: trip.destinations,
+      countryCodes: trip.countryCodes,
+      tags: trip.tags,
+    },
+    stops: stops.map((stop) => ({
+      id: stop.id,
+      city: stop.city,
+      country: stop.country,
+      countryCode: stop.countryCode,
+      lat: stop.lat,
+      lng: stop.lng,
+      startDate: stop.startDate,
+      endDate: stop.endDate,
+      notes: "",
+      order: stop.order,
+    })),
+    entries: entries.map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      date: entry.date,
+      location: entry.location,
+      lat: entry.lat,
+      lng: entry.lng,
+      mood: entry.mood,
+      weather: entry.weather,
+      contentHtml: entry.contentHtml,
+      excerpt: entry.excerpt,
+      tags: entry.tags,
+      media: media.slice(0, 3).map(publicMedia),
+    })),
+    media: media.map(publicMedia),
+    budget: showBudget && expenses.length ? demoBudget(trip.id, expenses) : null,
+  });
+}
+
+const TEST_MEDIA_ORIGIN = "https://media.example.invalid";
+const TEST_MEDIA_EXPIRES_AT = "2027-01-01T00:00:00.000Z";
+
+function publicMedia(media: (typeof demoFixtureState.media)[number]): PublicMedia {
+  return {
+    id: media.id,
+    url: `${TEST_MEDIA_ORIGIN}/mock/display/${media.id}.jpg`,
+    thumbUrl: `${TEST_MEDIA_ORIGIN}/mock/thumb/${media.id}.jpg`,
+    expiresAt: TEST_MEDIA_EXPIRES_AT,
+    width: media.width,
+    height: media.height,
+    blurhash: media.blurhash,
+    caption: media.caption,
+    date: media.date,
+    location: media.location,
+  };
+}
+
+function demoBudget(
+  tripId: string,
+  expenses: typeof demoFixtureState.expenses,
+): NonNullable<PublicTripResponse["budget"]> {
+  const total = expenses.reduce((sum, expense) => sum + expense.amountMinor, 0);
+  const currencies = [...new Set(expenses.map((expense) => expense.currency))];
+  const categories = [...new Set(expenses.map((expense) => expense.category))].map(
+    (category) => ({
+      category,
+      totals: [
+        {
+          currency: "CNY",
+          amountMinor: expenses
+            .filter((expense) => expense.category === category)
+            .reduce((sum, expense) => sum + expense.amountMinor, 0),
+        },
+      ],
+    }),
+  );
+
+  return {
+    tripId,
+    displayCurrency: "CNY",
+    originalTotals: currencies.map((currency) => ({
+      currency,
+      amountMinor: expenses
+        .filter((expense) => expense.currency === currency)
+        .reduce((sum, expense) => sum + expense.amountMinor, 0),
+    })),
+    displayTotal: { currency: "CNY", amountMinor: total, approx: true },
+    categories,
+    expenseCount: expenses.length,
+    overBudget: false,
+  };
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
 
 describe("ShareArticle", () => {
   it("never renders comments, emails, or internal notes from a public payload", () => {
@@ -306,11 +454,33 @@ describe("ShareArticle photo wall", () => {
 });
 
 describe("PublicSharePage", () => {
-  beforeEach(() => {
-    window.sessionStorage.clear();
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
+  function problem(status: number, code: string): Response {
+    return jsonResponse(
+      { type: "about:blank", title: "Share error", status, code, errors: [] },
+      status,
+    );
+  }
+
+  function stubShareApi(): PublicTripResponse {
+    const publicTrip = buildDemoPublicTrip({ showBudget: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("password=roamlog")) return jsonResponse(publicTrip);
+        if (url.includes("password=")) return problem(401, "SHARE_PASSWORD_INVALID");
+        return problem(401, "SHARE_PASSWORD_REQUIRED");
+      }),
+    );
+    return publicTrip;
+  }
+
   it("requires a password, rejects a wrong password, and then opens the share", async () => {
+    stubShareApi();
     const user = userEvent.setup();
     render(<PublicSharePage token="password-demo" />);
 
@@ -327,24 +497,51 @@ describe("PublicSharePage", () => {
     expect(await screen.findByRole("heading", { name: "旅行日志" })).toBeInTheDocument();
   });
 
-  it("shows distinct expired and revoked states", async () => {
-    const { unmount } = render(<PublicSharePage token="expired-demo" />);
-    expect(
-      await screen.findByRole("heading", { name: "这个分享链接已过期" }),
-    ).toBeInTheDocument();
-    unmount();
+  it("maps an unknown, expired, or revoked link to the same safe 404 copy", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({ type: "about:blank", title: "Not found", status: 404 }, 404),
+      ),
+    );
 
-    render(<PublicSharePage token="revoked-demo" />);
-    expect(
-      await screen.findByRole("heading", { name: "这个分享链接已被撤销" }),
-    ).toBeInTheDocument();
+    for (const token of ["expired-demo", "revoked-demo"]) {
+      const { unmount } = render(<PublicSharePage token={token} />);
+      expect(
+        await screen.findByRole("heading", { name: "这个分享链接已失效" }),
+      ).toBeInTheDocument();
+      unmount();
+    }
   });
 });
 
 describe("ShareLinkDialog", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("shows the token once and clears it when the dialog is reopened", async () => {
     const user = userEvent.setup();
-    renderWithDemo(<ShareLinkDialog tripId="trip-demo" />);
+    const shareToken = "0123456789abcdef0123456789abcdef";
+    const createdByApi = {
+      id: "0193d3a0-0000-7000-8000-000000000001",
+      workspaceId: "0193d3a0-0000-7000-8000-000000000002",
+      tripId: "0193d3a0-0000-7000-8000-000000000003",
+      createdById: "0193d3a0-0000-7000-8000-000000000004",
+      expiresAt: null,
+      revokedAt: null,
+      hasPassword: false,
+      allowIndex: false,
+      showBudget: false,
+      lastAccessedAt: null,
+      accessCount: 0,
+      createdAt: "2026-11-19T00:00:00.000Z",
+      token: shareToken,
+      url: `https://roamlog.test/share/${shareToken}`,
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(createdByApi, 201)));
+
+    renderWithDemo(<ShareLinkDialog tripId={createdByApi.tripId} />);
 
     await user.click(screen.getByRole("button", { name: "分享" }));
     expect(screen.getByRole("heading", { name: "公开分享这趟旅行" })).toBeInTheDocument();
@@ -355,11 +552,11 @@ describe("ShareLinkDialog", () => {
         screen.getByRole("heading", { name: "分享链接已创建" }),
       ).toBeInTheDocument(),
     );
-    expect(screen.getByText(/\/share\/demo-/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`/share/${shareToken}`))).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "关闭" }));
     await user.click(screen.getByRole("button", { name: "分享" }));
     expect(screen.getByRole("heading", { name: "公开分享这趟旅行" })).toBeInTheDocument();
-    expect(screen.queryByText(/\/share\/demo-/)).not.toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(`/share/${shareToken}`))).not.toBeInTheDocument();
   });
 });

@@ -34,7 +34,16 @@ import type {
   WorkspaceWithRole,
 } from "@roamlog/contracts";
 
-import type { DataMode } from "@/lib/data-mode";
+/**
+ * Data-source discriminator kept on the adapter contract.
+ *
+ * The web app only ever resolves `"api"` at runtime. `"mock"` stays in the
+ * union so the fixture adapter still satisfies `DataAdapter` until the
+ * B-stage cleanup removes it.
+ *
+ * TODO(b-stage): drop this discriminator together with the fixture adapter.
+ */
+export type DataMode = "api" | "mock";
 
 export interface TripListParams {
   status?: string;

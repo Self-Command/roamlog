@@ -1,5 +1,3 @@
-import { DATA_MODE, type DataMode } from "@/lib/data-mode";
-
 import {
   ApiError,
   isApiError,
@@ -7,17 +5,17 @@ import {
   isUnauthorized,
   isVersionConflict,
 } from "./errors";
-import { mockAdapterInstance } from "./mock";
 import { realAdapterInstance } from "./real";
 import type { DataAdapter } from "./types";
 
-const adapters: Record<DataMode, DataAdapter> = {
-  mock: mockAdapterInstance,
-  api: realAdapterInstance,
-};
-
-export function getDataAdapter(mode: DataMode = DATA_MODE): DataAdapter {
-  return adapters[mode];
+/**
+ * The web app has exactly one data source: the real API.
+ *
+ * TODO(b-stage): drop the retired fixture adapter module and this indirection
+ * once the mock fixtures package is test-only.
+ */
+export function getDataAdapter(): DataAdapter {
+  return realAdapterInstance;
 }
 
 export {

@@ -30,10 +30,8 @@ import {
   type WorkspaceMemberWithUser,
 } from "@roamlog/contracts";
 
-import type { DataMode } from "@/lib/data-mode";
-
 import { ApiError, errorFromResponse, invalidResponse } from "./errors";
-import type { DataAdapter, SessionInfo } from "./types";
+import type { DataAdapter, DataMode, SessionInfo } from "./types";
 
 async function requestJson(path: string, init: RequestInit = {}): Promise<unknown> {
   const response = await fetch(path, {

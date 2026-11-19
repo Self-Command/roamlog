@@ -1,0 +1,74 @@
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+/**
+ * Production-surface guard for Stage A, Task 1.
+ *
+ * The web app has exactly one data source: the real API. No route may keep a
+ * build-time `NEXT_PUBLIC_DATA_MODE` switch, and the retired `legacy-mock`
+ * fixture boundary must not be reachable from the app tree.
+ *
+ * `process.cwd()` is `apps/web` because the tests run through
+ * `pnpm --filter @roamlog/web`.
+ */
+
+const ROOT = join(process.cwd(), "app");
+const FORBIDDEN = [/data-mode/i, /DATA_MODE/, /legacy-mock/, /api-mocks/];
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((entry) => {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) return walk(full);
+    return full.endsWith(".tsx") ? [full] : [];
+  });
+}
+
+/** Routes that used to branch between a live component and a lazy mock workspace. */
+const LIVE_ROUTES = [
+  "app/(app)/w/[workspaceSlug]/journal/page.tsx",
+  "app/(app)/w/[workspaceSlug]/members/page.tsx",
+  "app/(app)/w/[workspaceSlug]/notifications/page.tsx",
+  "app/(app)/w/[workspaceSlug]/settings/page.tsx",
+  "app/(app)/w/[workspaceSlug]/activity/page.tsx",
+  "app/(app)/w/[workspaceSlug]/trips/[tripId]/page.tsx",
+  "app/(app)/w/[workspaceSlug]/trips/[tripId]/map/page.tsx",
+];
+
+describe("app routes carry no data-mode switch", () => {
+  it("imports no data-mode module", () => {
+    for (const file of walk(ROOT)) {
+      const source = readFileSync(file, "utf8");
+      for (const pattern of FORBIDDEN) {
+        expect(source, `${file} matches ${pattern}`).not.toMatch(pattern);
+      }
+    }
+  });
+
+  it("statically renders the live component from every former branching route", () => {
+    for (const route of LIVE_ROUTES) {
+      const source = readFileSync(join(process.cwd(), route), "utf8");
+      expect(source, `${route} still lazy-loads a component`).not.toMatch(/next\/dynamic/);
+      expect(source, `${route} still renders a legacy component`).not.toMatch(/Legacy/);
+    }
+  });
+});
+
+describe("the retired demo boundary is gone", () => {
+  it("has no legacy-mock directory", () => {
+    expect(existsSync(join(process.cwd(), "components/legacy-mock"))).toBe(false);
+  });
+
+  it("has no data-mode module", () => {
+    expect(existsSync(join(process.cwd(), "lib/data-mode.ts"))).toBe(false);
+  });
+
+  it("keeps only the React Query shell in providers", () => {
+    const source = readFileSync(join(process.cwd(), "components/providers.tsx"), "utf8");
+    expect(source).not.toMatch(/legacy-mock/);
+    expect(source).not.toMatch(/NEXT_PUBLIC_DATA_MODE/);
+    expect(source).not.toMatch(/MockBootScreen|LegacyMockRoot|startMockWorker/);
+    expect(source).toMatch(/QueryClientProvider/);
+  });
+});
