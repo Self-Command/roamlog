@@ -29,6 +29,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ConflictDialog } from "@/components/app-shell/conflict-dialog";
+import { ReportMenu } from "@/components/moderation/report-menu";
 import { EntryRevisionList } from "@/components/trip-detail/entry-revision-list";
 import { isVersionConflict } from "@/lib/api";
 
@@ -477,6 +478,21 @@ export function JournalEditorSheet({
                 )}
                 {statusCopy(saveState, lastSavedAt)}
               </span>
+              {entry ? (
+                // A report is a side action: it never closes the sheet and is
+                // available to every member, including Viewers.
+                <div className="ml-auto">
+                  <ReportMenu
+                    workspaceId={entry.workspaceId}
+                    target={{
+                      type: "entry",
+                      id: entry.id,
+                      label: entry.title || title || "未命名日志",
+                    }}
+                    label={`更多操作：${entry.title || "这篇日志"}`}
+                  />
+                </div>
+              ) : null}
             </div>
             <SheetTitle className="mt-2 font-serif text-3xl tracking-[-0.03em]">
               {entryId ? title || "未命名日志" : "写一篇日志"}

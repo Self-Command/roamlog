@@ -7,6 +7,7 @@ import { ImageOff, Images, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { deniedReason } from "./capabilities";
+import { ReportMenu } from "@/components/moderation/report-menu";
 import { ConfirmDialog } from "./dialogs";
 import { MEDIA_STATUS_LABELS, shortDateLabel, shortTimestamp } from "./format";
 import { mediaGroupKey, mediaPreviewUrl } from "./media-urls";
@@ -16,11 +17,13 @@ import { useTripWorkspace } from "./workspace-context";
 
 function PhotoCard({
   media,
+  workspaceId,
   canDelete,
   deleteTitle,
   onDelete,
 }: {
   media: Media;
+  workspaceId: string;
   canDelete: boolean;
   deleteTitle: string;
   onDelete: () => void;
@@ -63,24 +66,30 @@ function PhotoCard({
         )}
       </div>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={onDelete}
-        disabled={!canDelete}
-        title={canDelete ? `删除照片 ${label}` : deleteTitle}
-        aria-label={`删除照片 ${label}`}
-        className="absolute right-1.5 top-1.5 bg-black/60 backdrop-blur-sm"
-      >
-        <Trash2 aria-hidden="true" />
-      </Button>
+      <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-control bg-black/60 backdrop-blur-sm">
+        <ReportMenu
+          workspaceId={workspaceId}
+          target={{ type: "media", id: media.id, label }}
+          label={`更多操作：${label}`}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onDelete}
+          disabled={!canDelete}
+          title={canDelete ? `删除照片 ${label}` : deleteTitle}
+          aria-label={`删除照片 ${label}`}
+        >
+          <Trash2 aria-hidden="true" />
+        </Button>
+      </div>
     </li>
   );
 }
 
 export function PhotosTab({ tripId }: { tripId: string }) {
-  const { capabilities, mutate, pending, role } = useTripWorkspace();
+  const { capabilities, mutate, pending, role, workspace } = useTripWorkspace();
   const media = useTripMedia(tripId);
   const deleteMedia = useDeleteMedia();
   const [deleteTarget, setDeleteTarget] = useState<Media | null>(null);
@@ -149,6 +158,7 @@ export function PhotosTab({ tripId }: { tripId: string }) {
                     <PhotoCard
                       key={item.id}
                       media={item}
+                      workspaceId={workspace.id}
                       canDelete={capabilities.deleteMedia}
                       deleteTitle={deleteTitle ?? ""}
                       onDelete={() => setDeleteTarget(item)}

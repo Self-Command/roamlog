@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { CoverUploader } from "@/components/media";
+import { ReportMenu } from "@/components/moderation/report-menu";
 import { useMembersQuery, queryKeys } from "@/lib/query";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -130,6 +131,11 @@ export function TripWorkspaceHeader({
             <Badge tone={getTripStatusTone(trip.status)}>{getTripStatusLabel(trip.status)}</Badge>
             <Badge tone="neutral">{VISIBILITY_LABELS[trip.visibility]}</Badge>
             <Badge tone="slate">{roleLabel(workspace.role)}</Badge>
+            <ReportMenu
+              workspaceId={workspace.id}
+              target={{ type: "trip", id: trip.id, label: trip.title }}
+              label={`更多操作：${trip.title}`}
+            />
           </div>
         </div>
 

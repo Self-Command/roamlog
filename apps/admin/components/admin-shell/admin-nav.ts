@@ -1,6 +1,7 @@
 import {
   Activity,
   Building2,
+  Flag,
   Image,
   LayoutDashboard,
   ListChecks,
@@ -36,6 +37,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { href: "/admin/users", label: "用户", icon: Users },
       { href: "/admin/workspaces", label: "工作区", icon: Building2 },
+      { href: "/admin/content", label: "内容审核", icon: Flag },
       { href: "/admin/permissions", label: "权限矩阵", icon: ShieldCheck },
       { href: "/admin/audit", label: "审计日志", icon: ScrollText },
     ],

@@ -6,6 +6,7 @@ import { MessageCircle, Send } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import { isForbidden } from "@/lib/api";
+import { ReportMenu } from "@/components/moderation/report-menu";
 
 interface JournalCommentsProps {
   comments: Comment[];
@@ -105,7 +106,18 @@ export function JournalComments({
               >
                 <Avatar name={author?.name ?? "同行者"} src={author?.image ?? undefined} size={28} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-ink">{author?.name ?? "同行者"}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs text-ink">{author?.name ?? "同行者"}</p>
+                    <ReportMenu
+                      workspaceId={comment.workspaceId}
+                      target={{
+                        type: "comment",
+                        id: comment.id,
+                        label: comment.body.slice(0, 120),
+                      }}
+                      label={`更多操作：${author?.name ?? "同行者"}的评论`}
+                    />
+                  </div>
                   <p className="mt-1 whitespace-pre-wrap text-[12px] leading-5 text-body">
                     {comment.body}
                   </p>
