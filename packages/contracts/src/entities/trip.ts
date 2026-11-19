@@ -58,8 +58,60 @@ export type GeoBbox = z.infer<typeof GeoBboxSchema>;
 export const TripTagListSchema = createUniqueStringListSchema("tags", 20, 40);
 export type TripTagList = z.infer<typeof TripTagListSchema>;
 
-export const TripDestinationListSchema = createUniqueStringListSchema("destinations", 30, 120);
+/**
+ * @deprecated Names-only destination list kept for older clients and for the
+ * one remaining read path (`Trip.destinations`) during the 0010 deprecation
+ * window. The per-item bound is widened to 160 so a name derived from a
+ * structured `TripDestination` (DB `VARCHAR(160)`) can never make this legacy
+ * field unparsable; every previously valid 120-character value stays valid.
+ */
+export const TripDestinationListSchema = createUniqueStringListSchema("destinations", 30, 160);
 export type TripDestinationList = z.infer<typeof TripDestinationListSchema>;
+
+/**
+ * Where a structured destination came from. The value set is the same as
+ * `PlaceSearchProviderSchema` ("geoapify" | "photon" | "local") and is defined
+ * here to avoid a circular import between `entities/trip` and `api/places`
+ * (`api/places` already imports `IanaTimeZoneSchema` from this module).
+ * `entities.test.ts` asserts both enums never drift.
+ */
+export const TripDestinationProviderSchema = z.enum(["geoapify", "photon", "local"]);
+export type TripDestinationProvider = z.infer<typeof TripDestinationProviderSchema>;
+
+/**
+ * A structured destination row: the place a person picked (or typed) together
+ * with the metadata needed to draw it on a map and echo it back on edit.
+ *
+ * `provider` is `null` for rows backfilled from the deprecated
+ * `Trip.destinations` strings (0010 migration): those rows are "name only" and
+ * the UI offers to upgrade them with a real place search.
+ */
+export const TripDestinationSchema = z
+  .object({
+    id: UuidV7Schema,
+    name: z.string().min(1).max(160),
+    provider: TripDestinationProviderSchema.nullable(),
+    providerPlaceId: z.string().min(1).max(200).nullable(),
+    address: z.string().max(400).nullable(),
+    country: z.string().min(1).max(120).nullable(),
+    countryCode: CountryCodeSchema.nullable(),
+    lat: z.number().min(-90).max(90).nullable(),
+    lng: z.number().min(-180).max(180).nullable(),
+    timeZone: IanaTimeZoneSchema.nullable(),
+    bbox: GeoBboxSchema.nullable(),
+    order: z.number().int().min(0),
+  })
+  .strict()
+  .superRefine((destination, ctx) => {
+    if ((destination.lat === null) !== (destination.lng === null)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Destination lat and lng must be provided together.",
+        path: ["lng"],
+      });
+    }
+  });
+export type TripDestination = z.infer<typeof TripDestinationSchema>;
 
 export const TripGuestNameListSchema = createUniqueStringListSchema("guestNames", 30, 120);
 export type TripGuestNameList = z.infer<typeof TripGuestNameListSchema>;
@@ -140,7 +192,14 @@ export const TripSchema = z
       .describe("Formatted address of the selected origin place, when one was picked."),
     originBbox: GeoBboxSchema.nullable(),
     timeZone: IanaTimeZoneSchema.nullable(),
+    /** @deprecated Derived from `destinationsV2` names when rows exist. */
     destinations: TripDestinationListSchema,
+    /**
+     * Structured destinations ordered by `order`. Optional in the schema so
+     * fixtures and API surfaces that predate 0010 keep parsing; the trips
+     * presenter always emits it (an empty array for name-only legacy trips).
+     */
+    destinationsV2: z.array(TripDestinationSchema).optional(),
     countryCodes: z.array(CountryCodeSchema),
     tags: TripTagListSchema,
     guestNames: TripGuestNameListSchema,

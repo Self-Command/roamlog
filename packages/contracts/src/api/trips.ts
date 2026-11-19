@@ -8,6 +8,7 @@ import {
   GeoBboxSchema,
   IanaTimeZoneSchema,
   TripDestinationListSchema,
+  TripDestinationProviderSchema,
   TripGuestNameListSchema,
   TripParticipantSchema,
   TripSchema,
@@ -31,6 +32,63 @@ export type TripListQuery = z.infer<typeof TripListQuerySchema>;
 export const TripPageSchema = CursorPageSchema(TripSchema);
 export type TripPage = z.infer<typeof TripPageSchema>;
 
+/**
+ * One structured destination in a create/update payload.
+ *
+ * Every metadata field is **`.optional()`** on purpose: a caller that only knows
+ * a name (the old `destinations: string[]` client) must still be able to add
+ * destinations, and an existing client that omits the whole `destinationsV2`
+ * array must not break. `null` is accepted where "explicitly unknown" is
+ * meaningful, but absence is a separate state: omitted fields are stored as
+ * `null`, they are never an error.
+ *
+ * `order` is assigned by the server from the array position: the array is
+ * authoritative for route order.
+ */
+export const TripDestinationInputSchema = z
+  .object({
+    name: z.string().min(1).max(160),
+    provider: TripDestinationProviderSchema.nullable().optional(),
+    providerPlaceId: z.string().min(1).max(200).nullable().optional(),
+    address: z.string().max(400).nullable().optional(),
+    country: z.string().min(1).max(120).nullable().optional(),
+    countryCode: CountryCodeSchema.nullable().optional(),
+    lat: z.number().min(-90).max(90).nullable().optional(),
+    lng: z.number().min(-180).max(180).nullable().optional(),
+    timeZone: IanaTimeZoneSchema.nullable().optional(),
+    bbox: GeoBboxSchema.nullable().optional(),
+  })
+  .strict()
+  .superRefine((destination, ctx) => {
+    // `null` and "omitted" are different states, but both mean "no coordinate":
+    // only a real number counts as half of a pair.
+    const hasLat = destination.lat !== null && destination.lat !== undefined;
+    const hasLng = destination.lng !== null && destination.lng !== undefined;
+    if (hasLat !== hasLng) {
+      ctx.addIssue({
+        code: "custom",
+        message: "lat and lng must be provided together.",
+        path: ["lng"],
+      });
+    }
+  });
+export type TripDestinationInput = z.infer<typeof TripDestinationInputSchema>;
+
+/**
+ * Whole-group destination payload. Sending it replaces every active row of the
+ * trip; sending `[]` clears them; omitting it leaves stored rows untouched.
+ * Names stay unique case-insensitively, matching the legacy list rule.
+ */
+export const TripDestinationInputListSchema = z
+  .array(TripDestinationInputSchema)
+  .max(30)
+  .refine(
+    (items) =>
+      new Set(items.map((item) => item.name.trim().toLowerCase())).size === items.length,
+    { message: "destinationsV2 names must be unique." },
+  );
+export type TripDestinationInputList = z.infer<typeof TripDestinationInputListSchema>;
+
 const CreateTripShape = {
   title: z.string().min(1).max(160),
   summary: z.string().max(1000).optional(),
@@ -48,7 +106,13 @@ const CreateTripShape = {
   originAddress: z.string().max(400).nullable().optional(),
   originBbox: GeoBboxSchema.nullable().optional(),
   timeZone: IanaTimeZoneSchema.nullable().optional(),
+  /** @deprecated Names-only fallback; prefer `destinationsV2`. */
   destinations: TripDestinationListSchema.optional(),
+  /**
+   * Structured destinations. When present the whole group is replaced (an
+   * empty array clears it); when omitted stored rows stay untouched.
+   */
+  destinationsV2: TripDestinationInputListSchema.optional(),
   countryCodes: z.array(CountryCodeSchema).optional(),
   tags: TripTagListSchema.optional(),
   guestNames: TripGuestNameListSchema.optional(),
@@ -113,7 +177,13 @@ const UpdateTripShape = {
     .optional()
     .describe("Send null to clear the stored bbox; omit to keep it."),
   timeZone: IanaTimeZoneSchema.nullable().optional(),
+  /** @deprecated Names-only fallback; prefer `destinationsV2`. */
   destinations: TripDestinationListSchema.optional(),
+  /**
+   * Structured destinations. When present the whole group is replaced (an
+   * empty array clears it); when omitted stored rows stay untouched.
+   */
+  destinationsV2: TripDestinationInputListSchema.optional(),
   countryCodes: z.array(CountryCodeSchema).optional(),
   tags: TripTagListSchema.optional(),
   guestNames: TripGuestNameListSchema.optional(),
