@@ -18,6 +18,9 @@ export const CommentSchema = z
     createdAt: IsoTimestampSchema,
     updatedAt: IsoTimestampSchema,
     deletedAt: IsoTimestampSchema.nullable(),
+    /** Admin takedown marker; `deletedAt` remains the author's own delete. */
+    moderatedAt: IsoTimestampSchema.nullable().optional(),
+    moderatedById: UuidV7Schema.nullable().optional(),
   })
   .strict();
 export type Comment = z.infer<typeof CommentSchema>;

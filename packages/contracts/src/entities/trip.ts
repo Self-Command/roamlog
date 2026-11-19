@@ -154,6 +154,9 @@ export const TripSchema = z
     createdAt: IsoTimestampSchema,
     updatedAt: IsoTimestampSchema,
     deletedAt: IsoTimestampSchema.nullable(),
+    /** Admin takedown marker; `deletedAt` remains the author's own delete. */
+    moderatedAt: IsoTimestampSchema.nullable().optional(),
+    moderatedById: UuidV7Schema.nullable().optional(),
   })
   .strict()
   .superRefine((trip, ctx) => {
