@@ -1,4 +1,5 @@
 export * from "./admin";
+export * from "./admin-settings";
 export * from "./auth";
 export * from "./comments";
 export * from "./common";

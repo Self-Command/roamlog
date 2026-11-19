@@ -14,7 +14,7 @@ import { WorkspaceAccessService } from "../../common/services/workspace-access.s
 import { PrismaService } from "../prisma/prisma.service.js";
 
 export type AuditActorType = "user" | "admin" | "system";
-export type AuditMetadataValue = string | number | boolean | null | string[];
+export type AuditMetadataValue = string | number | boolean | null | string[] | boolean[];
 
 export interface AuditRecordInput {
   actorId?: string;

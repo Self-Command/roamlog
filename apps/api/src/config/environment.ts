@@ -235,6 +235,15 @@ const EnvironmentSchema = z
     MEDIA_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(604_800).default(900),
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: optionalUrl,
+    /**
+     * AES-256-GCM key material for `SystemSetting.secretCipher`. Optional so
+     * local/CI runs that never save a secret can boot; saving one without a key
+     * fails loudly with CONFIG_ENCRYPTION_KEY_MISSING instead of storing plaintext.
+     * `CONFIG_ENCRYPTION_KEYS` is a comma-separated key ring: the first entry is
+     * the current key, the rest decrypt historical ciphertext after a rotation.
+     */
+    CONFIG_ENCRYPTION_KEY: optionalString,
+    CONFIG_ENCRYPTION_KEYS: optionalString,
     ADMIN_2FA_ENFORCED: booleanFromEnvironment.optional(),
     SESSION_COOKIE_DOMAIN: optionalString,
     GOOGLE_CLIENT_ID: optionalString,
@@ -273,6 +282,28 @@ const EnvironmentSchema = z
     BOOTSTRAP_SUPER_ADMIN_EMAIL: optionalString,
   })
   .superRefine((environment, context) => {
+    // Validate the encryption key ring whenever it is present, in every
+    // environment: a mistyped key would only surface on the first secret save.
+    // Errors name the variable and never echo the key material.
+    const configuredKeys = [
+      ...(environment.CONFIG_ENCRYPTION_KEYS?.split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean) ?? []),
+      ...(environment.CONFIG_ENCRYPTION_KEY ? [environment.CONFIG_ENCRYPTION_KEY.trim()] : []),
+    ];
+    for (const configuredKey of configuredKeys) {
+      const decoded = Buffer.from(configuredKey, "base64");
+      if (decoded.length !== 32 || decoded.toString("base64") !== configuredKey) {
+        context.addIssue({
+          code: "custom",
+          path: ["CONFIG_ENCRYPTION_KEY"],
+          message:
+            "CONFIG_ENCRYPTION_KEY and every CONFIG_ENCRYPTION_KEYS entry must be base64-encoded 32-byte values",
+        });
+        break;
+      }
+    }
+
     // Deployment-shape checks keep keying off NODE_ENV, because staging also
     // runs NODE_ENV=production.
     if (environment.NODE_ENV === "production") {
@@ -498,9 +529,10 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
   return {
     ...input,
     ...result.data,
-    S3_PUBLIC_ENDPOINT: (
-      result.data.S3_PUBLIC_ENDPOINT ?? result.data.S3_ENDPOINT
-    ).replace(/\/+$/u, ""),
+    S3_PUBLIC_ENDPOINT: (result.data.S3_PUBLIC_ENDPOINT ?? result.data.S3_ENDPOINT).replace(
+      /\/+$/u,
+      "",
+    ),
     CORS_ORIGINS: corsOrigins,
   };
 }

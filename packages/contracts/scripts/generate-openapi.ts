@@ -12,6 +12,7 @@ import { registerHealthPaths } from "./openapi/paths-health";
 import { registerMediaPaths } from "./openapi/paths-media";
 import { registerMoneyPaths } from "./openapi/paths-money";
 import { registerPlacePaths } from "./openapi/paths-places";
+import { registerSettingsPaths } from "./openapi/paths-settings";
 import { registerSharingPaths } from "./openapi/paths-sharing";
 import { registerTripPaths } from "./openapi/paths-trips";
 import { registerWorkspacePaths } from "./openapi/paths-workspaces";
@@ -39,6 +40,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
   registerMoneyPaths(registry);
   registerSharingPaths(registry);
   registerAdminPaths(registry);
+  registerSettingsPaths(registry);
   registerHealthPaths(registry);
 
   const generator = new OpenApiGeneratorV31(registry.definitions, {
@@ -91,6 +93,10 @@ export function buildOpenApiDocument(): OpenApiDocument {
       { name: "Search", description: "Workspace-scoped search." },
       { name: "Realtime", description: "Socket.IO namespace and typed cache-invalidation events." },
       { name: "Admin", description: "Independent platform administration API." },
+      {
+        name: "Settings",
+        description: "Public site settings used by the web shell.",
+      },
       { name: "Health", description: "Liveness and dependency readiness." },
     ],
     security: [{ cookieAuth: [] }],

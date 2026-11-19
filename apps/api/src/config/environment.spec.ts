@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import { validateEnvironment } from "./environment.js";
@@ -272,9 +273,9 @@ describe("media storage configuration", () => {
   });
 
   it("requires a public endpoint in a real production deployment", () => {
-    expect(() =>
-      validateEnvironment({ ...productionStorage, S3_PUBLIC_ENDPOINT: "" }),
-    ).toThrow(/S3_PUBLIC_ENDPOINT is required when APP_ENV=production/);
+    expect(() => validateEnvironment({ ...productionStorage, S3_PUBLIC_ENDPOINT: "" })).toThrow(
+      /S3_PUBLIC_ENDPOINT is required when APP_ENV=production/,
+    );
   });
 
   it("accepts a TLS media host in production", () => {
@@ -359,5 +360,43 @@ describe("media storage configuration", () => {
     expect(message).not.toContain(secret);
     expect(message).not.toContain("access-key-should-not-leak");
     expect(message).not.toContain(endpoint);
+  });
+
+  it("accepts a valid CONFIG_ENCRYPTION_KEY ring in every environment", () => {
+    const current = randomBytes(32).toString("base64");
+    const previous = randomBytes(32).toString("base64");
+
+    expect(
+      validateEnvironment({ ...baseEnvironment, CONFIG_ENCRYPTION_KEY: current })
+        .CONFIG_ENCRYPTION_KEY,
+    ).toBe(current);
+    expect(
+      validateEnvironment({
+        ...baseEnvironment,
+        CONFIG_ENCRYPTION_KEYS: `${current},${previous}`,
+      }).CONFIG_ENCRYPTION_KEYS,
+    ).toBe(`${current},${previous}`);
+  });
+
+  it("rejects malformed encryption keys without echoing the key material", () => {
+    const malformed = "not-a-base64-32-byte-key";
+
+    let message = "";
+    try {
+      validateEnvironment({ ...baseEnvironment, CONFIG_ENCRYPTION_KEY: malformed });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toMatch(/CONFIG_ENCRYPTION_KEY/);
+    expect(message).toMatch(/base64-encoded 32-byte/);
+    expect(message).not.toContain(malformed);
+
+    expect(() =>
+      validateEnvironment({
+        ...baseEnvironment,
+        CONFIG_ENCRYPTION_KEYS: `${randomBytes(32).toString("base64")},short`,
+      }),
+    ).toThrow(/CONFIG_ENCRYPTION_KEY/);
   });
 });

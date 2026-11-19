@@ -74,6 +74,10 @@ describe("OpenAPI document", () => {
       "/v1/admin/flags/{key}",
       "/v1/admin/jobs",
       "/v1/admin/system",
+      "/v1/admin/settings",
+      "/v1/admin/settings/{key}",
+      "/v1/admin/settings/{key}/reveal",
+      "/v1/public/settings",
       "/v1/health",
       "/v1/ready",
       "/v1/ws",
@@ -191,6 +195,20 @@ describe("OpenAPI document", () => {
       properties?: Record<string, { type?: string }>;
     };
     expect(updateTrip.properties?.coverMediaId).toMatchObject({ type: "null" });
+  });
+
+  it("keeps settings secrets masked and the public projection anonymous", () => {
+    const doc = document();
+    const publicSettings = doc.paths["/v1/public/settings"]?.get as { security?: unknown[] };
+    expect(publicSettings.security).toEqual([]);
+
+    const item = doc.components.schemas.AdminSettingItem as {
+      properties?: Record<string, unknown>;
+    };
+    expect(item.properties).toHaveProperty("secret");
+    expect(item.properties).toHaveProperty("value");
+    expect(doc.components.schemas.RevealAdminSettingRequest).toBeDefined();
+    expect(doc.components.schemas.AdminSettingsResponse).toBeDefined();
   });
 
   it("publishes the audit CSV contract as a text/csv attachment", () => {

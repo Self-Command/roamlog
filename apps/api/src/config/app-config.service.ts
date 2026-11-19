@@ -100,6 +100,15 @@ export class AppConfigService {
     return this.required("BETTER_AUTH_SECRET");
   }
 
+  /** Current + historical CONFIG_ENCRYPTION_* values, validated at boot when set. */
+  get configEncryptionKey(): string | undefined {
+    return this.config.get<string>("CONFIG_ENCRYPTION_KEY");
+  }
+
+  get configEncryptionKeys(): string | undefined {
+    return this.config.get<string>("CONFIG_ENCRYPTION_KEYS");
+  }
+
   get sessionCookieDomain(): string | undefined {
     return this.config.get<string>("SESSION_COOKIE_DOMAIN");
   }

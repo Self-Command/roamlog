@@ -79,4 +79,14 @@ describe("platform permission matrix", () => {
     expect(canPlatform("support", "admin:jobs:manage")).toBe(false);
     expect(canPlatform("analyst", "admin:jobs:manage")).toBe(false);
   });
+
+  it("reserves platform settings read and write for super admins", () => {
+    for (const action of ["admin:settings:read", "admin:settings:write"] as const) {
+      expect(canPlatform("super_admin", action)).toBe(true);
+      expect(canPlatform("admin", action)).toBe(false);
+      expect(canPlatform("support", action)).toBe(false);
+      expect(canPlatform("analyst", action)).toBe(false);
+      expect(canPlatform("user", action)).toBe(false);
+    }
+  });
 });

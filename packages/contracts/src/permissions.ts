@@ -413,6 +413,8 @@ export const ADMIN_ACTIONS = [
   "admin:jobs:retry",
   "admin:jobs:manage",
   "admin:system:read",
+  "admin:settings:read",
+  "admin:settings:write",
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
