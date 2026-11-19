@@ -39,4 +39,26 @@ export function registerAiPaths(registry: OpenAPIRegistry): void {
     idempotent: true,
     errors: [403, 404, 409, 422, 429],
   });
+
+  // Rewriting is the only AI operation that produces prose for the user's own
+  // selection. It is a single request/response (no run, no tools) because the
+  // client shows the result as an in-place diff and the user accepts or rejects
+  // it locally; `status: 200` reflects "computed", not "created".
+  registerOperation(registry, {
+    method: "post",
+    path: "/v1/workspaces/{workspaceId}/ai/rewrite",
+    operationId: "rewriteAiSelection",
+    tag: "AI",
+    summary: "Rewrite a text selection with one of the closed instructions",
+    description:
+      "Rewrites the submitted selection and returns the new text plus the echoed `selectionHash`, the model and the token usage. " +
+      "The operation is chosen from a fixed enum; there is no free-text instruction field. " +
+      "`selectionHash` is the SHA-256 of `text` and is rejected on mismatch, so a stale preview can never overwrite a different selection. " +
+      "Nothing is persisted: the client replaces the selection and saves through the normal journal entry endpoint with `version`.",
+    params: c.WorkspaceParamsSchema,
+    body: c.AiRewriteRequestSchema,
+    response: c.AiRewriteResponseSchema,
+    status: 200,
+    errors: [400, 401, 403, 422, 429, 502, 503],
+  });
 }

@@ -172,6 +172,78 @@ export const AiRunExecuteResponseSchema = z
   .strict();
 export type AiRunExecuteResponse = z.infer<typeof AiRunExecuteResponseSchema>;
 
+/* -------------------------------------------------------------------------- */
+/* Selection rewriting ("AI writing", in-place preview)                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Rewriting a user's *selection* is the one AI surface that writes prose
+ * directly into a journal entry, so the request is intentionally narrow:
+ *
+ * - the operation is a closed enum — there is no free-text `prompt`/`command`
+ *   field to forward to the model, so a caller cannot smuggle instructions in;
+ * - `text` is the selection the client will replace, and `selectionHash` is its
+ *   SHA-256. The server re-hashes `text` and refuses a mismatch, and the client
+ *   re-hashes the selection again before it writes anything back, which is what
+ *   turns "the paragraph changed under the preview" into a visible error instead
+ *   of a silent overwrite;
+ * - the response echoes `selectionHash`, so a stale preview can never be applied
+ *   to a different selection even if two requests are in flight.
+ */
+export const AI_REWRITE_INSTRUCTIONS = [
+  "shorten",
+  "expand",
+  "polish",
+  "tone_formal",
+  "tone_casual",
+  "fix_grammar",
+] as const;
+export const AiRewriteInstructionSchema = z.enum(AI_REWRITE_INSTRUCTIONS);
+export type AiRewriteInstruction = z.infer<typeof AiRewriteInstructionSchema>;
+
+/**
+ * Domain ceiling for `text`. Longer selections are answered with
+ * `422 AI_REWRITE_TEXT_TOO_LONG` (a business rule), not with a schema error:
+ * the transport cap below only keeps a hostile body from reaching the model.
+ */
+export const AI_REWRITE_MAX_INPUT_CHARS = 6_000;
+/** Absolute wire cap for `text` and for the returned `replacement`. */
+export const AI_REWRITE_MAX_TEXT_CHARS = 20_000;
+
+/** Lowercase hex SHA-256 of the exact selection string. */
+export const AiSelectionHashSchema = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/)
+  .describe("Lowercase hex SHA-256 of the exact selected text.");
+
+export const AI_REWRITE_LOCALES = ["zh", "en"] as const;
+export const AiRewriteLocaleSchema = z.enum(AI_REWRITE_LOCALES);
+export type AiRewriteLocale = z.infer<typeof AiRewriteLocaleSchema>;
+
+export const AiRewriteRequestSchema = z
+  .object({
+    /** Context only: it never scopes the write, the workspace path already does. */
+    tripId: UuidV7Schema.optional(),
+    text: z.string().min(1).max(AI_REWRITE_MAX_TEXT_CHARS),
+    instruction: AiRewriteInstructionSchema,
+    selectionHash: AiSelectionHashSchema,
+    locale: AiRewriteLocaleSchema.optional(),
+  })
+  .strict();
+export type AiRewriteRequest = z.infer<typeof AiRewriteRequestSchema>;
+
+export const AiRewriteResponseSchema = z
+  .object({
+    /** The rewritten selection; the client previews it and only then replaces. */
+    replacement: z.string().min(1).max(AI_REWRITE_MAX_TEXT_CHARS),
+    /** Echo of the request hash, so the client can detect a stale preview. */
+    selectionHash: AiSelectionHashSchema,
+    model: z.string().min(1).max(200),
+    usage: AiUsageSchema,
+  })
+  .strict();
+export type AiRewriteResponse = z.infer<typeof AiRewriteResponseSchema>;
+
 /** Problem codes the AI endpoints may answer with (for client copy and tests). */
 export const AI_ERROR_CODES = {
   notConfigured: "AI_NOT_CONFIGURED",
@@ -184,4 +256,7 @@ export const AI_ERROR_CODES = {
   unresolvedPlace: "UNRESOLVED_PLACE",
   toolFailed: "AI_TOOL_FAILED",
   upstream: "AI_UPSTREAM",
+  rewriteTextTooLong: "AI_REWRITE_TEXT_TOO_LONG",
+  rewriteSelectionMismatch: "AI_SELECTION_HASH_MISMATCH",
+  rewriteEmpty: "AI_REWRITE_EMPTY",
 } as const;
