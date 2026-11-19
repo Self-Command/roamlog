@@ -15,6 +15,7 @@ import {
   presentRevision,
   presentStop,
   presentTrip,
+  type PresentParticipantInput,
   type PresentStopInput,
   type PresentTripInput,
 } from "../content-presenters.js";
@@ -150,19 +151,87 @@ describe("presentStop", () => {
   });
 });
 
+/**
+ * `TripParticipantSchema` grew the 0012 columns; the presenter emitted the old
+ * five and every participants read started returning 500. These pin the whole
+ * field set so a contract addition cannot leave the presenter behind again.
+ */
+describe("presentParticipant", () => {
+  it("emits every field the contract declares", () => {
+    const participant = presentParticipant(participantRow());
+
+    expect(TripParticipantSchema.parse(participant)).toEqual(participant);
+    expect(Object.keys(participant).sort()).toEqual(
+      [
+        "id",
+        "invitedAt",
+        "joinedAt",
+        "respondedAt",
+        "role",
+        "status",
+        "tripId",
+        "userId",
+        "workspaceId",
+      ].sort(),
+    );
+    expect(participant.status).toBe("joined");
+    expect(participant.role).toBe("editor");
+    expect(participant.respondedAt).toBe("2026-11-10T01:00:00.000Z");
+  });
+
+  it("reports invitedAt as the same instant as joinedAt", () => {
+    // 0012 redefined the existing instant instead of adding a second timestamp.
+    const participant = presentParticipant(participantRow());
+
+    expect(participant.joinedAt).toBe("2026-11-10T00:00:00.000Z");
+    expect(participant.invitedAt).toBe(participant.joinedAt);
+  });
+
+  it("keeps an invitation nobody has answered yet", () => {
+    const participant = presentParticipant(
+      participantRow({ status: "invited", role: "viewer", respondedAt: null }),
+    );
+
+    expect(participant.status).toBe("invited");
+    expect(participant.role).toBe("viewer");
+    expect(participant.respondedAt).toBeNull();
+  });
+
+  it("falls back to the 0012 backfill for a pre-0012 stub", () => {
+    // A hand-built instance (and a row read before the migration) carries no
+    // 0012 columns; it must still present as the backfilled `joined`/`viewer`.
+    const participant = presentParticipant({
+      id: PARTICIPANT_ID,
+      workspaceId: WORKSPACE_ID,
+      tripId: TRIP_ID,
+      userId: USER_ID,
+      joinedAt: new Date("2026-11-10T00:00:00.000Z"),
+    });
+
+    expect(participant.status).toBe("joined");
+    expect(participant.role).toBe("viewer");
+    expect(participant.respondedAt).toBeNull();
+    expect(participant.invitedAt).toBe(participant.joinedAt);
+  });
+});
+
 const PARTICIPANT_ID = "01942f30-1200-7000-8000-000000000005";
 const REVISION_ID = "01942f30-1200-7000-8000-000000000006";
 const ITINERARY_ID = "01942f30-1200-7000-8000-000000000007";
 const ACTIVITY_ID = "01942f30-1200-7000-8000-000000000008";
 const FUTURE_TIMESTAMP = new Date("2026-11-19T08:00:00.000Z");
 
-function participantRow() {
+function participantRow(overrides: Partial<PresentParticipantInput> = {}): PresentParticipantInput {
   return {
     id: PARTICIPANT_ID,
     workspaceId: WORKSPACE_ID,
     tripId: TRIP_ID,
     userId: USER_ID,
+    status: "joined",
+    role: "editor",
     joinedAt: new Date("2026-11-10T00:00:00.000Z"),
+    respondedAt: new Date("2026-11-10T01:00:00.000Z"),
+    ...overrides,
   };
 }
 
@@ -258,6 +327,13 @@ describe("presenter row-shape guards", () => {
     expect(TripParticipantSchema.parse(presented)).toEqual(presented);
     expect(presented).not.toHaveProperty("someFutureColumn");
     expect(presented).not.toHaveProperty("moderatedAt");
+    // The declared fields survive the stray column: status/role/invitedAt are
+    // the ones the presenter used to drop.
+    expect(presented).toMatchObject({
+      status: "joined",
+      role: "editor",
+      invitedAt: presented.joinedAt,
+    });
   });
 
   it("presentRevision ignores columns the contract does not declare", () => {

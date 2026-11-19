@@ -20,7 +20,7 @@ export class SearchService {
   ) {}
 
   async search(
-    _actor: AuthenticatedActor,
+    actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
     rawQuery: unknown,
   ): Promise<SearchResponse> {
@@ -36,7 +36,9 @@ export class SearchService {
     const args = {
       workspaceId: membership.workspaceId,
       userId: membership.userId,
-      canSeePrivate: membership.role === "owner" || membership.role === "admin",
+      // The platform role, not the workspace role: search now asks
+      // `tripVisibilityWhere`, whose only bypass is the platform override.
+      platformRole: actor.user.platformRole,
       q,
       limit: query.limit,
     };

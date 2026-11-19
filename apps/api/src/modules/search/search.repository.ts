@@ -1,11 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import { PrismaService } from "../prisma/prisma.service.js";
+import { tripVisibilityWhere } from "../trips/trip-access.js";
 
 export interface SearchQueryArgs {
   workspaceId: string;
   userId: string;
-  canSeePrivate: boolean;
+  /** Platform role of the actor; search asks the shared trip-access rule. */
+  platformRole: string;
   q: string;
   limit: number;
 }
@@ -153,14 +155,21 @@ export class SearchRepository {
     return members.map((member) => member.user);
   }
 
+  /**
+   * Search is a list of trips the actor may read, so it asks the same question
+   * the trip list and the detail page ask ({@link tripVisibilityWhere}) instead
+   * of keeping an owner/admin bypass of its own. That divergence was visible in
+   * both directions: an admin found a peer's `private` trip here and 404ed on
+   * open, while an invited participant — who can open the trip — found nothing.
+   *
+   * `super_admin` gets `{}` (the break-glass read), which every caller merges
+   * without dropping its own conditions.
+   */
   private tripVisibility(args: SearchQueryArgs): Record<string, unknown> {
-    return args.canSeePrivate
-      ? {}
-      : {
-          OR: [
-            { visibility: { in: ["workspace", "public_link"] } },
-            { createdById: args.userId },
-          ],
-        };
+    return tripVisibilityWhere({
+      userId: args.userId,
+      workspaceId: args.workspaceId,
+      platformRole: args.platformRole,
+    });
   }
 }

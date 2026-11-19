@@ -11,6 +11,8 @@ import {
   type EntryRevision,
   type ItineraryItem,
   type JournalEntry,
+  type ParticipantRole,
+  type ParticipantStatus,
   type Stop,
   type Trip,
   type TripCover,
@@ -225,20 +227,52 @@ export function presentStop(record: PresentStopInput): Stop {
   });
 }
 
-export function presentParticipant(record: {
+/**
+ * Row shape accepted by {@link presentParticipant}.
+ *
+ * `status`, `role` and `respondedAt` arrive with `0012_visibility_and_participants`,
+ * so they stay optional: a hand-built stub (and a row selected before the
+ * migration) still presents, falling back to exactly what `0012` backfills —
+ * `joined` / `viewer` / `null`. A real row always carries its own values.
+ */
+export interface PresentParticipantInput {
   id: string;
   workspaceId: string;
   tripId: string;
   userId: string;
+  /** Pre-0012 name for the instant the row was created; see `invitedAt` below. */
   joinedAt: Date | string;
-}): TripParticipant {
-  // `TripParticipantSchema` is strict and the row is never spread.
+  status?: ParticipantStatus;
+  role?: ParticipantRole;
+  respondedAt?: Date | string | null;
+}
+
+/**
+ * Projects a participant row.
+ *
+ * `TripParticipantSchema` is `.strict()` and the row is never spread: every
+ * field it declares is listed here by hand, or the next additive column turns
+ * every participants read — list and add alike — into a 500.
+ *
+ * `invitedAt` mirrors `joinedAt` on purpose: 0012 redefined that one instant
+ * instead of adding a second timestamp, and the contract documents the pair as
+ * the same moment under the participant model's name.
+ */
+export function presentParticipant(record: PresentParticipantInput): TripParticipant {
+  const joinedAt = iso(record.joinedAt);
   return TripParticipantSchema.parse({
     id: record.id,
     workspaceId: record.workspaceId,
     tripId: record.tripId,
     userId: record.userId,
-    joinedAt: iso(record.joinedAt),
+    status: record.status ?? "joined",
+    role: record.role ?? "viewer",
+    joinedAt,
+    invitedAt: joinedAt,
+    respondedAt:
+      record.respondedAt === undefined || record.respondedAt === null
+        ? null
+        : iso(record.respondedAt),
   });
 }
 

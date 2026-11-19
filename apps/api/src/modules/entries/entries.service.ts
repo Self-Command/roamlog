@@ -35,6 +35,7 @@ import {
 } from "../trips/content-presenters.js";
 import type { EntryRecord, RevisionRecord } from "../trips/content-records.js";
 import type { ContentTransaction } from "../trips/content-transaction.js";
+import { tripVisibilityWhere } from "../trips/trip-access.js";
 import { TripsRepository } from "../trips/trips.repository.js";
 import { VersionConflictException } from "../trips/version-conflict.exception.js";
 import {
@@ -55,30 +56,29 @@ export class EntriesService {
   ) {}
 
   async listWorkspace(
-    _actor: AuthenticatedActor,
+    actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
     rawQuery: unknown,
   ): Promise<EntryPage> {
     this.permissions.assertCan(membership.role, "entry:read", "journal_entry");
     const query = parseRequest(TripEntryListQuerySchema, rawQuery);
-    return this.listEntries(
-      query,
-      {
-        workspaceId: membership.workspaceId,
+    return this.listEntries(query, {
+      workspaceId: membership.workspaceId,
+      deletedAt: null,
+      trip: {
         deletedAt: null,
-        trip: {
-          deletedAt: null,
-          ...(membership.role === "owner" || membership.role === "admin"
-            ? {}
-            : {
-                OR: [
-                  { visibility: { in: ["workspace", "public_link"] } },
-                  { createdById: membership.userId },
-                ],
-              }),
-        },
+        // The same rule the trip list and the detail page use. The old
+        // `visibility in [...]` + owner/admin bypass let an admin see a peer's
+        // `private` entries and hid an invited participant's — both drift from
+        // `assertTripVisible`. `deletedAt` is ours, so the fragment is spread
+        // into the trip `where` and the other conditions stay intact.
+        ...tripVisibilityWhere({
+          userId: membership.userId,
+          workspaceId: membership.workspaceId,
+          platformRole: actor.user.platformRole,
+        }),
       },
-    );
+    });
   }
 
   async listByTrip(
