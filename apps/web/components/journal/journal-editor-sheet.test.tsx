@@ -1,4 +1,4 @@
-import { demoEntries, demoMembers, demoUser } from "@roamlog/api-mocks/fixtures";
+import { demoEntries, demoMembers, demoUser } from "@/test/fixtures";
 import type { EntryRevision, JournalEntry } from "@roamlog/contracts";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

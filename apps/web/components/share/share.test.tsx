@@ -7,7 +7,7 @@ import {
   type PublicMedia,
   type PublicTripResponse,
 } from "@roamlog/contracts";
-import { demoFixtureState } from "@roamlog/api-mocks/fixtures";
+import { demoFixtureState } from "@/test/fixtures";
 
 import { PublicSharePage } from "./public-share-page";
 import { ShareArticle } from "./share-article";

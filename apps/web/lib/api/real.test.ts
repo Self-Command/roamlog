@@ -8,7 +8,7 @@ import {
   demoNotifications,
   demoUser,
   demoWorkspaces,
-} from "@roamlog/api-mocks/fixtures";
+} from "@/test/fixtures";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "./errors";

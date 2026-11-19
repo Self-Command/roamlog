@@ -99,3 +99,28 @@ describe("the retired demo boundary is gone", () => {
     expect(source).toMatch(/QueryClientProvider/);
   });
 });
+
+/**
+ * The web app must never depend on the shared mock package again.
+ *
+ * Built at runtime on purpose: a literal spelling of the retired package name
+ * would make the whole-app dependency sweep match this guard itself, so the
+ * dependency we just removed would still look alive to that sweep.
+ */
+const RETIRED_MOCK_PACKAGE = ["@roamlog", "api-mocks"].join("/");
+
+describe("the shared mock package is not a web dependency", () => {
+  it("is absent from both dependencies and devDependencies", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
+    ) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const declared = Object.keys({
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+    });
+    expect(declared).not.toContain(RETIRED_MOCK_PACKAGE);
+  });
+});

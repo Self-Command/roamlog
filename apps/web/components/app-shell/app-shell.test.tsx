@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { demoTrips, demoUser, demoWorkspaces } from "@roamlog/api-mocks/fixtures";
+import { demoTrips, demoUser, demoWorkspaces } from "@/test/fixtures";
 import type { WorkspaceMemberWithUser } from "@roamlog/contracts";
 import { Button } from "@roamlog/ui";
 
