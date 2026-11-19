@@ -3,6 +3,7 @@
 import { useAddTripParticipant, useRemoveTripParticipant } from "@roamlog/api-client";
 import type { TripParticipant } from "@roamlog/contracts";
 import {
+  Avatar,
   Badge,
   Button,
   Dialog,
@@ -13,17 +14,55 @@ import {
   DialogTitle,
   Label,
   Select,
+  type BadgeProps,
 } from "@roamlog/ui";
-import { Plus, Trash2, Users } from "lucide-react";
+import { Lock, Plus, Trash2, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
-import { deniedReason } from "./capabilities";
+import { deniedReason, roleLabel } from "./capabilities";
 import { ConfirmDialog } from "./dialogs";
 import { shortTimestamp } from "./format";
 import { useMemberDirectory } from "./member-directory";
-import { EmptyBlock, QueryPanel } from "./panel";
+import { EmptyBlock, Panel, QueryPanel } from "./panel";
 import { assertMutationOk, useParticipants } from "./queries";
 import { useTripWorkspace } from "./workspace-context";
+
+type Tone = NonNullable<BadgeProps["tone"]>;
+
+/**
+ * Invitation status → readable badge.
+ *
+ * `pending` / `accepted` are the invitation vocabulary this screen is specified
+ * against; `invited` / `joined` / `declined` are the values the contract and
+ * `presentParticipant` emit today. All of them map to a real business state, so
+ * 「未知」 is reserved for values outside this table instead of swallowing a
+ * legitimate refusal.
+ */
+const INVITE_STATUS: Record<string, { label: string; tone: Tone }> = {
+  pending: { label: "待接受", tone: "yellow" },
+  invited: { label: "待接受", tone: "yellow" },
+  accepted: { label: "已接受", tone: "green" },
+  joined: { label: "已接受", tone: "green" },
+  declined: { label: "已拒绝", tone: "red" },
+};
+
+const UNKNOWN_INVITE_STATUS: { label: string; tone: Tone } = { label: "未知", tone: "slate" };
+
+function inviteStatusOf(status: string) {
+  return INVITE_STATUS[status] ?? UNKNOWN_INVITE_STATUS;
+}
+
+/**
+ * Reuses the role badge semantics already used across the workspace: owner is
+ * emphasized, viewer reads as read-only, editor/admin stay on the accent colour.
+ * Labels come from `roleLabel`, so Owner / Admin / Editor / Viewer are shared
+ * with the members page and the workspace header.
+ */
+function roleTone(role: string): Tone {
+  if (role === "owner") return "orange";
+  if (role === "viewer") return "slate";
+  return "green";
+}
 
 export function ParticipantsTab({ tripId }: { tripId: string }) {
   const { capabilities, mutate, pending, role } = useTripWorkspace();
@@ -47,6 +86,12 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
   const removeTitle = capabilities.removeParticipant
     ? undefined
     : deniedReason(role, "移除参与者");
+  const meta =
+    participants.state === "ready"
+      ? `${participants.data.length} 位`
+      : participants.state === "error"
+        ? "读取失败"
+        : "读取中";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,91 +138,135 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
     if (removed) setRemoveTarget(null);
   }
 
+  if (!capabilities.readParticipants) {
+    return (
+      <Panel title="参与者" meta={`${roleLabel(role)} · 无权限`}>
+        <EmptyBlock
+          icon={Lock}
+          title="当前角色不能查看参与者"
+          description={`${roleLabel(role)} 只能看到自己有权访问的内容，参与者名单不会提供给当前角色。`}
+        />
+      </Panel>
+    );
+  }
+
   return (
     <>
-      <QueryPanel
-        title="参与者"
-        meta={participants.state === "ready" ? `${participants.data.length} 位` : "读取中"}
-        actions={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setFormError(null);
-              setFormOpen(true);
-            }}
-            disabled={!capabilities.addParticipant}
-            title={addTitle}
-          >
-            <Plus aria-hidden="true" />
-            添加参与者
-          </Button>
-        }
-        result={participants}
-        errorTitle="参与者读取失败"
-        isEmpty={(data) => data.length === 0}
-        empty={
-          <EmptyBlock
-            icon={Users}
-            title="还没有参与者"
-            description="把工作区成员加入这趟旅行，他们才能收到提及和协作通知。"
-            action={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setFormOpen(true)}
-                disabled={!capabilities.addParticipant}
-                title={addTitle}
-              >
-                <Plus aria-hidden="true" />
-                添加第一位
-              </Button>
-            }
-          />
-        }
-      >
-        {(data) => (
-          <ul className="divide-y divide-hairline">
-            {data.map((participant) => {
-              const member = directory.byId.get(participant.userId);
-              return (
-                <li
-                  key={participant.id}
-                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5"
+      <div className="space-y-3">
+        <QueryPanel
+          title="参与者"
+          meta={meta}
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setFormError(null);
+                setFormOpen(true);
+              }}
+              disabled={!capabilities.addParticipant}
+              title={addTitle}
+            >
+              <Plus aria-hidden="true" />
+              添加参与者
+            </Button>
+          }
+          result={participants}
+          errorTitle="参与者读取失败"
+          isEmpty={(data) => data.length === 0}
+          empty={
+            <EmptyBlock
+              icon={Users}
+              title="还没有参与者"
+              description="把工作区成员加入这趟旅行，他们才能收到提及和协作通知。"
+              action={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFormOpen(true)}
+                  disabled={!capabilities.addParticipant}
+                  title={addTitle}
                 >
-                  <div className="min-w-0">
-                    <p className="text-[13px] leading-5 text-ink">
-                      {member?.name ?? `成员 ${participant.userId.slice(0, 8)}`}
-                      {member ? (
-                        <Badge tone={member.role === "viewer" ? "slate" : "green"} className="ml-2">
-                          {member.role}
-                        </Badge>
-                      ) : null}
-                    </p>
-                    <p className="mt-0.5 text-[11px] leading-4 text-muted">
-                      {member?.email ?? "成员资料不在当前工作区列表中"} · 加入于{" "}
-                      {shortTimestamp(participant.joinedAt)}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setRemoveTarget(participant)}
-                    disabled={!capabilities.removeParticipant}
-                    title={capabilities.removeParticipant ? "移除这位参与者" : removeTitle}
-                    aria-label={`移除参与者 ${member?.name ?? participant.userId.slice(0, 8)}`}
+                  <Plus aria-hidden="true" />
+                  添加第一位
+                </Button>
+              }
+            />
+          }
+        >
+          {(data) => (
+            <ul className="divide-y divide-hairline">
+              {data.map((participant) => {
+                const member = directory.byId.get(participant.userId);
+                const displayName = member?.name ?? `成员 ${participant.userId.slice(0, 8)}`;
+                // Workspace grants cover every member, so an owner/admin keeps that
+                // label even when the trip invitation itself says viewer.
+                const effectiveRole = member?.role ?? participant.role;
+                const invite = inviteStatusOf(participant.status);
+                const showJoinedAt =
+                  Boolean(participant.joinedAt) && participant.joinedAt !== participant.invitedAt;
+                return (
+                  <li
+                    key={participant.id}
+                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5"
                   >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </QueryPanel>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar name={displayName} size={32} />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[13px] leading-5 text-ink">{displayName}</p>
+                          <Badge
+                            tone={roleTone(effectiveRole)}
+                            title={
+                              member
+                                ? "工作区角色，覆盖本次旅行的全部权限"
+                                : "旅行内的参与者角色"
+                            }
+                          >
+                            {roleLabel(effectiveRole)}
+                          </Badge>
+                          <Badge tone={invite.tone}>{invite.label}</Badge>
+                        </div>
+                        <p className="mt-0.5 text-[11px] leading-4 text-muted">
+                          {member?.email ?? "成员资料不在当前工作区列表中"}
+                          {participant.invitedAt ? (
+                            <> · 邀请于 {shortTimestamp(participant.invitedAt)}</>
+                          ) : null}
+                          {showJoinedAt ? (
+                            <> · 加入于 {shortTimestamp(participant.joinedAt)}</>
+                          ) : null}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRemoveTarget(participant)}
+                      disabled={!capabilities.removeParticipant}
+                      title={capabilities.removeParticipant ? "移除这位参与者" : removeTitle}
+                      aria-label={`移除参与者 ${displayName}`}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </QueryPanel>
+
+        <p className="px-1 font-mono text-[10px] leading-5 text-stone">
+          新邀请默认是 viewer，可另行提升为 editor；分享链接与参与者相互独立。角色调整将在后续版本开放。
+        </p>
+        {!capabilities.addParticipant && !capabilities.removeParticipant ? (
+          <p role="note" className="px-1 text-[11px] leading-5 text-muted">
+            {roleLabel(role)} 角色可以查看参与者，但不能添加或移除。
+          </p>
+        ) : null}
+      </div>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent>
@@ -198,7 +287,7 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
                 <option value="">选择成员</option>
                 {available.map((member) => (
                   <option key={member.id} value={member.id}>
-                    {member.name}（{member.role}）
+                    {member.name}（{roleLabel(member.role)}）
                   </option>
                 ))}
               </Select>
