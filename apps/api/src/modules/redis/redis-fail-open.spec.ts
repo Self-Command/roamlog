@@ -1,8 +1,9 @@
+import { ServiceUnavailableException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { RateLimitService } from "../../common/security/rate-limit.service.js";
 import type { AppConfigService } from "../../config/app-config.service.js";
-import { JobQueueService } from "../exports/job-queue.service.js";
+import { JobQueueService, QUEUE_UNAVAILABLE_CODE } from "../exports/job-queue.service.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { PlacesCacheService } from "../places/places-cache.service.js";
 import { RedisService } from "./redis.service.js";
@@ -79,20 +80,26 @@ describe("Redis consumers stay available when Redis is down", () => {
     }
   }, 20_000);
 
-  it("queue ingress fails closed: it never reports a job that was not queued", async () => {
+  it("queue ingress fails closed with 503 QUEUE_UNAVAILABLE: it never reports a job that was not queued", async () => {
     const log = logger();
     const redis = redisService(log);
     const queue = new JobQueueService(redis);
 
     try {
-      await expect(
-        queue.enqueue({
+      const error = await queue
+        .enqueue({
           queue: "export",
           name: "trip-export",
           jobId: "export-abc",
           data: { tripId: "t" },
-        }),
-      ).rejects.toThrow();
+        })
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ServiceUnavailableException);
+      expect((error as ServiceUnavailableException).getStatus()).toBe(503);
+      expect((error as ServiceUnavailableException).getResponse()).toMatchObject({
+        code: QUEUE_UNAVAILABLE_CODE,
+      });
     } finally {
       await redis.onModuleDestroy();
     }

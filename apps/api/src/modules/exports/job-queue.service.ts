@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, ServiceUnavailableException } from "@nestjs/common";
 
 import { RedisService } from "../redis/redis.service.js";
 
 export const INGRESS_QUEUE_KEY = "jobs:ingress";
+/** Problem-details code returned when the queue backend cannot accept a job. */
+export const QUEUE_UNAVAILABLE_CODE = "QUEUE_UNAVAILABLE";
 
 export type JobQueueName = "media" | "email" | "export" | "reminders" | "maintenance";
 
@@ -34,6 +36,13 @@ export function deterministicJobId(namespace: string, ...parts: ReadonlyArray<st
  * envelope to a Redis ingress list; the worker drains this list into BullMQ
  * with the same deterministic jobId, so duplicate API requests remain
  * idempotent at the queue boundary.
+ *
+ * Failure policy: **fail-closed**. A Redis outage must not fabricate a queued
+ * job — the caller would report "queued" for a job that will never run and the
+ * user would wait forever for a file. The rejection surfaces as
+ * `503 QUEUE_UNAVAILABLE`: a dependency outage is not a server bug, and 500
+ * would send operators looking for a defect that does not exist. The Redis
+ * error message is never echoed (it contains host/port details).
  */
 @Injectable()
 export class JobQueueService {
@@ -54,7 +63,15 @@ export class JobQueueService {
       delayMs: Math.max(0, Math.trunc(request.delayMs ?? 0)),
       enqueuedAt: new Date().toISOString(),
     });
-    await this.redis.client.rpush(INGRESS_QUEUE_KEY, envelope);
+    try {
+      await this.redis.client.rpush(INGRESS_QUEUE_KEY, envelope);
+    } catch {
+      throw new ServiceUnavailableException({
+        code: QUEUE_UNAVAILABLE_CODE,
+        message: "The job queue is temporarily unavailable; the job was not queued.",
+        dependencies: ["redis"],
+      });
+    }
     return { jobId: request.jobId, queue: request.queue, name: request.name };
   }
 }

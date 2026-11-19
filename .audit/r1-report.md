@@ -34,13 +34,16 @@
 ## 2. 变更文件
 
 **核心（允许范围）**
-- `apps/api/src/modules/redis/redis.service.ts` —— 客户端选项、失败语义、状态/节流、`REDIS_REQUIRED` 启动门
+- `apps/api/src/modules/redis/redis.service.ts` —— 客户端选项、失败语义、状态/节流、`REDIS_REQUIRED` 启动门、**复活探针**
 - `apps/api/src/modules/redis/redis-resilience.spec.ts`（新）—— 关闭端口真实 `ioredis`、选项上限、错误监听、启动门
-- `apps/api/src/modules/redis/redis-fail-open.spec.ts`（新）—— 限流放行、缓存回源、队列 fail-closed
+- `apps/api/src/modules/redis/redis-revival.spec.ts`（新）—— 复活探针：30s 一次、失败重武装、销毁即停
+- `apps/api/src/modules/redis/redis-fail-open.spec.ts`（新）—— 限流放行、缓存回源、队列 fail-closed(503)
 - `apps/api/src/modules/redis/readiness-degraded.spec.ts`（新）—— `/v1/ready` 三段语义 + 契约校验
 - `apps/api/src/modules/redis/redis-rate-limit.spec.ts` —— 客户端改为「就绪后再断言不降级」（见 §6 风险 3）
 - `apps/api/src/modules/idempotency/idempotency.service.ts` —— fail-open 幂等语义
 - `apps/api/src/modules/idempotency/idempotency.service.spec.ts` —— 新增降级用例
+- `apps/api/src/modules/exports/job-queue.service.ts` —— ingress fail-closed 映射 **503 `QUEUE_UNAVAILABLE`**
+- `apps/api/src/modules/exports/__tests__/job-queue.service.spec.ts`（新）—— 503/code/不泄露 host:port + 正常入队
 - `apps/api/src/config/environment.ts` —— `REDIS_REQUIRED`（默认 `false`）
 - `apps/api/src/config/app-config.service.ts` —— `redisRequired` getter
 
@@ -65,7 +68,8 @@
 | --- | --- | --- |
 | `maxRetriesPerRequest` | `2`（常量） | 默认 20 会长时间挂住请求；2 次即失败 |
 | `enableOfflineQueue` | `false` | Redis 不在时立即失败，不堆积离线队列（正是旧实现 `MaxRetriesPerRequestError` 的来源） |
-| `retryStrategy` | `redisRetryStrategy`：50ms 起指数退避，封顶 2s，**第 10 次后返回 `null` 停止重连** | 有上限，不无限重连 |
+| `retryStrategy` | `redisRetryStrategy`：50ms 起指数退避，封顶 2s，**第 10 次后返回 `null` 停止快速重连** | 有上限，不无限重连 |
+| 复活探针 | `REDIS_REVIVAL_INTERVAL_MS`=30s：进入 `end` 后每 30s 单次 `client.connect()`，`unref()`，`onModuleDestroy` 清理 | 快速预算只应对抖动；长故障（Redis 重启 >约 14s）也能自愈，且不形成重连风暴（根 Agent 裁决 (b)） |
 | `connectTimeout` | `3000`ms | 握手不挂 |
 | `lazyConnect` | `false` | 按任务要求保持现有启动行为（构造即连；ioredis 构造期不抛，失败走 `error` 事件） |
 | `keyPrefix` / `connectionName` | 原样保留 | 无行为变化 |
@@ -85,7 +89,7 @@
 | 限流 auth / share / media presign | `RateLimitService.consume` → `incrementFixedWindow` | **fail-open**：原语抛错（刻意保留控制流），限流器降级到进程内固定窗口并标 `degraded:true`，不产生 429 风暴 | `rate-limit.service.ts:41-67` |
 | 幂等 | `IdempotencyService.run` → `tryAcquire` | **fail-open**：`unavailable` → 记 warn 后**照常执行**；读不到结果视为无记录；清理 best-effort，不掩盖原始错误 | `idempotency.service.ts:63-100` |
 | 配额 AI / Geoapify | `AiQuotaService.consume` / `PlacesQuotaService.consume` | **fail-open**：`allowed:true` + warn（调用方已有 try/catch） | `ai-quota.service.ts:59-75`、`places-quota.service.ts:63-75` |
-| 队列 ingress（export job） | `JobQueueService.enqueue` → `redis.client.rpush` | **fail-closed（明确错误）**：原始命令拒绝向上抛，**绝不假装入队成功**。选择理由见 §3.5 | `job-queue.service.ts:57` |
+| 队列 ingress（export job） | `JobQueueService.enqueue` → `redis.client.rpush` | **fail-closed（明确错误）**：原始命令拒绝后转成 **`503 QUEUE_UNAVAILABLE`**（`dependencies:["redis"]`），**绝不假装入队成功**，也不报成 500。选择理由见 §3.5 | `job-queue.service.ts:60-77` |
 | 会话 / 2FA | 不经过 `RedisService`；Better Auth 用自身存储 | 行为不变，Redis 故障不会触达该路径 | — |
 | 健康探针 | `ReadinessService.check` → `ping()` | `ping` 保留抛错（探针自己 catch），映射为 `degraded` | `readiness.service.ts:72-84` |
 
@@ -107,48 +111,58 @@
 
 同时修正两处**既存契约违约**（不是本任务引入）：
 1. `ReadinessService` 返回 `unavailable`，但 `ReadyResponseSchema` 只允许 `ok|degraded` → 契约补 `unavailable`（根 Agent 授权）。
-2. 失败探针返回 `error: "dependency check failed"`，而 `DependencyHealthSchema` 是 `.strict()` → **任何 down 的响应都不合法**；已移除该字段（顺带避免错误信息从无鉴权端点外泄）。这是 `readiness-degraded.spec.ts` 的契约断言抓到的真实缺陷。
+2. **`/v1/ready` 的 down 响应在此修复前对 `.strict()` 契约恒不合法，且会外泄 `error` 字段**：失败探针返回 `error: "dependency check failed"`，而 `DependencyHealthSchema` 是 `.strict()`，因此**任何** `status:"down"` 的 ready 响应都无法通过 `ReadyResponseSchema.safeParse`；同时该字段把依赖错误文本放到了无鉴权的健康端点上。已移除，改为只回 `{status, latencyMs}`。这是「契约测试只覆盖 happy path、没覆盖故障路径」的典型例子，由 `readiness-degraded.spec.ts` 的 `safeParse` 断言抓出。
 
-### 3.5 队列 ingress 选择：fail-closed
+### 3.5 队列 ingress 选择：fail-closed + 503
 读了现有实现（`job-queue.service.ts:42-59`）：API 不接 BullMQ，只把 envelope `rpush` 进 ingress list，worker 负责 drain。若这里 fail-open：
 - 返回 `{jobId}` 而实际没入队 = **静默丢导出任务**，用户看到「已排队」却永远拿不到文件；
 - 与「入队幂等」承诺冲突（重复请求会被当作已入队）。
-因此保留 fail-closed：Redis 故障时 `enqueue` 抛错，**不伪造成功**。HTTP 状态映射属 `exports` 模块（不在边界），当前很可能是 500；建议 exports 负责人改为 503 `SERVICE_UNAVAILABLE`（§8）。
+
+因此 fail-closed，并且异常类型是「依赖不可用」而非「服务端 bug」：`ServiceUnavailableException({ code: "QUEUE_UNAVAILABLE", message, dependencies: ["redis"] })` → HTTP **503**，不回声 Redis 错误文本（避免泄露 host/port）。`ExportsService.create` 的既有 `catch` 会先 `markFailed` 再重抛，所以导出记录仍会被正确标记失败（不会留下「排队中」僵尸记录）。
 
 ---
 
 ## 4. 验证命令与原始输出
 
 ### 4.1 `pnpm --filter @roamlog/api typecheck`
+最终（14:32）：
 ```text
 > roamlog-api@ typecheck C:\Users\BY9700\Desktop\UI\roamlog\apps\api
 $ tsc --noEmit
 ```
-（exit 0，无输出）
+exit 0，无输出。
+
+**中途曾出现一次并行污染（已消失，留证）**：14:30 运行同一命令时报
+```text
+src/modules/ai/__tests__/ai-stops-add.spec.ts(9,3): error TS2305: Module '"./ai-fixtures.js"' has no exported member 'GEOAPIFY_KYOTO'.
+```
+该文件是并行 AI Agent 的 **untracked 新文件**（mtime 14:29:23）与其修改中的 `ai-fixtures.ts`（mtime 14:29:59）保存顺序导致的瞬时不一致，**不在我的边界**，未代为修改；对方补齐导出后 14:32 复跑即 exit 0。全程我的文件未出现在任何 tsc 错误中。
 
 ### 4.2 定向测试（redis / guards / idempotency）
 ```text
 $ pnpm --filter @roamlog/api exec vitest run src/modules/redis src/common/guards src/modules/idempotency
 
- ✓ src/modules/redis/redis-resilience.spec.ts (6 tests) 261ms
+ ✓ src/modules/redis/redis-resilience.spec.ts (6 tests)
  ✓ src/modules/redis/redis-rate-limit.spec.ts (1 test) 28ms
- ✓ src/modules/idempotency/idempotency.service.spec.ts (3 tests) 7ms
  ✓ src/modules/redis/redis-fail-open.spec.ts (3 tests) 10ms
- ✓ src/modules/redis/readiness-degraded.spec.ts (4 tests) 8ms
+ ✓ src/modules/idempotency/idempotency.service.spec.ts (3 tests) 7ms
+ ✓ src/modules/redis/readiness-degraded.spec.ts (4 tests) 10ms
+ ✓ src/modules/redis/redis-revival.spec.ts (3 tests) 22ms
 
- Test Files  5 passed (5)
-      Tests  17 passed (17)
+ Test Files  6 passed (6)
+      Tests  20 passed (20)
 ```
-覆盖任务要求：关闭端口读写不抛/降级（`redis-resilience`）、限流放行（`redis-fail-open`）、缓存回源（`redis-fail-open`）、幂等降级（`idempotency.service.spec.ts` + `redis-fail-open`）、retryStrategy 上限（`redis-resilience` 选项用例）、错误监听存在（`listenerCount("error")`）、ready degraded+200（`readiness-degraded`）。
+覆盖任务要求：关闭端口读写不抛/降级（`redis-resilience`）、限流放行（`redis-fail-open`）、缓存回源（`redis-fail-open`）、幂等降级（`idempotency.service.spec.ts` + `redis-fail-open`）、retryStrategy 上限（`redis-resilience` 选项用例）、错误监听存在（`listenerCount("error")`）、ready degraded+200（`readiness-degraded`）、复活探针（`redis-revival`）。
+队列 503 另有专项：`src/modules/exports/__tests__/job-queue.service.spec.ts`（2 tests，`vitest run src/modules/exports` 中验证）。
 
 ### 4.3 全量 `pnpm --filter @roamlog/api test`
 ```text
- Test Files  86 passed | 7 skipped (93)
-      Tests  677 passed | 16 skipped (693)
-   Start at  14:21:24
-   Duration  75.96s
+ Test Files  89 passed | 7 skipped (96)
+      Tests  689 passed | 16 skipped (705)
+   Start at  14:30:54
+   Duration  83.34s
 ```
-**无并行 Agent 的在途文件污染本套件**：`apps/api/src/modules/{ai,trips}/**` 的同批改动（`ai-tools.ts`、`stops.service.ts` 等）在本次运行中全绿，未出现失败。
+**本套件没有被并行 Agent 的在途文件污染**：同批的 `ai-tools.ts`、`ai-stops-add.spec.ts`、`trips/stops.service.ts` 等改动在本次运行中全部通过（含其新增测试）。
 
 ### 4.4 真实进程验证（关闭端口 Redis）
 脚本 `.audit/r1-real-verify.sh`，完整原始输出 `.audit/r1-real-verify-output.txt`。环境：真实 API `apps/api/src/main.ts`、真实 PostgreSQL（127.0.0.1:55444）、本地假 S3（9111，仅让 `HeadBucket` 成功，从而**只有 Redis 是坏的**）、`REDIS_URL=redis://127.0.0.1:1`。
@@ -191,28 +205,30 @@ api stopped cleanly after kill
 
 ## 6. 已知风险
 
-1. **重连预算耗尽后不会自愈**（最重要）。`retryStrategy` 第 10 次后返回 `null`（任务明确要求「最多 10 次后停止重连」），ioredis 进入 `end` 且**不会再自动重连**：一次超过约 14s 的 Redis 重启/维护会让该 API 实例在**进程重启前**一直无 Redis（所有 Redis 功能持续降级，但 API 不崩）。两种修法二选一，需根 Agent 裁决：
-   - (a) 改为「无限次封顶退避」（`return Math.min(...)` 永不返回 `null`）——生产最常见做法，但违反本次任务书写法；
-   - (b) 保留 10 次上限，另加一个慢速复活探针（`on("end")` 后每 30s 单次 `client.connect()`，`unref()`，`onModuleDestroy` 清理）。约 12 行，可放在 `redis.service.ts`。
+1. ~~重连预算耗尽后不会自愈~~ **已修复（根 Agent 裁决 (b)）**：`on("end")` 后每 30s 单次 `client.connect()`，`unref()` 不吊住进程，成功后 `ready` 清理定时器并记 `redis.recovered`，失败自动重新武装，`onModuleDestroy` 停止探针。覆盖测试：`redis-revival.spec.ts`（30s 前不探、到点探一次、失败后重新武装、销毁后不再探）。**剩余注意**：探针是「单次尝试」，若 Redis 处于「TCP 可连但极慢」状态，一次尝试可能占用约 3s（`connectTimeout`），不影响请求路径。
 2. **settings 跨实例失效订阅不会重试**：`apps/api/src/modules/settings/settings.service.ts:112` 在 `onModuleInit` 里 `subscribe`。`enableOfflineQueue:false` 后，若启动瞬间 Redis 尚未 ready 或当时不可用，订阅**立即失败且不再重试**（日志已见 `settings.redis_degraded` / `operation:"subscribe_failed"`）。后果被既有 30s TTL 收敛窗口兜住（见 `authz-override-report.md:208`），但跨实例即时失效在「Redis 后恢复」场景下失效。建议 settings 负责人订阅 `RedisService` 暴露的 `ready` 事件重连；本任务不改 settings（越界）。
 3. **启动/重连瞬间会短暂 fail-open**：`enableOfflineQueue:false` + 构造即连，首批命令在 `ready` 前会立即失败（限流放行、缓存 miss）。这是刻意取舍（宁可放行也不排队），已把 `redis-rate-limit.spec.ts` 改为等待 `ready` 后断言，避免误判为「时刻降级」。
 4. **幂等在故障期可能重复执行**：明确的 fail-open 取舍（写入注释）。数据库自身唯一约束仍是最后防线；若某端点不能容忍重复，应改为对该端点 fail-closed。
-5. **队列 ingress 的 HTTP 语义**：当前会把 Redis 错误冒泡成 500（exports 控制器不在边界）。fail-closed 正确，但状态码应为 503。
+5. ~~队列 ingress 的 HTTP 语义~~ **已修复（根 Agent 授权）**：`JobQueueService.enqueue` 现在抛 `ServiceUnavailableException(503, code: QUEUE_UNAVAILABLE, dependencies:["redis"])`，不再冒泡成 500；单测 `exports/__tests__/job-queue.service.spec.ts` + 关闭端口实测（`redis-fail-open.spec.ts`）双覆盖，并断言响应体不含 Redis host/port。
 6. **无全局 `unhandledRejection` 兜底**（根 Agent 已确认另派）：`apps/api/src/main.ts:35` 只处理 bootstrap promise。建议在 `bootstrap()` 之后加 `process.on("unhandledRejection", …)` 记 fatal 并**不**退出（或显式 `process.exit(1)` 交给编排器重启），位置：`apps/api/src/main.ts` 顶层、`void bootstrap()` 前后。
 7. `REDIS_REQUIRED=true` 只强化启动期；运行期依旧 fail-open（刻意，已在 `environment.ts` 注释与 `redis.service.ts` 类注释中写明）。
 
 ## 7. 边界例外说明（已获授权）
 `apps/api/src/modules/health/**`、`packages/contracts/src/api/health.ts`、`apps/api/test/health.e2e-spec.ts` 原本不在我的可写清单。我先向根 Agent 报告事实（契约只允许 `ok|degraded`，实现却返回 `unavailable` 且有 e2e 断言 + 503），获批后按「ok 200 / degraded 200 / unavailable 503」实现，并**只**向契约 `status` 联合追加 `unavailable`（一个枚举，未动其它结构）。没有为了让测试变绿而把 db/storage 的 503 改成 200。
 
+第二轮追加授权：`apps/api/src/modules/exports/job-queue.service.ts`（503 映射 + 测试）。
+
+**审计记录要点（根 Agent 要求入档）**：`/v1/ready` 的 down 响应在此修复前对 `.strict()` 契约**恒不合法**，且会外泄 `error` 字段。
+
 ## 8. 未覆盖项 / TODO
 1. `tooling/scripts/check-env.ts` 的 `REDIS_REQUIRED` 校验（不在边界，根 Agent 未扩权）——建议在必填项校验旁新增可选项解析 + `REDIS_REQUIRED=true` 时把 `REDIS_URL` 升为不可缺失（当前 `REDIS_URL` 本来就必填，需改为按开关报错文案）。
 2. `.env.example` / 部署文档补 `REDIS_REQUIRED`（不在边界）。
 3. OpenAPI / 生成客户端同步 `ReadyResponse.status` 新枚举（`packages/api-client` 的 `ReadyResponse` 由 `packages/contracts` 类型推导，但 `openapi.json` 与 orval 产物需重新生成；本任务未跑生成器）。
-4. Redis 恢复后的自动重连（§6.1）。
-5. `exports` 的 503 映射（§6.5）。
+4. `apps/api/src/modules/settings/settings.service.ts:112` 的 Redis subscribe 重试（根 Agent 明确不授权，因该文件正被另一 Agent 改；由根 Agent 后续单独派）。
+5. `main.ts` 的 `unhandledRejection` / `uncaughtException` 兜底（根 Agent 要求只写建议，与「启动层统一整改」一起做）。
 
 ## 9. 建议下一步
-1. 裁决 §6.1（推荐 (a) 无限封顶退避，或 (b) 复活探针），我可以 15 分钟内补一个 `redis-revival.spec.ts`。
-2. 派 settings 负责人接 `RedisService` 的 `ready` 事件做订阅重连（跨实例失效恢复）。
-3. 单独任务补 `main.ts` 的 `unhandledRejection` / `uncaughtException` 兜底（属于「进程最后防线」，与本任务互补）。
-4. 在 staging 做一次「Redis 停机 60s 后恢复」演练，观察 §6.1 的实际影响面与 §6.2 的收敛窗口。
+1. settings 负责人接 `RedisService` 的 `ready` 事件做订阅重连（跨实例失效恢复）。
+2. 单独任务补 `main.ts` 的进程级兜底（属于「最后防线」，与本任务互补）。
+3. 在 staging 做一次「Redis 停机 60s → 恢复」演练，验证复活探针的实际恢复时延（预期 ≤30s + 握手时间），并观察 `redis.recovered` 日志。
+4. 补 OpenAPI/api-client 生成，让 `unavailable` 在生成产物中同样合法。

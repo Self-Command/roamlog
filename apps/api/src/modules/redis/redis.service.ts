@@ -40,6 +40,14 @@ export const REDIS_RETRY_MAX_DELAY_MS = 2_000;
 export const REDIS_COMMAND_TIMEOUT_MS = 1_000;
 /** One warn per identical error per minute (requirement: log throttle). */
 export const REDIS_ERROR_LOG_THROTTLE_MS = 60_000;
+/**
+ * After the fast retry budget is exhausted (10 attempts, ≈14s) the client
+ * settles in `end` and ioredis never reconnects on its own. A Redis restart
+ * longer than that would otherwise disable this instance's Redis until the next
+ * deployment, so a single slow probe re-opens the connection every 30s. It is
+ * not a reconnect storm: one attempt, then either `ready` or another `end`.
+ */
+export const REDIS_REVIVAL_INTERVAL_MS = 30_000;
 
 export type RedisRetryStrategy = (times: number) => number | null;
 
@@ -65,6 +73,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   readonly required: boolean;
   private degraded = false;
   private readonly lastWarnAt = new Map<string, number>();
+  private revivalTimer?: NodeJS.Timeout;
+  private destroying = false;
 
   constructor(
     @Inject(AppConfigService) config: AppConfigService,
@@ -93,12 +103,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.noteFailure("connection", error);
     });
     this.client.on("ready", () => {
+      this.clearRevival();
       this.markAvailable();
     });
     this.client.on("end", () => {
       // Retry budget exhausted (or the server closed the socket): no more
-      // reconnects until the next command/destroy. Logged once per minute.
+      // reconnects from ioredis itself. Log once per minute and arm the slow
+      // revival probe so a longer outage is not permanent.
       this.noteFailure("connection", new Error("Redis connection ended"));
+      this.scheduleRevival();
     });
   }
 
@@ -222,6 +235,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.destroying = true;
+    this.clearRevival();
+
     if (this.client.status === "end") {
       return;
     }
@@ -250,6 +266,39 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.noteFailure(name, error);
       return fallback;
     }
+  }
+
+  /**
+   * Long-outage recovery. ioredis gives up permanently after `retryStrategy`
+   * returns `null`, so once every {@link REDIS_REVIVAL_INTERVAL_MS} we make a
+   * single connection attempt. `unref()` keeps the timer from holding the
+   * process open, and a failed attempt re-arms through this same path.
+   */
+  private scheduleRevival(): void {
+    if (this.destroying || this.revivalTimer) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.revivalTimer = undefined;
+      if (this.destroying || this.client.status !== "end") {
+        return;
+      }
+      void this.client.connect().catch(() => {
+        // Still down: ioredis lands in `end` again, so the next probe is armed
+        // here as well as by the `end` listener.
+        this.scheduleRevival();
+      });
+    }, REDIS_REVIVAL_INTERVAL_MS);
+    timer.unref?.();
+    this.revivalTimer = timer;
+  }
+
+  private clearRevival(): void {
+    if (!this.revivalTimer) {
+      return;
+    }
+    clearTimeout(this.revivalTimer);
+    this.revivalTimer = undefined;
   }
 
   private markAvailable(): void {
