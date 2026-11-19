@@ -1,4 +1,5 @@
 import type { Job } from "bullmq";
+import { tripVisibilityWhere } from "@roamlog/db";
 import { defineProcessor, type JobProcessor, type ProcessorContext } from "../processor.js";
 import type { WorkerDependencies } from "./types.js";
 import { createZip, type ZipFile } from "./zip.js";
@@ -111,9 +112,32 @@ async function buildExportBundle(
   const includeExpenses = Boolean(record.includeExpenses);
   const includeMedia = Boolean(record.includeMedia);
 
+  // The unified trip rule needs one fact the export row does not carry: the
+  // requester's platform role, for the `super_admin` break-glass branch. Every
+  // trip enumeration below is filtered by `tripVisibilityWhere(requester)`, the
+  // same predicate the API's list surfaces use — an export must not be a wider
+  // read than the trip list it is exported from.
+  const requesterPlatformRole =
+    (
+      await deps.db.user.findUnique({
+        where: { id: record.requestedById },
+        select: { platformRole: true },
+      })
+    )?.platformRole ?? "user";
+  const requester = {
+    userId: record.requestedById as string,
+    workspaceId: record.workspaceId as string,
+    platformRole: requesterPlatformRole as string,
+  };
+
   if (record.scope === "trip") {
     const trip = await deps.db.trip.findFirst({
-      where: { id: record.tripId, workspaceId: record.workspaceId, deletedAt: null },
+      where: {
+        id: record.tripId,
+        workspaceId: record.workspaceId,
+        deletedAt: null,
+        ...tripVisibilityWhere(requester),
+      },
     });
     if (!trip) {
       throw new Error("Trip no longer exists");
@@ -157,7 +181,11 @@ async function buildExportBundle(
       select: { userId: true, role: true, joinedAt: true },
     });
     const trips = await deps.db.trip.findMany({
-      where: { workspaceId: workspace.id, deletedAt: null },
+      where: {
+        workspaceId: workspace.id,
+        deletedAt: null,
+        ...tripVisibilityWhere(requester),
+      },
       orderBy: { startDate: "asc" },
     });
     const workspaceBundle = {
@@ -207,9 +235,24 @@ async function buildExportBundle(
     where: { userId: record.requestedById, status: "active" },
     include: { workspace: true },
   });
-  const workspaceIds = memberships.map((membership: any) => membership.workspaceId);
+  // Account scope spans workspaces, so the predicate is applied once per
+  // membership: the rule's workspace tier is relative to `actor.workspaceId`,
+  // and collapsing every workspace into one would hide the user's own
+  // `workspace`-tier trips in the others. An empty membership list yields
+  // `OR: []`, which matches nothing — the same result as the old
+  // `workspaceId: { in: [] }`.
   const trips = await deps.db.trip.findMany({
-    where: { workspaceId: { in: workspaceIds }, deletedAt: null },
+    where: {
+      deletedAt: null,
+      OR: memberships.map((membership: any) => ({
+        workspaceId: membership.workspaceId,
+        ...tripVisibilityWhere({
+          userId: record.requestedById,
+          workspaceId: membership.workspaceId,
+          platformRole: requesterPlatformRole,
+        }),
+      })),
+    },
   });
   const tripIds = trips.map((trip: any) => trip.id);
   const entries = await deps.db.journalEntry.findMany({
