@@ -71,9 +71,24 @@ describe("validateCoverFile", () => {
     expect(result.error.code).toBe("COVER_FILE_NAME_INVALID");
   });
 
-  it("formats byte sizes for the validation message", () => {
-    expect(formatBytes(1024)).toBe("1 KB");
-    expect(formatBytes(25 * 1024 * 1024)).toBe("25 MB");
-    expect(formatBytes(1024 * 1024 + 512 * 1024)).toBe("1.5 MB");
+  it("formats byte sizes in decimal units for the validation message", () => {
+    expect(formatBytes(1_024)).toBe("1 KB");
+    expect(formatBytes(COVER_MAX_BYTES)).toBe("25 MB");
+    expect(formatBytes(1_500_000)).toBe("1.5 MB");
+    expect(formatBytes(1_572_864)).toBe("1.6 MB");
+  });
+
+  it("renders the limit as decimal 25 MB, never the binary 23.8 MB", () => {
+    expect(COVER_MAX_BYTES).toBe(25_000_000);
+    expect(formatBytes(COVER_MAX_BYTES)).toBe("25 MB");
+    expect(formatBytes(COVER_MAX_BYTES)).not.toBe("23.8 MB");
+
+    const tooLarge = validateCoverFile(
+      makeFile("cover.jpg", "image/jpeg", COVER_MAX_BYTES + 1),
+    );
+    expect(tooLarge.ok).toBe(false);
+    if (tooLarge.ok) return;
+    expect(tooLarge.error.message).toContain("25 MB");
+    expect(tooLarge.error.message).not.toContain("23.8");
   });
 });

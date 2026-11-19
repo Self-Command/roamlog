@@ -104,7 +104,7 @@ describe("行程 tab（真实 stops）", () => {
     // No persisted address yet: the city/country line is the fallback location.
     expect(screen.getByText("京都 · 日本")).toBeInTheDocument();
     expect(screen.getByText(/35\.0116, 135\.7681/)).toBeInTheDocument();
-    expect(screen.getByText("Photon")).toBeInTheDocument();
+    expect(screen.getByText("Photon 搜索")).toBeInTheDocument();
     expect(screen.getByText(/ORDER 0 · VERSION 1/)).toBeInTheDocument();
     expect(calls).toEqual([{ method: "GET", url: `/v1/trips/${TRIP_ID}/stops`, body: undefined }]);
   });

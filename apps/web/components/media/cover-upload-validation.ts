@@ -49,12 +49,17 @@ export function resolveCoverMimeType(file: Pick<File, "name" | "type">): string 
   return EXTENSION_MIME[extension] ?? null;
 }
 
+/**
+ * Formats upload sizes in decimal units, matching the admin setting
+ * `media.maxUploadBytes` (25,000,000 bytes → `25 MB`). Binary units would show
+ * the same limit as `23.8 MB` and make the UI contradict the setting.
+ */
 export function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) {
-    const megabytes = bytes / (1024 * 1024);
+  if (bytes >= 1_000_000) {
+    const megabytes = bytes / 1_000_000;
     return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`;
   }
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes >= 1_000) return `${Math.round(bytes / 1_000)} KB`;
   return `${bytes} B`;
 }
 

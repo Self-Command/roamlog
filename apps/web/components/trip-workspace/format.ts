@@ -52,14 +52,24 @@ export function splitModeLabel(mode: ExpenseWithSplits["splitMode"]): string {
   return mode === "equal" ? "均摊" : "自定义分摊";
 }
 
+/**
+ * Human label for a stop's place source. Wording mirrors
+ * `lib/places-attribution.ts`: Geoapify/Photon are automated search sources,
+ * `local` is the workspace's own place library and `null` is manual entry.
+ * Unknown runtime values fall back to neutral copy instead of leaking the enum.
+ */
 export function providerLabel(provider: PlaceProvider | null): string {
   switch (provider) {
+    case "geoapify":
+      return "Geoapify 搜索";
     case "photon":
-      return "Photon";
+      return "Photon 搜索";
     case "local":
       return "本地地点库";
-    default:
+    case null:
       return "手动录入";
+    default:
+      return "未知来源";
   }
 }
 

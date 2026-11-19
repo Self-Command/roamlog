@@ -544,7 +544,6 @@ export const NON_GRANTABLE_ADMIN_ACTIONS: readonly string[] = [
   "admin:users:reset-2fa",
   "admin:users:update",
   "admin:settings:write",
-  "admin:workspaces:transfer",
   "admin:permissions:read",
   "admin:permissions:write",
 ];

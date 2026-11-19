@@ -73,7 +73,8 @@ describe("CoverUploader", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByText("拖拽图片到这里，或")).toBeInTheDocument();
     expect(screen.getByText(/JPEG · PNG · WebP · AVIF · HEIC/)).toBeInTheDocument();
-    expect(screen.getByText(/最大 23\.8 MB/)).toBeInTheDocument();
+    expect(screen.getByText(/最大 25 MB/)).toBeInTheDocument();
+    expect(screen.queryByText(/23\.8/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "选择图片" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("尚未设置封面。");
   });

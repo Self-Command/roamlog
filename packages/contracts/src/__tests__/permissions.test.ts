@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { can, canPlatform } from "../permissions";
+import {
+  ADMIN_ACTIONS,
+  NON_GRANTABLE_ADMIN_ACTIONS,
+  PLATFORM_ROLE_ACTIONS,
+  can,
+  canPlatform,
+} from "../permissions";
 
 describe("workspace permission matrix", () => {
   it("lets viewers participate in comments without granting content writes", () => {
@@ -87,6 +93,18 @@ describe("platform permission matrix", () => {
       expect(canPlatform("support", action)).toBe(false);
       expect(canPlatform("analyst", action)).toBe(false);
       expect(canPlatform("user", action)).toBe(false);
+    }
+  });
+
+  it("every non-grantable action is a real action", () => {
+    for (const action of NON_GRANTABLE_ADMIN_ACTIONS) {
+      expect(ADMIN_ACTIONS).toContain(action);
+    }
+  });
+
+  it("every role action is a real action", () => {
+    for (const [role, actions] of Object.entries(PLATFORM_ROLE_ACTIONS)) {
+      for (const action of actions) expect(ADMIN_ACTIONS, role).toContain(action);
     }
   });
 });

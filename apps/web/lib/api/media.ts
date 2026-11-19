@@ -23,13 +23,17 @@ import { unwrap } from "./shared";
 /**
  * Cover upload limits, restated from the server contract.
  *
- * `MediaPresignRequestSchema` caps uploads at 25 MB and accepts exactly these
- * six image types; `apps/api/src/modules/media/media-rules.ts` enforces the same
- * values (`MAX_MEDIA_BYTES`, `ALLOWED_IMAGE_MIME_TYPES`). The web app cannot
- * import the API package, so the constants live here and every selection is
- * re-checked against `MediaPresignRequestSchema` to prevent drift.
+ * `MediaPresignRequestSchema` hard-caps uploads at 25 MiB (26,214,400 bytes)
+ * and accepts exactly these six image types;
+ * `apps/api/src/modules/media/media-rules.ts` enforces the same values
+ * (`MAX_MEDIA_BYTES`, `ALLOWED_IMAGE_MIME_TYPES`). The web app cannot import the
+ * API package, so the constants live here and every selection is re-checked
+ * against `MediaPresignRequestSchema` to prevent drift.
+ *
+ * 与后台设置 `media.maxUploadBytes` 的默认值一致（十进制 25,000,000 字节），
+ * 改一处必须改另一处；后台设置会覆盖这个兜底值。
  */
-export const COVER_MAX_BYTES = 25 * 1024 * 1024;
+export const COVER_MAX_BYTES = 25_000_000;
 
 export const COVER_MIME_TYPES = [
   "image/jpeg",

@@ -21,6 +21,7 @@ import {
   type CoverUploadOperation,
   type CoverUploadPhase,
 } from "./cover-upload-error";
+import { formatBytes } from "./cover-upload-validation";
 
 export interface CoverChange {
   kind: "uploaded" | "removed";
@@ -71,11 +72,6 @@ const STATUS_LABEL: Record<CoverUploadPhase, string> = {
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
-}
-
-function formatMegabytes(bytes: number): string {
-  const megabytes = bytes / (1024 * 1024);
-  return Number.isInteger(megabytes) ? `${megabytes} MB` : `${megabytes.toFixed(1)} MB`;
 }
 
 function describeLiveText(input: {
@@ -364,7 +360,7 @@ export function CoverUploader({
             <div>
               <p className="text-sm text-body">拖拽图片到这里，或</p>
               <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-                JPEG · PNG · WebP · AVIF · HEIC / 最大 {formatMegabytes(effectiveMaxBytes)}
+                JPEG · PNG · WebP · AVIF · HEIC / 最大 {formatBytes(effectiveMaxBytes)}
               </p>
             </div>
             <Button variant="ghost" size="sm" onClick={openPicker} disabled={disabled}>
