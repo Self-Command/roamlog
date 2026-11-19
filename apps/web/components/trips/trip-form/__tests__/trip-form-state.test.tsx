@@ -9,7 +9,10 @@ import {
   applyTripDateChange,
   buildCreateTripRequest,
   buildUpdateTripRequest,
+  destinationFromPlace,
+  destinationsFromTrip,
   emptyTripFormValues,
+  manualDestination,
   mapServerFieldErrors,
   originFromPlace,
   parseBudgetAmount,
@@ -120,14 +123,20 @@ describe("validateTripForm", () => {
     );
   });
 
-  it("rejects more than 30 destinations", () => {
-    const destinations = Array.from({ length: 31 }, (_, index) => `目的地 ${index}`);
+  it("rejects more than 30 destinations and duplicate names", () => {
+    const destinations = Array.from({ length: 31 }, (_, index) =>
+      manualDestination(`目的地 ${index}`),
+    );
     expect(validateTripForm(makeValues({ destinations })).destinations).toBe(
       "最多添加 30 个目的地",
     );
     expect(
       validateTripForm(makeValues({ destinations: destinations.slice(0, 30) })).destinations,
     ).toBeUndefined();
+    expect(
+      validateTripForm(makeValues({ destinations: [manualDestination("京都"), manualDestination(" 京都 ")] }))
+        .destinations,
+    ).toBe("目的地不能重复");
   });
 });
 
@@ -148,8 +157,10 @@ describe("buildCreateTripRequest", () => {
           bbox: [121.3, 31.1, 121.6, 31.4],
         },
         originQuery: "上海",
-        destinations: [" 京都 ", "大阪"],
-        destinationCountryCodes: { 京都: "JP", 大阪: "JP" },
+        destinations: [
+          { ...manualDestination(" 京都 "), countryCode: "JP" },
+          manualDestination("大阪"),
+        ],
         budgetAmount: "12000.50",
         budgetCurrency: "cny",
         tags: [" 寺庙 ", "咖啡"],
@@ -170,7 +181,32 @@ describe("buildCreateTripRequest", () => {
       originAddress: "上海市, 中国",
       originBbox: [121.3, 31.1, 121.6, 31.4],
       timeZone: "Asia/Shanghai",
-      destinations: ["京都", "大阪"],
+      destinationsV2: [
+        {
+          name: "京都",
+          provider: "local",
+          providerPlaceId: null,
+          address: null,
+          country: null,
+          countryCode: "JP",
+          lat: null,
+          lng: null,
+          timeZone: null,
+          bbox: null,
+        },
+        {
+          name: "大阪",
+          provider: "local",
+          providerPlaceId: null,
+          address: null,
+          country: null,
+          countryCode: null,
+          lat: null,
+          lng: null,
+          timeZone: null,
+          bbox: null,
+        },
+      ],
       countryCodes: ["CN", "JP"],
       tags: ["寺庙", "咖啡"],
       guestNames: ["小林"],
@@ -206,6 +242,7 @@ describe("buildCreateTripRequest", () => {
       timeZone: null,
     });
     expect(payload).not.toHaveProperty("destinations");
+    expect(payload).not.toHaveProperty("destinationsV2");
     expect(payload).not.toHaveProperty("budgetAmountMinor");
     expect(payload).not.toHaveProperty("tags");
   });
@@ -258,8 +295,8 @@ describe("originFromPlace", () => {
       originBbox: [135.6081441, 34.8515754, 135.9281441, 35.1715754],
       timeZone: "Asia/Tokyo",
     });
-    // `Trip` has no origin-provider column and destinations are plain names, so
-    // neither `provider` nor `originProvider` may leak into the request.
+    // `Trip` has no origin-provider column, and destination providers live
+    // inside `destinationsV2` rows, so no top-level `provider` may leak.
     expect(payload).not.toHaveProperty("provider");
     expect(payload).not.toHaveProperty("originProvider");
   });
@@ -277,6 +314,7 @@ describe("buildUpdateTripRequest", () => {
 
     expect(patch).toEqual({ version: 4, title: "冬季京都" });
     expect(patch).not.toHaveProperty("destinations");
+    expect(patch).not.toHaveProperty("destinationsV2");
     expect(patch).not.toHaveProperty("originLat");
     expect(patch).not.toHaveProperty("tags");
     expect(patch).not.toHaveProperty("budgetAmountMinor");
@@ -381,19 +419,132 @@ describe("buildUpdateTripRequest", () => {
     expect(cleared).toMatchObject({ version: trip.version, originAddress: null, originBbox: null });
   });
 
-  it("sends destinations and learned country codes when the route changes", () => {
+  it("sends the structured destinations when the route changes", () => {
     const trip = makeRoundTrip();
     const patch = buildUpdateTripRequest(
       {
         ...valuesFromTrip(trip),
-        destinations: ["京都", "金泽"],
-        destinationCountryCodes: { 金泽: "JP" },
+        destinations: [
+          manualDestination("京都"),
+          { ...manualDestination("金泽"), countryCode: "JP" },
+        ],
       },
       trip,
     );
 
-    expect(patch?.destinations).toEqual(["京都", "金泽"]);
+    expect(patch?.destinationsV2?.map((destination) => destination.name)).toEqual([
+      "京都",
+      "金泽",
+    ]);
+    expect(patch?.destinationsV2?.[1]?.countryCode).toBe("JP");
+    // No deprecated names array: the server mirrors it from the rows.
+    expect(patch).not.toHaveProperty("destinations");
+    // The country set did not change (JP was already there).
     expect(patch).not.toHaveProperty("countryCodes");
+  });
+
+  it("echoes stored coordinates, address and timezone back into the edit form", () => {
+    const trip = makeRoundTrip({
+      destinations: ["京都"],
+      destinationsV2: [
+        {
+          id: "0198f000-0000-7000-8000-0000000000d1",
+          name: "京都",
+          provider: "geoapify",
+          providerPlaceId: "k-1",
+          address: "京都市, 京都府, 日本",
+          country: "日本",
+          countryCode: "JP",
+          lat: 35.0116,
+          lng: 135.7681,
+          timeZone: "Asia/Tokyo",
+          bbox: [135.6, 34.85, 135.93, 35.17],
+          order: 0,
+        },
+      ],
+    });
+
+    const values = valuesFromTrip(trip);
+    expect(values.destinations).toHaveLength(1);
+    expect(values.destinations[0]).toMatchObject({
+      id: "0198f000-0000-7000-8000-0000000000d1",
+      provider: "geoapify",
+      address: "京都市, 京都府, 日本",
+      lat: 35.0116,
+      lng: 135.7681,
+      timeZone: "Asia/Tokyo",
+      bbox: [135.6, 34.85, 135.93, 35.17],
+    });
+    // Echoing the stored group must not fabricate an update.
+    expect(buildUpdateTripRequest(values, trip)).toBeNull();
+  });
+
+  it("shows a names-only legacy trip and upgrades it to a structured row", () => {
+    const trip = makeRoundTrip({ destinations: ["京都"], destinationsV2: [] });
+    const values = valuesFromTrip(trip);
+
+    // Legacy rows are name-only: no invented coordinates or address.
+    expect(values.destinations).toEqual([
+      {
+        id: null,
+        name: "京都",
+        provider: "local",
+        providerPlaceId: null,
+        address: null,
+        country: null,
+        countryCode: null,
+        lat: null,
+        lng: null,
+        timeZone: null,
+        bbox: null,
+      },
+    ]);
+
+    const place: Place = {
+      provider: "geoapify",
+      providerPlaceId: "k-1",
+      name: "京都",
+      address: "京都市, 京都府, 日本",
+      country: "日本",
+      countryCode: "JP",
+      lat: 35.0116,
+      lng: 135.7681,
+      timeZone: "Asia/Tokyo",
+      bbox: [135.6, 34.85, 135.93, 35.17],
+      importance: 0.19,
+      type: "city",
+    };
+    const upgraded = buildUpdateTripRequest(
+      { ...values, destinations: [destinationFromPlace(place)] },
+      trip,
+    );
+    expect(upgraded?.destinationsV2).toEqual([
+      {
+        name: "京都",
+        provider: "geoapify",
+        providerPlaceId: "k-1",
+        address: "京都市, 京都府, 日本",
+        country: "日本",
+        countryCode: "JP",
+        lat: 35.0116,
+        lng: 135.7681,
+        timeZone: "Asia/Tokyo",
+        bbox: [135.6, 34.85, 135.93, 35.17],
+      },
+    ]);
+  });
+
+  it("keeps the chosen order when destinations move", () => {
+    const trip = makeRoundTrip({ destinations: ["京都", "大阪"], destinationsV2: [] });
+    const values = valuesFromTrip(trip);
+    const reordered = [values.destinations[1]!, values.destinations[0]!];
+    const patch = buildUpdateTripRequest({ ...values, destinations: reordered }, trip);
+
+    expect(patch?.destinationsV2?.map((destination) => destination.name)).toEqual(["大阪", "京都"]);
+    expect(destinationsFromTrip({ ...trip, destinationsV2: [] }).map((row) => row.name)).toEqual([
+      "京都",
+      "大阪",
+    ]);
   });
 });
 
@@ -411,6 +562,7 @@ describe("mapServerFieldErrors", () => {
     const errors = mapServerFieldErrors([
       { field: "originLat", message: "纬度不合法" },
       { field: "countryCodes.0", message: "国家代码不合法" },
+      { field: "destinationsV2.0.name", message: "目的地名称过长" },
       { field: "budgetAmountMinor", message: "金额必须非负" },
       { field: "workspaceId", message: "工作区不可写" },
     ]);

@@ -167,7 +167,20 @@ describe("TripForm create", () => {
       originAddress: "京都市, 京都府, 日本",
       originBbox: [135.6, 34.85, 135.93, 35.17],
       timeZone: "Asia/Tokyo",
-      destinations: ["金泽"],
+      destinationsV2: [
+        {
+          name: "金泽",
+          provider: "local",
+          providerPlaceId: null,
+          address: null,
+          country: null,
+          countryCode: null,
+          lat: null,
+          lng: null,
+          timeZone: null,
+          bbox: null,
+        },
+      ],
       countryCodes: ["JP"],
       tags: ["寺庙"],
       guestNames: ["小林"],
@@ -424,5 +437,208 @@ describe("TripForm edit", () => {
     expect(banner).toHaveTextContent("409 版本冲突");
     await user.click(screen.getByRole("button", { name: "重新加载最新版本" }));
     expect(onReload).toHaveBeenCalledTimes(1);
+  });
+});
+describe("TripForm structured destinations", () => {
+  const KYOTO_DESTINATION = {
+    id: "0198f000-0000-7000-8000-0000000000d1",
+    name: "京都",
+    provider: "geoapify" as const,
+    providerPlaceId: "k-1",
+    address: "京都市, 京都府, 日本",
+    country: "日本",
+    countryCode: "JP",
+    lat: 35.0116,
+    lng: 135.7681,
+    timeZone: "Asia/Tokyo",
+    bbox: [135.6, 34.85, 135.93, 35.17] as [number, number, number, number],
+    order: 0,
+  };
+  const OSAKA_DESTINATION = {
+    ...KYOTO_DESTINATION,
+    id: "0198f000-0000-7000-8000-0000000000d2",
+    name: "大阪",
+    address: "大阪市, 大阪府, 日本",
+    lat: 34.6937,
+    lng: 135.5023,
+    order: 1,
+  };
+
+  it("submits a searched destination with its address, coordinates and timezone", async () => {
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="create"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref="/w/roamlog-crew/trips"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/旅行标题/), "北陆七日");
+    await user.type(screen.getByRole("combobox", { name: "搜索目的地" }), "京都");
+    await user.click(await screen.findByRole("option", { name: /^京都/ }));
+
+    // The picked place is echoed with its provider address and coordinates.
+    expect(await screen.findByText("京都市, 京都府, 日本")).toBeInTheDocument();
+    expect(screen.getByText("35.0116, 135.7681")).toBeInTheDocument();
+    expect(screen.getByText("地点库")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "创建旅行" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+
+    const [payload] = onSubmit.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(payload.destinationsV2).toEqual([
+      {
+        name: "京都",
+        provider: "geoapify",
+        providerPlaceId: "k-1",
+        address: "京都市, 京都府, 日本",
+        country: "日本",
+        countryCode: "JP",
+        lat: 35.0116,
+        lng: 135.7681,
+        timeZone: "Asia/Tokyo",
+        bbox: [135.6, 34.85, 135.93, 35.17],
+      },
+    ]);
+    // The deprecated names array is no longer submitted by the form.
+    expect(payload).not.toHaveProperty("destinations");
+    expect(payload.countryCodes).toEqual(["JP"]);
+  });
+
+  it("echoes stored destination metadata on edit without rewriting it", async () => {
+    const trip = makeTrip({
+      version: 5,
+      countryCodes: ["CN", "JP"],
+      destinations: ["京都", "大阪"],
+      destinationsV2: [KYOTO_DESTINATION, OSAKA_DESTINATION],
+    });
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(await screen.findByText("京都市, 京都府, 日本")).toBeInTheDocument();
+    expect(screen.getByText("大阪市, 大阪府, 日本")).toBeInTheDocument();
+    expect(screen.getByText("35.0116, 135.7681")).toBeInTheDocument();
+    expect(screen.getAllByText("Asia/Tokyo").length).toBeGreaterThan(0);
+    expect(screen.getByText("2/30")).toBeInTheDocument();
+
+    const title = screen.getByLabelText(/旅行标题/);
+    await user.clear(title);
+    await user.type(title, "冬季关西");
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    // An untouched route must not be part of the patch.
+    expect(onSubmit).toHaveBeenCalledWith({ version: 5, title: "冬季关西" });
+  });
+
+  it("submits the new order after moving a destination", async () => {
+    const trip = makeTrip({
+      version: 2,
+      countryCodes: ["CN", "JP"],
+      destinations: ["京都", "大阪"],
+      destinationsV2: [KYOTO_DESTINATION, OSAKA_DESTINATION],
+    });
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "下移「京都」" }));
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const [patch] = onSubmit.mock.calls[0] as unknown as [
+      {
+        version: number;
+        destinationsV2?: Array<{ name: string; lat: number | null }>;
+      },
+    ];
+    expect(patch.version).toBe(2);
+    expect(patch.destinationsV2?.map((destination) => destination.name)).toEqual([
+      "大阪",
+      "京都",
+    ]);
+    // Metadata travels with the moved row instead of being dropped.
+    expect(patch.destinationsV2?.[1]?.lat).toBe(35.0116);
+  });
+
+  it("shows a names-only legacy trip and upgrades a row through search", async () => {
+    const trip = makeTrip({
+      version: 3,
+      countryCodes: ["CN", "JP"],
+      destinations: ["京都"],
+      destinationsV2: [],
+    });
+    const onSubmit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    useFakeMediaClient();
+
+    renderWithQuery(
+      <TripForm
+        mode="edit"
+        workspaceId="0198f000-0000-7000-8000-0000000000c1"
+        searchPlaces={searchPlaces}
+        cancelHref={`/w/roamlog-crew/trips/${trip.id}`}
+        initialTrip={trip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(await screen.findByText("仅名称")).toBeInTheDocument();
+    // Origin and destination both report missing coordinates in this fixture.
+    expect(screen.getAllByText("坐标为空").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "搜索替换「京都」" }));
+    await user.click(await screen.findByRole("option", { name: /^京都/ }));
+
+    expect(await screen.findByText("京都市, 京都府, 日本")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const [patch] = onSubmit.mock.calls[0] as unknown as [
+      { destinationsV2?: Array<Record<string, unknown>> },
+    ];
+    expect(patch.destinationsV2).toEqual([
+      {
+        name: "京都",
+        provider: "geoapify",
+        providerPlaceId: "k-1",
+        address: "京都市, 京都府, 日本",
+        country: "日本",
+        countryCode: "JP",
+        lat: 35.0116,
+        lng: 135.7681,
+        timeZone: "Asia/Tokyo",
+        bbox: [135.6, 34.85, 135.93, 35.17],
+      },
+    ]);
   });
 });

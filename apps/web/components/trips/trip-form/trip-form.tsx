@@ -42,7 +42,9 @@ import {
   applyTripDateChange,
   buildCreateTripRequest,
   buildUpdateTripRequest,
+  destinationFromPlace,
   emptyTripFormValues,
+  manualDestination,
   mapServerFieldErrors,
   originFromPlace,
   parseBudgetAmount,
@@ -299,28 +301,50 @@ export function TripForm(props: TripFormProps) {
     updateFields({ origin: null, originQuery: "" }, ["origin"]);
   }
 
-  function handleAddDestination(name: string, countryCode: string | null) {
+  function handleAddPlaceDestination(place: Place) {
+    const destination = destinationFromPlace(place);
     setValues((current) => ({
       ...current,
-      destinations: [...current.destinations, name],
-      destinationCountryCodes: countryCode
-        ? { ...current.destinationCountryCodes, [name.toLowerCase()]: countryCode }
-        : current.destinationCountryCodes,
+      destinations: [...current.destinations, destination],
+    }));
+    clearFieldErrors("destinations");
+  }
+
+  function handleAddManualDestination(name: string) {
+    setValues((current) => ({
+      ...current,
+      destinations: [...current.destinations, manualDestination(name)],
+    }));
+    clearFieldErrors("destinations");
+  }
+
+  function handleReplaceWithPlace(index: number, place: Place) {
+    const destination = destinationFromPlace(place);
+    setValues((current) => ({
+      ...current,
+      destinations: current.destinations.map((existing, currentIndex) =>
+        currentIndex === index ? destination : existing,
+      ),
+    }));
+    clearFieldErrors("destinations");
+  }
+
+  function handleReplaceWithManual(index: number, name: string) {
+    const destination = manualDestination(name);
+    setValues((current) => ({
+      ...current,
+      destinations: current.destinations.map((existing, currentIndex) =>
+        currentIndex === index ? destination : existing,
+      ),
     }));
     clearFieldErrors("destinations");
   }
 
   function handleRemoveDestination(index: number) {
-    setValues((current) => {
-      const removed = current.destinations[index];
-      const codes = { ...current.destinationCountryCodes };
-      if (removed) delete codes[removed.toLowerCase()];
-      return {
-        ...current,
-        destinations: current.destinations.filter((_, currentIndex) => currentIndex !== index),
-        destinationCountryCodes: codes,
-      };
-    });
+    setValues((current) => ({
+      ...current,
+      destinations: current.destinations.filter((_, currentIndex) => currentIndex !== index),
+    }));
   }
 
   function handleMoveDestination(index: number, direction: -1 | 1) {
@@ -664,8 +688,11 @@ export function TripForm(props: TripFormProps) {
                 comboboxId="trip-destination-search"
                 manualInputId="trip-destination-manual"
                 destinations={values.destinations}
-                countryCodes={values.destinationCountryCodes}
-                onAdd={handleAddDestination}
+                resolvePlace={(optionId) => placeIndex.current.get(optionId)}
+                onAddPlace={handleAddPlaceDestination}
+                onAddManual={handleAddManualDestination}
+                onReplacePlace={handleReplaceWithPlace}
+                onReplaceManual={handleReplaceWithManual}
                 onRemove={handleRemoveDestination}
                 onMove={handleMoveDestination}
                 search={search}
@@ -793,15 +820,16 @@ export function TripForm(props: TripFormProps) {
                 ) : (
                   <ol className="mt-2 space-y-1.5">
                     {values.destinations.slice(0, 6).map((destination, index) => (
-                      <li key={destination} className="flex items-baseline gap-2 text-sm">
+                      <li
+                        key={`${destination.name}-${index}`}
+                        className="flex items-baseline gap-2 text-sm"
+                      >
                         <span className="type-meta w-4 shrink-0 tabular-nums text-stone">
                           {index + 1}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-body">{destination}</span>
-                        {values.destinationCountryCodes[destination.toLowerCase()] ? (
-                          <span className="type-meta">
-                            {values.destinationCountryCodes[destination.toLowerCase()]}
-                          </span>
+                        <span className="min-w-0 flex-1 truncate text-body">{destination.name}</span>
+                        {destination.countryCode ? (
+                          <span className="type-meta">{destination.countryCode}</span>
                         ) : null}
                       </li>
                     ))}

@@ -3,6 +3,9 @@ import type {
   GeoBbox,
   Place,
   Trip,
+  TripDestination,
+  TripDestinationInput,
+  TripDestinationProvider,
   TripStatus,
   TripVisibility,
   UpdateTripRequest,
@@ -24,7 +27,8 @@ export const TRIP_FORM_LIMITS = {
   summary: 1000,
   origin: 120,
   destinationCount: 30,
-  destinationLength: 120,
+  /** Matches `TripDestinationSchema.name.max(160)` and DB `VARCHAR(160)`. */
+  destinationLength: 160,
   tagCount: 20,
   tagLength: 40,
   guestCount: 30,
@@ -67,6 +71,132 @@ export function originFromPlace(place: Place): TripFormOrigin {
   };
 }
 
+/**
+ * One destination as the form holds it. It is a superset of the request shape:
+ * `id` is the stored row id (echo/upgrade only, never submitted) and every
+ * metadata field mirrors what the place search returned.
+ */
+export interface TripFormDestination {
+  id: string | null;
+  name: string;
+  provider: TripDestinationProvider;
+  providerPlaceId: string | null;
+  address: string | null;
+  country: string | null;
+  countryCode: string | null;
+  lat: number | null;
+  lng: number | null;
+  timeZone: string | null;
+  bbox: GeoBbox | null;
+}
+
+/** Builds the form destination from the place the person actually picked. */
+export function destinationFromPlace(place: Place): TripFormDestination {
+  return {
+    id: null,
+    name: place.name,
+    provider: place.provider,
+    providerPlaceId: place.providerPlaceId,
+    address: place.address,
+    country: place.country,
+    countryCode: place.countryCode ?? null,
+    lat: place.lat,
+    lng: place.lng,
+    timeZone: place.timeZone ?? null,
+    bbox: place.bbox ?? null,
+  };
+}
+
+/** Manually typed destination: a real destination, but no place metadata. */
+export function manualDestination(name: string): TripFormDestination {
+  return {
+    id: null,
+    name,
+    provider: "local",
+    providerPlaceId: null,
+    address: null,
+    country: null,
+    countryCode: null,
+    lat: null,
+    lng: null,
+    timeZone: null,
+    bbox: null,
+  };
+}
+
+/** Stored row -> form value. A `null` provider stays "local" (unknown source). */
+function destinationFromStored(row: TripDestination): TripFormDestination {
+  return {
+    id: row.id,
+    name: row.name,
+    provider: row.provider ?? "local",
+    providerPlaceId: row.providerPlaceId,
+    address: row.address,
+    country: row.country,
+    countryCode: row.countryCode,
+    lat: row.lat,
+    lng: row.lng,
+    timeZone: row.timeZone,
+    bbox: row.bbox,
+  };
+}
+
+/**
+ * Form destinations for a saved trip.
+ *
+ * Prefers `destinationsV2` (ordered, soft-delete-free). A trip that only has the
+ * deprecated `destinations` names is shown as name-only rows so the edit page
+ * still echoes every place and the person can upgrade a row by searching again.
+ */
+export function destinationsFromTrip(trip: Trip): TripFormDestination[] {
+  if (trip.destinationsV2 && trip.destinationsV2.length > 0) {
+    return [...trip.destinationsV2]
+      .sort((left, right) => left.order - right.order)
+      .map(destinationFromStored);
+  }
+  return trip.destinations.map(manualDestination);
+}
+
+/** Request shape: no `id`, no `order` (the server assigns order). */
+export function destinationInput(destination: TripFormDestination): TripDestinationInput {
+  return {
+    name: destination.name.trim(),
+    provider: destination.provider,
+    providerPlaceId: destination.providerPlaceId,
+    address: destination.address,
+    country: destination.country,
+    countryCode: destination.countryCode,
+    lat: destination.lat,
+    lng: destination.lng,
+    timeZone: destination.timeZone,
+    bbox: destination.bbox,
+  };
+}
+
+/** Order-aware equality: moving rows is a change, reordering metadata is too. */
+export function sameDestinationGroup(
+  left: readonly TripFormDestination[],
+  right: readonly TripFormDestination[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((destination, index) => {
+    const other = right[index];
+    if (!other) return false;
+    return (
+      destination.name.trim() === other.name.trim() &&
+      destination.provider === other.provider &&
+      destination.providerPlaceId === other.providerPlaceId &&
+      destination.address === other.address &&
+      destination.country === other.country &&
+      destination.countryCode === other.countryCode &&
+      destination.lat === other.lat &&
+      destination.lng === other.lng &&
+      destination.timeZone === other.timeZone &&
+      sameBbox(destination.bbox, other.bbox)
+    );
+  });
+}
+
 export interface TripFormValues {
   title: string;
   summary: string;
@@ -78,9 +208,7 @@ export interface TripFormValues {
   origin: TripFormOrigin | null;
   /** Text currently in the origin combobox (kept when no place was selected). */
   originQuery: string;
-  destinations: string[];
-  /** Country codes learned from the places provider, keyed by destination name. */
-  destinationCountryCodes: Record<string, string>;
+  destinations: TripFormDestination[];
   /** Decimal string as typed by the person, e.g. "1200.50". */
   budgetAmount: string;
   budgetCurrency: string;
@@ -139,7 +267,6 @@ export function emptyTripFormValues(): TripFormValues {
     origin: null,
     originQuery: "",
     destinations: [],
-    destinationCountryCodes: {},
     budgetAmount: "",
     budgetCurrency: "",
     tags: [],
@@ -216,8 +343,7 @@ export function valuesFromTrip(trip: Trip): TripFormValues {
         }
       : null,
     originQuery: originName,
-    destinations: [...trip.destinations],
-    destinationCountryCodes: {},
+    destinations: destinationsFromTrip(trip),
     budgetAmount: formatBudgetInput(trip.budgetAmountMinor),
     budgetCurrency: trip.budgetCurrency ?? "",
     tags: [...trip.tags],
@@ -261,8 +387,8 @@ export function deriveCountryCodes(
   const originCode = values.origin?.countryCode?.trim().toUpperCase();
   if (originCode) codes.add(originCode);
   for (const destination of values.destinations) {
-    const code = values.destinationCountryCodes[destination.trim().toLowerCase()];
-    if (code) codes.add(code.trim().toUpperCase());
+    const code = destination.countryCode?.trim().toUpperCase();
+    if (code) codes.add(code);
   }
   for (const code of preserved) {
     const normalized = code.trim().toUpperCase();
@@ -299,15 +425,16 @@ export function validateTripForm(values: TripFormValues): TripFormErrors {
     errors.origin = `起点最多 ${TRIP_FORM_LIMITS.origin} 个字符`;
   }
 
+  const destinationNames = values.destinations.map((destination) => destination.name);
   if (values.destinations.length > TRIP_FORM_LIMITS.destinationCount) {
     errors.destinations = `最多添加 ${TRIP_FORM_LIMITS.destinationCount} 个目的地`;
-  } else if (values.destinations.some((item) => item.trim().length === 0)) {
+  } else if (destinationNames.some((name) => name.trim().length === 0)) {
     errors.destinations = "目的地不能为空";
   } else if (
-    values.destinations.some((item) => item.trim().length > TRIP_FORM_LIMITS.destinationLength)
+    destinationNames.some((name) => name.trim().length > TRIP_FORM_LIMITS.destinationLength)
   ) {
     errors.destinations = `单个目的地不能超过 ${TRIP_FORM_LIMITS.destinationLength} 个字符`;
-  } else if (hasDuplicates(values.destinations)) {
+  } else if (hasDuplicates(destinationNames)) {
     errors.destinations = "目的地不能重复";
   }
 
@@ -384,7 +511,7 @@ export function buildCreateTripRequest(values: TripFormValues): CreateTripReques
   const origin = originPayload(values);
   const budget = parseBudgetAmount(values.budgetAmount);
   const countryCodes = deriveCountryCodes(values);
-  const destinations = values.destinations.map((item) => item.trim());
+  const destinationsV2 = values.destinations.map(destinationInput);
 
   return {
     title: values.title.trim(),
@@ -394,7 +521,8 @@ export function buildCreateTripRequest(values: TripFormValues): CreateTripReques
     startDate: values.startDate,
     endDate: values.endDate,
     ...(origin ?? {}),
-    ...(destinations.length > 0 ? { destinations } : {}),
+    // Structured group only: the server mirrors the deprecated names array.
+    ...(destinationsV2.length > 0 ? { destinationsV2 } : {}),
     ...(countryCodes.length > 0 ? { countryCodes } : {}),
     ...(values.tags.length > 0 ? { tags: values.tags.map((tag) => tag.trim()) } : {}),
     ...(values.guestNames.length > 0
@@ -419,7 +547,7 @@ export function buildUpdateTripRequest(
   const budget = parseBudgetAmount(values.budgetAmount);
   const nextBudgetMinor = budget.ok ? budget.amountMinor : null;
   const nextCurrency = values.budgetCurrency.trim().toUpperCase() || null;
-  const nextDestinations = values.destinations.map((item) => item.trim());
+  const initialDestinations = destinationsFromTrip(initialTrip);
   const preservedCountryCodes = initialTrip.countryCodes.filter(
     (code) => code.toUpperCase() !== (initialTrip.originCountryCode ?? "").toUpperCase(),
   );
@@ -464,8 +592,8 @@ export function buildUpdateTripRequest(
     }
   }
 
-  if (!sameStringArray(nextDestinations, initialTrip.destinations)) {
-    patch.destinations = nextDestinations;
+  if (!sameDestinationGroup(values.destinations, initialDestinations)) {
+    patch.destinationsV2 = values.destinations.map(destinationInput);
   }
   if (!sameStringSet(nextCountryCodes, initialTrip.countryCodes)) {
     patch.countryCodes = nextCountryCodes;
@@ -539,6 +667,8 @@ function mapServerField(field: string | undefined): TripFormField | null {
     case "tags":
     case "guestNames":
       return field;
+    case "destinationsV2":
+      return "destinations";
     case "originLat":
     case "originLng":
     case "originCountryCode":

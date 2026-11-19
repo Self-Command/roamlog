@@ -123,8 +123,11 @@ describe("destinations field place attribution", () => {
         comboboxId="trip-destination-search"
         manualInputId="trip-destination-manual"
         destinations={[]}
-        countryCodes={{}}
-        onAdd={vi.fn()}
+        resolvePlace={() => undefined}
+        onAddPlace={vi.fn()}
+        onAddManual={vi.fn()}
+        onReplacePlace={vi.fn()}
+        onReplaceManual={vi.fn()}
         onRemove={vi.fn()}
         onMove={vi.fn()}
         search={vi.fn(async () => ({
