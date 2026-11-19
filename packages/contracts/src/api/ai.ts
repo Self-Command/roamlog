@@ -21,8 +21,14 @@ export const AiProtocolSchema = z.enum([
 export type AiProtocol = z.infer<typeof AiProtocolSchema>;
 
 /**
- * The tool set: read (`places.search`, `trips.get`, `stops.list`), additive
- * writes, and one field-whitelisted `trips.update`.
+ * The tool set: read (`places.search`, `trips.get`, `trips.list`, `stops.list`),
+ * additive writes, and one field-whitelisted `trips.update`.
+ *
+ * `trips.list` is the discovery read: a user says "make the Kyoto 5-day trip 6
+ * days" by name, not by UUID, so the model needs a workspace-scoped list to
+ * turn that name into a `tripId` before `trips.update`/`stops.add` can act on
+ * it. It reuses the product list query, so visibility and pagination are the
+ * same rules the trips page uses.
  *
  * `trips.update` exists because "make my 5-day trip 6 days" is a real user
  * request that otherwise forces the model to `trips.create` a duplicate. The
@@ -34,6 +40,7 @@ export const AI_TOOL_NAMES = [
   "places.search",
   "trips.create",
   "trips.get",
+  "trips.list",
   "trips.update",
   "stops.add",
   "stops.list",
@@ -45,7 +52,12 @@ export const AiToolNameSchema = z.enum(AI_TOOL_NAMES);
 export type AiToolName = z.infer<typeof AiToolNameSchema>;
 
 /** Tools the planner may execute while it is still collecting context. */
-export const AI_READ_ONLY_TOOLS = ["places.search", "trips.get", "stops.list"] as const;
+export const AI_READ_ONLY_TOOLS = [
+  "places.search",
+  "trips.get",
+  "trips.list",
+  "stops.list",
+] as const;
 const readOnlyTools = new Set<string>(AI_READ_ONLY_TOOLS);
 export function isReadOnlyAiTool(tool: string): boolean {
   return readOnlyTools.has(tool);

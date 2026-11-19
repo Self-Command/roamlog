@@ -105,6 +105,15 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
   }),
   "trips.get": z.object({ tripId: uuid }),
   /**
+   * Discovery only: a title keyword and a page size. Deliberately no
+   * `workspaceId`/`userId`/`ownerId` — the workspace and caller always come
+   * from the authenticated membership, so a model cannot widen its own scope.
+   */
+  "trips.list": z.object({
+    query: nonEmpty(80).optional(),
+    limit: z.number().int().min(1).max(20).optional(),
+  }),
+  /**
    * Descriptive fields only. `visibility`, `showExactPhotoLocation`, `status`,
    * `favorite`, covers, grants and settings are absent on purpose: the model may
    * fix a mistyped title or extend a trip's dates, never change who can read it
@@ -172,7 +181,7 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
   {
     name: "places.search",
     description:
-      "Search the place database and return candidates with providerPlaceId, country and coordinates. Read-only, no side effects. Always search before adding a stop.",
+      "Search the place database and return candidates with providerPlaceId, country and coordinates. Read-only, no side effects. Always search before adding a stop. If a Chinese/Japanese name returns degraded with no candidates, retry with the romanized or English name (for example Kiyomizu-dera, Fushimi Inari, Kinkaku-ji).",
     parameters: {
       type: "object",
       properties: {
@@ -219,9 +228,31 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
     },
   },
   {
+    name: "trips.list",
+    description:
+      "Find trips in the current workspace, optionally filtered by a title keyword. Returns tripId, title, startDate, endDate and primary destination only. Read-only, no side effects. When the user refers to a trip by NAME (for example \"京都 5 日游\") and gives no tripId, call this first and use the matching tripId with trips.update or stops.add. Prefer a short distinctive keyword (for example 京都) if the full phrase does not match; match the returned title and dates to pick the right trip.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          maxLength: 80,
+          description: "Optional title keyword, 1-80 characters.",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 20,
+          description: "Maximum trips to return, default 10.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: "trips.update",
     description:
-      "Change an EXISTING trip's title, summary, startDate or endDate (for example \"make it 6 days\" means a new endDate). WRITES DATA. Use this instead of creating a new trip when the user wants to extend, shorten, rename or re-summarise a trip. It cannot delete a trip, change who can see it, or touch settings.",
+      "Change an EXISTING trip's title, summary, startDate or endDate (for example \"make it 6 days\" means a new endDate). WRITES DATA. Use this instead of creating a new trip when the user wants to extend, shorten, rename or re-summarise a trip. When the user names the trip instead of giving a tripId, call trips.list first to resolve its id. It cannot delete a trip, change who can see it, or touch settings.",
     parameters: {
       type: "object",
       properties: {
@@ -512,6 +543,8 @@ export class AiToolbox {
         return this.searchPlaces(parsed.data as { q: string; limit?: number }, context);
       case "trips.get":
         return this.getTrip((parsed.data as { tripId: string }).tripId, context);
+      case "trips.list":
+        return this.listTrips(parsed.data as { query?: string; limit?: number }, context);
       case "stops.list":
         return this.listStops((parsed.data as { tripId: string }).tripId, context);
       case "trips.create": {
@@ -583,6 +616,39 @@ export class AiToolbox {
         destinations: trip.destinations,
         visibility: trip.visibility,
         version: trip.version,
+      },
+    };
+  }
+
+  /**
+   * Lists trips through the product's own read path.
+   *
+   * `TripsService.list` applies the `trip:read` role check, the workspace
+   * scope and `tripVisibilityWhere`, so the model sees exactly what the trips
+   * page shows this caller — private trips of other people and trips of other
+   * workspaces never enter the payload. Only small discovery fields are
+   * projected: the summary body is deliberately dropped to keep the planning
+   * context small.
+   */
+  private async listTrips(
+    args: { query?: string; limit?: number },
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const page = await this.trips.list(context.actor, context.membership, {
+      limit: args.limit ?? 10,
+      sort: "startDate:desc",
+      ...(args.query === undefined ? {} : { q: args.query }),
+    });
+    return {
+      ok: true,
+      payload: {
+        trips: page.items.map((trip) => ({
+          tripId: trip.id,
+          title: trip.title,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          ...(trip.destinations[0] ? { destination: trip.destinations[0] } : {}),
+        })),
       },
     };
   }

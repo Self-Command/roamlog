@@ -120,6 +120,7 @@ export interface ToolServiceMocks {
   trips: {
     create: ReturnType<typeof vi.fn>;
     get: ReturnType<typeof vi.fn>;
+    list: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
   stops: { create: ReturnType<typeof vi.fn>; list: ReturnType<typeof vi.fn> };
@@ -133,6 +134,11 @@ export function toolServiceMocks(): ToolServiceMocks {
     trips: {
       create: vi.fn().mockResolvedValue(tripRecord({ id: TRIP_ID })),
       get: vi.fn().mockResolvedValue(tripRecord()),
+      list: vi.fn().mockResolvedValue({
+        items: [tripRecord()],
+        nextCursor: null,
+        hasMore: false,
+      }),
       update: vi.fn().mockResolvedValue(tripRecord({ budgetAmountMinor: 800_000 })),
     },
     stops: {

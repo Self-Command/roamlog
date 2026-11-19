@@ -26,6 +26,7 @@ describe("AI planning contracts", () => {
       "places.search",
       "trips.create",
       "trips.get",
+      "trips.list",
       "trips.update",
       "stops.add",
       "stops.list",
@@ -50,6 +51,8 @@ describe("AI planning contracts", () => {
     }
     expect(isReadOnlyAiTool("places.search")).toBe(true);
     expect(isReadOnlyAiTool("trips.create")).toBe(false);
+    // Discovery must run while planning, before any write is proposed.
+    expect(isReadOnlyAiTool("trips.list")).toBe(true);
     // Updating an existing trip is a write: it never runs while planning.
     expect(isReadOnlyAiTool("trips.update")).toBe(false);
   });

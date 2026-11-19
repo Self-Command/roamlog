@@ -4,6 +4,11 @@ import { AnthropicMessagesAdapter } from "./anthropic-messages.adapter.js";
 import { OpenAiChatAdapter } from "./openai-chat.adapter.js";
 import { OpenAiResponsesAdapter } from "./openai-responses.adapter.js";
 
+// The SSE reader is part of the adapter surface: the streaming plan loop needs
+// the same zero-dependency parser for every protocol.
+export { parseSseStream, postSse } from "./sse.js";
+export type { PostSseInit, SseFrame } from "./sse.js";
+
 /**
  * Builds the adapter for one request's resolved settings.
  *

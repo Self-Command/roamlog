@@ -19,6 +19,7 @@ const TOOL_LABELS: Readonly<Record<AiToolName, string>> = {
   "places.search": "搜索地点",
   "trips.create": "创建旅行",
   "trips.get": "查阅旅行",
+  "trips.list": "查找旅行",
   "trips.update": "修改旅行信息",
   "stops.add": "添加行程节点",
   "stops.list": "查看行程节点",
@@ -205,6 +206,13 @@ export function describePlannedCall(call: AiToolCall): PlannedCallCopy {
     }
     case "trips.get": {
       return { label, headline: "读取一份已有旅行", details, write: isWriteCall(call) };
+    }
+    case "trips.list": {
+      const query = textArg(args, "query");
+      const limit = numberArg(args, "limit");
+      if (query) details.push(`标题包含「${query}」`);
+      if (limit !== undefined) details.push(`最多 ${limit} 条`);
+      return { label, headline: "查找已有旅行", details, write: isWriteCall(call) };
     }
     case "trips.update": {
       // "Make it 6 days" arrives as new dates on an existing trip, so the dates
