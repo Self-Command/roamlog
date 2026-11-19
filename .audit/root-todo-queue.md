@@ -47,3 +47,42 @@
 2. **迁移提交后必须通知根 Agent 应用**：今天因 `0009_media_motion` 未应用到共享库，导致**所有公开分享页 500**。
 3. **`prisma generate` 由提交 schema 的人负责**，不作为"后续事项"（今天 `packages/db` 因此编译不过）。
 4. **`packages/contracts` 的任何改动必须保持每一步可编译**：它是被全仓 import 的共享包，语法错误会让所有 Agent 的本地环境同时失效。
+
+---
+
+## 第二批需求（用户 2026-11-19 追加，全部"只移植不设计"）
+
+| # | 需求 | 决策 | 状态 |
+|---|---|---|---|
+| B1 | **可见性 custom + 同行人重设计** | 同行人可提升 editor；分享链接保留且独立；工作区级授权对该区全体生效 | P1 已交付（判定收敛到 6 处 + 40 组对拍）；**P2 API / P3 UI 待派** |
+| B2 | **全球地址（中国门牌级 + 全球）** | 腾讯主 + 高德备（待 key）+ Geoapify 全球；中国坐标**允许入库**；Photon 中国兜底**必须关**；允许地图点选兜底 | 腾讯实测通过；接入中 |
+| B3 | **真实 3D 地球** | 接受**矢量地球**（非照片级卫星）；零新增依赖（maplibre `projection="globe"`） | 实现中 |
+| B4 | **洞察图表重做** | shadcn/ui Charts + Recharts（139.7KB gzip）；**禁无限循环动效**；热力图保持 DOM 网格 | 实现中 |
+| B5 | **EXIF 元数据 + 地图打点** | exifr；**压缩前读**；精选约 40 字段；公开页**显示精确 GPS** + Owner 开关 | 实现中（地图打点后置） |
+| B6 | **富文本编辑器** | **已是 TipTap 3.34** → 走 A 路线：补官方扩展，不换栈 | 实现中 |
+| B7 | **AI 聊天页（ChatGPT 式）** | assistant-ui 骨架 + vercel/chatbot 渲染 + LibreChat 审批语义；**不买付费包** | 实现中（本阶段 localStorage） |
+| B8 | **AI 写作（选中优化）** | **方案 A：原位预览 + 接受**（Notion/Google Docs 范式）；需 `baseVersion` + `selectionHash` 校验 | 调研完成，**待派** |
+
+## 关键约束（贯穿第二批）
+
+1. **只移植不设计**：报告必须写"移植自哪里"（URL / 路径 / commit）；写不出来视为自己设计，按未完成退回。
+2. **依赖由协调者一次性安装**（已装 `gcoord`/`exifr`/`recharts`/`@assistant-ui/react`/tiptap 扩展）；任务包一律冻结 `package.json`。
+3. **输出纪律**：命令带 `| tail`，禁跑全量 test（前几轮 Agent 大面积失败与输出过载相关）。
+4. **契约生成单点**：只有根 Agent 跑 `contracts:generate`。
+5. **迁移提交后必须通知根 Agent 应用**到共享库（0009/0010 漏应用曾导致公开页与行程页全 500）。
+
+## 第二批已知待办
+
+| 项 | 说明 |
+|---|---|
+| `VIS P2/P3` | 可见性 API（grants + 同行人状态/角色）+ UI（搜索式多选、chip、同行人面板） |
+| `AI_WRITING` | 编辑器内选中改写（方案 A） |
+| AI 会话服务端持久化 | 当前仅 localStorage |
+| 地图打点（照片 GPS） | EXIF 存了坐标，地图侧未消费 |
+| 高德备源 | 等用户 key；无 key 时降级 |
+| 天地图补测 | CGCS2000≈WGS-84，免转换，可作中国免费兜底 |
+| worker 上传落桶 | 入队→上传间换桶会导致行 bucket 与实际不一致 |
+
+## 迁移台账（共享库已应用 13 条）
+
+0009 media_motion · 0010 trip_destinations · 0011 export_bucket · 0012 visibility_and_participants · 0013 stop_provider_tencent
