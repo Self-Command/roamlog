@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseFilters,
   UseGuards,
@@ -146,6 +147,45 @@ export class TripsController {
     @Param("userId") userId: string,
   ) {
     return this.trips.removeParticipant(actor, membership, tripId, userId);
+  }
+
+  @Patch("trips/:tripId/participants/:userId")
+  @ContentTenant("trip")
+  @RequirePermission("trip:update", "trip")
+  @UseGuards(ContentTenantGuard, RolesGuard)
+  updateParticipant(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("tripId") tripId: string,
+    @Param("userId") userId: string,
+    @Body() body: unknown,
+  ) {
+    return this.trips.updateParticipant(actor, membership, tripId, userId, body);
+  }
+
+  @Get("trips/:tripId/access-grants")
+  @ContentTenant("trip")
+  @RequirePermission("trip:read", "trip")
+  @UseGuards(ContentTenantGuard, RolesGuard)
+  listAccessGrants(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("tripId") tripId: string,
+  ) {
+    return this.trips.listAccessGrants(actor, membership, tripId);
+  }
+
+  @Put("trips/:tripId/access-grants")
+  @ContentTenant("trip")
+  @RequirePermission("trip:update", "trip")
+  @UseGuards(ContentTenantGuard, RolesGuard)
+  setAccessGrants(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("tripId") tripId: string,
+    @Body() body: unknown,
+  ) {
+    return this.trips.setAccessGrants(actor, membership, tripId, body);
   }
 
   @Get("trips/:tripId/activity")

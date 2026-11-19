@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -10,9 +11,13 @@ import {
   AddTripParticipantRequestSchema,
   CreateTripRequestSchema,
   DuplicateTripRequestSchema,
+  SetTripAccessGrantsRequestSchema,
+  TripAccessGrantsResponseSchema,
   TripListQuerySchema,
+  UpdateParticipantRequestSchema,
   UpdateTripRequestSchema,
   type Trip,
+  type TripAccessGrantsResponse,
   type TripCover,
   type TripDestinationInput,
   type TripPage,
@@ -50,6 +55,7 @@ import type { ContentTransaction } from "./content-transaction.js";
 import { tripVisibilityWhere } from "./trip-access.js";
 import {
   TripsRepository,
+  type TripAccessGrantRecord,
   type TripCreateData,
   type TripDestinationWriteData,
   type TripUpdateData,
@@ -567,6 +573,134 @@ export class TripsService {
     }
   }
 
+  /**
+   * Reads the explicit audience of a trip. Any reader of the trip may see who
+   * else can read it; the visibility decision runs first so a non-reader gets
+   * the same 404 as every other trip surface (never a 403 existence oracle).
+   */
+  async listAccessGrants(
+    _actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    tripId: string,
+  ): Promise<TripAccessGrantsResponse> {
+    this.permissions.assertCan(membership.role, "trip:read", "trip");
+    await this.requireVisibleTrip(membership, tripId);
+    return this.presentAccessGrants(tripId);
+  }
+
+  /**
+   * Whole-set replacement: the payload is the complete audience, so rows that
+   * are not listed are deleted in the same transaction that inserts the new
+   * ones.
+   *
+   * Writing grants on a non-`custom` trip is allowed on purpose: switching the
+   * trip to `custom` later must not require a second save. The response reports
+   * the persisted rows exactly as they are, and `resolveTripAccess` only
+   * consults them when `visibility === "custom"` — so such rows grant nothing
+   * while the trip is `workspace`, `private` or `public_link`.
+   */
+  async setAccessGrants(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    tripId: string,
+    rawInput: unknown,
+  ): Promise<TripAccessGrantsResponse> {
+    // Visibility first: a non-reader must see 404, not a 403 that reveals the
+    // trip exists. Only then does the (higher) manage-access bar apply.
+    const trip = await this.requireVisibleTrip(membership, tripId);
+    this.assertCanManageAccess(actor, membership, trip);
+    const input = parseRequest(SetTripAccessGrantsRequestSchema, rawInput);
+    await this.assertGrantTargetsInTenancy(actor, membership, input);
+
+    await this.repository.transaction(async (tx) => {
+      await this.repository.replaceAccessGrants(tx, {
+        tripId,
+        workspaceIds: input.workspaces,
+        userIds: input.users,
+        // Never read from the request body: the audit trail names the actor.
+        grantedById: actor.user.id,
+      });
+      await this.activities.record(tx, {
+        workspaceId: membership.workspaceId,
+        tripId,
+        actorId: actor.user.id,
+        verb: "trip.access_grant.updated",
+        entityType: "trip",
+        entityId: tripId,
+        metadata: { workspaceIds: input.workspaces, userIds: input.users },
+      });
+    });
+
+    return this.presentAccessGrants(tripId);
+  }
+
+  /**
+   * Changes a participant's role and/or invitation status.
+   *
+   * Only the trip creator or a Workspace owner/admin may do this; a participant
+   * who is merely an `editor` cannot promote themselves or anyone else.
+   */
+  async updateParticipant(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    tripId: string,
+    userId: string,
+    rawInput: unknown,
+  ): Promise<TripParticipant> {
+    const trip = await this.requireVisibleTrip(membership, tripId);
+    this.assertCanManageAccess(actor, membership, trip);
+    assertUuid(userId, "userId");
+    const input = parseRequest(UpdateParticipantRequestSchema, rawInput);
+
+    return this.repository.transaction(async (tx) => {
+      const participant = await this.repository.findParticipant(
+        membership.workspaceId,
+        tripId,
+        userId,
+        tx,
+      );
+      if (!participant) {
+        throw new NotFoundException({
+          code: "PARTICIPANT_NOT_FOUND",
+          message: "Trip participant not found.",
+        });
+      }
+
+      const updated = await this.repository.updateParticipant(tx, {
+        participantId: participant.id,
+        data: {
+          ...(input.role === undefined ? {} : { role: input.role }),
+          ...(input.status === undefined ? {} : { status: input.status }),
+        },
+      });
+
+      if (input.role !== undefined && input.role !== participant.role) {
+        await this.activities.record(tx, {
+          workspaceId: membership.workspaceId,
+          tripId,
+          actorId: actor.user.id,
+          verb: "participant.role_changed",
+          entityType: "participant",
+          entityId: participant.id,
+          metadata: { userId, role: input.role },
+        });
+      }
+      if (input.status !== undefined && input.status !== participant.status) {
+        await this.activities.record(tx, {
+          workspaceId: membership.workspaceId,
+          tripId,
+          actorId: actor.user.id,
+          verb: "participant.status_changed",
+          entityType: "participant",
+          entityId: participant.id,
+          metadata: { userId, status: input.status },
+        });
+      }
+
+      return presentParticipant(updated);
+    });
+  }
+
   async removeParticipant(
     actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
@@ -616,6 +750,132 @@ export class TripsService {
   ) {
     const trip = await this.requireVisibleTrip(membership, tripId);
     return this.activities.listTrip(actor, membership, trip, rawQuery);
+  }
+
+  /**
+   * Audience and participant-role changes are a higher bar than ordinary trip
+   * editing. `trip:update` is the existing capability that admits Workspace
+   * editors, so it is reused as the base gate; on top of it only the trip
+   * creator ("trip owner") or a Workspace owner/admin may re-share the trip or
+   * change a participant's role. No second permission matrix is introduced —
+   * `PermissionService` stays the single source of the role capabilities.
+   */
+  private assertCanManageAccess(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    trip: { createdById: string },
+  ): void {
+    this.permissions.assertCan(membership.role, "trip:update", "trip");
+    if (
+      membership.role !== "owner" &&
+      membership.role !== "admin" &&
+      trip.createdById !== actor.user.id
+    ) {
+      throw new ForbiddenException({
+        code: "WORKSPACE_ROLE_FORBIDDEN",
+        message: "Only the trip creator or a Workspace owner/admin may manage access.",
+      });
+    }
+  }
+
+  /**
+   * Rejects cross-tenant grant targets before any write.
+   *
+   * A workspace grant may only name a Workspace the actor belongs to; a user
+   * grant may only name an active member of the trip's own Workspace (the same
+   * convention `addParticipant` already uses). Anything else is a 400 with the
+   * field-level `VALIDATION_ERROR` shape, not a 404 that would act as an
+   * existence oracle for arbitrary tenant ids.
+   */
+  private async assertGrantTargetsInTenancy(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    input: { workspaces: readonly string[]; users: readonly string[] },
+  ): Promise<void> {
+    const [activeWorkspaceIds, activeUserIds] = await Promise.all([
+      this.repository.findActiveWorkspaceIdsForUser(actor.user.id, input.workspaces),
+      this.repository.findActiveMemberIds(membership.workspaceId, input.users),
+    ]);
+    const invalidWorkspaces = input.workspaces.filter((id) => !activeWorkspaceIds.includes(id));
+    const invalidUsers = input.users.filter((id) => !activeUserIds.includes(id));
+    if (invalidWorkspaces.length === 0 && invalidUsers.length === 0) {
+      return;
+    }
+
+    throw new BadRequestException({
+      code: "VALIDATION_ERROR",
+      message:
+        "Access grants must reference Workspaces you belong to and active members of this Workspace.",
+      errors: [
+        ...invalidWorkspaces.map((id) => ({
+          field: "workspaces",
+          code: "INVALID_INPUT",
+          message: `Workspace ${id} is not one you belong to.`,
+        })),
+        ...invalidUsers.map((id) => ({
+          field: "users",
+          code: "INVALID_INPUT",
+          message: `User ${id} is not an active member of this Workspace.`,
+        })),
+      ],
+    });
+  }
+
+  /** Projects stored grants into the contract's `grants` + `resolved` shape. */
+  private async presentAccessGrants(tripId: string): Promise<TripAccessGrantsResponse> {
+    const grants = await this.repository.listAccessGrants(tripId);
+    const workspaceIds = [
+      ...new Set(grants.flatMap((grant) => (grant.workspaceId ? [grant.workspaceId] : []))),
+    ];
+    const userIds = [...new Set(grants.flatMap((grant) => (grant.userId ? [grant.userId] : [])))];
+    const [workspaces, users] = await Promise.all([
+      this.repository.findWorkspacesByIds(workspaceIds),
+      this.repository.findUsersByIds(userIds),
+    ]);
+    const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
+    const userById = new Map(users.map((user) => [user.id, user]));
+
+    const resolvedWorkspaces = grants.flatMap((grant: TripAccessGrantRecord) => {
+      if (!grant.workspaceId) {
+        return [];
+      }
+      const workspace = workspaceById.get(grant.workspaceId);
+      return [
+        {
+          targetType: "workspace" as const,
+          targetId: grant.workspaceId,
+          label: (workspace?.name.trim() || "Unknown workspace").slice(0, 160),
+          sublabel: null,
+        },
+      ];
+    });
+    const resolvedUsers = grants.flatMap((grant: TripAccessGrantRecord) => {
+      if (!grant.userId) {
+        return [];
+      }
+      const user = userById.get(grant.userId);
+      const email = user?.email ?? "";
+      const at = email.lastIndexOf("@");
+      const label = (user?.name.trim() || email.trim() || "Unknown user").slice(0, 160);
+      return [
+        {
+          targetType: "user" as const,
+          targetId: grant.userId,
+          label,
+          sublabel: at > 0 ? email.slice(at + 1).slice(0, 200) : null,
+        },
+      ];
+    });
+
+    return TripAccessGrantsResponseSchema.parse({
+      grants: grants.map((grant: TripAccessGrantRecord) => ({
+        id: grant.id,
+        targetType: grant.workspaceId ? "workspace" : "user",
+        targetId: grant.workspaceId ?? grant.userId,
+        createdAt: grant.createdAt.toISOString(),
+      })),
+      resolved: { workspaces: resolvedWorkspaces, users: resolvedUsers },
+    });
   }
 
   private async requireTrip(workspaceId: string, tripId: string): Promise<TripRecord> {

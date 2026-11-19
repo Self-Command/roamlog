@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Prisma } from "@roamlog/db";
 import type {
   GeoBbox,
+  ParticipantRole,
+  ParticipantStatus,
   TripStatus,
   TripVisibility,
 } from "@roamlog/contracts";
@@ -93,6 +95,28 @@ export interface TripDestinationWriteData {
   timeZone: string | null;
   bbox: GeoBbox | null;
   order: number;
+}
+
+/** Raw `TripAccessGrant` row (0012). Exactly one target column is non-null. */
+export interface TripAccessGrantRecord {
+  id: string;
+  tripId: string;
+  workspaceId: string | null;
+  userId: string | null;
+  grantedById: string;
+  createdAt: Date;
+}
+
+/**
+ * A `TripParticipant` row with the columns added by
+ * `0012_visibility_and_participants`. Kept in this file (rather than widening
+ * `ParticipantRecord`) because only the role/status write path needs them.
+ */
+export interface ParticipantAccessRecord extends ParticipantRecord {
+  status?: ParticipantStatus;
+  role?: ParticipantRole;
+  invitedById?: string | null;
+  respondedAt?: Date | null;
 }
 
 /**
@@ -291,11 +315,11 @@ export class TripsRepository {
     tripId: string,
     userId: string,
     tx?: ContentTransaction,
-  ): Promise<ParticipantRecord | null> {
+  ): Promise<ParticipantAccessRecord | null> {
     const client = tx ?? this.prisma.client;
     return (await client.tripParticipant.findFirst({
       where: { workspaceId, tripId, userId },
-    })) as ParticipantRecord | null;
+    })) as ParticipantAccessRecord | null;
   }
 
   async createParticipant(
@@ -316,6 +340,139 @@ export class TripsRepository {
   ): Promise<number> {
     const result = await tx.tripParticipant.deleteMany({ where: data });
     return result.count;
+  }
+
+  async updateParticipant(
+    tx: ContentTransaction,
+    args: {
+      participantId: string;
+      data: { role?: ParticipantRole; status?: ParticipantStatus };
+    },
+  ): Promise<ParticipantAccessRecord> {
+    return (await tx.tripParticipant.update({
+      where: { id: args.participantId },
+      data: args.data,
+    })) as ParticipantAccessRecord;
+  }
+
+  async listAccessGrants(
+    tripId: string,
+    tx?: ContentTransaction,
+  ): Promise<TripAccessGrantRecord[]> {
+    const client = tx ?? this.prisma.client;
+    return (await client.tripAccessGrant.findMany({
+      where: { tripId },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    })) as TripAccessGrantRecord[];
+  }
+
+  /**
+   * Whole-set replacement for a trip's explicit audience.
+   *
+   * Delete-then-create in the caller's transaction: the contract is "this array
+   * is the complete list", so a row that is absent from the payload must not
+   * survive. `createMany` keeps the write to one statement for the 50-row bound.
+   */
+  async replaceAccessGrants(
+    tx: ContentTransaction,
+    args: {
+      tripId: string;
+      workspaceIds: readonly string[];
+      userIds: readonly string[];
+      grantedById: string;
+    },
+  ): Promise<void> {
+    await tx.tripAccessGrant.deleteMany({ where: { tripId: args.tripId } });
+    const data = [
+      ...args.workspaceIds.map((workspaceId) => ({
+        tripId: args.tripId,
+        workspaceId,
+        userId: null,
+        grantedById: args.grantedById,
+      })),
+      ...args.userIds.map((userId) => ({
+        tripId: args.tripId,
+        workspaceId: null,
+        userId,
+        grantedById: args.grantedById,
+      })),
+    ];
+    if (data.length > 0) {
+      await tx.tripAccessGrant.createMany({ data });
+    }
+  }
+
+  /**
+   * The subset of `workspaceIds` the actor is an active member of.
+   *
+   * A workspace grant names a whole tenant, so accepting an arbitrary id would
+   * let a caller write a cross-tenant reference (and probe existence through
+   * the error). Only workspaces the caller already belongs to are valid.
+   */
+  async findActiveWorkspaceIdsForUser(
+    userId: string,
+    workspaceIds: readonly string[],
+  ): Promise<string[]> {
+    if (workspaceIds.length === 0) {
+      return [];
+    }
+    const rows = await this.prisma.client.workspaceMember.findMany({
+      where: {
+        userId,
+        workspaceId: { in: [...workspaceIds] },
+        status: "active",
+        workspace: { status: "active", deletedAt: null },
+      },
+      select: { workspaceId: true },
+    });
+    return rows.map((row) => row.workspaceId);
+  }
+
+  /**
+   * The subset of `userIds` that are active members of `workspaceId`.
+   *
+   * Same tenancy convention as `addParticipant`: a user grant may only name a
+   * person who already belongs to the trip's Workspace, never an id from
+   * another tenant.
+   */
+  async findActiveMemberIds(workspaceId: string, userIds: readonly string[]): Promise<string[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    const rows = await this.prisma.client.workspaceMember.findMany({
+      where: {
+        workspaceId,
+        userId: { in: [...userIds] },
+        status: "active",
+        workspace: { status: "active", deletedAt: null },
+      },
+      select: { userId: true },
+    });
+    return [...new Set(rows.map((row) => row.userId))];
+  }
+
+  async findWorkspacesByIds(
+    workspaceIds: readonly string[],
+  ): Promise<Array<{ id: string; name: string; slug: string }>> {
+    if (workspaceIds.length === 0) {
+      return [];
+    }
+    return this.prisma.client.workspace.findMany({
+      where: { id: { in: [...workspaceIds] } },
+      select: { id: true, name: true, slug: true },
+    });
+  }
+
+  async findUsersByIds(
+    userIds: readonly string[],
+  ): Promise<Array<{ id: string; name: string; email: string }>> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    return this.prisma.client.user.findMany({
+      where: { id: { in: [...userIds] } },
+      select: { id: true, name: true, email: true },
+    });
   }
 
   async findWorkspaceMember(

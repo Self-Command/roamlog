@@ -94,6 +94,35 @@ export function registerTripPaths(registry: OpenAPIRegistry): void {
     response: c.RemoveTripParticipantResponseSchema,
   });
   registerOperation(registry, {
+    method: "patch",
+    path: "/v1/trips/{tripId}/participants/{userId}",
+    operationId: "updateTripParticipant",
+    tag: "Participants",
+    summary: "Change a participant's role or invitation status",
+    params: c.TripParticipantParamsSchema,
+    body: c.UpdateParticipantRequestSchema,
+    response: c.TripParticipantSchema,
+  });
+  registerOperation(registry, {
+    method: "get",
+    path: "/v1/trips/{tripId}/access-grants",
+    operationId: "listTripAccessGrants",
+    tag: "Trips",
+    summary: "List a trip's explicit access grants",
+    params: c.TripParamsSchema,
+    response: c.TripAccessGrantsResponseSchema,
+  });
+  registerOperation(registry, {
+    method: "put",
+    path: "/v1/trips/{tripId}/access-grants",
+    operationId: "setTripAccessGrants",
+    tag: "Trips",
+    summary: "Replace a trip's explicit access grants",
+    params: c.TripParamsSchema,
+    body: c.SetTripAccessGrantsRequestSchema,
+    response: c.TripAccessGrantsResponseSchema,
+  });
+  registerOperation(registry, {
     method: "get",
     path: "/v1/trips/{tripId}/activity",
     operationId: "listTripActivity",
