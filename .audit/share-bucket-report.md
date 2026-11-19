@@ -38,13 +38,13 @@
 bucket: rowBucket(record.bucket),
 ```
 
-`coverMediaSources()`（`share-links.service.ts:546-582`）在把候选封面行收窄成 `CoverMediaSource` 时补：
+`coverMediaSources()`（`share-links.service.ts:550-582`）在把候选封面行收窄成 `CoverMediaSource` 时补：
 
 ```ts
 bucket: rowBucket(row.bucket),
 ```
 
-辅助函数（`share-links.service.ts:587-599`）：
+辅助函数（`share-links.service.ts:596`）：
 
 ```ts
 function rowBucket(value: unknown): string | null {
@@ -79,7 +79,7 @@ rg -n "createSignedReadUrl|createPresignedUpload|deleteObject|MediaUrlSource|med
 | `apps/api/src/modules/media/media.service.ts:699` | 登录页 motion 写入后的读取（`sign(withMotion)`） | 是 | 否 |
 | `apps/api/src/modules/media/trip-cover.service.ts:88` | 封面投影器，登录页与公开页共用；bucket 取决于 loader 传入的行 | 是（当 loader 把行原样传入时） | 否（改的是公开页 loader，见下两行） |
 | **`apps/api/src/modules/share-links/share-links.service.ts:312`**（`signMany(sources)`） | **公开页图库**；源在 **:303** 现在带 `bucket: rowBucket(record.bucket)` | **修复后：是** | **是** |
-| **`apps/api/src/modules/share-links/share-links.service.ts:567-576`**（`coverMediaSources` push，:575） | **公开页封面 loader**；`bucket: rowBucket(row.bucket)` | **修复后：是** | **是** |
+| **`apps/api/src/modules/share-links/share-links.service.ts:575`**（`coverMediaSources` push） | **公开页封面 loader**；`bucket: rowBucket(row.bucket)` | **修复后：是** | **是** |
 | `apps/api/src/modules/exports/exports.service.ts:160` | **export 下载**（登录页）：`createSignedReadUrl(record.storageKey ?? "")`，未传 bucket；`Export` 模型也没有 bucket 列（`packages/db/prisma/schema.prisma:918-941`） | **否** | **否（不在本任务范围）** |
 | `apps/worker/src/dependencies.ts:97` | worker 删除对象：`DeleteObjectCommand({ Bucket: bucket })`，bucket 来自 `S3_BUCKET` 环境变量 | **否（当前/环境 bucket）** | 否（禁止触碰） |
 | `apps/worker/src/jobs/media.ts:355` | worker 媒体清理：`deps.storage.deleteObject(key)`，无 bucket | **否** | 否（禁止触碰） |
