@@ -4,6 +4,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 
 import { SchematicRouteMap } from "./map-fallback";
 import type { MapPoint } from "./map-types";
+import { PlacesAttribution } from "./places-attribution";
 
 const MapCanvas = lazy(() => import("./map-canvas"));
 
@@ -68,6 +69,10 @@ export function AtlasMap({
         <div className="absolute left-3 top-3 rounded-pill border border-hairline-strong bg-black/65 px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-white/65">
           TILE FALLBACK / SCHEMATIC WORLD
         </div>
+        <div className="absolute bottom-1 left-2 flex max-w-[calc(100%-0.5rem)] items-center rounded bg-black/85 px-2 py-0.5">
+          {/* Atlas renders no live search, so only the OSM credit applies. */}
+          <PlacesAttribution provider={null} tone="overlay" />
+        </div>
       </div>
     );
   }
@@ -87,6 +92,7 @@ export function AtlasMap({
         selectedId={selectedPointId}
         onSelect={selectPoint}
         onError={() => setMapFailed(true)}
+        placesProvider={null}
       />
     </Suspense>
   );

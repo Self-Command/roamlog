@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { formatMinor, moodLabels, weatherLabels } from "@/lib/demo-format";
+import type { PlacesProvider } from "@/lib/places-attribution";
 import {
   coverClassForTrip,
   formatDateRange,
@@ -22,9 +23,21 @@ import {
 } from "@/lib/trip-presentation";
 import type { PublicMedia, PublicTrip, PublicTripResponse } from "@roamlog/contracts";
 
+import { PlacesAttribution } from "@/components/map/places-attribution";
+
 import { sanitizePublicHtml } from "./html";
 
-export function ShareArticle({ data }: { data: PublicTripResponse }) {
+export function ShareArticle({
+  data,
+  placesProvider = null,
+}: {
+  data: PublicTripResponse;
+  /**
+   * Source of the stored stop/entry places. The public payload does not expose
+   * a provider yet, so callers stay conservative (OSM) until it does.
+   */
+  placesProvider?: PlacesProvider;
+}) {
   const { trip, stops, entries, media, budget } = data;
   const tripIndex =
     [...trip.id].reduce((total, character) => total + character.charCodeAt(0), 0) % 5;
@@ -246,6 +259,15 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
       <footer className="border-t border-hairline py-10">
         <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone">
           END OF SHARED ARCHIVE
+        </p>
+        {/*
+          The public projection renders place names that came from the place
+          search, so the credit belongs on this page too — a private-only
+          attribution would leave every shared trip non-compliant.
+        */}
+        <p className="mt-2 flex flex-wrap items-center gap-1 text-[10px] leading-4 text-stone">
+          <span>地点数据来源：</span>
+          <PlacesAttribution provider={placesProvider} />
         </p>
         <div className="mt-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <p className="font-serif text-xl text-ink">把共同记忆留在同一个地方。</p>

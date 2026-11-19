@@ -29,7 +29,8 @@ export function EditTripPage({
 
   const searchPlaces: TripFormPlaceSearch = React.useCallback(async (query, { signal }) => {
     const outcome = await searchPlacesForTripForm(query, signal);
-    return { items: outcome.items, degraded: outcome.degraded };
+    // The provider must reach the form so the credit names the real source.
+    return { items: outcome.items, degraded: outcome.degraded, provider: outcome.provider };
   }, []);
 
   async function handleReload() {

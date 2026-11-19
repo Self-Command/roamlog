@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -72,6 +72,9 @@ function buildDemoPublicTrip({
       countryCode: stop.countryCode,
       lat: stop.lat,
       lng: stop.lng,
+      // `PublicStopSchema` requires the key since the stop-address migration;
+      // the demo fixture simply has no formatted address.
+      address: null,
       startDate: stop.startDate,
       endDate: stop.endDate,
       notes: "",
@@ -556,5 +559,31 @@ describe("ShareLinkDialog", () => {
     await user.click(screen.getByRole("button", { name: "分享" }));
     expect(screen.getByRole("heading", { name: "公开分享这趟旅行" })).toBeInTheDocument();
     expect(screen.queryByText(new RegExp(`/share/${shareToken}`))).not.toBeInTheDocument();
+  });
+});
+
+describe("ShareArticle place attribution", () => {
+  it("shows the place-data credit on the public page, not only in the app", () => {
+    render(<ShareArticle data={buildDemoPublicTrip()} />);
+
+    const credit = screen.getByTestId("places-attribution");
+    expect(credit).toHaveAttribute("data-provider", "unknown");
+    expect(credit).not.toHaveAttribute("aria-hidden");
+
+    const link = within(credit).getByRole("link", {
+      name: /OpenStreetMap contributors/,
+    });
+    expect(link).toHaveAttribute("href", "https://www.openstreetmap.org/copyright");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("adds the Geoapify credit when the caller knows the stored places came from it", () => {
+    render(<ShareArticle data={buildDemoPublicTrip()} placesProvider="geoapify" />);
+
+    const credit = screen.getByTestId("places-attribution");
+    expect(credit).toHaveTextContent("Powered by Geoapify");
+    expect(credit).toHaveTextContent("© OpenStreetMap contributors");
+    expect(credit).not.toHaveTextContent(/Photon/);
   });
 });

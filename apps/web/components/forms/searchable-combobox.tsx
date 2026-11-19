@@ -4,6 +4,8 @@ import { Button, Input } from "@roamlog/ui";
 import { Loader2, Search, X } from "lucide-react";
 import * as React from "react";
 
+import type { PlacesProvider } from "@/lib/places-attribution";
+
 export interface ComboboxOption {
   id: string;
   label: string;
@@ -18,6 +20,12 @@ export interface ComboboxSearchResult {
   items: ComboboxOption[];
   /** Upstream place provider reported a degraded result. */
   degraded?: boolean;
+  /**
+   * Provider that actually produced these items. Optional so non-place
+   * comboboxes (currency, …) stay unchanged; place searches must set it or the
+   * credit can only fall back to the conservative OSM copy.
+   */
+  provider?: PlacesProvider;
 }
 
 export interface ComboboxSearchContext {
@@ -59,6 +67,11 @@ export interface SearchableComboboxProps {
   rateLimitedLabel?: (seconds: number) => string;
   clearLabel?: string;
   onClear?: () => void;
+  /**
+   * Rendered below the option list, as a sibling of `role="listbox"` (never an
+   * option). Used for the place-data attribution; hidden when omitted.
+   */
+  listFooter?: React.ReactNode;
   className?: string;
 }
 
@@ -162,11 +175,13 @@ export function SearchableCombobox({
   rateLimitedLabel = (seconds) => `请求过于频繁，请等待约 ${seconds} 秒后重试。`,
   clearLabel = "清除",
   onClear,
+  listFooter,
   className,
 }: SearchableComboboxProps) {
   const reactId = React.useId();
   const inputId = id ?? `${reactId}-input`;
   const listboxId = `${reactId}-listbox`;
+  const footerId = `${reactId}-listbox-footer`;
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const searchRef = React.useRef(search);
@@ -431,54 +446,68 @@ export function SearchableCombobox({
       </div>
 
       {showListbox ? (
-        <div
-          id={listboxId}
-          role="listbox"
-          aria-label={`${label}建议`}
-          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-card border border-hairline-strong bg-surface-2 p-1 shadow-2xl"
-        >
-          {status === "loading" ? (
-            <div role="status" className="flex items-center gap-2 px-2.5 py-3 text-xs text-muted">
-              <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
-              {loadingLabel}
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-card border border-hairline-strong bg-surface-2 p-1 shadow-2xl">
+          <ul
+            id={listboxId}
+            role="listbox"
+            aria-label={`${label}建议`}
+            aria-describedby={listFooter ? footerId : undefined}
+            className="max-h-72 overflow-y-auto"
+          >
+            {status === "loading" ? (
+              <div role="status" className="flex items-center gap-2 px-2.5 py-3 text-xs text-muted">
+                <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+                {loadingLabel}
+              </div>
+            ) : null}
+
+            {status === "error" ? (
+              <div role="status" className="px-2.5 py-3">
+                <p className="text-xs leading-5 text-accent-red">{errorMessage || errorLabel}</p>
+                <Button type="button" variant="subtle" size="sm" className="mt-2" onClick={retry}>
+                  重试
+                </Button>
+              </div>
+            ) : null}
+
+            {status === "rate-limited" ? (
+              <div role="status" className="px-2.5 py-3">
+                <p className="text-xs leading-5 text-accent-orange">{errorMessage}</p>
+                <Button type="button" variant="subtle" size="sm" className="mt-2" onClick={retry}>
+                  重试
+                </Button>
+              </div>
+            ) : null}
+
+            {status === "ready" && degraded ? (
+              <p role="status" className="px-2.5 py-2 text-xs leading-5 text-accent-orange">
+                {degradedLabel}
+              </p>
+            ) : null}
+
+            {showEmpty ? (
+              <p role="status" className="px-2.5 py-3 text-xs text-muted">
+                {emptyLabel}
+              </p>
+            ) : null}
+
+            {status === "ready"
+              ? options.map((option, index) => renderOptionRow(option, index))
+              : (status === "error" || status === "rate-limited") && manualOption
+                ? renderOptionRow(manualOption, options.length - 1)
+                : null}
+          </ul>
+
+          {/*
+            Sibling of the listbox on purpose: attribution is descriptive text,
+            not an option. Putting it inside `role="listbox"` would expose it to
+            screen readers as a selectable row and shift arrow-key indexing.
+          */}
+          {listFooter ? (
+            <div id={footerId} className="border-t border-hairline px-3 py-1.5">
+              {listFooter}
             </div>
           ) : null}
-
-          {status === "error" ? (
-            <div role="status" className="px-2.5 py-3">
-              <p className="text-xs leading-5 text-accent-red">{errorMessage || errorLabel}</p>
-              <Button type="button" variant="subtle" size="sm" className="mt-2" onClick={retry}>
-                重试
-              </Button>
-            </div>
-          ) : null}
-
-          {status === "rate-limited" ? (
-            <div role="status" className="px-2.5 py-3">
-              <p className="text-xs leading-5 text-accent-orange">{errorMessage}</p>
-              <Button type="button" variant="subtle" size="sm" className="mt-2" onClick={retry}>
-                重试
-              </Button>
-            </div>
-          ) : null}
-
-          {status === "ready" && degraded ? (
-            <p role="status" className="px-2.5 py-2 text-xs leading-5 text-accent-orange">
-              {degradedLabel}
-            </p>
-          ) : null}
-
-          {showEmpty ? (
-            <p role="status" className="px-2.5 py-3 text-xs text-muted">
-              {emptyLabel}
-            </p>
-          ) : null}
-
-          {status === "ready"
-            ? options.map((option, index) => renderOptionRow(option, index))
-            : (status === "error" || status === "rate-limited") && manualOption
-              ? renderOptionRow(manualOption, options.length - 1)
-              : null}
         </div>
       ) : null}
     </div>

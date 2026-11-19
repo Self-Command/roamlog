@@ -21,6 +21,8 @@ import {
   type MapStop,
 } from "./map-types";
 import { CitySearch } from "./city-search";
+import { geocoderPlacesProvider } from "./geo";
+import { PlacesAttribution } from "./places-attribution";
 
 const MapCanvas = lazy(() => import("./map-canvas"));
 
@@ -92,6 +94,9 @@ export function TripMap({
   }
 
   const fallback = mode === "list" || forceFallback || mapFailed || !webglAvailable;
+  // Map tiles and the city search have different sources; credit the search
+  // provider when the search box is actually on screen.
+  const placesProvider = allowSearch ? geocoderPlacesProvider() : null;
 
   return (
     <section className={`surface-card overflow-hidden ${className ?? ""}`}>
@@ -132,13 +137,18 @@ export function TripMap({
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px] lg:divide-x lg:divide-hairline">
         <div className="relative min-h-72 overflow-hidden border-b border-hairline lg:border-b-0">
           {fallback ? (
-            <MapFallback
-              stops={stops}
-              points={points}
-              selectedId={activeId}
-              onSelect={selectPoint}
-              reason={mode === "list" ? "manual" : "unavailable"}
-            />
+            <div className="relative">
+              <MapFallback
+                stops={stops}
+                points={points}
+                selectedId={activeId}
+                onSelect={selectPoint}
+                reason={mode === "list" ? "manual" : "unavailable"}
+              />
+              <div className="pointer-events-none absolute bottom-1 left-2 z-10 flex max-w-[calc(100%-0.5rem)] items-center rounded bg-black/85 px-2 py-0.5">
+                <PlacesAttribution provider={placesProvider} tone="overlay" />
+              </div>
+            </div>
           ) : (
             <MapErrorBoundary onError={() => setMapFailed(true)}>
               <Suspense
@@ -159,6 +169,7 @@ export function TripMap({
                   selectedId={activeId}
                   onSelect={selectPoint}
                   onError={() => setMapFailed(true)}
+                  placesProvider={placesProvider}
                 />
               </Suspense>
             </MapErrorBoundary>

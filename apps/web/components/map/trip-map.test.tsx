@@ -55,6 +55,25 @@ describe("TripMap", () => {
     expect(screen.getByText("LIST VIEW / ACCESSIBLE MAP")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "选择停靠点 京都" })).toBeInTheDocument();
   });
+
+  it("credits the map's Photon city search on top of OSM, even in the fallback", () => {
+    render(<TripMap stops={STOPS} forceFallback />);
+
+    const credit = screen.getByTestId("places-attribution");
+    expect(credit).toHaveAttribute("data-provider", "photon");
+    expect(credit).toHaveTextContent("Search by Photon");
+    expect(credit).toHaveTextContent("© OpenStreetMap contributors");
+    expect(credit).not.toHaveTextContent(/Geoapify/);
+  });
+
+  it("keeps the conservative OSM credit when no search is shown", () => {
+    render(<TripMap stops={STOPS} forceFallback allowSearch={false} />);
+
+    const credit = screen.getByTestId("places-attribution");
+    expect(credit).toHaveAttribute("data-provider", "unknown");
+    expect(credit).toHaveTextContent("© OpenStreetMap contributors");
+    expect(credit).not.toHaveTextContent(/Geoapify|Photon/);
+  });
 });
 
 describe("CitySearch", () => {

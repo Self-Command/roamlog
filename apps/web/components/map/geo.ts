@@ -1,3 +1,5 @@
+import type { PlacesProvider } from "@/lib/places-attribution";
+
 import type { CitySearchResult } from "./map-types";
 
 const DEFAULT_GEOCODER_URL = "https://photon.komoot.io/api/";
@@ -23,6 +25,26 @@ export function getGeocoderUrl(): string {
     process.env.NEXT_PUBLIC_GEOCODER_URL?.trim() ||
     DEFAULT_GEOCODER_URL
   );
+}
+
+/**
+ * Which provider the map's own city search actually talks to.
+ *
+ * The map tile source (OpenFreeMap/OSM) and the search source are different
+ * things, so the credit must report the search provider instead of assuming
+ * the trip form's Geoapify path. Anything unrecognised stays `null`, which
+ * degrades to the conservative OSM credit.
+ */
+export function geocoderPlacesProvider(): PlacesProvider {
+  let host: string;
+  try {
+    host = new URL(getGeocoderUrl()).host.toLowerCase();
+  } catch {
+    return null;
+  }
+  if (host.endsWith("geoapify.com")) return "geoapify";
+  if (host.endsWith("photon.komoot.io")) return "photon";
+  return null;
 }
 
 export function clearGeocoderCache() {

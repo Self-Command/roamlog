@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,15 +12,17 @@ import {
 } from "../searchable-combobox";
 
 const OPTION: ComboboxOption = { id: "photon:1", label: "京都", description: "city · 日本", meta: "JP" };
+const SECOND: ComboboxOption = { id: "photon:2", label: "奈良", description: "city · 日本", meta: "JP" };
 
 interface HarnessProps {
   search: ComboboxSearch;
   allowManual?: boolean;
   onManual?: (query: string) => void;
   onSelect?: (option: ComboboxOption) => void;
+  listFooter?: React.ReactNode;
 }
 
-function Harness({ search, allowManual = false, onManual, onSelect }: HarnessProps) {
+function Harness({ search, allowManual = false, onManual, onSelect, listFooter }: HarnessProps) {
   const [value, setValue] = React.useState("");
   return (
     <SearchableCombobox
@@ -32,6 +34,7 @@ function Harness({ search, allowManual = false, onManual, onSelect }: HarnessPro
       search={search}
       allowManual={allowManual}
       debounceMs={0}
+      listFooter={listFooter}
     />
   );
 }
@@ -242,5 +245,64 @@ describe("SearchableCombobox states", () => {
 
     expect(onSelect).toHaveBeenCalledWith(OPTION);
     expect(screen.queryByRole("option")).not.toBeInTheDocument();
+  });
+
+  it("renders the list footer as a described sibling of the listbox, not as an option", async () => {
+    const search = vi.fn<ComboboxSearch>().mockResolvedValue({ items: [OPTION, SECOND] });
+    const user = userEvent.setup();
+    render(
+      <Harness
+        search={search}
+        listFooter={<span>Powered by Geoapify · © OpenStreetMap contributors</span>}
+      />,
+    );
+
+    await user.type(screen.getByRole("combobox", { name: "搜索地点" }), "京都");
+    const listbox = await screen.findByRole("listbox");
+    const footerText = screen.getByText("Powered by Geoapify · © OpenStreetMap contributors");
+    const footer = footerText.parentElement!;
+
+    // The footer lives beside the listbox, not inside it.
+    expect(listbox).not.toContainElement(footerText);
+    expect(footer.parentElement).toBe(listbox.parentElement);
+    expect(listbox.nextElementSibling).toBe(footer);
+
+    // …and is wired up for assistive technology without becoming an option.
+    expect(listbox).toHaveAttribute("aria-describedby", footer.id);
+    expect(within(listbox).getAllByRole("option")).toHaveLength(2);
+  });
+
+  it("keeps the footer out of arrow-key indexing", async () => {
+    const onSelect = vi.fn<(option: ComboboxOption) => void>();
+    const search = vi.fn<ComboboxSearch>().mockResolvedValue({ items: [OPTION, SECOND] });
+    const user = userEvent.setup();
+    render(
+      <Harness
+        search={search}
+        onSelect={onSelect}
+        listFooter={<span>Powered by Geoapify</span>}
+      />,
+    );
+
+    await user.type(screen.getByRole("combobox", { name: "搜索地点" }), "京都");
+    await screen.findByRole("listbox");
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    // Index 1 is the second real option; a footer in the list would shift this.
+    expect(onSelect).toHaveBeenCalledWith(SECOND);
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
+  });
+
+  it("adds no footer DOM and no aria-describedby when the prop is omitted", async () => {
+    const search = vi.fn<ComboboxSearch>().mockResolvedValue({ items: [OPTION] });
+    const user = userEvent.setup();
+    render(<Harness search={search} />);
+
+    await user.type(screen.getByRole("combobox", { name: "搜索地点" }), "京都");
+    const listbox = await screen.findByRole("listbox");
+
+    expect(listbox).not.toHaveAttribute("aria-describedby");
+    expect(listbox.nextElementSibling).toBeNull();
+    expect(screen.queryByText(/Powered by Geoapify/)).not.toBeInTheDocument();
   });
 });

@@ -26,6 +26,7 @@ import type { ComboboxOption, ComboboxSearch } from "@/components/forms/searchab
 import { CoverUploader } from "@/components/media";
 import type { CoverChange, CoverUploadError, CoverUploadPhase } from "@/components/media";
 import { isApiError, isForbidden, isVersionConflict } from "@/lib/api/errors";
+import type { PlacesProvider } from "@/lib/places-attribution";
 import { formatBudget, getTripStatusLabel, getTripStatusTone } from "@/lib/trip-presentation";
 
 import { BudgetField } from "./budget-field";
@@ -56,6 +57,12 @@ import {
 export interface TripFormPlaceSearchResult {
   items: Place[];
   degraded?: boolean;
+  /**
+   * Provider that actually produced `items`. Optional so existing callers keep
+   * working, but place searches must forward it or the UI can only show the
+   * conservative OSM credit instead of the real source.
+   */
+  provider?: PlacesProvider;
 }
 
 export type TripFormPlaceSearch = (
@@ -190,7 +197,7 @@ export function TripForm(props: TripFormProps) {
           meta: place.countryCode || undefined,
         };
       });
-      return { items, degraded: result.degraded };
+      return { items, degraded: result.degraded, provider: result.provider };
     },
     [searchPlaces],
   );

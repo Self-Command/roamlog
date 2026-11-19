@@ -9,6 +9,7 @@ import {
   type ComboboxOption,
   type ComboboxSearch,
 } from "@/components/forms/searchable-combobox";
+import { usePlacesSearchAttribution } from "@/components/map/places-attribution";
 
 import { FormRow } from "./field-shell";
 import type { TripFormOrigin } from "./trip-form-state";
@@ -39,6 +40,13 @@ export function OriginField({
   error,
 }: OriginFieldProps) {
   const hasManualOnlyText = !origin && query.trim().length > 0;
+  const placesSearch = usePlacesSearchAttribution(search);
+
+  function handleQueryChange(next: string) {
+    // A new query invalidates the results (and the credit) currently on screen.
+    placesSearch.reset();
+    onQueryChange(next);
+  }
 
   return (
     <FormRow
@@ -53,11 +61,12 @@ export function OriginField({
             id={id}
             label="旅行起点"
             value={query}
-            onValueChange={onQueryChange}
+            onValueChange={handleQueryChange}
             onSelect={onSelect}
             onManual={onManual}
             onClear={onClear}
-            search={search}
+            search={placesSearch.search}
+            listFooter={placesSearch.footer}
             placeholder="搜索城市或地点，例如「京都」"
             disabled={disabled}
             invalid={invalid}

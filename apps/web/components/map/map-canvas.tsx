@@ -12,7 +12,10 @@ import Map, {
   type MapRef,
 } from "react-map-gl/maplibre";
 
+import type { PlacesProvider } from "@/lib/places-attribution";
+
 import type { MapPoint } from "./map-types";
+import { PlacesAttribution } from "./places-attribution";
 
 export interface MapCanvasProps {
   points: MapPoint[];
@@ -21,6 +24,8 @@ export interface MapCanvasProps {
   onSelect?: (id: string) => void;
   onError?: () => void;
   onReady?: () => void;
+  /** Source of the city search shown alongside the map, when known. */
+  placesProvider?: PlacesProvider;
 }
 
 const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
@@ -38,6 +43,7 @@ export default function MapCanvas({
   onSelect,
   onError,
   onReady,
+  placesProvider = null,
 }: MapCanvasProps) {
   const mapRef = useRef<MapRef | null>(null);
   const styleUrl = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || DEFAULT_STYLE_URL;
@@ -150,16 +156,15 @@ export default function MapCanvas({
         })}
       </Map>
 
-      <div className="pointer-events-none absolute bottom-1 left-2 z-10 rounded bg-black/55 px-2 py-0.5 font-mono text-[8px] leading-4 text-white/60">
-        <a
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noreferrer"
-          className="pointer-events-auto underline decoration-white/30 underline-offset-2"
-        >
-          © OpenStreetMap
-        </a>{" "}
-        · OpenFreeMap
+      {/*
+        Tiles come from OpenFreeMap (OSM-derived), so the OSM credit is always
+        shown; when the page's city search has a known provider it is added on
+        the same line. The plate is nearly opaque so the 10px credit keeps
+        >=4.5:1 contrast even over a white tile.
+      */}
+      <div className="pointer-events-none absolute bottom-1 left-2 z-10 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-black/85 px-2 py-0.5">
+        <PlacesAttribution provider={placesProvider} tone="overlay" />
+        <span className="font-mono text-[8px] leading-4 text-white/60">· OpenFreeMap</span>
       </div>
     </div>
   );

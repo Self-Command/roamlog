@@ -9,6 +9,7 @@ import {
   type ComboboxOption,
   type ComboboxSearch,
 } from "@/components/forms/searchable-combobox";
+import { usePlacesSearchAttribution } from "@/components/map/places-attribution";
 
 import { FormRow } from "./field-shell";
 import { TRIP_FORM_LIMITS } from "./trip-form-state";
@@ -41,6 +42,18 @@ export function DestinationsField({
   const [query, setQuery] = React.useState("");
   const [manualValue, setManualValue] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
+  const placesSearch = usePlacesSearchAttribution(search);
+
+  function handleQueryChange(next: string) {
+    // A new query invalidates the results (and the credit) currently on screen.
+    placesSearch.reset();
+    setQuery(next);
+  }
+
+  function clearQuery() {
+    placesSearch.reset();
+    setQuery("");
+  }
 
   function tryAdd(rawName: string, countryCode: string | null): boolean {
     const name = rawName.trim();
@@ -66,7 +79,7 @@ export function DestinationsField({
   }
 
   function handlePlaceSelect(option: ComboboxOption) {
-    if (tryAdd(option.label, option.meta ?? null)) setQuery("");
+    if (tryAdd(option.label, option.meta ?? null)) clearQuery();
   }
 
   function handleManualSubmit() {
@@ -86,13 +99,14 @@ export function DestinationsField({
             id={comboboxId}
             label="搜索目的地"
             value={query}
-            onValueChange={setQuery}
+            onValueChange={handleQueryChange}
             onSelect={handlePlaceSelect}
             onManual={(value) => {
-              if (tryAdd(value, null)) setQuery("");
+              if (tryAdd(value, null)) clearQuery();
             }}
-            onClear={() => setQuery("")}
-            search={search}
+            onClear={clearQuery}
+            search={placesSearch.search}
+            listFooter={placesSearch.footer}
             placeholder="搜索城市或地点，例如「金泽」"
             disabled={disabled}
             invalid={invalid}
