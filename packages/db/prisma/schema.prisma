@@ -863,3 +863,19 @@ model Export {
   @@index([status, createdAt])
   @@index([requestedById])
 }
+
+/// Database diff layered on top of the code-owned Admin role → action matrix
+/// (`PLATFORM_ROLE_ACTIONS`). A row exists only when the operator decision
+/// differs from the code default; deleting the row restores the code default.
+model PlatformRoleOverride {
+  role        PlatformRole
+  action      String   @db.VarChar(80)
+  granted     Boolean  @default(true)
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([role, action])
+  @@index([updatedById])
+  @@map("PlatformRoleOverride")
+}

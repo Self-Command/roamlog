@@ -20,6 +20,7 @@ export {
   makeMedia,
   makeMember,
   makePackingItem,
+  makePlatformRoleOverride,
   makeTrip,
   makeUser,
   makeWorkspace,

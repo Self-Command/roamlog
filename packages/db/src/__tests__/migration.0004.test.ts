@@ -33,6 +33,7 @@ describe("0004_system_setting migration", () => {
       "0002_two_factor_state",
       "0003_w0_trip_stop_place_metadata",
       migrationName,
+      "0005_platform_role_override",
     ]);
   });
 

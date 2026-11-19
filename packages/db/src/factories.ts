@@ -4,6 +4,7 @@ import type {
   JournalEntry,
   Media,
   PackingItem,
+  PlatformRoleOverride,
   Prisma,
   Trip,
   User,
@@ -272,6 +273,20 @@ export function makeMedia(overrides: Partial<Media> = {}): Media {
     createdAt: fixedNow,
     updatedAt: fixedNow,
     deletedAt: null,
+    ...overrides,
+  };
+}
+
+export function makePlatformRoleOverride(
+  overrides: Partial<PlatformRoleOverride> = {},
+): PlatformRoleOverride {
+  return {
+    role: overrides.role ?? "support",
+    action: overrides.action ?? "admin:users:read",
+    granted: overrides.granted ?? false,
+    updatedById: overrides.updatedById ?? nextId("user"),
+    updatedAt: fixedNow,
+    createdAt: fixedNow,
     ...overrides,
   };
 }
