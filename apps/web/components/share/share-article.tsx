@@ -27,18 +27,11 @@ import { PlacesAttribution } from "@/components/map/places-attribution";
 
 import { sanitizePublicHtml } from "./html";
 
-export function ShareArticle({
-  data,
-  placesProvider = null,
-}: {
-  data: PublicTripResponse;
-  /**
-   * Source of the stored stop/entry places. The public payload does not expose
-   * a provider yet, so callers stay conservative (OSM) until it does.
-   */
-  placesProvider?: PlacesProvider;
-}) {
+export function ShareArticle({ data }: { data: PublicTripResponse }) {
   const { trip, stops, entries, media, budget } = data;
+  // The public payload now carries the real source of every stored place, so the
+  // page credits exactly the providers it renders instead of guessing OSM.
+  const placesProviders = publicPlacesProviders(data);
   const tripIndex =
     [...trip.id].reduce((total, character) => total + character.charCodeAt(0), 0) % 5;
   const [coverFailed, setCoverFailed] = useState(false);
@@ -267,7 +260,12 @@ export function ShareArticle({
         */}
         <p className="mt-2 flex flex-wrap items-center gap-1 text-[10px] leading-4 text-stone">
           <span>地点数据来源：</span>
-          <PlacesAttribution provider={placesProvider} />
+          {placesProviders.map((provider, index) => (
+            <span key={provider ?? "unknown"} className="inline-flex items-center gap-1">
+              {index > 0 ? <span aria-hidden="true">·</span> : null}
+              <PlacesAttribution provider={provider} />
+            </span>
+          ))}
         </p>
         <div className="mt-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <p className="font-serif text-xl text-ink">把共同记忆留在同一个地方。</p>
@@ -282,6 +280,33 @@ export function ShareArticle({
       </footer>
     </main>
   );
+}
+
+/**
+ * Every place source present in the public payload, in a stable order.
+ *
+ * Both the trip origin and each stop carry their own provider, so a shared trip
+ * that mixed sources must credit every one of them — showing a single credit
+ * would mislabel the rest. When nothing carries a provider (legacy shares,
+ * manually typed places) the list collapses to `[null]`, which renders the
+ * conservative OSM credit: the page still shows place names, so a credit is
+ * never optional.
+ */
+const PLACES_PROVIDER_ORDER: ReadonlyArray<NonNullable<PlacesProvider>> = [
+  "geoapify",
+  "photon",
+  "local",
+];
+
+function publicPlacesProviders(data: PublicTripResponse): PlacesProvider[] {
+  const present = new Set<NonNullable<PlacesProvider>>();
+  const include = (provider: PlacesProvider | undefined) => {
+    if (provider) present.add(provider);
+  };
+  include(data.trip.originProvider);
+  for (const stop of data.stops) include(stop.provider);
+  if (present.size === 0) return [null];
+  return PLACES_PROVIDER_ORDER.filter((provider) => present.has(provider));
 }
 
 /**

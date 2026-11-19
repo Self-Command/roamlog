@@ -61,6 +61,9 @@ function buildDemoPublicTrip({
       coverMediaId: trip.coverMediaId,
       cover: trip.cover,
       origin: trip.origin,
+      // The demo fixtures predate the origin-provider column: the share page must
+      // stay conservative (OSM) when a legacy payload carries no source.
+      originProvider: null,
       destinations: trip.destinations,
       countryCodes: trip.countryCodes,
       tags: trip.tags,
@@ -72,6 +75,7 @@ function buildDemoPublicTrip({
       countryCode: stop.countryCode,
       lat: stop.lat,
       lng: stop.lng,
+      provider: stop.provider,
       // `PublicStopSchema` requires the key since the stop-address migration;
       // the demo fixture simply has no formatted address.
       address: null,
@@ -562,9 +566,116 @@ describe("ShareLinkDialog", () => {
   });
 });
 
+type ShareProvider = NonNullable<PublicTripResponse["stops"][number]["provider"]>;
+
+/**
+ * Public payload with explicit place sources. The stop template comes from the
+ * demo fixtures, so the rest of the payload stays schema-valid while the
+ * providers under test are exact.
+ */
+function shareWithPlaceProviders({
+  stops,
+  originProvider = null,
+}: {
+  stops: Array<ShareProvider | null>;
+  originProvider?: ShareProvider | null;
+}): PublicTripResponse {
+  const data = buildDemoPublicTrip({ showBudget: false });
+  const template = data.stops[0]!;
+  return {
+    ...data,
+    trip: { ...data.trip, originProvider },
+    stops: stops.map((provider, index) => ({
+      ...template,
+      id: `${template.id.slice(0, -1)}${index}`,
+      order: index,
+      provider,
+    })),
+  };
+}
+
 describe("ShareArticle place attribution", () => {
-  it("shows the place-data credit on the public page, not only in the app", () => {
-    render(<ShareArticle data={buildDemoPublicTrip()} />);
+  it("shows the Geoapify credit required by a Geoapify-sourced stop", () => {
+    render(<ShareArticle data={shareWithPlaceProviders({ stops: ["geoapify"] })} />);
+
+    const credit = screen.getByTestId("places-attribution");
+    expect(credit).toHaveAttribute("data-provider", "geoapify");
+    expect(credit).toHaveTextContent("Powered by Geoapify");
+    expect(credit).toHaveTextContent("© OpenStreetMap contributors");
+    expect(credit).not.toHaveTextContent(/Photon/);
+    expect(credit).not.toHaveTextContent("手动录入");
+    expect(within(credit).getByRole("link", { name: /Powered by Geoapify/ })).toHaveAttribute(
+      "href",
+      "https://www.geoapify.com/",
+    );
+  });
+
+  it("shows the Photon credit for a Photon-sourced stop", () => {
+    render(<ShareArticle data={shareWithPlaceProviders({ stops: ["photon"] })} />);
+
+    const credit = screen.getByTestId("places-attribution");
+    expect(credit).toHaveAttribute("data-provider", "photon");
+    expect(credit).toHaveTextContent("Search by Photon");
+    expect(credit).toHaveTextContent("© OpenStreetMap contributors");
+    expect(credit).not.toHaveTextContent(/Geoapify/);
+    expect(credit).not.toHaveTextContent("手动录入");
+    expect(within(credit).getByRole("link", { name: /Search by Photon/ })).toHaveAttribute(
+      "href",
+      "https://photon.komoot.io/",
+    );
+  });
+
+  it("labels manually entered places without borrowing a third-party credit", () => {
+    render(<ShareArticle data={shareWithPlaceProviders({ stops: ["local"] })} />);
+
+    const credit = screen.getByTestId("places-attribution");
+    expect(credit).toHaveAttribute("data-provider", "local");
+    expect(credit).toHaveTextContent("手动录入");
+    expect(credit).not.toHaveTextContent(/Geoapify|Photon|OpenStreetMap/);
+    // A manual entry has no upstream source, so there is nothing to link.
+    expect(within(credit).queryByRole("link")).toBeNull();
+  });
+
+  it("credits every distinct source once when a shared trip mixes providers", () => {
+    render(
+      <ShareArticle
+        data={shareWithPlaceProviders({
+          stops: ["geoapify", "photon", "local"],
+          originProvider: "photon",
+        })}
+      />,
+    );
+
+    const credits = screen.getAllByTestId("places-attribution");
+    expect(credits.map((credit) => credit.getAttribute("data-provider"))).toEqual([
+      "geoapify",
+      "photon",
+      "local",
+    ]);
+    // No credit borrows another provider's copy: the Geoapify line only carries
+    // the Geoapify wording, and the same holds for Photon and manual entry.
+    expect(credits[0]).toHaveTextContent("Powered by Geoapify");
+    expect(credits[0]).not.toHaveTextContent(/Photon/);
+    expect(credits[1]).toHaveTextContent("Search by Photon");
+    expect(credits[1]).not.toHaveTextContent(/Geoapify/);
+    expect(credits[2]).toHaveTextContent("手动录入");
+    expect(credits[2]).not.toHaveTextContent(/Geoapify|Photon/);
+  });
+
+  it("credits the origin source when no stop carries a provider", () => {
+    render(
+      <ShareArticle
+        data={shareWithPlaceProviders({ stops: [null], originProvider: "geoapify" })}
+      />,
+    );
+
+    const credit = screen.getByTestId("places-attribution");
+    expect(credit).toHaveAttribute("data-provider", "geoapify");
+    expect(credit).toHaveTextContent("Powered by Geoapify");
+  });
+
+  it("falls back to the conservative OSM credit for a legacy share without providers", () => {
+    render(<ShareArticle data={shareWithPlaceProviders({ stops: [null] })} />);
 
     const credit = screen.getByTestId("places-attribution");
     expect(credit).toHaveAttribute("data-provider", "unknown");
@@ -576,14 +687,6 @@ describe("ShareArticle place attribution", () => {
     expect(link).toHaveAttribute("href", "https://www.openstreetmap.org/copyright");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
-  });
-
-  it("adds the Geoapify credit when the caller knows the stored places came from it", () => {
-    render(<ShareArticle data={buildDemoPublicTrip()} placesProvider="geoapify" />);
-
-    const credit = screen.getByTestId("places-attribution");
-    expect(credit).toHaveTextContent("Powered by Geoapify");
-    expect(credit).toHaveTextContent("© OpenStreetMap contributors");
-    expect(credit).not.toHaveTextContent(/Photon/);
+    expect(credit).not.toHaveTextContent(/Geoapify|Photon|手动录入/);
   });
 });
