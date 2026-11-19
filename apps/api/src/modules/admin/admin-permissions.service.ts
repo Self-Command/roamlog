@@ -18,6 +18,7 @@ import { parseRequest } from "../../common/services/request-validation.js";
 import { AuditService } from "../audit/audit.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { assertAdminAction } from "./admin-access.js";
+import { ADMIN_AUTHZ_PORT, type AdminAuthzPort } from "./admin-authz.service.js";
 import { uuidV7FromString } from "./admin-ids.js";
 
 const PLATFORM_PERMISSIONS_TARGET_ID = uuidV7FromString("platform-permissions");
@@ -46,7 +47,19 @@ export function mergePermissionMatrix(
     if (!PLATFORM_ROLES.includes(override.role as PlatformRole)) {
       continue;
     }
+    // `user` and `super_admin` are code-defined invariants: the first never gets
+    // an Admin action, the second always keeps the full surface. Mirror the
+    // runtime merge so the matrix never displays a state authorization ignores.
+    if (override.role === "user" || override.role === "super_admin") {
+      continue;
+    }
     if (!ADMIN_ACTIONS.includes(override.action as AdminAction)) {
+      continue;
+    }
+    // Keep GET consistent with runtime authorization: the override layer may
+    // only move grantable actions, so a security-sensitive row (manual SQL,
+    // stale release) is never presented as an effective grant either.
+    if (!isGrantableAdminAction(override.action)) {
       continue;
     }
     const actions = grantedActions.get(override.role as PlatformRole);
@@ -78,6 +91,7 @@ export class AdminPermissionsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(ADMIN_AUTHZ_PORT) private readonly authz: AdminAuthzPort,
   ) {}
 
   async get(actor: AuthenticatedActor): Promise<AdminPermissionsResponse> {
@@ -110,7 +124,11 @@ export class AdminPermissionsService {
     await this.prisma.client.$transaction(async (transaction) => {
       for (const change of applied) {
         const codeGranted = PLATFORM_ROLE_ACTIONS[change.role].includes(change.action);
-        if (codeGranted === change.granted) {
+        // `user` never gains an Admin action and `super_admin` never loses one,
+        // regardless of what the override table says. Do not store dead rows
+        // that authorization would ignore; drop any stale one instead.
+        const codeOwned = change.role === "user" || change.role === "super_admin";
+        if (codeOwned || codeGranted === change.granted) {
           // Code already answers this pair: storing a row would be a redundant
           // copy, so drop any previous diff and fall back to the compiled matrix.
           await transaction.platformRoleOverride.deleteMany({
@@ -152,6 +170,10 @@ export class AdminPermissionsService {
         transaction,
       );
     });
+
+    // The new diff is committed: drop this process's cached effective actions
+    // immediately. Other API instances converge within the 30s TTL.
+    this.authz.invalidate();
 
     return this.read();
   }

@@ -2,6 +2,7 @@ import type { ExecutionContext, INestApplication } from "@nestjs/common";
 import { UnauthorizedException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import type { AdminSettingsResponse, PublicSettingsResponse } from "@roamlog/contracts";
+import { PLATFORM_ROLE_ACTIONS } from "@roamlog/contracts";
 import { randomBytes } from "node:crypto";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +17,7 @@ import { PinoLoggerService } from "../../observability/pino-logger.service.js";
 import { PrismaService } from "../../prisma/prisma.service.js";
 import { RedisService } from "../../redis/redis.service.js";
 import { AdminGuard } from "../../admin/admin.guard.js";
+import { ADMIN_AUTHZ_PORT, type AdminAuthzPort } from "../../admin/admin-authz.service.js";
 import { PlatformTwoFactorGuard } from "../../admin/platform-two-factor.guard.js";
 import { AdminSettingsController } from "../admin-settings.controller.js";
 import { PublicSettingsController } from "../public-settings.controller.js";
@@ -26,6 +28,11 @@ import { SETTINGS_REGISTRY, SETTINGS_REGISTRY_TOKEN } from "../settings.registry
 const encryptionKey = randomBytes(32).toString("base64");
 const secretBox = SecretBox.fromEnvironment({ CONFIG_ENCRYPTION_KEY: encryptionKey });
 const STORED_PASSWORD = "smtp-password-4321";
+
+const codeMatrixAuthz: AdminAuthzPort = {
+  getEffectiveActions: async (role) => new Set(PLATFORM_ROLE_ACTIONS[role]),
+  invalidate: () => undefined,
+};
 
 function settingRow(key: string, group: string, value: unknown): SystemSettingRow {
   const now = new Date();
@@ -152,6 +159,7 @@ async function createApp(options: { user?: AuthenticatedActorUser }) {
       { provide: AppConfigService, useValue: config },
       { provide: PinoLoggerService, useValue: logger },
       { provide: AuditService, useValue: audit },
+      { provide: ADMIN_AUTHZ_PORT, useValue: codeMatrixAuthz },
       PlatformTwoFactorGuard,
       AdminGuard,
     ],

@@ -24,8 +24,9 @@ function setup(overrides: Array<{ role: string; action: string; granted: boolean
     },
   };
   const audit = { record: vi.fn().mockResolvedValue({ id: "audit" }) };
-  const service = new AdminPermissionsService(prisma as never, audit as never);
-  return { prisma, audit, service };
+  const authz = { getEffectiveActions: vi.fn(), invalidate: vi.fn() };
+  const service = new AdminPermissionsService(prisma as never, audit as never, authz as never);
+  return { prisma, audit, authz, service };
 }
 
 function allowTransaction(prisma: ReturnType<typeof setup>["prisma"]) {
@@ -108,6 +109,37 @@ describe("AdminPermissionsService", () => {
     );
   });
 
+  it("never exposes a non-grantable action from the override table", () => {
+    const matrix = mergePermissionMatrix([
+      { role: "support", action: "admin:users:delete", granted: true },
+      { role: "admin", action: "admin:permissions:write", granted: true },
+      { role: "admin", action: "admin:users:delete", granted: false },
+    ]);
+
+    expect(matrix.roles.find((entry) => entry.role === "support")?.actions).not.toContain(
+      "admin:users:delete",
+    );
+    expect(matrix.roles.find((entry) => entry.role === "admin")?.actions).toContain(
+      "admin:users:delete",
+    );
+    expect(matrix.roles.find((entry) => entry.role === "admin")?.actions).not.toContain(
+      "admin:permissions:write",
+    );
+  });
+
+  it("treats user and super_admin as code-owned invariants", () => {
+    const matrix = mergePermissionMatrix([
+      { role: "user", action: "admin:metrics:read", granted: true },
+      { role: "super_admin", action: "admin:flags:read", granted: false },
+    ]);
+    const user = matrix.roles.find((entry) => entry.role === "user");
+    const superAdmin = matrix.roles.find((entry) => entry.role === "super_admin");
+
+    expect(user?.actions).toEqual([]);
+    expect(superAdmin?.actions).toEqual([...PLATFORM_ROLE_ACTIONS.super_admin]);
+    expect(superAdmin?.actions).toContain("admin:flags:read");
+  });
+
   it("rejects security-sensitive changes with 422 PERMISSION_NOT_GRANTABLE", async () => {
     const { prisma, service } = setup();
     allowTransaction(prisma);
@@ -120,6 +152,7 @@ describe("AdminPermissionsService", () => {
       response: expect.objectContaining({ code: "PERMISSION_NOT_GRANTABLE" }),
     });
     expect(prisma.client.$transaction).not.toHaveBeenCalled();
+    expect(prisma.client.platformRoleOverride.upsert).not.toHaveBeenCalled();
 
     await expect(
       service.update(actor(), {
@@ -165,8 +198,23 @@ describe("AdminPermissionsService", () => {
     );
   });
 
-  it("re-reads the merged matrix after a successful save", async () => {
-    const { prisma, service } = setup([
+  it("never stores rows that a role invariant would ignore", async () => {
+    const { prisma, service } = setup();
+    const transaction = allowTransaction(prisma);
+
+    await service.update(actor(), {
+      changes: [
+        { role: "user", action: "admin:metrics:read", granted: true },
+        { role: "super_admin", action: "admin:flags:read", granted: false },
+      ],
+    });
+
+    expect(transaction.platformRoleOverride.upsert).not.toHaveBeenCalled();
+    expect(transaction.platformRoleOverride.deleteMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-reads the merged matrix after a successful save and invalidates the authz cache", async () => {
+    const { prisma, authz, service } = setup([
       { role: "support", action: "admin:flags:update", granted: true },
     ]);
     allowTransaction(prisma);
@@ -176,6 +224,7 @@ describe("AdminPermissionsService", () => {
     });
 
     expect(prisma.client.platformRoleOverride.findMany).toHaveBeenCalledTimes(1);
+    expect(authz.invalidate).toHaveBeenCalledTimes(1);
     expect(matrix.roles.find((entry) => entry.role === "support")?.actions).toContain(
       "admin:flags:update",
     );

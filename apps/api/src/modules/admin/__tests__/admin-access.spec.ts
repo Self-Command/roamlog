@@ -1,5 +1,5 @@
 import { ForbiddenException } from "@nestjs/common";
-import { canPlatform } from "@roamlog/contracts";
+import { PLATFORM_ROLE_ACTIONS, canPlatform } from "@roamlog/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,7 +8,26 @@ import {
 } from "../admin-access.js";
 import { AdminGuard } from "../admin.guard.js";
 import { ADMIN_PERMISSION_METADATA } from "../admin.decorator.js";
+import type { AdminAuthzPort } from "../admin-authz.service.js";
 import { makeActor, USER_OWNER_ID } from "../../../../test/identity-fixtures.js";
+
+type Role = "user" | "support" | "analyst" | "admin" | "super_admin";
+
+/** Mirrors the pre-override behavior by serving the compiled matrix directly. */
+function codeMatrixAuthz(): AdminAuthzPort {
+  return {
+    getEffectiveActions: async (role) => new Set(PLATFORM_ROLE_ACTIONS[role]),
+    invalidate: () => undefined,
+  };
+}
+
+function authzWith(role: Role, actions: readonly string[]): AdminAuthzPort {
+  return {
+    getEffectiveActions: async (requested) =>
+      requested === role ? new Set(actions) : new Set(PLATFORM_ROLE_ACTIONS[requested]),
+    invalidate: () => undefined,
+  };
+}
 
 describe("platform admin access", () => {
   it("matches the contract role matrix for destructive and system actions", () => {
@@ -51,62 +70,133 @@ describe("platform admin access", () => {
   });
 });
 
+describe("assertAdminAction", () => {
+  it("uses the effective actions attached by AdminGuard", () => {
+    const support = makeActor(USER_OWNER_ID, { platformRole: "support" });
+
+    // A granted override passes the guard, so the inner assertion must agree.
+    support.platformActions = new Set(["admin:users:read", "admin:flags:update"]);
+    expect(() => assertAdminAction(support, "admin:flags:update")).not.toThrow();
+
+    // A revoked override must block the inner assertion too.
+    support.platformActions = new Set(["admin:flags:update"]);
+    expect(() => assertAdminAction(support, "admin:users:read")).toThrow(ForbiddenException);
+  });
+
+  it("falls back to the compiled matrix outside an Admin API request", () => {
+    const support = makeActor(USER_OWNER_ID, { platformRole: "support" });
+
+    expect(() => assertAdminAction(support, "admin:users:read")).not.toThrow();
+    expect(() => assertAdminAction(support, "admin:flags:update")).toThrow(ForbiddenException);
+  });
+});
+
 describe("AdminGuard", () => {
-  function contextFor(role: "user" | "support" | "analyst" | "admin" | "super_admin", action: string) {
+  function contextFor(role: Role, action: string) {
     const handler = function handler() {
       return undefined;
     };
     Reflect.defineMetadata(ADMIN_PERMISSION_METADATA, action, handler);
+    const request: {
+      user?: ReturnType<typeof makeActor>["user"];
+      adminActions?: ReadonlySet<string>;
+    } = {
+      user: makeActor(USER_OWNER_ID, { platformRole: role }).user,
+    };
 
     return {
-      getHandler: () => handler,
-      getClass: () => class TestController {},
-      switchToHttp: () => ({
-        getRequest: () => ({
-          user: makeActor(USER_OWNER_ID, { platformRole: role }).user,
+      request,
+      context: {
+        getHandler: () => handler,
+        getClass: () => class TestController {},
+        switchToHttp: () => ({
+          getRequest: () => request,
         }),
-      }),
-    } as never;
+      } as never,
+    };
   }
 
-  it("allows support to read metrics but not delete users", () => {
-    const guard = new AdminGuard();
+  it("allows support to read metrics but not delete users", async () => {
+    const guard = new AdminGuard(codeMatrixAuthz());
 
-    expect(guard.canActivate(contextFor("support", "admin:metrics:read"))).toBe(true);
-    expect(() => guard.canActivate(contextFor("support", "admin:users:delete"))).toThrow(
-      ForbiddenException,
+    await expect(guard.canActivate(contextFor("support", "admin:metrics:read").context)).resolves.toBe(
+      true,
     );
+    await expect(
+      guard.canActivate(contextFor("support", "admin:users:delete").context),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it("allows admin to retry jobs but not update feature flags", () => {
-    const guard = new AdminGuard();
+  it("allows admin to retry jobs but not update feature flags", async () => {
+    const guard = new AdminGuard(codeMatrixAuthz());
 
-    expect(guard.canActivate(contextFor("admin", "admin:jobs:retry"))).toBe(true);
-    expect(() => guard.canActivate(contextFor("admin", "admin:flags:update"))).toThrow(
-      ForbiddenException,
+    await expect(
+      guard.canActivate(contextFor("admin", "admin:jobs:retry").context),
+    ).resolves.toBe(true);
+    await expect(
+      guard.canActivate(contextFor("admin", "admin:flags:update").context),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("allows super_admin to manage queues and update flags", async () => {
+    const guard = new AdminGuard(codeMatrixAuthz());
+
+    await expect(
+      guard.canActivate(contextFor("super_admin", "admin:jobs:manage").context),
+    ).resolves.toBe(true);
+    await expect(
+      guard.canActivate(contextFor("super_admin", "admin:flags:update").context),
+    ).resolves.toBe(true);
+  });
+
+  it("honors a granted override and exposes the effective set downstream", async () => {
+    const supportActions = [...PLATFORM_ROLE_ACTIONS.support, "admin:flags:update"];
+    const guard = new AdminGuard(authzWith("support", supportActions));
+    const { context, request } = contextFor("support", "admin:flags:update");
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.adminActions?.has("admin:flags:update")).toBe(true);
+    expect(request.adminActions?.has("admin:users:read")).toBe(true);
+  });
+
+  it("honors a revoked override even though the code matrix grants it", async () => {
+    const revoked = PLATFORM_ROLE_ACTIONS.support.filter(
+      (action) => action !== "admin:users:read",
     );
+    const guard = new AdminGuard(authzWith("support", revoked));
+
+    await expect(
+      guard.canActivate(contextFor("support", "admin:users:read").context),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it("allows super_admin to manage queues and update flags", () => {
-    const guard = new AdminGuard();
+  it("surfaces authorization-source failures instead of allowing the request", async () => {
+    const failure = new Error("authorization source unavailable");
+    const guard = new AdminGuard({
+      getEffectiveActions: async () => {
+        throw failure;
+      },
+      invalidate: () => undefined,
+    });
 
-    expect(guard.canActivate(contextFor("super_admin", "admin:jobs:manage"))).toBe(true);
-    expect(guard.canActivate(contextFor("super_admin", "admin:flags:update"))).toBe(true);
+    await expect(
+      guard.canActivate(contextFor("admin", "admin:metrics:read").context),
+    ).rejects.toBe(failure);
   });
 
-  it("rejects unauthenticated callers", () => {
-    const guard = new AdminGuard();
+  it("rejects unauthenticated callers", async () => {
+    const guard = new AdminGuard(codeMatrixAuthz());
     const handler = function handler() {
       return undefined;
     };
     Reflect.defineMetadata(ADMIN_PERMISSION_METADATA, "admin:metrics:read", handler);
 
-    expect(() =>
+    await expect(
       guard.canActivate({
         getHandler: () => handler,
         getClass: () => class TestController {},
         switchToHttp: () => ({ getRequest: () => ({}) }),
       } as never),
-    ).toThrow();
+    ).rejects.toBeInstanceOf(Error);
   });
 });

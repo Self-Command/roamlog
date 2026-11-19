@@ -19,5 +19,16 @@ export function assertPlatformAction(user: User, action: AdminAction): void {
 }
 
 export function assertAdminAction(actor: AuthenticatedActor, action: AdminAction): void {
+  // Admin HTTP routes pass through AdminGuard first, which resolves the
+  // permission-matrix override layer and attaches the effective set to the
+  // request/actor. When present it is authoritative; callers outside an Admin
+  // API request keep the compiled-matrix behavior.
+  if (actor.platformActions !== undefined) {
+    if (!actor.platformActions.has(action)) {
+      throw forbidden(action, actor.user.platformRole);
+    }
+    return;
+  }
+
   assertPlatformAction(actor.user, action);
 }

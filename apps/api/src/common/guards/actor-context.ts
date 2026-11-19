@@ -15,12 +15,20 @@ export interface AuthenticatedRequest extends Request {
   user?: User;
   authSession?: AuthSessionContext;
   workspaceMembership?: WorkspaceMembershipAccess;
+  /**
+   * Effective platform actions resolved by `AdminGuard`. Admin services use it
+   * for defense-in-depth assertions so the permission-matrix override layer
+   * governs the inner check as well as the guard.
+   */
+  adminActions?: ReadonlySet<string>;
 }
 
 export interface AuthenticatedActor {
   user: User;
   ip: string | null;
   userAgent: string | null;
+  /** Present only on Admin API requests that passed `AdminGuard`. */
+  platformActions?: ReadonlySet<string>;
 }
 
 function requestIp(request: AuthenticatedRequest): string | null {
@@ -41,6 +49,7 @@ export function actorFromRequest(request: AuthenticatedRequest): AuthenticatedAc
     user: request.user,
     ip: requestIp(request),
     userAgent: requestUserAgent(request),
+    ...(request.adminActions ? { platformActions: request.adminActions } : {}),
   };
 }
 
