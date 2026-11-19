@@ -2,7 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { setWorkerUrl } from "maplibre-gl";
+import { setWorkerUrl, type Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Map, { NavigationControl, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
 
@@ -49,6 +49,31 @@ if (typeof window !== "undefined") {
 export const GLOBE_ZOOM = 2.2;
 export const CITY_ZOOM = 11;
 
+// Liberty uses its `background` layer as the land base once its z7
+// `natural_earth` hillshade raster drops out; painting that layer black for the
+// black space around the globe therefore turns every high-zoom map black. Keep
+// the space black and paint the globe surface with a world-covering fill in the
+// style's own background colour instead.
+const GLOBE_BASE_SOURCE_ID = "globe-land-base";
+const GLOBE_BASE_LAYER_ID = "globe-land-base";
+const GLOBE_BASE_FALLBACK_COLOR = "#f8f4f0";
+const WORLD_BASE_POLYGON = {
+  type: "Feature" as const,
+  properties: {},
+  geometry: {
+    type: "Polygon" as const,
+    coordinates: [
+      [
+        [-179.9, -89.9],
+        [179.9, -89.9],
+        [179.9, 89.9],
+        [-179.9, 89.9],
+        [-179.9, -89.9],
+      ],
+    ],
+  },
+};
+
 export interface GlobePoint {
   id: string;
   label: string;
@@ -86,6 +111,46 @@ function initialView(points: GlobePoint[]) {
 }
 
 /**
+ * Paints the globe's space black while giving its surface the same land base
+ * as the Liberty style. The world polygon is inserted directly above the
+ * style's `background` layer, so all style layers (water, landcover, roads…)
+ * keep their normal order on top of it.
+ */
+function prepareGlobeBase(map: MapLibreMap) {
+  try {
+    const style = map.getStyle();
+    const background = style?.layers?.find((layer) => layer.id === "background");
+    const backgroundPaint = background?.paint as Record<string, unknown> | undefined;
+    const configured = backgroundPaint?.["background-color"];
+    const baseColor = typeof configured === "string" ? configured : GLOBE_BASE_FALLBACK_COLOR;
+
+    if (background) {
+      map.setPaintProperty("background", "background-color", "#000000");
+    }
+    if (map.getLayer(GLOBE_BASE_LAYER_ID)) return;
+    if (!map.getSource(GLOBE_BASE_SOURCE_ID)) {
+      map.addSource(GLOBE_BASE_SOURCE_ID, {
+        type: "geojson",
+        data: WORLD_BASE_POLYGON,
+      });
+    }
+    const layers = map.getStyle().layers;
+    const backgroundIndex = layers.findIndex((layer) => layer.id === "background");
+    map.addLayer(
+      {
+        id: GLOBE_BASE_LAYER_ID,
+        type: "fill",
+        source: GLOBE_BASE_SOURCE_ID,
+        paint: { "fill-color": baseColor },
+      },
+      backgroundIndex >= 0 ? layers[backgroundIndex + 1]?.id : undefined,
+    );
+  } catch {
+    // A style without a background layer keeps its own colour.
+  }
+}
+
+/**
  * 3D globe over the existing OpenFreeMap Liberty vector style. There is no
  * entrance flight: the camera is placed statically, which keeps
  * `prefers-reduced-motion` users out of unrequested motion. Reduced motion also
@@ -105,7 +170,13 @@ export default function GlobeView({
   const mapRef = useRef<MapRef | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [autoRotate, setAutoRotate] = useState(false);
-  const [narrow, setNarrow] = useState(false);
+  // react-map-gl only reads `cooperativeGestures` while constructing the Map
+  // (it is not one of the props it updates later), so the narrow-screen flag
+  // must be correct on the very first render — a post-mount effect is too late.
+  const [narrow, setNarrow] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+    return window.matchMedia("(max-width: 639px)").matches;
+  });
   const reducedMotion = useReducedMotion();
 
   const styleUrl = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || DEFAULT_STYLE_URL;
@@ -154,7 +225,6 @@ export default function GlobeView({
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const query = window.matchMedia("(max-width: 639px)");
-    setNarrow(query.matches);
     const onChange = (event: MediaQueryListEvent) => setNarrow(event.matches);
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
@@ -233,15 +303,7 @@ export default function GlobeView({
             void handleClick(event);
           }}
           onLoad={(event) => {
-            // The Liberty style paints its space with #f8f4f0; the product
-            // canvas must be true black, so only the background paint changes.
-            try {
-              if (event.target.getLayer("background")) {
-                event.target.setPaintProperty("background", "background-color", "#000000");
-              }
-            } catch {
-              // A style without a background layer keeps its own colour.
-            }
+            prepareGlobeBase(event.target);
           }}
           onError={() => onError?.()}
           style={{ width: "100%", height: "100%" }}

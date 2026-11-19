@@ -11,9 +11,17 @@ const { fakeMap, mapProps } = vi.hoisted(() => ({
     easeTo: vi.fn(),
     getBearing: vi.fn(() => 0),
     setBearing: vi.fn(),
-    getLayer: vi.fn(() => ({})),
+    getLayer: vi.fn((id: string) => (id === "background" ? {} : undefined)),
     setPaintProperty: vi.fn(),
     getSource: vi.fn(() => null),
+    addSource: vi.fn(),
+    addLayer: vi.fn(),
+    getStyle: vi.fn(() => ({
+      layers: [
+        { id: "background", type: "background", paint: { "background-color": "#f8f4f0" } },
+        { id: "water", type: "fill", paint: {} },
+      ],
+    })),
   },
   mapProps: { current: null as Record<string, unknown> | null },
 }));
@@ -70,6 +78,23 @@ const points: GlobePoint[] = [
 ];
 
 /** jsdom has no real media queries; `useReducedMotion` reads `matchMedia`. */
+function stubMatchMedia({ reduce = false, narrow = false }: { reduce?: boolean; narrow?: boolean } = {}) {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes("prefers-reduced-motion") ? reduce : query.includes("max-width: 639px") ? narrow : false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  return () => {
+    window.matchMedia = original;
+  };
+}
+
 function stubReducedMotion(reduce: boolean) {
   const original = window.matchMedia;
   window.matchMedia = ((query: string) => ({
@@ -91,7 +116,7 @@ describe("GlobeView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fakeMap.getBearing.mockReturnValue(0);
-    fakeMap.getLayer.mockReturnValue({});
+    fakeMap.getLayer.mockImplementation((id: string) => (id === "background" ? {} : undefined));
     fakeMap.getSource.mockReturnValue(null);
   });
 
@@ -112,6 +137,34 @@ describe("GlobeView", () => {
       "background-color",
       "#000000",
     );
+  });
+
+  it("keeps the style's land base inside the black globe space", () => {
+    render(<GlobeView points={points} />);
+
+    expect(fakeMap.addSource).toHaveBeenCalledWith(
+      "globe-land-base",
+      expect.objectContaining({ type: "geojson" }),
+    );
+    expect(fakeMap.addLayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "globe-land-base",
+        type: "fill",
+        source: "globe-land-base",
+        paint: { "fill-color": "#f8f4f0" },
+      }),
+      "water",
+    );
+  });
+
+  it("enables cooperative gestures on narrow viewports from the first render", () => {
+    const restore = stubMatchMedia({ narrow: true });
+    try {
+      render(<GlobeView points={points} />);
+      expect(mapProps.current?.cooperativeGestures).toBe(true);
+    } finally {
+      restore();
+    }
   });
 
   it("builds clustered GeoJSON from real coordinates only", () => {
