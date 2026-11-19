@@ -73,7 +73,7 @@ const SECRET = z.string().min(1).max(4_096);
 const THEME_ACCENTS = ["white", "amber", "blue", "emerald", "rose"] as const;
 const LANGUAGES = ["zh-CN", "en"] as const;
 const MAIL_PROVIDERS = ["resend", "smtp"] as const;
-const PLACE_PROVIDERS = ["geoapify", "photon"] as const;
+const PLACE_PROVIDERS = ["geoapify", "photon", "tencent", "local", "map_pin"] as const;
 
 function define(entry: Omit<SettingDefinition, "defaultValue">): SettingDefinition {
   if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, entry.key)) {
@@ -522,6 +522,39 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     envLocked: false,
     label: "Daily quota",
     help: "Platform-wide AI calls per day. Zero disables planning.",
+  }),
+  define({
+    key: "ai.baseUrl",
+    group: "ai",
+    type: "string",
+    schema: z.string().min(1).max(200).nullish(),
+    isPublic: false,
+    isSecret: false,
+    envLocked: false,
+    label: "AI base URL",
+    help: "OpenAI-compatible endpoint, e.g. https://api.openai.com/v1",
+  }),
+  define({
+    key: "ai.model",
+    group: "ai",
+    type: "string",
+    schema: z.string().min(1).max(80).nullish(),
+    isPublic: false,
+    isSecret: false,
+    envLocked: false,
+    label: "AI model",
+    help: "Model id served at the base URL",
+  }),
+  define({
+    key: "ai.apiKey",
+    group: "ai",
+    type: "secret",
+    schema: SECRET,
+    isPublic: false,
+    isSecret: true,
+    envLocked: false,
+    label: "AI API key",
+    help: "Stored encrypted; only the last four characters are shown.",
   }),
 
   define({

@@ -406,6 +406,37 @@ describe("SettingsService writes", () => {
     expect(item.value).toBeUndefined();
   });
 
+  it("stores ai.apiKey encrypted and never returns its plaintext", async () => {
+    const { service, prisma } = setup();
+    await service.onModuleInit();
+
+    const result = await service.update(superAdmin(), {
+      updates: [
+        { key: "ai.baseUrl", value: "https://api.openai.com/v1" },
+        { key: "ai.model", value: "gpt-4o-mini" },
+        { key: "ai.apiKey", value: "sk-ai-secret-4242" },
+      ],
+    });
+
+    expect(result.updated.find((entry) => entry.key === "ai.apiKey")?.secret).toBe(true);
+
+    const stored = prisma.store.get("ai.apiKey");
+    expect(stored?.secretCipher).toMatch(/^v1:[0-9a-f]{8}:/u);
+    expect(stored?.secretLast4).toBe("4242");
+    expect(stored?.value).not.toBe("sk-ai-secret-4242");
+
+    const item = await service.getAdminSetting("ai.apiKey");
+    expect(item.secret).toEqual({ hasValue: true, last4: "4242" });
+    expect(item.value).toBeUndefined();
+    expect(JSON.stringify(item)).not.toContain("sk-ai-secret-4242");
+
+    // The non-secret companions read back as their stored values.
+    const baseUrl = await service.getAdminSetting("ai.baseUrl");
+    expect(baseUrl.value).toBe("https://api.openai.com/v1");
+    const model = await service.getAdminSetting("ai.model");
+    expect(model.value).toBe("gpt-4o-mini");
+  });
+
   it("lets another instance observe the new value after pub/sub invalidation", async () => {
     const redis = new FakeRedisBroker();
     const prisma = fakePrisma();

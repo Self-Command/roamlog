@@ -37,9 +37,54 @@ describe("ai.* settings merge", () => {
       timeoutMs: 15_000,
       maxOutputTokens: 1_234,
       dailyQuota: 2,
-      // Credentials stay environment-only.
+      // No stored credentials in this case, so the environment supplies them.
       baseUrl: "http://127.0.0.1:3425/v1",
       model: "auto/deepseek-v4.1-flash",
+      configured: true,
+    });
+  });
+
+  it("lets the stored endpoint, model and key beat the environment", () => {
+    const { settings } = resolveAiSettingsFromStored({
+      env: BASE_ENV,
+      stored: {
+        "ai.baseUrl": "https://api.anthropic.com/v1/",
+        "ai.model": "stored-model",
+        "ai.apiKey": "sk-stored",
+      },
+    });
+
+    // Trailing slash is normalized so the adapter hits one canonical endpoint.
+    expect(settings).toMatchObject({
+      baseUrl: "https://api.anthropic.com/v1",
+      model: "stored-model",
+      apiKey: "sk-stored",
+      configured: true,
+    });
+  });
+
+  it("stays unconfigured when a stored endpoint has no model", () => {
+    const { settings } = resolveAiSettingsFromStored({
+      env: {},
+      stored: { "ai.baseUrl": "https://api.openai.com/v1" },
+    });
+
+    expect(settings).toMatchObject({
+      baseUrl: "https://api.openai.com/v1",
+      model: "",
+      configured: false,
+    });
+  });
+
+  it("becomes configured when a stored endpoint joins the environment model", () => {
+    const { settings } = resolveAiSettingsFromStored({
+      env: { AI_MODEL: "env-model" },
+      stored: { "ai.baseUrl": "https://api.openai.com/v1" },
+    });
+
+    expect(settings).toMatchObject({
+      baseUrl: "https://api.openai.com/v1",
+      model: "env-model",
       configured: true,
     });
   });

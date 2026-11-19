@@ -61,6 +61,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   "ai.timeoutMs": 30_000,
   "ai.maxOutputTokens": 4_096,
   "ai.dailyQuota": 1_000,
+  "ai.baseUrl": null,
+  "ai.model": null,
+  "ai.apiKey": null,
 
   "places.provider": "geoapify",
   "places.apiKey": null,

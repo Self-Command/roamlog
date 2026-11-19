@@ -75,6 +75,9 @@ describe("SETTINGS_REGISTRY", () => {
       "ai.timeoutMs",
       "ai.maxOutputTokens",
       "ai.dailyQuota",
+      "ai.baseUrl",
+      "ai.model",
+      "ai.apiKey",
       "limits.searchPerMinute",
       "limits.uploadPerMinute",
       // Behavior switches that are still unimplemented must not be public:
@@ -182,6 +185,9 @@ describe("SETTINGS_REGISTRY", () => {
       "ai.timeoutMs",
       "ai.maxOutputTokens",
       "ai.dailyQuota",
+      "ai.baseUrl",
+      "ai.model",
+      "ai.apiKey",
       "places.provider",
       "places.lang",
       "places.limit",
@@ -194,11 +200,44 @@ describe("SETTINGS_REGISTRY", () => {
     }
   });
 
+  it("registers the console-configurable AI endpoint, model and key in the ai group", () => {
+    const baseUrl = SETTINGS_BY_KEY.get("ai.baseUrl");
+    const model = SETTINGS_BY_KEY.get("ai.model");
+    const apiKey = SETTINGS_BY_KEY.get("ai.apiKey");
+
+    expect(baseUrl?.group).toBe("ai");
+    expect(baseUrl?.type).toBe("string");
+    expect(baseUrl?.isSecret).toBe(false);
+    expect(baseUrl?.envLocked).toBe(false);
+    // Null default + nullable schema: the key stays absent until an operator saves one.
+    expect(baseUrl?.defaultValue).toBeNull();
+    expect(baseUrl?.schema.safeParse(null).success).toBe(true);
+    expect(baseUrl?.schema.safeParse("https://api.openai.com/v1").success).toBe(true);
+    expect(baseUrl?.schema.safeParse("").success).toBe(false);
+    expect(baseUrl?.schema.safeParse("x".repeat(201)).success).toBe(false);
+
+    expect(model?.group).toBe("ai");
+    expect(model?.type).toBe("string");
+    expect(model?.isSecret).toBe(false);
+    expect(model?.envLocked).toBe(false);
+    expect(model?.defaultValue).toBeNull();
+    expect(model?.schema.safeParse("gpt-4o-mini").success).toBe(true);
+    expect(model?.schema.safeParse("x".repeat(81)).success).toBe(false);
+
+    expect(apiKey?.group).toBe("ai");
+    expect(apiKey?.type).toBe("secret");
+    expect(apiKey?.isSecret).toBe(true);
+    expect(apiKey?.envLocked).toBe(false);
+    expect(apiKey?.defaultValue).toBeNull();
+    expect(apiKey?.schema.safeParse(12345).success).toBe(false);
+  });
+
   it("marks exactly the credential keys as secret", () => {
     const secretKeys = SETTINGS_REGISTRY.filter((entry) => entry.isSecret).map(
       (entry) => entry.key,
     );
     expect(secretKeys.sort()).toEqual([
+      "ai.apiKey",
       "mail.resendApiKey",
       "mail.smtpPassword",
       "places.apiKey",

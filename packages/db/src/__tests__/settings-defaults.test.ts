@@ -36,8 +36,16 @@ describe("DEFAULT_SETTINGS", () => {
       "storage.accessKey",
       "storage.secretKey",
       "places.apiKey",
+      "ai.apiKey",
     ]) {
       expect(DEFAULT_SETTINGS[key as keyof typeof DEFAULT_SETTINGS]).toBeNull();
+    }
+  });
+
+  it("starts the console-configurable AI provider keys unset", () => {
+    for (const key of ["ai.baseUrl", "ai.model", "ai.apiKey"]) {
+      expect(hasDefaultSetting(key), key).toBe(true);
+      expect(DEFAULT_SETTINGS[key as keyof typeof DEFAULT_SETTINGS], key).toBeNull();
     }
   });
 

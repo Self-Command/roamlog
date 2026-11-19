@@ -6,8 +6,9 @@
  * 1. `resolveAiSettings` reads the `AI_*` environment variables once; it is the
  *    fallback and the source of the upstream credentials (base URL, key, model).
  * 2. `AiSettingsResolver` reads `SettingsService.getGroup("ai")` on every
- *    request and overlays the four admin keys on top:
- *    `ai.defaultProvider`, `ai.timeoutMs`, `ai.maxOutputTokens`, `ai.dailyQuota`.
+ *    request and overlays the admin keys on top:
+ *    `ai.defaultProvider`, `ai.timeoutMs`, `ai.maxOutputTokens`,
+ *    `ai.dailyQuota`, `ai.baseUrl`, `ai.model` and `ai.apiKey`.
  *
  * Priority: an `envLocked` key always uses the environment; every other key is
  * `database value > environment > code default`. A database outage, a missing
@@ -109,6 +110,9 @@ const AI_ENV_VARS: Readonly<Record<string, string>> = Object.freeze({
   "ai.timeoutMs": "AI_TIMEOUT_MS",
   "ai.maxOutputTokens": "AI_MAX_OUTPUT_TOKENS",
   "ai.dailyQuota": "AI_DAILY_QUOTA",
+  "ai.baseUrl": "AI_BASE_URL",
+  "ai.apiKey": "AI_API_KEY",
+  "ai.model": "AI_MODEL",
 });
 
 /**
@@ -210,10 +214,41 @@ function integerFromEnv(min: number, max: number): (raw: string) => number | und
 }
 
 /**
+ * Normalizes an endpoint: trims it and strips trailing slashes, so a stored
+ * `https://api.openai.com/v1/` and an env value without the slash are equal.
+ */
+function baseUrlFromValue(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim().replace(/\/+$/u, "");
+  return trimmed ? trimmed : undefined;
+}
+
+function modelFromValue(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/** The key may legitimately be empty for a local gateway; empty stays unset. */
+function apiKeyFromValue(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
  * Pure merge of stored settings over the environment and code defaults.
  *
- * `baseUrl`/`apiKey`/`model` stay environment-only: the console has no keys for
- * them, and switching provider must never silently point at another upstream.
+ * The endpoint, model and key are now console-editable like the rest of the
+ * group: a stored value wins, the environment is the fallback. `configured` is
+ * recomputed from the merged endpoint + model, so a stored endpoint alone never
+ * flips the gateway to "configured".
  */
 export function resolveAiSettingsFromStored(
   inputs: AiSettingsInputs = {},
@@ -256,17 +291,48 @@ export function resolveAiSettingsFromStored(
     (value) => parseStoredInteger(value, ...AI_DAILY_QUOTA_BOUNDS),
     integerFromEnv(...AI_DAILY_QUOTA_BOUNDS),
   );
+  const baseUrl = effectiveValue(
+    "ai.baseUrl",
+    stored,
+    env,
+    envLockOf,
+    baseUrlFromValue,
+    baseUrlFromValue,
+  );
+  const apiKey = effectiveValue(
+    "ai.apiKey",
+    stored,
+    env,
+    envLockOf,
+    apiKeyFromValue,
+    apiKeyFromValue,
+  );
+  const model = effectiveValue(
+    "ai.model",
+    stored,
+    env,
+    envLockOf,
+    modelFromValue,
+    modelFromValue,
+  );
 
   for (const [key, entry] of [
     ["ai.defaultProvider", protocol],
     ["ai.timeoutMs", timeoutMs],
     ["ai.maxOutputTokens", maxOutputTokens],
     ["ai.dailyQuota", dailyQuota],
+    ["ai.baseUrl", baseUrl],
+    ["ai.apiKey", apiKey],
+    ["ai.model", model],
   ] as const) {
     if (entry.ignored) {
       ignored.push({ key, reason: "unsupported_value" });
     }
   }
+
+  const mergedBaseUrl = baseUrl.value ?? base.baseUrl;
+  const mergedApiKey = apiKey.value ?? base.apiKey;
+  const mergedModel = model.value ?? base.model;
 
   return {
     settings: {
@@ -275,6 +341,12 @@ export function resolveAiSettingsFromStored(
       timeoutMs: timeoutMs.value ?? base.timeoutMs,
       maxOutputTokens: maxOutputTokens.value ?? base.maxOutputTokens,
       dailyQuota: dailyQuota.value ?? base.dailyQuota,
+      baseUrl: mergedBaseUrl,
+      apiKey: mergedApiKey,
+      model: mergedModel,
+      // Configured needs both the endpoint and the model, whatever layer supplied
+      // each half; the key stays optional so a local gateway can run keyless.
+      configured: Boolean(mergedBaseUrl && mergedModel),
     },
     ignored,
   };
