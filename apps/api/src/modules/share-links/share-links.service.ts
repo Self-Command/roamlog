@@ -84,7 +84,8 @@ export class ShareLinksService {
   ): Promise<ShareLinkCreated> {
     this.permissions.assertCan(membership.role, "share-link:create", "share_link");
     const input = parseRequest(CreateShareLinkRequestSchema, rawInput);
-    await this.requireVisibleTrip(actor, membership, tripId);    const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+    await this.requireVisibleTrip(actor, membership, tripId);
+    const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
     if (expiresAt && expiresAt.getTime() <= Date.now()) {
       throw new BadRequestException({
         code: "SHARE_EXPIRY_INVALID",
