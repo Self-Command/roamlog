@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import type { Place } from "@roamlog/contracts";
+
 import { makeTrip } from "@/test/fake-data";
 
 import {
@@ -9,6 +11,7 @@ import {
   buildUpdateTripRequest,
   emptyTripFormValues,
   mapServerFieldErrors,
+  originFromPlace,
   parseBudgetAmount,
   validateTripForm,
   valuesFromTrip,
@@ -205,6 +208,60 @@ describe("buildCreateTripRequest", () => {
     expect(payload).not.toHaveProperty("destinations");
     expect(payload).not.toHaveProperty("budgetAmountMinor");
     expect(payload).not.toHaveProperty("tags");
+  });
+});
+
+describe("originFromPlace", () => {
+  const geoapifyPlace: Place = {
+    provider: "geoapify",
+    providerPlaceId: "51e1bdfea47461405994da8b683bb64140f00103f9",
+    name: "京都市",
+    address: "京都市, 京都府, 日本",
+    country: "日本",
+    countryCode: "JP",
+    lat: 35.0115754,
+    lng: 135.7681441,
+    timeZone: "Asia/Tokyo",
+    bbox: [135.6081441, 34.8515754, 135.9281441, 35.1715754],
+    importance: 0.18,
+    type: "city",
+  };
+
+  it("takes the provider and geodata from the place the user picked", () => {
+    // Not a literal: a Geoapify pick must stay `geoapify` in the form.
+    expect(originFromPlace(geoapifyPlace)).toEqual({
+      name: "京都市",
+      provider: "geoapify",
+      lat: 35.0115754,
+      lng: 135.7681441,
+      countryCode: "JP",
+      timeZone: "Asia/Tokyo",
+      address: "京都市, 京都府, 日本",
+      bbox: [135.6081441, 34.8515754, 135.9281441, 35.1715754],
+    });
+  });
+
+  it("submits the picked origin without a provider field", () => {
+    const payload = buildCreateTripRequest(
+      makeValues({
+        origin: originFromPlace(geoapifyPlace),
+        originQuery: geoapifyPlace.name,
+      }),
+    );
+
+    expect(payload).toMatchObject({
+      origin: "京都市",
+      originLat: 35.0115754,
+      originLng: 135.7681441,
+      originCountryCode: "JP",
+      originAddress: "京都市, 京都府, 日本",
+      originBbox: [135.6081441, 34.8515754, 135.9281441, 35.1715754],
+      timeZone: "Asia/Tokyo",
+    });
+    // `Trip` has no origin-provider column and destinations are plain names, so
+    // neither `provider` nor `originProvider` may leak into the request.
+    expect(payload).not.toHaveProperty("provider");
+    expect(payload).not.toHaveProperty("originProvider");
   });
 });
 

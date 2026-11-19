@@ -43,6 +43,7 @@ import {
   buildUpdateTripRequest,
   emptyTripFormValues,
   mapServerFieldErrors,
+  originFromPlace,
   parseBudgetAmount,
   tripFormDurationLabel,
   validateTripForm,
@@ -252,16 +253,7 @@ export function TripForm(props: TripFormProps) {
   function handleOriginSelect(option: ComboboxOption) {
     const place = placeIndex.current.get(option.id);
     const origin = place
-      ? {
-          name: place.name,
-          provider: place.provider,
-          lat: place.lat,
-          lng: place.lng,
-          countryCode: place.countryCode ?? null,
-          timeZone: place.timeZone ?? null,
-          address: place.address ?? null,
-          bbox: place.bbox ?? null,
-        }
+      ? originFromPlace(place)
       : {
           name: option.label,
           provider: "local" as const,

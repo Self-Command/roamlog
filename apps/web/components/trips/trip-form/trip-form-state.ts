@@ -46,6 +46,27 @@ export interface TripFormOrigin {
   bbox: GeoBbox | null;
 }
 
+/**
+ * Builds the form's origin from the place the user actually picked.
+ *
+ * `provider` comes from the search result (`geoapify`, `photon` or `local`)
+ * instead of a hardcoded literal, so a Geoapify pick stays identifiable in the
+ * form. `Trip` has no origin-provider column, so this value is display state
+ * and is deliberately not part of the create/update payload.
+ */
+export function originFromPlace(place: Place): TripFormOrigin {
+  return {
+    name: place.name,
+    provider: place.provider,
+    lat: place.lat,
+    lng: place.lng,
+    countryCode: place.countryCode ?? null,
+    timeZone: place.timeZone ?? null,
+    address: place.address ?? null,
+    bbox: place.bbox ?? null,
+  };
+}
+
 export interface TripFormValues {
   title: string;
   summary: string;
@@ -179,6 +200,10 @@ export function valuesFromTrip(trip: Trip): TripFormValues {
     origin: originName
       ? {
           name: originName,
+          // `Trip` does not persist which provider the origin came from; this
+          // only drives the "地点库 / 手动地点" badge on the edit page and is
+          // never submitted. A place picked in this session keeps its real
+          // provider through `originFromPlace`.
           provider: hasCoordinates ? "photon" : "local",
           lat: trip.originLat,
           lng: trip.originLng,
