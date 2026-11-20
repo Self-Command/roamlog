@@ -104,7 +104,7 @@ function UserImage({ image, filename, providerMetadata }: ImageMessagePartProps)
         target="_blank"
         aria-label={`查看附件 ${filename ?? metadata?.name ?? ""}`.trim()}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- signed cross-origin media URL */}
+        {/* Signed cross-origin media URL. */}
         <img
           alt={filename ?? metadata?.name ?? "附件"}
           className="size-full object-cover"

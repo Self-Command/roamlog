@@ -389,7 +389,7 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
 
   useEffect(() => {
     if (!workspace) return;
-    let pending: string | null = null;
+    let pending: string | null;
     try {
       pending = window.sessionStorage.getItem(SLUG_NOTICE_KEY);
       if (pending === workspace.slug) window.sessionStorage.removeItem(SLUG_NOTICE_KEY);

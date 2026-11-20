@@ -93,7 +93,7 @@ export function AttachmentPreview({
       data-attachment-reason={attachment.status.reason}
     >
       {isImage && url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- signed cross-origin media URL, not a Next-served asset
+        // Signed cross-origin media URL, not a Next-served asset.
         <img
           alt={attachment.name || "附件"}
           className="size-full object-cover"
