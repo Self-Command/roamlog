@@ -19,15 +19,19 @@ const media = vi.hoisted(() => ({ setCover: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
-vi.mock("@/lib/api/trip-form", () => ({
-  useCreateTripFormMutation: () => createTrip,
-  searchPlacesForTripForm: vi.fn(async () => ({
-    items: [],
-    degraded: false,
-    cached: false,
-    provider: "photon",
-  })),
-}));
+vi.mock("@/lib/api/trip-form", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/trip-form")>();
+  return {
+    ...actual,
+    useCreateTripFormMutation: () => createTrip,
+    searchPlacesForTripForm: vi.fn(async () => ({
+      items: [],
+      degraded: false,
+      cached: false,
+      provider: "photon",
+    })),
+  };
+});
 
 vi.mock("@/lib/api/media", () => ({
   createCoverMediaClient: () => ({ setCover: media.setCover }),

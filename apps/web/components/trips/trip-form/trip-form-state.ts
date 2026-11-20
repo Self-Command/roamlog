@@ -228,6 +228,7 @@ export type TripFormField =
   | "summary"
   | "status"
   | "visibility"
+  | "accessGrants"
   | "startDate"
   | "endDate"
   | "origin"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useAddTripParticipant, useRemoveTripParticipant } from "@roamlog/api-client";
-import type { TripParticipant } from "@roamlog/contracts";
+import type { ParticipantRole, TripParticipant } from "@roamlog/contracts";
 import {
   Avatar,
   Badge,
@@ -18,6 +18,10 @@ import {
 } from "@roamlog/ui";
 import { Lock, Plus, Trash2, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
+
+import { changeTripParticipantRole } from "@/lib/api/access-grants";
+import { isApiError, isForbidden } from "@/lib/api/errors";
+import { useSessionQuery } from "@/lib/query";
 
 import { deniedReason, roleLabel } from "./capabilities";
 import { ConfirmDialog } from "./dialogs";
@@ -64,8 +68,26 @@ function roleTone(role: string): Tone {
   return "green";
 }
 
+function participantRoleError(error: unknown): string {
+  if (isForbidden(error)) return "当前角色不能调整参与者角色。";
+  if (isApiError(error)) {
+    if (error.status === 401) return "登录状态已失效，请重新登录后再试。";
+    if (error.status === 400) return "角色值无效，请重新选择。";
+    if (error.status === 404) return "这位参与者已不在列表中，请刷新后重试。";
+    // `invalidResponse` is a contract mismatch, not an HTTP failure. Reporting
+    // it as 「HTTP 200」 would name a successful status as the error, so keep
+    // the two cases distinct.
+    if (error.code === "INVALID_RESPONSE") {
+      return "服务器返回的参与者数据无法识别，请刷新页面后重试。";
+    }
+    return `角色调整失败（HTTP ${error.status}），请稍后重试。`;
+  }
+  return "网络异常，角色没有调整。请检查网络后重试。";
+}
+
 export function ParticipantsTab({ tripId }: { tripId: string }) {
-  const { capabilities, mutate, pending, role } = useTripWorkspace();
+  const { capabilities, mutate, pending, role, trip } = useTripWorkspace();
+  const session = useSessionQuery();
   const participants = useParticipants(tripId);
   const directory = useMemberDirectory();
   const addParticipant = useAddTripParticipant();
@@ -75,6 +97,16 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<TripParticipant | null>(null);
+  const [roleOverrides, setRoleOverrides] = useState<Record<string, ParticipantRole>>({});
+  const [rolePendingId, setRolePendingId] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
+
+  const currentUserId = session.data?.user.id;
+  const canManageRoles =
+    role !== "viewer" &&
+    (role === "owner" ||
+      role === "admin" ||
+      (Boolean(currentUserId) && trip.createdById === currentUserId));
 
   const participantIds = useMemo(() => {
     if (participants.state !== "ready") return new Set<string>();
@@ -136,6 +168,27 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
       failure: "参与者没有移除。",
     });
     if (removed) setRemoveTarget(null);
+  }
+
+  async function changeRole(participant: TripParticipant, nextRole: ParticipantRole) {
+    if (!canManageRoles || participant.role === nextRole || rolePendingId) return;
+    const previousRole = roleOverrides[participant.id] ?? participant.role;
+
+    setRoleError(null);
+    setRolePendingId(participant.id);
+    // Optimistic selection, so the control does not snap back while PATCH is in
+    // flight. The success value below comes from the server's participant row.
+    setRoleOverrides((current) => ({ ...current, [participant.id]: nextRole }));
+    try {
+      const updated = await changeTripParticipantRole(tripId, participant.userId, nextRole);
+      setRoleOverrides((current) => ({ ...current, [participant.id]: updated.role }));
+    } catch (error) {
+      // Roll back to exactly what the person saw before this attempt.
+      setRoleOverrides((current) => ({ ...current, [participant.id]: previousRole }));
+      setRoleError(participantRoleError(error));
+    } finally {
+      setRolePendingId(null);
+    }
   }
 
   if (!capabilities.readParticipants) {
@@ -204,6 +257,7 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
                 // Workspace grants cover every member, so an owner/admin keeps that
                 // label even when the trip invitation itself says viewer.
                 const effectiveRole = member?.role ?? participant.role;
+                const tripRole = roleOverrides[participant.id] ?? participant.role;
                 const invite = inviteStatusOf(participant.status);
                 const showJoinedAt =
                   Boolean(participant.joinedAt) && participant.joinedAt !== participant.invitedAt;
@@ -240,17 +294,41 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
                         </p>
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setRemoveTarget(participant)}
-                      disabled={!capabilities.removeParticipant}
-                      title={capabilities.removeParticipant ? "移除这位参与者" : removeTitle}
-                      aria-label={`移除参与者 ${displayName}`}
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {canManageRoles ? (
+                        <div className="flex items-center gap-2">
+                          <span className="type-meta text-stone">旅行角色</span>
+                          <Select
+                            value={tripRole}
+                            onChange={(event) =>
+                              void changeRole(
+                                participant,
+                                event.target.value as ParticipantRole,
+                              )
+                            }
+                            disabled={pending || rolePendingId !== null}
+                            aria-label={`更改 ${displayName} 的旅行角色`}
+                            aria-busy={rolePendingId === participant.id}
+                            title="工作区 Owner/Admin 的权限高于旅行内角色"
+                            className="h-9 w-28 text-xs"
+                          >
+                            <option value="viewer">可查看</option>
+                            <option value="editor">可编辑</option>
+                          </Select>
+                        </div>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRemoveTarget(participant)}
+                        disabled={!capabilities.removeParticipant}
+                        title={capabilities.removeParticipant ? "移除这位参与者" : removeTitle}
+                        aria-label={`移除参与者 ${displayName}`}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </div>
                   </li>
                 );
               })}
@@ -258,12 +336,26 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
           )}
         </QueryPanel>
 
+        {roleError ? (
+          <p role="alert" className="px-1 text-xs leading-5 text-accent-red">
+            {roleError}
+          </p>
+        ) : null}
+
         <p className="px-1 font-mono text-[10px] leading-5 text-stone">
-          新邀请默认是 viewer，可另行提升为 editor；分享链接与参与者相互独立。角色调整将在后续版本开放。
+          新邀请默认是 viewer，可另行提升为 editor；分享链接与参与者相互独立。旅行角色只影响这趟旅行内的权限。
         </p>
-        {!capabilities.addParticipant && !capabilities.removeParticipant ? (
+        {!canManageRoles || (!capabilities.addParticipant && !capabilities.removeParticipant) ? (
           <p role="note" className="px-1 text-[11px] leading-5 text-muted">
-            {roleLabel(role)} 角色可以查看参与者，但不能添加或移除。
+            {!canManageRoles
+              ? "只有行程创建者或工作区 Owner/Admin 可以调整参与者角色；你仍可以查看当前角色。"
+              : null}
+            {!canManageRoles && (!capabilities.addParticipant || !capabilities.removeParticipant)
+              ? " "
+              : null}
+            {!capabilities.addParticipant && !capabilities.removeParticipant
+              ? `${roleLabel(role)} 角色可以查看参与者，但不能添加或移除。`
+              : null}
           </p>
         ) : null}
       </div>

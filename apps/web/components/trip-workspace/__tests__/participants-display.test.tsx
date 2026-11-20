@@ -192,7 +192,7 @@ describe("参与者：真实邀请状态与角色", () => {
     expect(screen.getByText(/加入于/)).toBeInTheDocument();
   });
 
-  it("说明新邀请默认 viewer、分享链接与参与者相互独立，且没有假的改角色按钮", async () => {
+  it("说明新邀请默认 viewer、分享链接与参与者相互独立，创建者可调整旅行角色", async () => {
     stubFetch([
       route("GET", `/v1/trips/${TRIP_ID}/participants`, [
         participantOf({ id: PARTICIPANT_ID, userId: OTHER_USER_ID }),
@@ -207,8 +207,8 @@ describe("参与者：真实邀请状态与角色", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /提升为|改为|更改角色|调整角色/ }),
-    ).not.toBeInTheDocument();
+      await screen.findByRole("combobox", { name: "更改 沈青禾 的旅行角色" }),
+    ).toHaveValue("viewer");
   });
 
   it("没有参与者时显示可读空状态，规则说明仍然存在", async () => {

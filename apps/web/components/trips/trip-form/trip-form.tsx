@@ -28,9 +28,15 @@ import type { ComboboxOption, ComboboxSearch } from "@/components/forms/searchab
 import { CoverUploader } from "@/components/media";
 import type { CoverChange, CoverUploadError, CoverUploadPhase } from "@/components/media";
 import { isApiError, isForbidden, isVersionConflict } from "@/lib/api/errors";
+import {
+  TripAccessGrantsSaveError,
+  type TripAccessGrantsInput,
+  withTripAccessGrants,
+} from "@/lib/api/trip-form";
 import type { PlacesProvider } from "@/lib/places-attribution";
 import { formatBudget, getTripStatusLabel, getTripStatusTone } from "@/lib/trip-presentation";
 
+import { AccessGrantsField, useTripAccessGrantEditor } from "./access-grants-field";
 import { BudgetField } from "./budget-field";
 import { DatePicker } from "./date-picker";
 import { DestinationsField } from "./destinations-field";
@@ -108,6 +114,11 @@ interface FormBanner {
   conflict?: boolean;
 }
 
+interface AccessGrantSaveFailure {
+  stage: "created" | "updated";
+  trip: Trip;
+}
+
 const CREATE_SUBMIT_LABEL = "创建旅行";
 const EDIT_SUBMIT_LABEL = "保存旅行";
 
@@ -116,6 +127,7 @@ const FIELD_IDS: Partial<Record<TripFormField, string>> = {
   summary: "trip-summary",
   status: "trip-status",
   visibility: "trip-visibility",
+  accessGrants: "trip-access-grants",
   startDate: "trip-start-date",
   endDate: "trip-end-date",
   origin: "trip-origin",
@@ -129,6 +141,8 @@ const FIELD_IDS: Partial<Record<TripFormField, string>> = {
 const FIELD_ORDER: TripFormField[] = [
   "title",
   "summary",
+  "visibility",
+  "accessGrants",
   "startDate",
   "endDate",
   "origin",
@@ -227,9 +241,34 @@ export function TripForm(props: TripFormProps) {
   const [pendingCoverMediaId, setPendingCoverMediaId] = React.useState<string | null>(null);
   const [coverError, setCoverError] = React.useState<string | null>(null);
   const [coverPhase, setCoverPhase] = React.useState<CoverUploadPhase>("idle");
+  const [accessGrantFailure, setAccessGrantFailure] =
+    React.useState<AccessGrantSaveFailure | null>(null);
 
   const coverBusy = COVER_BUSY_PHASES.includes(coverPhase);
-  const busy = pending || coverBusy;
+  // A failed grants write means the trip row is already saved. Keep the rest of
+  // the form read-only until the retry completes, otherwise another submit would
+  // look like it could change fields that this retry will intentionally skip.
+  const accessGrantRetrying = Boolean(accessGrantFailure);
+  const busy = pending || coverBusy || accessGrantRetrying;
+  const grantEditor = useTripAccessGrantEditor({
+    mode: props.mode,
+    tripId: props.mode === "edit" ? props.initialTrip.id : undefined,
+    workspaceId,
+    createdById: props.mode === "edit" ? props.initialTrip.createdById : undefined,
+    enabled: values.visibility === "custom",
+  });
+  const grantSelectionCount =
+    grantEditor.selection.workspaces.length + grantEditor.selection.users.length;
+
+  React.useEffect(() => {
+    if (grantSelectionCount === 0) return;
+    setErrors((current) => {
+      if (!current.accessGrants) return current;
+      const next = { ...current };
+      delete next.accessGrants;
+      return next;
+    });
+  }, [grantSelectionCount]);
 
   const placeIndex = React.useRef(new Map<string, Place>());
 
@@ -472,37 +511,158 @@ export function TripForm(props: TripFormProps) {
     });
   }
 
+  function selectedAccessGrantCount(): number {
+    return grantSelectionCount;
+  }
+
+  function accessGrantPayload(): TripAccessGrantsInput | null {
+    if (values.visibility !== "custom" || !grantEditor.canManage) return null;
+    return {
+      workspaces: [...grantEditor.selection.workspaces],
+      users: [...grantEditor.selection.users],
+    };
+  }
+
+  function accessGrantValidationError(): string | null {
+    if (values.visibility !== "custom") return null;
+    if (grantEditor.status === "loading" || grantEditor.status === "idle") {
+      return "正在读取可见范围，请稍候再保存。";
+    }
+    if (grantEditor.status === "error") {
+      return "可见范围读取失败，请点击“重新加载”后再保存，避免覆盖已有设置。";
+    }
+    if (!grantEditor.canManage) {
+      const alreadyCustom =
+        props.mode === "edit" && props.initialTrip.visibility === "custom";
+      if (!alreadyCustom) {
+        return "只有行程创建者或工作区 Owner/Admin 可以设置指定可见范围。";
+      }
+      return null;
+    }
+    if (selectedAccessGrantCount() === 0) {
+      return "指定可见至少需要选择一个工作区或一位成员，否则没有人能进入这趟旅行。";
+    }
+    return null;
+  }
+
+  function applyAccessGrantFailure(error: TripAccessGrantsSaveError) {
+    setAccessGrantFailure({ stage: error.stage, trip: error.trip });
+    if (error.stage === "updated") setTripState(error.trip);
+
+    const reason = isForbidden(error.reason)
+      ? "当前角色没有管理可见范围的权限。"
+      : isApiError(error.reason)
+        ? error.reason.code === "INVALID_RESPONSE"
+          ? "可见范围已提交，但服务器返回的数据无法识别。"
+          : `保存可见范围失败（HTTP ${error.reason.status}）。`
+        : "网络异常，保存可见范围失败。";
+    setBanner({
+      tone: "error",
+      message:
+        error.stage === "created"
+          ? `行程已创建，但可见范围未保存。${reason} 请点击「重试保存可见范围」，不会重复创建行程。`
+          : `行程字段已保存，但可见范围未保存。${reason} 请点击「重试保存可见范围」，不会重复提交行程字段。`,
+    });
+  }
+
+  async function retryAccessGrantSave() {
+    if (!accessGrantFailure || pending) return;
+    const grants = accessGrantPayload();
+    if (!grants) {
+      setBanner({
+        tone: "error",
+        message: "可见范围没有成功载入，暂时无法重试。请返回旅行详情后重新进入编辑页。",
+      });
+      return;
+    }
+
+    setPending(true);
+    setBanner(null);
+    try {
+      if (accessGrantFailure.stage === "created" && props.mode === "create") {
+        await props.onSubmit(withTripAccessGrants(buildCreateTripRequest(values), grants), {
+          coverMediaId: pendingCoverMediaId,
+        });
+      } else if (accessGrantFailure.stage === "updated" && props.mode === "edit") {
+        await props.onSubmit(
+          withTripAccessGrants({ version: accessGrantFailure.trip.version }, grants),
+        );
+      } else {
+        throw new Error("Access grant retry does not match the form mode.");
+      }
+      setAccessGrantFailure(null);
+    } catch (error) {
+      if (error instanceof TripAccessGrantsSaveError) {
+        applyAccessGrantFailure(error);
+      } else {
+        applyServerError(error);
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending || coverBusy) return;
+    if (pending || coverBusy || accessGrantFailure) return;
 
     const nextErrors = validateTripForm(values);
+    const grantError = accessGrantValidationError();
+    if (grantError) nextErrors.accessGrants = grantError;
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       focusField(firstErrorId(nextErrors));
       setBanner({
         tone: "error",
-        message: nextErrors.form ?? "还有字段需要修正，请检查下方标记。",
+        message: nextErrors.form ?? nextErrors.accessGrants ?? "还有字段需要修正，请检查下方标记。",
       });
       return;
     }
 
+    const grants = accessGrantPayload();
     setErrors({});
     setBanner(null);
     setPending(true);
     try {
       if (props.mode === "create") {
-        await props.onSubmit(buildCreateTripRequest(values), { coverMediaId: pendingCoverMediaId });
+        const input = buildCreateTripRequest(values);
+        await props.onSubmit(
+          grants ? withTripAccessGrants(input, grants) : input,
+          { coverMediaId: pendingCoverMediaId },
+        );
         return;
       }
+
       const patch = buildUpdateTripRequest(values, tripState ?? props.initialTrip);
-      if (!patch) {
+      const grantsChanged = Boolean(grants && grantEditor.dirty);
+      if (!patch && !grantsChanged) {
         setBanner({ tone: "info", message: "没有检测到修改，未提交请求。" });
         return;
       }
-      await props.onSubmit(patch);
+      if (!patch && grants) {
+        // `UpdateTripRequestSchema` rejects a version-only patch, so a
+        // grants-only edit must still carry a real field. Re-asserting the
+        // current `visibility: "custom"` keeps the mandatory trip write valid
+        // before the full grants replacement.
+        await props.onSubmit(
+          withTripAccessGrants(
+            {
+              version: (tripState ?? props.initialTrip).version,
+              visibility: values.visibility,
+            },
+            grants,
+          ),
+        );
+        return;
+      }
+      if (!patch) return;
+      await props.onSubmit(grants ? withTripAccessGrants(patch, grants) : patch);
     } catch (error) {
-      applyServerError(error);
+      if (error instanceof TripAccessGrantsSaveError) {
+        applyAccessGrantFailure(error);
+      } else {
+        applyServerError(error);
+      }
     } finally {
       setPending(false);
     }
@@ -515,6 +675,11 @@ export function TripForm(props: TripFormProps) {
       : "记录一段新的旅程。标题与日期是必填项，保存后会直接进入旅行详情。"
     : "更新旅行的基本信息、路线与预算。只有改动过的字段会提交，保存后立即生效。";
   const defaultSubmitLabel = isCreate ? CREATE_SUBMIT_LABEL : EDIT_SUBMIT_LABEL;
+  const grantFailureHref = accessGrantFailure
+    ? accessGrantFailure.stage === "created"
+      ? `${cancelHref.replace(/\/$/, "")}/${accessGrantFailure.trip.id}`
+      : cancelHref
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -536,7 +701,24 @@ export function TripForm(props: TripFormProps) {
             }
           >
             <p className="leading-6">{banner.message}</p>
-            {banner.conflict && props.mode === "edit" && props.onReload ? (
+            {accessGrantFailure ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void retryAccessGrantSave()}
+                  disabled={pending}
+                >
+                  {pending ? "重试中…" : "重试保存可见范围"}
+                </Button>
+                {grantFailureHref ? (
+                  <Link href={grantFailureHref} className={buttonVariants({ variant: "ghost" })}>
+                    前往旅行详情
+                  </Link>
+                ) : null}
+              </div>
+            ) : banner.conflict && props.mode === "edit" && props.onReload ? (
               <Button type="button" variant="outline" size="sm" onClick={props.onReload}>
                 重新加载最新版本
               </Button>
@@ -545,7 +727,7 @@ export function TripForm(props: TripFormProps) {
         ) : null}
 
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:gap-12">
-          <fieldset disabled={pending} className="min-w-0 space-y-10">
+          <fieldset disabled={pending || accessGrantRetrying} className="min-w-0 space-y-10">
             <section className="space-y-5">
               <div className="flex items-baseline justify-between gap-4 border-b border-hairline pb-2">
                 <h2 className="type-eyebrow">01 / 基本信息</h2>
@@ -619,7 +801,7 @@ export function TripForm(props: TripFormProps) {
                       onChange={(event) =>
                         updateFields(
                           { visibility: event.target.value as TripVisibility },
-                          ["visibility"],
+                          ["visibility", "accessGrants"],
                         )
                       }
                       aria-invalid={invalid}
@@ -634,6 +816,14 @@ export function TripForm(props: TripFormProps) {
                   )}
                 </FormRow>
               </div>
+
+              {values.visibility === "custom" ? (
+                <AccessGrantsField
+                  editor={grantEditor}
+                  disabled={pending || accessGrantRetrying}
+                  error={errors.accessGrants}
+                />
+              ) : null}
             </section>
 
             <section className="space-y-5" data-testid="trip-cover-field">
@@ -917,11 +1107,13 @@ export function TripForm(props: TripFormProps) {
             <p className="type-meta text-stone" role="status">
               {pending
                 ? "正在保存…"
-                : coverBusy
-                  ? "封面上传/处理中，完成后即可保存…"
-                  : props.mode === "edit"
-                    ? `仅提交变更字段 · 当前版本 v${(tripState ?? props.initialTrip).version}`
-                    : `保存后跳转到旅行详情 · 标题上限 ${TRIP_FORM_LIMITS.title} 字`}
+                : accessGrantRetrying
+                  ? "行程已保存，正在等待重试可见范围…"
+                  : coverBusy
+                    ? "封面上传/处理中，完成后即可保存…"
+                    : props.mode === "edit"
+                      ? `仅提交变更字段 · 当前版本 v${(tripState ?? props.initialTrip).version}`
+                      : `保存后跳转到旅行详情 · 标题上限 ${TRIP_FORM_LIMITS.title} 字`}
             </p>
             <div className="flex items-center justify-end gap-2">
               <Link
