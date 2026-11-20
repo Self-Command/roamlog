@@ -3,7 +3,13 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["test/**/*.e2e-spec.ts", "src/**/*.spec.ts"],
+    include: [
+      "test/**/*.e2e-spec.ts",
+      "src/**/*.spec.ts",
+      // AI streaming e2e spec lives next to its module (required path
+      // `src/modules/ai/__tests__/stream.e2e-spec.ts`) instead of test/.
+      "src/**/*.e2e-spec.ts",
+    ],
     fileParallelism: false,
     hookTimeout: 30_000,
     testTimeout: 30_000,
