@@ -1,0 +1,28 @@
+{
+  "generatedAt": "2026-11-20T11:21:48.958Z",
+  "workspaceSettings": {
+    "logoAfterReload": true,
+    "patchBody": {
+      "weekStartsOn": 3,
+      "settings": {
+        "defaultVisibility": "private",
+        "notificationDefaults": {
+          "inApp": false,
+          "email": true
+        },
+        "accentColor": "#3b9eff",
+        "density": "compact"
+      }
+    },
+    "persistedAfterReload": true,
+    "slugEditable": true,
+    "slugValidationRejected": true
+  },
+  "danger": {
+    "adminRole": "admin",
+    "ownerWorkspace": "travel-archive-2f2fa4e4fda6",
+    "exportTriggered": true,
+    "deleteGate": true,
+    "transferGate": true
+  }
+}
