@@ -25,6 +25,7 @@ Related files:
 | `AI_TIMEOUT_MS`        | no                      | `60000`       | Integer `5000`–`120000`                                 |
 | `AI_MAX_OUTPUT_TOKENS` | no                      | `6000`        | Integer `256`–`32000`                                   |
 | `AI_DAILY_QUOTA`       | no                      | `20`          | Integer `0`–`100000`; `0` disables the cap              |
+| `AI_VISION_SUPPORTED`  | no                      | `false`       | `true`/`1`/`yes`/`on` enable image input; anything else is off |
 
 There is **no AI on/off switch**. The runtime definition of “configured” is
 `AI_BASE_URL && AI_MODEL`; that pair is what makes the AI endpoints callable,
@@ -42,6 +43,35 @@ Use a secret store for `AI_API_KEY`, never a committed file, and never a
 `change_me`, `placeholder`, `your-`, or `xxxx`, so a local gateway token must be
 a real non-empty string (for example `local-gateway-token`) rather than
 `CHANGE_ME`.
+
+### Image input (vision)
+
+`AI_VISION_SUPPORTED` (admin key `ai.vision`, boolean, default `false`) is the
+only thing that makes `GET .../ai/models` report `vision: true`.
+
+The gateway's `/v1/models` catalog is **not** a source of truth here: it declares
+`modalities.input: ["text","image"]` for routes that cannot read an image at all.
+Observed on 2026-11-20 against a local gateway: `auto/deepseek-v4.1-flash` and
+`auto/glm-5.3-flash` answered HTTP 200 with empty content and a reasoning trace
+saying the visual analysis was skipped; `auto/gemma-4-31b-it` returned 400 and
+`genimi-studio/gemini-3-flash-lite` had no route. The API used to hard-code
+`vision: true`, so the composer advertised a capability the model did not have.
+
+What the switch changes:
+
+- `true`: chat attachments are inlined as `data:` URLs and sent as image content
+  parts; the model selector shows「支持图片」.
+- `false` (default): attachments are still uploaded and persisted with the
+  conversation (thumbnails survive a reload), but **no image part reaches the
+  model**. The user message gains a short note telling the model it cannot see
+  the attached images, and the composer states the limitation before sending.
+
+Precedence: stored `ai.vision` (Admin → 服务 → AI) > `AI_VISION_SUPPORTED` > code
+default `false`. Enable it only after verifying the target model really accepts
+images; a wrong `true` is worse than the default because the UI promises vision.
+
+Per-model declaration (`AI_VISION_MODELS`) is deliberately not implemented yet:
+the deployment-wide switch is enough until a real vision route is onboarded.
 
 ## 2. Protocols
 

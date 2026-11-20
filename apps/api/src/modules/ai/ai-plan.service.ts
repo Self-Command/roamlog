@@ -196,6 +196,28 @@ function toConversationMessages(messages: readonly unknown[]): AiConversationMes
   return result;
 }
 
+/**
+ * Model-facing note appended to a turn that carries attachments the model
+ * cannot read (deployment `ai.vision` off).
+ *
+ * Without it the model has no idea an image was attached and may answer "no
+ * image received" as if the user forgot to attach one. The note never contains
+ * image content and explicitly forbids inventing it; it is appended only when
+ * `vision === false` **and** the turn has attachments, so every other request
+ * keeps its prompt byte for byte. The persisted history never includes it.
+ *
+ * Port reference: vercel/chatbot only offers the attachment UI for models whose
+ * curated `ChatModel.vision` is true (`lib/ai/models.ts` L17–L24), so upstream
+ * never hits this case; this note is the adaptation for Roamlog's
+ * "allowed even without vision" product decision.
+ */
+export function visionlessAttachmentNotice(count: number): string {
+  return (
+    `补充说明：用户附了 ${count} 张图片，但当前模型无法查看图片内容。` +
+    "请仅根据文字作答；如果必须看图，请让用户用文字描述图片内容。不要编造图片内容。"
+  );
+}
+
 @Injectable()
 export class AiPlanService {
   /** `id → display_name` cache for the model selector; see `gatewayModelNames`. */
@@ -246,17 +268,27 @@ export class AiPlanService {
         ? {}
         : { reasoningEffort: body.reasoningEffort }),
     });
-    const images = await this.resolveAttachmentImages(
+    // The references are always validated (a bogus media id stays a 400 on this
+    // endpoint); the bytes are only inlined when the model can actually read
+    // them. `chat` persists nothing, so the parts are model-facing here.
+    const attachmentParts = await this.resolveAttachmentParts(
       actor,
       membership,
       body.attachments,
     );
+    const images =
+      settings.vision === true
+        ? await this.resolveAttachmentImages(attachmentParts)
+        : [];
     await this.consumeQuota(actor);
 
     const messages: AiConversationMessage[] = [
       {
         role: "user",
-        content: this.userMessage(body),
+        content: this.userMessage(body, {
+          count: attachmentParts.length,
+          vision: settings.vision === true,
+        }),
         ...(images.length > 0 ? { images } : {}),
       },
     ];
@@ -320,12 +352,17 @@ export class AiPlanService {
         : { reasoningEffort: body.reasoningEffort }),
     });
     // Resolved before the commit point: a bad attachment is still a 400 JSON
-    // response, never an in-stream failure after `meta`.
-    const images = await this.resolveAttachmentImages(
+    // response, never an in-stream failure after `meta`. These parts back the
+    // persisted turn below; they become model input only when vision is on.
+    const attachmentParts = await this.resolveAttachmentParts(
       actor,
       membership,
       body.attachments,
     );
+    const images =
+      settings.vision === true
+        ? await this.resolveAttachmentImages(attachmentParts)
+        : [];
     const conversations = this.conversations;
 
     const conversation = await conversations.getOrCreate({
@@ -360,8 +397,12 @@ export class AiPlanService {
       // The stored turn keeps its attachments: the client renders these image
       // parts after a reload and re-signs them from `mediaId` when the URL has
       // expired. Without this the persisted row is text-only and the thumbnail
-      // disappears on refresh.
-      ...(images.length > 0 ? { content: userTurnParts(body.message, images) } : {}),
+      // disappears on refresh. Note this is deliberately independent of
+      // `images`: a model that cannot read images must still show them in the
+      // conversation.
+      ...(attachmentParts.length > 0
+        ? { content: userTurnParts(body.message, attachmentParts) }
+        : {}),
     });
 
     // `ThreadHistoryAdapter.append()` may have created the user row first, and
@@ -392,7 +433,14 @@ export class AiPlanService {
       ...history,
       {
         role: "user",
-        content: this.userMessage(body),
+        content: this.userMessage(body, {
+          count: attachmentParts.length,
+          vision: settings.vision === true,
+        }),
+        // Only when vision is on. With vision off the model gets the text plus
+        // the "cannot see the attached image" note, never an `image_url` part
+        // it would ignore or hallucinate about; the attachments still live in
+        // the persisted turn above.
         ...(images.length > 0 ? { images } : {}),
       },
     ];
@@ -733,7 +781,14 @@ export class AiPlanService {
         name: (displayNames.get(id) ?? readableModelName(id)).slice(0, 80),
         provider: id.includes("/") ? id.split("/")[0]! : "gateway",
         reasoning: reasoningSupported,
-        vision: true,
+        // Operator-declared, default off. This used to be a hard-coded `true`
+        // (and the contract says vision is "declared, never guessed"), yet the
+        // model still could not read images: the gateway advertises
+        // `modalities.input: ["text","image"]` for text-only routes. Only an
+        // explicit `AI_VISION_SUPPORTED` opt-in may claim the capability, so
+        // the selector and the composer never promise something the model
+        // does not have.
+        vision: settings.vision === true,
       })),
       defaultModel: settings.model,
       reasoningSupported,
@@ -794,11 +849,13 @@ export class AiPlanService {
   /**
    * Turns attachment references into image content parts the model can read.
    *
-   * Chain (no new upload system): the browser already ran the existing media
-   * presign→PUT→complete flow, so each `mediaId` is a media row in this
-   * workspace. `MediaService.getOne` enforces the workspace boundary and returns
-   * a signed read URL; the bytes are fetched here and inlined as a `data:` URL so
-   * the gateway never needs egress to object storage.
+   * Model-facing half of the attachment pipeline. The caller passes the parts
+   * from {@link resolveAttachmentParts} **only when this deployment has opted
+   * into vision** (`AiSettings.vision === true`, i.e. `AI_VISION_SUPPORTED`).
+   * When vision is off the model receives no image part at all: the gateway
+   * would ignore it (observed: HTTP 200, empty content, "visual analysis
+   * skipped") or the model would invent what it cannot see, and the base64
+   * would still be billed as input tokens.
    *
    * Port reference: vercel/chatbot stores the uploaded URL on the message
    * (`multimodal-input.tsx` L286–L292) and lets AI SDK `convertToModelMessages`
@@ -806,10 +863,46 @@ export class AiPlanService {
    * equivalent conversion happens here, once, for all three adapters.
    */
   private async resolveAttachmentImages(
+    parts: readonly AiAttachmentPart[],
+  ): Promise<AiImagePart[]> {
+    const images: AiImagePart[] = [];
+    for (const part of parts) {
+      if (!part.url) {
+        throw new HttpException(
+          {
+            code: "AI_ATTACHMENT_INVALID",
+            message: "Attachment is not ready yet.",
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      const bytes = await fetchAttachmentBytes(part.url);
+      images.push({
+        mimeType: part.mimeType,
+        dataUrl: `data:${part.mimeType};base64,${bytes.toString("base64")}`,
+        ...(part.mediaId === undefined ? {} : { mediaId: part.mediaId }),
+        url: part.url,
+        ...(part.name === undefined ? {} : { name: part.name }),
+        ...(part.sizeBytes === undefined ? {} : { sizeBytes: part.sizeBytes }),
+      });
+    }
+    return images;
+  }
+
+  /**
+   * Attachment metadata for one turn, resolved through the media pipeline.
+   *
+   * Persisted-turn half of the pipeline: it **always** runs, so a bad attachment
+   * is still a 400 and the stored user message keeps its image parts (the
+   * thumbnail survives a reload). It deliberately carries no bytes — those are
+   * only inlined by {@link resolveAttachmentImages} when vision is on — so
+   * "kept in the conversation" and "sent to the model" are separate decisions.
+   */
+  private async resolveAttachmentParts(
     actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
     attachments: readonly AiAttachment[] | undefined,
-  ): Promise<AiImagePart[]> {
+  ): Promise<AiAttachmentPart[]> {
     if (!attachments || attachments.length === 0) return [];
     if (!this.media) {
       throw new HttpException(
@@ -821,7 +914,7 @@ export class AiPlanService {
       );
     }
 
-    const images: AiImagePart[] = [];
+    const parts: AiAttachmentPart[] = [];
     for (const attachment of attachments) {
       let read: Awaited<ReturnType<MediaService["getOne"]>>;
       try {
@@ -847,17 +940,15 @@ export class AiPlanService {
         );
       }
 
-      const bytes = await fetchAttachmentBytes(url);
-      images.push({
+      parts.push({
         mimeType: read.mimeType,
-        dataUrl: `data:${read.mimeType};base64,${bytes.toString("base64")}`,
         mediaId: read.id,
         url,
         name: attachment.name,
         sizeBytes: attachment.sizeBytes,
       });
     }
-    return images;
+    return parts;
   }
 
   /** Daily quota check shared by the blocking and streaming endpoints. */
@@ -1420,11 +1511,21 @@ export class AiPlanService {
     }
   }
 
-  private userMessage(body: AiChatRequest): string {
-    return JSON.stringify({
+  private userMessage(
+    body: AiChatRequest,
+    attachments?: { readonly count: number; readonly vision: boolean },
+  ): string {
+    const envelope = JSON.stringify({
       request: body.message,
       hints: body.hints ?? {},
     });
+    // Only when the turn really has attachments the model cannot read. The
+    // hint rides on the user turn (not the system prompt) so it is scoped to
+    // this request and cannot leak into conversations that never attached one.
+    if (!attachments || attachments.vision || attachments.count === 0) {
+      return envelope;
+    }
+    return `${envelope}\n\n${visionlessAttachmentNotice(attachments.count)}`;
   }
 }
 
@@ -1581,6 +1682,24 @@ async function fetchAttachmentBytes(url: string): Promise<Buffer> {
 }
 
 /**
+ * Attachment metadata kept on a persisted user turn.
+ *
+ * Deliberately not an {@link AiImagePart}: it carries no bytes, so the stored
+ * shape can never be mistaken for something the model is allowed to read. The
+ * two halves of the pipeline are resolved separately (`resolveAttachmentParts`
+ * for the conversation, `resolveAttachmentImages` for the model).
+ */
+interface AiAttachmentPart {
+  readonly mimeType: string;
+  /** Media row id, so the persisted content part can be re-signed by the client. */
+  readonly mediaId?: string;
+  /** Signed display URL at turn time (expires; `mediaId` is the durable handle). */
+  readonly url?: string;
+  readonly name?: string;
+  readonly sizeBytes?: number;
+}
+
+/**
  * assistant-ui-shaped content parts for a persisted user turn.
  *
  * Shape matches `ImageMessagePart` (`{type:"image", image, filename,
@@ -1589,11 +1708,11 @@ async function fetchAttachmentBytes(url: string): Promise<Buffer> {
  */
 function userTurnParts(
   text: string,
-  images: readonly AiImagePart[],
+  parts: readonly AiAttachmentPart[],
 ): readonly unknown[] {
   return [
     { type: "text", text },
-    ...images.map((image) => ({
+    ...parts.map((image) => ({
       type: "image",
       id: image.mediaId,
       image: image.url ?? "",

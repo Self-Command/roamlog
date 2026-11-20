@@ -131,7 +131,11 @@ export function ModelSelectorCompact({ workspaceId }: { workspaceId: string }) {
             >
               <span className="text-sm text-ink">{model.name}</span>
               <span className="type-meta text-stone">
-                {[model.provider, model.vision ? "支持图片" : null, model.reasoning ? "支持思考" : null]
+                {[
+                  model.provider,
+                  model.vision ? "支持图片" : "不支持图片",
+                  model.reasoning ? "支持思考" : null,
+                ]
                   .filter(Boolean)
                   .join(" · ")}
               </span>

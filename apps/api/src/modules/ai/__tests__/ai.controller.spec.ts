@@ -1,6 +1,6 @@
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import { AI_REWRITE_MAX_INPUT_CHARS, AiRunIdSchema } from "@roamlog/contracts";
+import { AI_REWRITE_MAX_INPUT_CHARS, AiChatModelsResponseSchema, AiRunIdSchema } from "@roamlog/contracts";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -144,6 +144,32 @@ function asLogger(stub: ReturnType<typeof loggerStub>) {
 afterEach(async () => {
   vi.unstubAllGlobals();
   await Promise.all(apps.splice(0).map((app) => app.close()));
+});
+
+describe("GET /v1/workspaces/:workspaceId/ai/models — vision truthfulness", () => {
+  async function modelsFrom(settings: ReturnType<typeof aiSettings>) {
+    const { app } = await createApp({ settings });
+    const response = await request(app.getHttpServer())
+      .get(`/v1/workspaces/${WORKSPACE_ID}/ai/models`)
+      .expect(200);
+    return AiChatModelsResponseSchema.parse(response.body);
+  }
+
+  it("returns vision:false when AI_VISION_SUPPORTED is not configured", async () => {
+    const body = await modelsFrom(aiSettings({ baseUrl: null }));
+    expect(body.models[0]?.vision).toBe(false);
+    expect(body.defaultModel).toBe("auto/deepseek-v4.1-flash");
+  });
+
+  it("returns vision:false when the operator keeps the switch off", async () => {
+    const body = await modelsFrom(aiSettings({ baseUrl: null, vision: false }));
+    expect(body.models[0]?.vision).toBe(false);
+  });
+
+  it("returns vision:true only when the operator opted in", async () => {
+    const body = await modelsFrom(aiSettings({ baseUrl: null, vision: true }));
+    expect(body.models[0]?.vision).toBe(true);
+  });
 });
 
 describe("POST /v1/workspaces/:workspaceId/ai/chat", () => {

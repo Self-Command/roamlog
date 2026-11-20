@@ -603,6 +603,23 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     label: "AI API 密钥",
     help: "加密存储，仅显示末四位字符。",
   }),
+  define({
+    key: "ai.vision",
+    group: "ai",
+    type: "boolean",
+    schema: booleanSetting("支持图片输入"),
+    isPublic: false,
+    isSecret: false,
+    // Not env-locked (the registry keeps that field for future use): a stored
+    // value wins, `AI_VISION_SUPPORTED` is the fallback, and the code default is
+    // `false`. See `ai.settings.ts` `DEFAULT_AI_VISION`.
+    envLocked: false,
+    envVar: "AI_VISION_SUPPORTED",
+    label: "支持图片输入",
+    help:
+      "开启后，聊天附件会作为图片内容发送给模型。网关 /v1/models 的 modalities 字段不可信" +
+      "（实测声明支持 image 的模型会跳过视觉分析），所以默认关闭；开启前请自行验证该模型确实能读图。",
+  }),
 
   define({
     key: "places.provider",

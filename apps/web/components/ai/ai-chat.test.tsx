@@ -1,4 +1,5 @@
 import type {
+  AiChatModelsResponse,
   AiChatResponse,
   AiPlanWarning,
   AiRunExecuteResponse,
@@ -113,12 +114,15 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /** Keeps the remote conversation adapter quiet while these tests only assert the chat turn. */
-function installConversationFetch(): void {
+function installConversationFetch(modelsPayload?: unknown): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
+      if (modelsPayload !== undefined && url.includes("/ai/models")) {
+        return jsonResponse(modelsPayload);
+      }
       if (url.includes("/ai/conversations?")) {
         return jsonResponse({ items: [], nextCursor: null });
       }
@@ -210,6 +214,59 @@ describe("AiChat empty state", () => {
     expect(screen.getByRole("button", { name: /带爸妈去成都四天/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /周末去杭州/ })).toBeInTheDocument();
     expect(screen.getByLabelText("给 AI 助手发消息")).toBeInTheDocument();
+  });
+});
+
+describe("AiChat vision disclosure", () => {
+  const VISION_OFF: AiChatModelsResponse = {
+    models: [
+      {
+        id: "auto/deepseek-v4.1-flash",
+        name: "Deepseek V4.1 Flash",
+        provider: "auto",
+        reasoning: true,
+        vision: false,
+      },
+    ],
+    defaultModel: "auto/deepseek-v4.1-flash",
+    reasoningSupported: true,
+  };
+  const VISION_ON: AiChatModelsResponse = {
+    ...VISION_OFF,
+    models: [
+      {
+        id: "auto/deepseek-v4.1-flash",
+        name: "Deepseek V4.1 Flash",
+        provider: "auto",
+        reasoning: true,
+        vision: true,
+      },
+    ],
+  };
+
+  it("says images are archived but not sent, and keeps the attach button usable", async () => {
+    installConversationFetch(VISION_OFF);
+    renderChat();
+
+    const note = await screen.findByTestId("vision-note");
+    expect(note).toHaveTextContent(
+      "当前模型无法识别图片：图片只会作为附件保存在会话里，不会发送给模型。",
+    );
+    const attach = screen.getByTestId("attachments-button");
+    expect(attach).toHaveAttribute("title", expect.stringContaining("无法识别图片"));
+    // Archiving a photo is still allowed, so the control stays enabled.
+    expect(attach).toBeEnabled();
+  });
+
+  it("shows no note once the model is declared able to read images", async () => {
+    installConversationFetch(VISION_ON);
+    renderChat();
+
+    expect(await screen.findByTestId("model-selector-current")).toHaveTextContent(
+      "Deepseek V4.1 Flash",
+    );
+    expect(screen.queryByTestId("vision-note")).not.toBeInTheDocument();
+    expect(screen.getByTestId("attachments-button")).not.toHaveAttribute("title");
   });
 });
 

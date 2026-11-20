@@ -463,7 +463,7 @@ pnpm admin:bootstrap -- --force
 | 图片压缩   | `MEDIA_MAX_EDGE`, `MEDIA_QUALITY`, `MEDIA_TARGET_BYTES`, `MEDIA_KEEP_ORIGINAL`                                                  | **仅 `check:env` 预检/文档占位，API 与 web 不读取**；实际参数是后台 `media.*` 设置 |
 | 设置加密   | `CONFIG_ENCRYPTION_KEY`, `CONFIG_ENCRYPTION_KEYS`                                                                               | 后台 secret 设置的 AES-256-GCM key 与轮转 ring |
 | 地点搜索   | `PLACES_PROVIDER`, `GEOAPIFY_API_KEY`, `PLACES_FALLBACK_TO_PHOTON`, `GEOAPIFY_DAILY_LIMIT`, `PLACES_*`                           | Geoapify 主源、Photon 兜底、每日额度与高级超时/缓存/限流参数 |
-| AI 规划    | `AI_PROTOCOL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_OUTPUT_TOKENS`, `AI_DAILY_QUOTA` | 可选 AI planner：三协议、超时、输出上限与配额；`AI_BASE_URL` + `AI_MODEL` 同时存在即视为启用 |
+| AI 规划    | `AI_PROTOCOL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_OUTPUT_TOKENS`, `AI_DAILY_QUOTA`, `AI_VISION_SUPPORTED` | 可选 AI planner：三协议、超时、输出上限与配额；`AI_BASE_URL` + `AI_MODEL` 同时存在即视为启用；`AI_VISION_SUPPORTED` 默认 false（网关 `/v1/models` 的 modalities 不可信，看图能力须显式声明） |
 | MinIO 镜像 | `MINIO_IMAGE`, `MINIO_MC_IMAGE`                                                                                                 | 固定、可验证的镜像来源                         |
 | 邮件       | `EMAIL_PROVIDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `RESEND_API_KEY`, `EMAIL_FROM`                        | Mailpit / SMTP relay / Resend                  |
 | 地图       | `NEXT_PUBLIC_MAP_STYLE_URL`, `NEXT_PUBLIC_GEOCODER_URL`                                                                         | 瓦片样式与城市搜索                             |

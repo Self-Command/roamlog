@@ -49,6 +49,17 @@ export const DEFAULT_AI_PROTOCOL: AiProtocol = "openai-chat";
 export const DEFAULT_AI_TIMEOUT_MS = 60_000;
 export const DEFAULT_AI_MAX_OUTPUT_TOKENS = 6_000;
 export const DEFAULT_AI_DAILY_QUOTA = 20;
+/**
+ * Image capability is **off unless an operator says otherwise**.
+ *
+ * The gateway catalog cannot be trusted for this: `GET /v1/models` publishes
+ * `modalities.input: ["text","image"]` for routes that cannot read an image at
+ * all (observed 2026-11-20 for `auto/deepseek-v4.1-flash` and
+ * `auto/glm-5.3-flash`: HTTP 200 with empty content and a reasoning trace that
+ * says the visual analysis was skipped). Promising `vision: true` from that
+ * metadata made the UI advertise a capability the model does not have.
+ */
+export const DEFAULT_AI_VISION = false;
 
 /** Never log more than one fallback / ignored-value warning per window. */
 const SETTINGS_WARN_THROTTLE_MS = 10_000;
@@ -80,6 +91,21 @@ export interface AiSettings {
   readonly maxOutputTokens: number;
   /** Per-user daily plan-run cap. `0` disables the cap. */
   readonly dailyQuota: number;
+  /**
+   * Whether image attachments may be sent to the model.
+   *
+   * Ported from vercel/chatbot `lib/ai/models.ts` L17–L24 (`ChatModel`), where
+   * `vision` is a **hand-declared** per-model capability — never inferred from
+   * the provider catalog. Roamlog has one deployment-wide switch instead of a
+   * curated per-model table: the admin key `ai.vision` (boolean, default
+   * `false`, `envVar: AI_VISION_SUPPORTED`), resolved like every other key —
+   * stored value > environment > code default.
+   *
+   * Optional on purpose: "unconfigured" is a real state (omitted by a stored
+   * row or by an older test snapshot). Every consumer treats anything except
+   * `true` as "this model cannot read images", so the default can never lie.
+   */
+  readonly vision?: boolean;
   readonly configured: boolean;
 }
 
@@ -87,6 +113,35 @@ export interface AiSettings {
 export const AI_ALLOWED_MODELS_ENV = "AI_ALLOWED_MODELS";
 /** Optional deployment-wide reasoning depth fallback. */
 export const AI_REASONING_EFFORT_ENV = "AI_REASONING_EFFORT";
+/**
+ * Operator opt-in for image attachments (`true`/`1`/`yes`/`on`; anything else
+ * is off). Deliberately an explicit switch: neither the gateway's
+ * `modalities.input` nor a model id pattern proves a route can read an image.
+ */
+export const AI_VISION_SUPPORTED_ENV = "AI_VISION_SUPPORTED";
+
+/** The values that count as an explicit "yes" in the environment. */
+const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
+/** The values that count as an explicit "no" in the environment. */
+const FALSE_VALUES = new Set(["0", "false", "no", "off"]);
+
+/**
+ * Strict boolean reader shared by the environment fallback and a stored
+ * `ai.vision` row. Returns `undefined` for anything that is not a recognised
+ * boolean, so the caller keeps its default instead of guessing.
+ */
+function booleanFromValue(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (TRUE_VALUES.has(normalized)) return true;
+  if (FALSE_VALUES.has(normalized)) return false;
+  return undefined;
+}
 
 /** The upstream reasoning-depth union, restated for the environment parser. */
 const REASONING_EFFORTS: readonly AiReasoningEffort[] = [
@@ -168,6 +223,9 @@ export function resolveAiSettings(env: NodeJS.ProcessEnv = process.env): AiSetti
     timeoutMs: integer(env.AI_TIMEOUT_MS, DEFAULT_AI_TIMEOUT_MS, 5_000, 120_000),
     maxOutputTokens: integer(env.AI_MAX_OUTPUT_TOKENS, DEFAULT_AI_MAX_OUTPUT_TOKENS, 256, 32_000),
     dailyQuota: integer(env.AI_DAILY_QUOTA, DEFAULT_AI_DAILY_QUOTA, 0, 100_000),
+    // Explicit operator opt-in only. An unset, empty or unrecognised value is
+    // `false`: a model that cannot read images must never be advertised as one.
+    vision: booleanFromValue(env[AI_VISION_SUPPORTED_ENV]) ?? DEFAULT_AI_VISION,
     configured,
   };
 }
@@ -181,6 +239,10 @@ const AI_ENV_VARS: Readonly<Record<string, string>> = Object.freeze({
   "ai.baseUrl": "AI_BASE_URL",
   "ai.apiKey": "AI_API_KEY",
   "ai.model": "AI_MODEL",
+  // `settings.registry` registers `ai.vision` (boolean, default false) for the
+  // admin console; the environment is its fallback. Either way the capability
+  // is declared, never guessed from gateway metadata.
+  "ai.vision": AI_VISION_SUPPORTED_ENV,
 });
 
 /**
@@ -383,6 +445,14 @@ export function resolveAiSettingsFromStored(
     modelFromValue,
     modelFromValue,
   );
+  const vision = effectiveValue(
+    "ai.vision",
+    stored,
+    env,
+    envLockOf,
+    booleanFromValue,
+    booleanFromValue,
+  );
 
   for (const [key, entry] of [
     ["ai.defaultProvider", protocol],
@@ -392,6 +462,7 @@ export function resolveAiSettingsFromStored(
     ["ai.baseUrl", baseUrl],
     ["ai.apiKey", apiKey],
     ["ai.model", model],
+    ["ai.vision", vision],
   ] as const) {
     if (entry.ignored) {
       ignored.push({ key, reason: "unsupported_value" });
@@ -414,6 +485,9 @@ export function resolveAiSettingsFromStored(
       model: mergedModel,
       // Recomputed after the merge: the stored/DB model must lead the list.
       allowedModels: parseAllowedModels(env, mergedModel),
+      // Same precedence as every other key: the admin's stored `ai.vision`
+      // wins, `AI_VISION_SUPPORTED` is the fallback, the code default is false.
+      vision: vision.value ?? base.vision ?? DEFAULT_AI_VISION,
       // Configured needs both the endpoint and the model, whatever layer supplied
       // each half; the key stays optional so a local gateway can run keyless.
       configured: Boolean(mergedBaseUrl && mergedModel),

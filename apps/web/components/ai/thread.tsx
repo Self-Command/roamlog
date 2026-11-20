@@ -17,6 +17,7 @@ import { AttachmentPreview } from "./attachment-preview";
 import { ReasoningSelectorCompact, ModelSelectorCompact } from "./chat-controls";
 import { AI_ATTACHMENT_ACCEPT } from "./media-attachment-adapter";
 import { useMessages, type ChatStatus } from "./use-messages";
+import { useCurrentChatModel, VisionNote, VISION_UNAVAILABLE_NOTE } from "./vision-note";
 
 /**
  * The conversation surface: message list + fixed composer.
@@ -108,6 +109,12 @@ function Composer({ workspaceId }: { workspaceId: string }) {
   const running = useAuiState((state) => state.thread.isRunning);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The capability of the model the next turn will use. `vision: false` keeps
+  // the attach button enabled (the photo is still archived with the message)
+  // but states the limitation here and in the note below (see `vision-note.tsx`
+  // for why disabling was rejected).
+  const currentModel = useCurrentChatModel(workspaceId);
+  const visionUnavailable = currentModel !== null && !currentModel.vision;
 
   const addFiles = useCallback(
     async (files: File[]) => {
@@ -191,6 +198,7 @@ function Composer({ workspaceId }: { workspaceId: string }) {
             aria-label="添加图片附件"
             className="shrink-0"
             data-testid="attachments-button"
+            title={visionUnavailable ? VISION_UNAVAILABLE_NOTE : undefined}
             onClick={() => fileInputRef.current?.click()}
             disabled={running}
           >
@@ -216,6 +224,8 @@ function Composer({ workspaceId }: { workspaceId: string }) {
           <ModelSelectorCompact workspaceId={workspaceId} />
           <ReasoningSelectorCompact workspaceId={workspaceId} />
         </div>
+
+        <VisionNote model={currentModel} />
 
         {error ? (
           <p role="alert" className="px-2 text-xs leading-5 text-accent-red" data-testid="composer-error">
