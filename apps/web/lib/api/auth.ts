@@ -37,6 +37,14 @@ export const MAIL_NOT_CONFIGURED_MESSAGE =
 export const MAIL_DELIVERY_FAILED_MESSAGE =
   "邮件未能发出，重置链接没有送达。请稍后重试；若持续失败，请联系管理员检查邮件服务。";
 
+/** The change-email confirmation is the link that has to arrive first. */
+export const CHANGE_EMAIL_NOT_CONFIGURED_MESSAGE =
+  "邮件服务未配置，无法发出确认邮件。请联系管理员配置邮件发送后重试。";
+
+/** Same shape as {@link MAIL_DELIVERY_FAILED_MESSAGE}, for the email-change flow. */
+export const CHANGE_EMAIL_DELIVERY_FAILED_MESSAGE =
+  "确认邮件没有发出。请稍后重试；若持续失败，请联系管理员检查邮件服务。";
+
 export interface SignInResult {
   twoFactorRedirect: boolean;
   twoFactorMethods: string[];
@@ -188,18 +196,36 @@ export async function changePassword(
 
 /**
  * `POST /v1/auth/change-email` — Better Auth only accepts `newEmail` and
- * `callbackURL` here. When the account's email is already verified the service
- * sends a verification link and the address keeps its old value until that link
- * is opened, which is why the form's copy says "验证后生效".
+ * `callbackURL` here.
+ *
+ * With `user.changeEmail.sendChangeEmailConfirmation` enabled the first mail is
+ * a confirmation **to the current address** (`better-auth.com/docs/concepts/users-accounts#confirming-with-current-email`);
+ * clicking it makes Better Auth send the verification link to the new address,
+ * and only that second click moves the address. The row keeps its old email
+ * until then, which is why the form copy says "两封都完成后才生效".
+ *
+ * The API gateway appends `emailDelivery: "failed"` when the confirmation could
+ * not be handed to the transport, so the form does not claim success for a mail
+ * that never left.
  */
 export async function changeEmail(newEmail: string, callbackURL?: string): Promise<void> {
-  await authRequest(
+  const body = await authRequest(
     "/v1/auth/change-email",
     jsonInit("POST", {
       newEmail,
       ...(callbackURL ? { callbackURL } : {}),
     }),
   );
+  const parsed = RequestPasswordResetResponseSchema.safeParse(body);
+  const delivery: EmailDeliveryMarker | undefined = parsed.success
+    ? parsed.data.emailDelivery
+    : undefined;
+  if (delivery === "not_configured") {
+    throw new EmailNotConfiguredError(CHANGE_EMAIL_NOT_CONFIGURED_MESSAGE);
+  }
+  if (delivery === "failed") {
+    throw new EmailDeliveryFailedError(CHANGE_EMAIL_DELIVERY_FAILED_MESSAGE);
+  }
 }
 
 /**

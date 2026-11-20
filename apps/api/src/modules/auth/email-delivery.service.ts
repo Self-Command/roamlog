@@ -150,6 +150,33 @@ export class EmailDeliveryService {
     });
   }
 
+  /**
+   * The first half of an email change: Better Auth sends this link to the
+   * account's **current** address (`sendChangeEmailConfirmation`), and clicking
+   * it is what triggers the second link to the new address. Mirrors Better
+   * Auth's own wording for the step, in the same transactional template style
+   * as the verification and reset mails above.
+   */
+  async sendChangeEmailConfirmation(
+    user: MailUser,
+    newEmail: string,
+    url: string,
+  ): Promise<void> {
+    const safeUrl = escapeHtml(url);
+    const safeNewEmail = escapeHtml(newEmail);
+    await this.send({
+      to: user.email,
+      ...(user.id ? { userId: user.id } : {}),
+      subject: "确认更换你的 Roamlog 邮箱",
+      template: "auth.change-email",
+      text: `确认把 Roamlog 邮箱更换为 ${newEmail}：${url}`,
+      html: emailShell(
+        "确认更换邮箱",
+        `<p style="color:#acb1ba;line-height:1.6">${escapeHtml(user.name)}，有人请求把这个账号的邮箱更换为 <strong style="color:#fff">${safeNewEmail}</strong>。点击下方链接确认后，我们还会向新邮箱发送验证信；两封都完成才会生效。如果不是你发起的请求，请忽略此邮件，账号不会变化。</p><p><a href="${safeUrl}" style="color:#fff;background:#222;padding:12px 18px;border-radius:8px;text-decoration:none">确认更换</a></p>`,
+      ),
+    });
+  }
+
   async sendInvitation(input: InvitationMailInput): Promise<void> {
     const safeUrl = escapeHtml(input.url);
     await this.send({

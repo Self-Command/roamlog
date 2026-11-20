@@ -57,6 +57,75 @@ export const COVER_ACCEPT_ATTRIBUTE = [
   ".heif",
 ].join(",");
 
+/**
+ * The batch-upload limits the server actually enforces.
+ *
+ * The API owns these numbers (admin-configurable), so the web app must never
+ * restate them as constants. `GET /v1/workspaces/:workspaceId/media/limits`
+ * returns this shape; the UI feeds it straight into Uppy's restrictions and
+ * into every limit sentence it renders. When the endpoint is unavailable the
+ * caller gets `null` and must fall back to copy that mentions no numbers.
+ */
+export interface MediaUploadLimits {
+  /** Maximum files in one batch (one presign call each). */
+  maxFilesPerBatch: number;
+  /** Per-file byte ceiling. */
+  maxFileBytes: number;
+  /** Total bytes accepted in one batch. */
+  maxBatchBytes: number;
+  /** Presign calls allowed per window, per caller. */
+  presignPerMinute: number;
+}
+
+const MEDIA_UPLOAD_LIMIT_FIELDS = [
+  "maxFilesPerBatch",
+  "maxFileBytes",
+  "maxBatchBytes",
+  "presignPerMinute",
+] as const;
+
+/**
+ * Validates the limits payload without a generated schema.
+ *
+ * The endpoint is newer than the generated client, so this module talks to it
+ * with `fetch` and checks the exact four fields itself: a partial or malformed
+ * body is treated as "unknown limits" rather than as a licence to show a wrong
+ * number.
+ */
+export function parseMediaUploadLimits(value: unknown): MediaUploadLimits | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  const parsed = {} as MediaUploadLimits;
+  for (const field of MEDIA_UPLOAD_LIMIT_FIELDS) {
+    const number = candidate[field];
+    if (typeof number !== "number" || !Number.isFinite(number) || number <= 0) return null;
+    parsed[field] = number;
+  }
+  return parsed;
+}
+
+/**
+ * Reads the workspace's upload limits.
+ *
+ * Resolves `null` on 404 (endpoint not deployed yet), any non-2xx or a network
+ * failure; callers render number-free copy in that case instead of guessing.
+ */
+export async function getMediaUploadLimits(
+  workspaceId: string,
+): Promise<MediaUploadLimits | null> {
+  try {
+    const response = await fetch(`/v1/workspaces/${workspaceId}/media/limits`, {
+      credentials: "include",
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    return parseMediaUploadLimits(await response.json().catch(() => null));
+  } catch {
+    return null;
+  }
+}
+
 export interface PutObjectRequest {
   /** Signed URL returned by the presign endpoint. Never constructed client-side. */
   url: string;

@@ -140,7 +140,7 @@ export function ShareLinkDialog({
             <DialogTitle>{created ? "分享链接已创建" : "公开分享这趟旅行"}</DialogTitle>
             <DialogDescription>
               {created
-                ? "令牌只会显示这一次。关闭后无法再次查看，只能重新创建链接。"
+                ? "链接只会显示这一次。关闭后无法再次查看，只能重新创建链接。"
                 : "公开页面只显示旅行、日志和照片，不显示评论、邮箱或内部备注。"}
             </DialogDescription>
           </DialogHeader>
@@ -149,9 +149,9 @@ export function ShareLinkDialog({
             <div className="space-y-4">
               <div className="rounded-control border border-accent-orange/25 bg-accent-orange/5 p-3">
                 <div className="flex items-center gap-2">
-                  <Badge tone="orange">TOKEN / ONE TIME</Badge>
-                  {created.hasPassword ? <Badge tone="neutral">PASSWORD</Badge> : null}
-                  {created.showBudget ? <Badge tone="neutral">BUDGET</Badge> : null}
+                  <Badge tone="orange">链接只显示一次</Badge>
+                  {created.hasPassword ? <Badge tone="neutral">访问密码</Badge> : null}
+                  {created.showBudget ? <Badge tone="neutral">含预算</Badge> : null}
                 </div>
                 <p className="mt-3 break-all font-mono text-[11px] leading-5 text-ink">
                   {created.url}
@@ -171,7 +171,7 @@ export function ShareLinkDialog({
               </div>
               <p className="flex items-start gap-1.5 text-[10px] leading-5 text-muted">
                 <TriangleAlert aria-hidden="true" className="mt-0.5 size-3 shrink-0 text-accent-yellow" />
-                令牌相当于访问凭证。不要公开转发；撤销后旧链接会立即失效。
+                链接相当于访问凭证。不要公开转发；撤销后旧链接会立即失效。
               </p>
             </div>
           ) : (

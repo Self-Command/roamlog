@@ -4,6 +4,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 
 import { SchematicRouteMap } from "@/components/map/map-fallback";
 import type { MapPoint } from "@/components/map/map-types";
+import type { PhotoPoint } from "@/components/map/photo-points";
 import { PlacesAttribution } from "@/components/map/places-attribution";
 
 const MapCanvas = lazy(() => import("@/components/map/map-canvas"));
@@ -15,17 +16,30 @@ const MapCanvas = lazy(() => import("@/components/map/map-canvas"));
  * MapCanvas sizes itself with `height: 100%`, which resolves to 0 under an
  * auto-height parent (the atlas regression guarded by map-flat.spec.ts), so the
  * wrapper uses the same `h-[320px] sm:h-[440px]` frame as atlas-map.tsx.
+ *
+ * Photos travel through unchanged: this component owns no filtering of its own,
+ * so the GPS pairs the trip page derived from `Media.lat/lng` are exactly what
+ * the cluster layer plots. Clicking a single photo asks the page for the viewer;
+ * the cluster layer still only expands on click.
  */
 export function TripStopMap({
   points,
   route,
   selectedId,
   onSelect,
+  photos,
+  showPhotos = false,
+  focusPhotosToken = 0,
+  onOpenPhoto,
 }: {
   points: MapPoint[];
   route: Array<[number, number]>;
   selectedId?: string;
   onSelect: (id: string) => void;
+  photos?: PhotoPoint[];
+  showPhotos?: boolean;
+  focusPhotosToken?: number;
+  onOpenPhoto?: (photoId: string) => void;
 }) {
   const [mapFailed, setMapFailed] = useState(false);
   const [webglAvailable, setWebglAvailable] = useState(false);
@@ -78,6 +92,10 @@ export function TripStopMap({
           route={route}
           selectedId={selectedId}
           onSelect={onSelect}
+          photos={photos}
+          showPhotos={showPhotos}
+          focusPhotosToken={focusPhotosToken}
+          onOpenPhoto={onOpenPhoto}
           onError={() => setMapFailed(true)}
           placesProvider={null}
         />

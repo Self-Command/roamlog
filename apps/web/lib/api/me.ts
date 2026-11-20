@@ -24,11 +24,14 @@ import { unwrap, unwrapMessage } from "./shared";
  *   trip cover;
  * - `GET/DELETE /v1/me/sessions` for the device list.
  *
- * `User.image` is a plain URL (`UserSchema.image = z.url().nullable()` in
- * `packages/contracts/src/entities/user.ts`), and `presentUser` passes the stored
- * column through untouched (`apps/api/src/common/services/user-presenter.ts`),
- * so the avatar is stored as the *signed display URL* of the uploaded media —
- * not a media id, which would not satisfy the contract.
+ * `User.image` is a URL in the contract (`UserSchema.image = z.url().nullable()`
+ * in `packages/contracts/src/entities/user.ts`), but the API never persists the
+ * *signed* URL: `PATCH /v1/me { image: <upload url> }` recovers the media id from
+ * the object key and stores that
+ * (`apps/api/src/modules/users/avatar-image.ts`), then re-signs it on every
+ * `GET /v1/me`. The uploaded `mediaId` is therefore still returned here — it is
+ * the stable identity the server keeps, and the URL is only a 15-minute view of
+ * it (`apps/api/src/modules/users/users.service.ts:presentAccount`).
  */
 
 /** Farthest the presign → complete → processing chain may take before failing. */
@@ -72,8 +75,10 @@ export function isAvatarUploadError(value: unknown): value is AvatarUploadError 
 export interface AvatarUploadResult {
   mediaId: string;
   /**
-   * Signed display URL to persist in `User.image`. `thumbUrl` is preferred
-   * because the avatar never renders larger than the settings preview.
+   * Signed display URL of the upload. `PATCH /v1/me` sends it because the
+   * contract's `image` field is a URL; the API converts it back to {@link mediaId}
+   * before writing, so this URL never becomes the stored value. `thumbUrl` is
+   * preferred because the avatar never renders larger than the settings preview.
    */
   url: string;
   /** Expiry of {@link url}; `null` only if the API omitted it. */

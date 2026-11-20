@@ -38,6 +38,31 @@ export function mediaPreviewUrl(media: MediaWithMaybeUrls): string | null {
   return null;
 }
 
+/**
+ * Largest signed URL available for the full-screen viewer.
+ *
+ * `mediaPreviewUrl` deliberately prefers the 320px `thumb` so the grid stays
+ * light; the lightbox needs the opposite order, otherwise zooming a photo shows
+ * a blurry upscale. Same source object, same expiry — no second signing path.
+ */
+const VIEWER_VARIANT_ORDER = ["display", "large", "medium", "original", "small", "thumb"] as const;
+
+export function mediaViewerUrl(media: MediaWithMaybeUrls): string | null {
+  const direct = nonEmptyString(media.url);
+  if (direct) return direct;
+
+  if (isRecord(media.variants)) {
+    for (const name of VIEWER_VARIANT_ORDER) {
+      const variant = media.variants[name];
+      if (isRecord(variant)) {
+        const url = nonEmptyString(variant.url);
+        if (url) return url;
+      }
+    }
+  }
+  return mediaPreviewUrl(media);
+}
+
 /** Group key for the photo grid: the photo's own date, else its upload date. */
 export function mediaGroupKey(media: Media): string {
   if (media.date) return media.date;

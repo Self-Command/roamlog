@@ -28,8 +28,11 @@ env:
   S3_ACCESS_KEY: roamlog
   S3_SECRET_KEY: roamlog-ci-secret
   RESEND_API_KEY: re_ci_placeholder
-  NEXT_PUBLIC_MAP_STYLE_URL: https://demotiles.maplibre.org/style.json
-  NEXT_PUBLIC_GEOCODER_URL: https://nominatim.openstreetmap.org
+  # Keep CI on the same map/search defaults as the product
+  # (apps/web/components/map/globe-view.tsx, map-canvas.tsx and geo.ts).
+  # demotiles/nominatim made the globe-style and Photon-attribution tests fail.
+  NEXT_PUBLIC_MAP_STYLE_URL: https://tiles.openfreemap.org/styles/liberty
+  NEXT_PUBLIC_GEOCODER_URL: https://photon.komoot.io/api/
   EXPORT_SIGNED_URL_TTL: "900"
   BOOTSTRAP_SUPER_ADMIN_EMAIL: admin@roamlog.local
   DEMO_SEED_ENABLED: "true"

@@ -1,4 +1,7 @@
+"use client";
+
 import type { MediaExif } from "@roamlog/contracts";
+import { useState } from "react";
 
 import { shortDateLabel } from "@/components/trip-workspace/format";
 
@@ -17,6 +20,11 @@ import { shortDateLabel } from "@/components/trip-workspace/format";
  *   values are numeric/text and become `ƒ/1.8`, `1/250 s`, `24mm` only here;
  * - the camera name is de-duplicated (`Make=Apple, Model=iPhone 15 Pro` must not
  *   print as "Apple Apple iPhone 15 Pro").
+ *
+ * The detail surface renders **all 50 curated fields** in the five groups the
+ * schema itself documents (10 + 15 + 7 + 8 + 10), instead of the 8 it used to
+ * show. Only fields that actually carry a value are rendered, so the sparse
+ * object the API returns (it drops `null`s) never paints a grid of dashes.
  */
 
 function cx(...values: Array<string | false | null | undefined>): string {
@@ -163,6 +171,406 @@ export function hasExactLocation(exif: MediaExif | null | undefined): boolean {
   );
 }
 
+// ---------------------------------------------------------------------------
+// The 50 curated fields, grouped exactly as the schema documents them.
+// ---------------------------------------------------------------------------
+
+export interface MediaExifFieldSpec {
+  key: keyof MediaExif;
+  label: string;
+}
+
+export interface MediaExifGroupSpec {
+  key: string;
+  title: string;
+  /** One line explaining what the group answers; never a placeholder. */
+  description: string;
+  fields: readonly MediaExifFieldSpec[];
+}
+
+/**
+ * The five groups of `MediaExifSchema` (10 / 15 / 7 / 8 / 10 = 50).
+ *
+ * Keys are exifr tag names, so this list can be diffed against
+ * `packages/contracts/src/entities/media.ts` and against
+ * `apps/web/lib/image/read-photo-exif.ts` without translation.
+ */
+export const EXIF_FIELD_GROUPS: readonly MediaExifGroupSpec[] = [
+  {
+    key: "camera",
+    title: "相机 / 镜头 / 署名",
+    description: "设备与作者信息",
+    fields: [
+      { key: "Make", label: "相机品牌" },
+      { key: "Model", label: "相机型号" },
+      { key: "LensMake", label: "镜头品牌" },
+      { key: "LensModel", label: "镜头型号" },
+      { key: "Software", label: "处理软件" },
+      { key: "Artist", label: "作者" },
+      { key: "Copyright", label: "版权" },
+      { key: "OwnerName", label: "相机所有者" },
+      { key: "BodySerialNumber", label: "机身序列号" },
+      { key: "LensSerialNumber", label: "镜头序列号" },
+    ],
+  },
+  {
+    key: "exposure",
+    title: "曝光",
+    description: "拍摄时的光学与测光参数",
+    fields: [
+      { key: "FNumber", label: "光圈" },
+      { key: "ExposureTime", label: "快门" },
+      { key: "ISO", label: "感光度" },
+      { key: "FocalLength", label: "焦距" },
+      { key: "FocalLengthIn35mmFormat", label: "等效焦距" },
+      { key: "ExposureCompensation", label: "曝光补偿" },
+      { key: "ExposureProgram", label: "曝光程序" },
+      { key: "ExposureMode", label: "曝光模式" },
+      { key: "Flash", label: "闪光灯" },
+      { key: "WhiteBalance", label: "白平衡" },
+      { key: "MeteringMode", label: "测光模式" },
+      { key: "LightSource", label: "光源" },
+      { key: "SceneCaptureType", label: "场景类型" },
+      { key: "DigitalZoomRatio", label: "数码变焦" },
+      { key: "SubjectDistance", label: "主体距离" },
+    ],
+  },
+  {
+    key: "time",
+    title: "时间",
+    description: "拍摄、创建与写入的时间戳",
+    fields: [
+      { key: "DateTimeOriginal", label: "拍摄时间" },
+      { key: "CreateDate", label: "创建时间" },
+      { key: "ModifyDate", label: "修改时间" },
+      { key: "OffsetTimeOriginal", label: "拍摄时区" },
+      { key: "OffsetTime", label: "时区" },
+      { key: "SubSecTimeOriginal", label: "拍摄秒以下" },
+      { key: "GPSDateTime", label: "GPS 时间" },
+    ],
+  },
+  {
+    key: "image",
+    title: "图像",
+    description: "像素、色彩与分辨率",
+    fields: [
+      { key: "Orientation", label: "方向" },
+      { key: "ColorSpace", label: "色彩空间" },
+      { key: "ExifImageWidth", label: "图像宽度" },
+      { key: "ExifImageHeight", label: "图像高度" },
+      { key: "XResolution", label: "水平分辨率" },
+      { key: "YResolution", label: "垂直分辨率" },
+      { key: "ResolutionUnit", label: "分辨率单位" },
+      { key: "BitsPerSample", label: "位深" },
+    ],
+  },
+  {
+    key: "location",
+    title: "位置",
+    description: "拍摄点与朝向",
+    fields: [
+      { key: "latitude", label: "纬度" },
+      { key: "longitude", label: "经度" },
+      { key: "GPSLatitude", label: "GPS 纬度" },
+      { key: "GPSLongitude", label: "GPS 经度" },
+      { key: "GPSAltitude", label: "海拔" },
+      { key: "GPSAltitudeRef", label: "海拔基准" },
+      { key: "GPSImgDirection", label: "拍摄方向" },
+      { key: "GPSImgDirectionRef", label: "方向基准" },
+      { key: "GPSHPositioningError", label: "定位误差" },
+      { key: "GPSProcessingMethod", label: "定位方式" },
+    ],
+  },
+];
+
+/** How many fields the schema/spec defines; the UI can never show more. */
+export const EXIF_TOTAL_FIELD_COUNT = EXIF_FIELD_GROUPS.reduce(
+  (total, group) => total + group.fields.length,
+  0,
+);
+
+const ORIENTATION_LABELS: Record<number, string> = {
+  1: "正常",
+  2: "水平镜像",
+  3: "旋转 180°",
+  4: "垂直镜像",
+  5: "转置",
+  6: "顺时针 90°",
+  7: "逆时针 90°",
+  8: "逆时针 90° 镜像",
+};
+
+const COLOR_SPACE_LABELS: Record<string, string> = {
+  srgb: "sRGB",
+  "adobe rgb": "Adobe RGB",
+  uncalibrated: "未校准",
+};
+
+const RESOLUTION_UNIT_LABELS: Record<string, string> = {
+  inches: "英寸",
+  inch: "英寸",
+  cm: "厘米",
+  centimeters: "厘米",
+};
+
+const ALTITUDE_REF_LABELS: Record<string, string> = {
+  "above sea level": "海平面以上",
+  "below sea level": "海平面以下",
+  "above sea level (0)": "海平面以上",
+  "below sea level (1)": "海平面以下",
+  "0": "海平面以上",
+  "1": "海平面以下",
+};
+
+const DIRECTION_REF_LABELS: Record<string, string> = {
+  t: "真北",
+  true: "真北",
+  "true north": "真北",
+  m: "磁北",
+  magnetic: "磁北",
+  "magnetic north": "磁北",
+};
+
+const ENUM_LABELS: Record<string, Record<string, string>> = {
+  ExposureProgram: {
+    manual: "手动",
+    "normal program": "程序自动",
+    "aperture priority": "光圈优先",
+    "shutter priority": "快门优先",
+    "creative program": "创意程序",
+    "action program": "运动程序",
+    "portrait mode": "人像模式",
+    "landscape mode": "风景模式",
+    bulb: "B 门",
+    "not defined": "未定义",
+  },
+  ExposureMode: {
+    "auto exposure": "自动曝光",
+    "manual exposure": "手动曝光",
+    "auto bracket": "自动包围",
+  },
+  WhiteBalance: {
+    auto: "自动",
+    manual: "手动",
+  },
+  MeteringMode: {
+    average: "平均测光",
+    "center weighted average": "中央重点平均测光",
+    spot: "点测光",
+    "multi spot": "多点测光",
+    pattern: "评价测光",
+    partial: "局部测光",
+    other: "其他",
+    unknown: "未知",
+  },
+  LightSource: {
+    unknown: "未知",
+    daylight: "日光",
+    fluorescent: "荧光灯",
+    "tungsten (incandescent light)": "钨丝灯",
+    flash: "闪光灯",
+    "fine weather": "晴天",
+    "cloudy weather": "阴天",
+    shade: "阴影",
+    "standard light a": "标准光源 A",
+    "standard light b": "标准光源 B",
+    "standard light c": "标准光源 C",
+    "d55": "D55",
+    "d65": "D65",
+    "d75": "D75",
+  },
+  SceneCaptureType: {
+    standard: "标准",
+    landscape: "风景",
+    portrait: "人像",
+    "night scene": "夜景",
+  },
+  Flash: {
+    true: "已闪光",
+    false: "未闪光",
+  },
+};
+
+function numberValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function textValue(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function dateTimeValue(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? textValue(value) : CAPTURE_TIME_FORMATTER.format(parsed);
+}
+
+function enumValue(key: string, value: unknown): string | null {
+  const text = textValue(value);
+  if (text === null) return null;
+  const dictionary = ENUM_LABELS[key];
+  return dictionary?.[text.toLowerCase()] ?? text;
+}
+
+/**
+ * Formats one tag for display.
+ *
+ * Returns `null` when the tag has no displayable value, which is the signal the
+ * renderer uses to skip the whole row (`MediaExifDetail` never prints `—`).
+ */
+export function formatExifFieldValue(key: keyof MediaExif, value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") {
+    return ENUM_LABELS.Flash?.[String(value)] ?? (value ? "是" : "否");
+  }
+
+  switch (key) {
+    case "FNumber":
+      return formatAperture(numberValue(value));
+    case "ExposureTime":
+      return formatExposureTime(textValue(value));
+    case "ISO": {
+      const iso = numberValue(value);
+      return iso === null ? null : `ISO ${iso}`;
+    }
+    case "FocalLength":
+      return formatFocalLength(numberValue(value));
+    case "FocalLengthIn35mmFormat": {
+      const focal = formatFocalLength(numberValue(value));
+      return focal ? `${focal}（等效）` : null;
+    }
+    case "ExposureCompensation": {
+      const ev = numberValue(value);
+      if (ev === null) return null;
+      return `${ev > 0 ? "+" : ""}${decimal(ev, 2)} EV`;
+    }
+    case "DigitalZoomRatio": {
+      const ratio = numberValue(value);
+      return ratio === null ? null : `${decimal(ratio, 2)}×`;
+    }
+    case "SubjectDistance": {
+      const distance = numberValue(value);
+      return distance === null ? null : `${decimal(distance, 2)} 米`;
+    }
+    case "GPSAltitude": {
+      const altitude = numberValue(value);
+      return altitude === null ? null : `${decimal(altitude, 1)} 米`;
+    }
+    case "GPSImgDirection": {
+      const direction = numberValue(value);
+      return direction === null ? null : `${decimal(direction, 1)}°`;
+    }
+    case "GPSHPositioningError": {
+      const error = numberValue(value);
+      return error === null ? null : `${decimal(error, 1)} 米`;
+    }
+    case "GPSLatitude":
+    case "GPSLongitude":
+    case "latitude":
+    case "longitude": {
+      const coordinate = numberValue(value);
+      return coordinate === null ? null : coordinate.toFixed(6);
+    }
+    case "Orientation": {
+      const orientation = numberValue(value);
+      return orientation === null ? null : (ORIENTATION_LABELS[orientation] ?? String(orientation));
+    }
+    case "ColorSpace": {
+      const text = textValue(value);
+      return text === null ? null : (COLOR_SPACE_LABELS[text.toLowerCase()] ?? text);
+    }
+    case "ResolutionUnit": {
+      const text = textValue(value);
+      return text === null ? null : (RESOLUTION_UNIT_LABELS[text.toLowerCase()] ?? text);
+    }
+    case "GPSAltitudeRef": {
+      const text = textValue(value);
+      return text === null ? null : (ALTITUDE_REF_LABELS[text.toLowerCase()] ?? text);
+    }
+    case "GPSImgDirectionRef": {
+      const text = textValue(value);
+      return text === null ? null : (DIRECTION_REF_LABELS[text.toLowerCase()] ?? text);
+    }
+    case "ExifImageWidth":
+    case "ExifImageHeight": {
+      const pixels = numberValue(value);
+      return pixels === null ? null : `${pixels} px`;
+    }
+    case "XResolution":
+    case "YResolution": {
+      const dpi = numberValue(value);
+      return dpi === null ? null : `${decimal(dpi, 0)} dpi`;
+    }
+    case "BitsPerSample": {
+      const bits = numberValue(value);
+      return bits === null ? null : `${bits} 位`;
+    }
+    case "DateTimeOriginal":
+    case "CreateDate":
+    case "ModifyDate":
+    case "GPSDateTime":
+      return dateTimeValue(value);
+    case "ExposureProgram":
+    case "ExposureMode":
+    case "WhiteBalance":
+    case "MeteringMode":
+    case "LightSource":
+    case "SceneCaptureType":
+    case "Flash":
+      return enumValue(key, value);
+    default:
+      return textValue(value) ?? (typeof value === "number" ? String(value) : null);
+  }
+}
+
+export interface MediaExifRow {
+  key: keyof MediaExif;
+  label: string;
+  value: string;
+}
+
+export interface MediaExifGroup {
+  key: string;
+  title: string;
+  description: string;
+  rows: MediaExifRow[];
+}
+
+/**
+ * Groups the sparse `exif` object into the five display groups.
+ *
+ * Empty groups are dropped entirely; rows with no displayable value are skipped
+ * one by one, so a photo that only carries `Make` renders one row, not fifty.
+ */
+export function groupExifFields(exif: MediaExif | null | undefined): MediaExifGroup[] {
+  if (!exif) return [];
+  const groups: MediaExifGroup[] = [];
+  for (const group of EXIF_FIELD_GROUPS) {
+    const rows: MediaExifRow[] = [];
+    for (const field of group.fields) {
+      const value = formatExifFieldValue(field.key, exif[field.key]);
+      if (value === null) continue;
+      rows.push({ key: field.key, label: field.label, value });
+    }
+    if (rows.length > 0) {
+      groups.push({
+        key: group.key,
+        title: group.title,
+        description: group.description,
+        rows,
+      });
+    }
+  }
+  return groups;
+}
+
+/** How many of the 50 fields this photo actually carries. */
+export function countExifFields(exif: MediaExif | null | undefined): number {
+  return groupExifFields(exif).reduce((total, group) => total + group.rows.length, 0);
+}
+
 export interface MediaExifSummaryProps {
   exif: MediaExif | null | undefined;
   /** Row date (`Media.date`); EXIF's capture date is the fallback. */
@@ -229,11 +637,13 @@ export interface MediaExifDetailProps {
 }
 
 /**
- * L2 — the photo detail surface: the camera/lens block, the exposure chips
- * (`ISO / 焦距 / 光圈 / 快门`, the research report's order) and the capture time.
+ * L2 — the photo detail surface.
  *
- * Renders nothing when the photo has no metadata, so a screenshot or a stripped
- * export shows an empty section rather than a grid of dashes.
+ * The short block (camera, exposure chips, capture time) stays as the research
+ * report designed it. Under it sits the full metadata: the five schema groups,
+ * collapsed by default, expandable to every field that has a value. This is the
+ * gap the old 8-field panel left — `GPSAltitude`, `Artist`, `Software`,
+ * `Orientation`, … now have a place to be read.
  */
 export function MediaExifDetail({ exif, date, className }: MediaExifDetailProps) {
   const camera = formatCameraName(exif);
@@ -246,11 +656,27 @@ export function MediaExifDetail({ exif, date, className }: MediaExifDetailProps)
     formatExposureTime(exif?.ExposureTime),
   ].filter((chip): chip is string => chip !== null);
   const fallbackDate = captureTime ? null : formatCaptureDate(date, exif);
-  if (!camera && !lens && chips.length === 0 && !captureTime && !fallbackDate) {
+  const groups = groupExifFields(exif);
+  const fieldCount = groups.reduce((total, group) => total + group.rows.length, 0);
+  const [expanded, setExpanded] = useState(false);
+
+  if (
+    !camera &&
+    !lens &&
+    chips.length === 0 &&
+    !captureTime &&
+    !fallbackDate &&
+    fieldCount === 0
+  ) {
     return null;
   }
+
   return (
-    <div className={cx("flex flex-col gap-3", className)} data-testid="media-exif-detail">
+    <div
+      className={cx("flex flex-col gap-3", className)}
+      data-testid="media-exif-detail"
+      data-exif-field-count={fieldCount}
+    >
       {camera || lens ? (
         <div className="flex flex-col gap-0.5">
           <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">相机</p>
@@ -274,6 +700,63 @@ export function MediaExifDetail({ exif, date, className }: MediaExifDetailProps)
         <div className="flex flex-col gap-0.5">
           <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">拍摄时间</p>
           <p className="font-mono text-[11px] text-white/75">{captureTime ?? fallbackDate}</p>
+        </div>
+      ) : null}
+
+      {fieldCount > 0 ? (
+        <div className="rounded-control border border-hairline">
+          <button
+            type="button"
+            data-testid="media-exif-toggle"
+            aria-expanded={expanded}
+            aria-controls="media-exif-fields"
+            onClick={() => setExpanded((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[11px] text-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"
+          >
+            <span>
+              {expanded
+                ? `收起拍摄参数（${fieldCount} / ${EXIF_TOTAL_FIELD_COUNT} 项）`
+                : `展开全部拍摄参数（${fieldCount} / ${EXIF_TOTAL_FIELD_COUNT} 项）`}
+            </span>
+            <span aria-hidden="true" className="font-mono text-[10px] text-stone">
+              {expanded ? "−" : "+"}
+            </span>
+          </button>
+
+          {expanded ? (
+            <div
+              id="media-exif-fields"
+              data-testid="media-exif-fields"
+              className="space-y-3 border-t border-hairline px-3 py-3"
+            >
+              {groups.map((group) => (
+                <section key={group.key} data-exif-group={group.key}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h4 className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink">
+                      {group.title}
+                    </h4>
+                    <span className="font-mono text-[8px] text-stone">
+                      {group.rows.length} 项 · {group.description}
+                    </span>
+                  </div>
+                  <dl className="mt-1.5 grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+                    {group.rows.map((row) => (
+                      <div
+                        key={row.key}
+                        data-exif-field={row.key}
+                        className="flex items-baseline justify-between gap-3 border-b border-hairline py-1 last:border-b-0"
+                      >
+                        <dt className="shrink-0 text-[10px] text-stone">{row.label}</dt>
+                        <dd className="min-w-0 break-words text-right font-mono text-[10px] text-white/80">
+                          {row.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

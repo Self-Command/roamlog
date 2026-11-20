@@ -82,24 +82,21 @@ function problemFrom(body: unknown) {
 export function failureFrom(
   status: number,
   body: unknown,
-  path: string,
+  _path: string,
   fallback?: string,
 ): ApiError {
   const problem = problemFrom(body);
   return new ApiError(
     status,
-    problem?.detail ?? problem?.title ?? fallback ?? `请求 ${path} 失败（HTTP ${status}）。`,
+    problem?.detail ?? problem?.title ?? fallback ?? "读取失败，请稍后重试。",
     problem?.code ?? (status === 401 ? "UNAUTHORIZED" : "API_REQUEST_FAILED"),
     problem,
   );
 }
 
-export function toApiError(error: unknown, path: string): ApiError {
+export function toApiError(error: unknown, _path: string): ApiError {
   if (error instanceof ApiError) return error;
-  if (error instanceof Error) {
-    return new ApiError(0, error.message || `无法连接 ${path}。`, "NETWORK_ERROR");
-  }
-  return new ApiError(0, `无法连接 ${path}。`, "NETWORK_ERROR");
+  return new ApiError(0, "网络连接失败，请稍后重试。", "NETWORK_ERROR");
 }
 
 /**

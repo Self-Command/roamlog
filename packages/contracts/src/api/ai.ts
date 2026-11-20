@@ -212,7 +212,16 @@ export const AiChatModelSchema = z
     provider: z.string().min(1).max(40),
     /** `true` when the operator allows `reasoningEffort` for this model. */
     reasoning: z.boolean(),
-    /** `true` when image attachments may be sent to this model. */
+    /**
+     * `true` only when the operator explicitly enabled image input for this
+     * deployment (`AI_VISION_SUPPORTED`; default `false`).
+     *
+     * Never derived from the gateway catalog: `GET /v1/models` reports
+     * `modalities.input: ["text","image"]` for routes that cannot read an image
+     * (observed 2026-11-20: HTTP 200, empty content, "visual analysis skipped").
+     * When `false`, attachments are still accepted and persisted with the
+     * conversation, but the API sends no image part to the model.
+     */
     vision: z.boolean(),
   })
   .strict();

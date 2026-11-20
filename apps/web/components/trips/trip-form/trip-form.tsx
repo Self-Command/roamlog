@@ -484,7 +484,7 @@ export function TripForm(props: TripFormProps) {
           tone: "error",
           message:
             fieldErrors.form ??
-            `服务器校验未通过（422）${error.problem?.detail ? `：${error.problem.detail}` : "，请检查标记的字段。"}`,
+            `保存失败，请检查标记的字段。${error.problem?.detail ? ` ${error.problem.detail}` : ""}`,
         });
         return;
       }
@@ -501,7 +501,7 @@ export function TripForm(props: TripFormProps) {
       }
       setBanner({
         tone: "error",
-        message: `保存失败（HTTP ${error.status}）${error.problem?.detail ? `：${error.problem.detail}` : `：${error.message}`}`,
+        message: `保存失败，请稍后重试。${error.problem?.detail ? `：${error.problem.detail}` : ""}`,
       });
       return;
     }
@@ -553,8 +553,8 @@ export function TripForm(props: TripFormProps) {
       ? "当前角色没有管理可见范围的权限。"
       : isApiError(error.reason)
         ? error.reason.code === "INVALID_RESPONSE"
-          ? "可见范围已提交，但服务器返回的数据无法识别。"
-          : `保存可见范围失败（HTTP ${error.reason.status}）。`
+          ? "可见范围已提交，但返回的数据无法识别。"
+          : "保存可见范围失败，请稍后重试。"
         : "网络异常，保存可见范围失败。";
     setBanner({
       tone: "error",
@@ -896,7 +896,7 @@ export function TripForm(props: TripFormProps) {
 
               <p className="type-meta text-stone">
                 {durationLabel
-                  ? `${formatDateRangeLabel(values.startDate, values.endDate)} · ${durationLabel}（含首尾两天，服务端同规则）`
+                  ? `${formatDateRangeLabel(values.startDate, values.endDate)} · ${durationLabel}（含首尾两天）`
                   : "请选择有效的出发与返回日期，时长按含首尾两天计算。"}
               </p>
             </section>
@@ -1097,7 +1097,7 @@ export function TripForm(props: TripFormProps) {
             </div>
 
             <p className="mt-3 type-meta leading-5 text-stone">
-              日期、坐标、时区与金额都会按契约字段提交；手动填写的地点不附带坐标。
+              日期、坐标、时区与金额会一并保存；手动填写的地点不附带坐标。
             </p>
           </aside>
         </div>
@@ -1112,7 +1112,7 @@ export function TripForm(props: TripFormProps) {
                   : coverBusy
                     ? "封面上传/处理中，完成后即可保存…"
                     : props.mode === "edit"
-                      ? `仅提交变更字段 · 当前版本 v${(tripState ?? props.initialTrip).version}`
+                      ? "仅保存本次修改"
                       : `保存后跳转到旅行详情 · 标题上限 ${TRIP_FORM_LIMITS.title} 字`}
             </p>
             <div className="flex items-center justify-end gap-2">

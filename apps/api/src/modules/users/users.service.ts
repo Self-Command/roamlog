@@ -1,4 +1,10 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import {
   DeleteMeRequestSchema,
   SessionParamsSchema,
@@ -13,10 +19,13 @@ import {
 
 import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
 import { parseRequest } from "../../common/services/request-validation.js";
-import { presentUser } from "../../common/services/user-presenter.js";
+import { presentUser, type UserRecordInput } from "../../common/services/user-presenter.js";
 import { AuditService } from "../audit/audit.service.js";
+import { MediaUrlService } from "../media/media-url.service.js";
+import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { WorkspacesService } from "../workspaces/workspaces.service.js";
+import { isAvatarMediaId, mediaIdFromAvatarUrl } from "./avatar-image.js";
 
 const userSelect = {
   id: true,
@@ -40,6 +49,8 @@ export class UsersService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(MediaUrlService) private readonly mediaUrls: MediaUrlService,
+    @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
   ) {}
 
   async getMe(actor: AuthenticatedActor): Promise<User> {
@@ -53,17 +64,18 @@ export class UsersService {
         message: "User not found.",
       });
     }
-    return presentUser(user);
+    return this.presentAccount(user);
   }
 
   async updateMe(actor: AuthenticatedActor, rawInput: unknown): Promise<User> {
     const input: UpdateMeRequest = parseRequest(UpdateMeRequestSchema, rawInput);
+    const image = await this.storedAvatar(actor, input.image);
     return this.prisma.client.$transaction(async (transaction) => {
       const user = await transaction.user.update({
         where: { id: actor.user.id },
         data: {
           ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.image !== undefined ? { image: input.image } : {}),
+          ...(image !== undefined ? { image } : {}),
           ...(input.locale !== undefined ? { locale: input.locale } : {}),
           ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
         },
@@ -82,8 +94,87 @@ export class UsersService {
         },
         transaction,
       );
-      return presentUser(user);
+      return this.presentAccount(user);
     });
+  }
+
+  /**
+   * Turns the client's `image` input into the value the row stores.
+   *
+   * The profile page still sends the signed URL the media pipeline returned
+   * (`PATCH /v1/me { image }` is in the published contract), so the media id is
+   * recovered from that URL's object key. Storing the id — not the URL — is what
+   * keeps the avatar alive past the SigV4 TTL (see `avatar-image.ts`).
+   *
+   * The recovered id is only used when the media row exists, is not deleted and
+   * was uploaded by the caller; anything else keeps the URL verbatim, which is
+   * exactly the pre-existing behaviour for an external avatar.
+   */
+  private async storedAvatar(
+    actor: AuthenticatedActor,
+    image: string | null | undefined,
+  ): Promise<string | null | undefined> {
+    if (image === undefined || image === null) {
+      return image;
+    }
+    const mediaId = mediaIdFromAvatarUrl(image);
+    if (!mediaId) {
+      return image;
+    }
+    const media = await this.prisma.client.media.findFirst({
+      where: { id: mediaId, deletedAt: null },
+      select: { id: true, uploaderId: true },
+    });
+    if (!media) {
+      // A URL shaped like our media key that no row backs: do not persist a
+      // dangling id, and do not silently accept a forged avatar either.
+      throw new BadRequestException({
+        code: "AVATAR_MEDIA_NOT_FOUND",
+        message: "The uploaded avatar media was not found.",
+      });
+    }
+    if (media.uploaderId !== actor.user.id) {
+      throw new BadRequestException({
+        code: "AVATAR_MEDIA_NOT_OWNED",
+        message: "The avatar must be media uploaded by this account.",
+      });
+    }
+    return media.id;
+  }
+
+  /**
+   * Presents a user row, re-signing a stored avatar media id on every read.
+   *
+   * This is the only place that signs, because it is the only caller with the
+   * storage dependency (`MediaUrlService`); `presentUser` keeps presenting raw
+   * rows for member lists and the Admin API, where a bare id is dropped to
+   * `null` rather than breaking the strict `UserSchema.image = z.url()`.
+   */
+  private async presentAccount(record: UserRecordInput): Promise<User> {
+    const presented = presentUser(record);
+    const stored = record.image;
+    if (!stored || !isAvatarMediaId(stored)) {
+      return presented;
+    }
+    try {
+      const media = await this.prisma.client.media.findFirst({
+        where: { id: stored.trim(), deletedAt: null },
+        select: { id: true, key: true, bucket: true, status: true, variants: true },
+      });
+      if (!media) {
+        return { ...presented, image: null };
+      }
+      const urls = await this.mediaUrls.sign(media);
+      return { ...presented, image: urls.thumbUrl ?? urls.url };
+    } catch (error) {
+      // A broken storage configuration must not take the whole profile page
+      // down: the avatar is decorative, so it degrades to initials.
+      this.logger.warn(
+        { code: "AVATAR_SIGN_FAILED", error: error instanceof Error ? error.message : "unknown" },
+        "user.avatar_sign_failed",
+      );
+      return { ...presented, image: null };
+    }
   }
 
   async listMyWorkspaces(actor: AuthenticatedActor): Promise<MyWorkspacesResponse> {

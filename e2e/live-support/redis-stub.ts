@@ -150,6 +150,33 @@ function commandResponse(command: string, args: readonly RespValue[], store: Red
       });
       return integer(next);
     }
+    // `INCRBY` is what the per-account upload bucket charges with (one token per
+    // presigned link, so a three-photo batch charges 3). Without this case the
+    // default branch answered `+OK`, ioredis surfaced the count as the string
+    // "OK", and every arithmetic use of it became NaN — which made the bucket
+    // reject every upload forever with `RateLimit-Remaining: NaN`.
+    case "INCRBY": {
+      const key = args[0];
+      const rawAmount = args[1];
+      if (typeof key !== "string" || typeof rawAmount !== "string") {
+        return simple("ERR invalid INCRBY arguments");
+      }
+      const amount = Number(rawAmount);
+      if (!Number.isInteger(amount)) {
+        return simple("ERR value is not an integer or out of range");
+      }
+      const current = activeValue(store, key);
+      const parsed = Number(current?.value ?? "0");
+      if (!Number.isInteger(parsed)) {
+        return simple("ERR value is not an integer or out of range");
+      }
+      const next = parsed + amount;
+      store.set(key, {
+        value: String(next),
+        expiresAt: current?.expiresAt ?? null,
+      });
+      return integer(next);
+    }
     case "TTL": {
       const key = args[0];
       const stored = typeof key === "string" ? activeValue(store, key) : undefined;

@@ -11,9 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@roamlog/ui";
-import { ImageOff, Images, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ImageOff, Images, Info, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 
 import {
   MediaExifDetail,
@@ -23,15 +25,37 @@ import {
   formatExposureSummary,
   hasExactLocation,
 } from "@/components/media";
+import { photosFromMedia } from "@/components/map/photo-points";
 
 import { deniedReason } from "./capabilities";
 import { ReportMenu } from "@/components/moderation/report-menu";
 import { ConfirmDialog } from "./dialogs";
 import { MEDIA_STATUS_LABELS, shortDateLabel, shortTimestamp } from "./format";
-import { mediaGroupKey, mediaPreviewUrl } from "./media-urls";
+import { mediaGroupKey, mediaPreviewUrl, mediaViewerUrl } from "./media-urls";
 import { EmptyBlock, QueryPanel } from "./panel";
-import { assertMutationOk, useTripMedia } from "./queries";
+import { assertMutationOk, tripWorkspaceKeys, useTripMedia } from "./queries";
 import { useTripWorkspace } from "./workspace-context";
+import { PhotoUploader } from "@/components/media/photo-uploader";
+import { PhotoMapSection } from "@/components/media/photo-map-section";
+import type { PhotoLightboxItem } from "@/components/media/photo-lightbox";
+
+/**
+ * YARL touches `document.body` (its Portal) and is 12 KB gzip, so the viewer is
+ * a client-only chunk that only loads once a photo is actually opened.
+ */
+const PhotoLightbox = dynamic(
+  () => import("@/components/media/photo-lightbox").then((module) => module.PhotoLightbox),
+  {
+    ssr: false,
+    loading: () => (
+      <div role="status" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90">
+        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/70">
+          正在打开照片查看…
+        </p>
+      </div>
+    ),
+  },
+);
 
 /**
  * Mirrors the rule `MediaExifSummary` applies internally.
@@ -56,28 +80,39 @@ function PhotoCard({
   workspaceId,
   canDelete,
   deleteTitle,
+  isNew,
   onDelete,
-  onOpen,
+  onOpenViewer,
+  onOpenDetail,
 }: {
   media: Media;
   workspaceId: string;
   canDelete: boolean;
   deleteTitle: string;
+  isNew: boolean;
   onDelete: () => void;
-  onOpen: () => void;
+  onOpenViewer: () => void;
+  onOpenDetail: () => void;
 }) {
   const url = mediaPreviewUrl(media);
   const label = media.caption ?? "旅行照片";
   const fallbackDate = media.date ? shortDateLabel(media.date) : shortTimestamp(media.createdAt);
 
   return (
-    <li className="group relative overflow-hidden rounded-control border border-hairline bg-surface-2">
+    <li
+      data-media-id={media.id}
+      data-testid={`photo-card-${media.id}`}
+      className={`group relative overflow-hidden rounded-control border bg-surface-2 ${
+        isNew ? "border-accent-orange/55 ring-1 ring-accent-orange/30" : "border-hairline"
+      }`}
+    >
       <div className="relative aspect-[4/3] w-full">
         {url ? (
           <button
             type="button"
-            onClick={onOpen}
-            aria-label={`查看照片详情：${label}`}
+            onClick={onOpenViewer}
+            aria-label={`打开照片查看：${label}`}
+            data-testid={`photo-open-${media.id}`}
             className="block size-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"
           >
             {/* Signed URLs are per-request and short lived; next/image would need remote-pattern config. */}
@@ -116,6 +151,17 @@ function PhotoCard({
       </div>
 
       <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-control bg-black/60 backdrop-blur-sm">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onOpenDetail}
+          aria-label={`查看照片详情：${label}`}
+          data-testid={`photo-detail-${media.id}`}
+          title={`查看照片详情 ${label}`}
+        >
+          <Info aria-hidden="true" />
+        </Button>
         <ReportMenu
           workspaceId={workspaceId}
           target={{ type: "media", id: media.id, label }}
@@ -188,8 +234,13 @@ export function PhotosTab({ tripId }: { tripId: string }) {
     useTripWorkspace();
   const media = useTripMedia(tripId);
   const deleteMedia = useDeleteMedia();
+  const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<Media | null>(null);
-  const [detailTarget, setDetailTarget] = useState<Media | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const [recentIds, setRecentIds] = useState<readonly string[]>([]);
+  const [pendingScrollIds, setPendingScrollIds] = useState<readonly string[]>([]);
+  const gridRef = useRef<HTMLDivElement | null>(null);
 
   const groups = useMemo(() => {
     if (media.state !== "ready") return [];
@@ -201,11 +252,89 @@ export function PhotosTab({ tripId }: { tripId: string }) {
     return [...byDate.entries()].sort((left, right) => right[0].localeCompare(left[0]));
   }, [media]);
 
+  const orderedMedia = useMemo(() => groups.flatMap(([, items]) => items), [groups]);
+
+  /**
+   * Viewer order follows the grid's order (date groups, newest first), and the
+   * index is always resolved from the photo id — never from a cluster/group
+   * index — so a place with several photos cannot open the wrong one (spec §E.2
+   * S2). Signed `thumb/display` URLs expire after 900 s; a refetch hands back
+   * new references and YARL updates its slides in place.
+   */
+  const viewerItems = useMemo<PhotoLightboxItem[]>(() => {
+    const items: PhotoLightboxItem[] = [];
+    for (const item of orderedMedia) {
+      const src = mediaViewerUrl(item);
+      if (!src) continue;
+      items.push({
+        id: item.id,
+        src,
+        alt: item.caption ?? "旅行照片",
+        width: item.width,
+        height: item.height,
+      });
+    }
+    return items;
+  }, [orderedMedia]);
+
+  const viewerIndex = viewerId
+    ? viewerItems.findIndex((item) => item.id === viewerId)
+    : -1;
+
+  const detailMedia = detailId
+    ? (media.state === "ready"
+        ? media.data.items.find((item) => item.id === detailId)
+        : undefined) ?? null
+    : null;
+
+  const photoPoints = useMemo(
+    () => (media.state === "ready" ? photosFromMedia(media.data.items) : []),
+    [media],
+  );
+
   const deleteTitle = capabilities.deleteMedia ? undefined : deniedReason(role, "删除照片");
   // Absent means the default the product decided on: a shared trip shows the
   // exact point a photo was taken at. Display only — the switch is a trip
   // setting and lives in the edit form this tab links to.
   const showExactLocation = trip.showExactPhotoLocation !== false;
+
+  const refreshMedia = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: tripWorkspaceKeys.media(tripId) });
+  }, [queryClient, tripId]);
+
+  const openViewer = useCallback(
+    (mediaId: string) => {
+      // A photo still processing has no signed URL yet; its detail panel is the
+      // honest surface (the real status, never a fake image).
+      if (viewerItems.some((item) => item.id === mediaId)) {
+        setViewerId(mediaId);
+        return;
+      }
+      setDetailId(mediaId);
+    },
+    [viewerItems],
+  );
+
+  const handleUploaded = useCallback((mediaIds: readonly string[]) => {
+    setRecentIds(mediaIds);
+    setPendingScrollIds(mediaIds);
+  }, []);
+
+  // Scroll to the first photo of the batch once the refetched grid actually has it.
+  useEffect(() => {
+    if (pendingScrollIds.length === 0 || media.state !== "ready") return;
+    const container = gridRef.current;
+    if (!container) return;
+    const first = pendingScrollIds[0];
+    if (!first) return;
+    const target = container.querySelector<HTMLElement>(`[data-media-id="${first}"]`);
+    if (!target) return;
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+    setPendingScrollIds([]);
+  }, [media, pendingScrollIds]);
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -223,17 +352,32 @@ export function PhotosTab({ tripId }: { tripId: string }) {
     if (deleted) setDeleteTarget(null);
   }
 
-  const detailUrl = detailTarget ? mediaPreviewUrl(detailTarget) : null;
-  const detailLabel = detailTarget?.caption ?? "旅行照片";
+  const detailUrl = detailMedia ? mediaPreviewUrl(detailMedia) : null;
+  const detailLabel = detailMedia?.caption ?? "旅行照片";
 
   return (
     <>
       <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="type-eyebrow">PHOTO LIBRARY</p>
+          <PhotoUploader
+            workspaceId={workspace.id}
+            tripId={tripId}
+            canUpload={capabilities.presignMedia}
+            role={role}
+            onUploaded={handleUploaded}
+          />
+        </div>
+
         <ExactLocationNotice
           exact={showExactLocation}
           editHref={`/w/${workspaceSlug}/trips/${trip.id}/edit`}
           canEdit={capabilities.updateTrip}
         />
+
+        {media.state === "ready" && media.data.items.length > 0 ? (
+          <PhotoMapSection photos={photoPoints} onOpenPhoto={openViewer} />
+        ) : null}
 
         <QueryPanel
           title="照片"
@@ -255,7 +399,7 @@ export function PhotosTab({ tripId }: { tripId: string }) {
           }
         >
           {() => (
-            <div className="space-y-5 px-4 py-4">
+            <div ref={gridRef} className="space-y-5 px-4 py-4">
               {groups.map(([date, items]) => (
                 <section key={date} className="space-y-2">
                   <div className="flex items-baseline justify-between gap-2">
@@ -272,8 +416,10 @@ export function PhotosTab({ tripId }: { tripId: string }) {
                         workspaceId={workspace.id}
                         canDelete={capabilities.deleteMedia}
                         deleteTitle={deleteTitle ?? ""}
+                        isNew={recentIds.includes(item.id)}
                         onDelete={() => setDeleteTarget(item)}
-                        onOpen={() => setDetailTarget(item)}
+                        onOpenViewer={() => openViewer(item.id)}
+                        onOpenDetail={() => setDetailId(item.id)}
                       />
                     ))}
                   </ul>
@@ -285,41 +431,74 @@ export function PhotosTab({ tripId }: { tripId: string }) {
       </div>
 
       <Dialog
-        open={Boolean(detailTarget)}
+        open={Boolean(detailMedia)}
         onOpenChange={(open) => {
-          if (!open) setDetailTarget(null);
+          if (!open) setDetailId(null);
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onEscapeKeyDown={(event) => {
+            // YARL already stops Escape propagation; this is the second lock so a
+            // viewer closing can never take the detail dialog with it.
+            if (viewerId) event.preventDefault();
+          }}
+        >
           <DialogHeader>
             <DialogTitle className="truncate">{detailLabel}</DialogTitle>
             <DialogDescription>
               没有拍摄参数的照片只显示图片本身。
             </DialogDescription>
           </DialogHeader>
-          {detailTarget ? (
+          {detailMedia ? (
             <div className="space-y-4">
               {detailUrl ? (
-                <img
-                  src={detailUrl}
-                  alt={detailLabel}
-                  className="max-h-[55vh] w-full rounded-control object-contain"
-                />
+                <div className="space-y-2">
+                  <img
+                    src={detailUrl}
+                    alt={detailLabel}
+                    className="max-h-[55vh] w-full rounded-control object-contain"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setViewerId(detailMedia.id)}
+                  >
+                    全屏查看
+                  </Button>
+                </div>
               ) : (
                 <p className="text-xs text-muted">图片还在处理中。</p>
               )}
-              {detailTarget.exif ? (
-                <MediaExifDetail exif={detailTarget.exif} date={detailTarget.date} />
+              {detailMedia.exif ? (
+                <MediaExifDetail exif={detailMedia.exif} date={detailMedia.date} />
               ) : (
                 <p className="text-xs text-muted">这张照片没有可读取的拍摄参数。</p>
               )}
-              {detailTarget.location ? (
-                <p className="font-mono text-[11px] text-white/75">拍摄地：{detailTarget.location}</p>
+              {detailMedia.location ? (
+                <p className="font-mono text-[11px] text-white/75">
+                  拍摄地：{detailMedia.location}
+                </p>
+              ) : null}
+              {detailMedia.lat !== null && detailMedia.lat !== undefined &&
+              detailMedia.lng !== null && detailMedia.lng !== undefined ? (
+                <p className="font-mono text-[10px] text-stone" data-testid="photo-detail-coordinates">
+                  {detailMedia.lat.toFixed(6)}, {detailMedia.lng.toFixed(6)}
+                </p>
               ) : null}
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <PhotoLightbox
+        open={viewerIndex >= 0}
+        index={viewerIndex >= 0 ? viewerIndex : 0}
+        items={viewerItems}
+        onClose={() => setViewerId(null)}
+        onImageError={refreshMedia}
+      />
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
@@ -327,7 +506,7 @@ export function PhotosTab({ tripId }: { tripId: string }) {
           if (!open) setDeleteTarget(null);
         }}
         title="删除这张照片？"
-        description="软删除后照片不再出现在旅行相册和分享页。存储对象由服务端清理。"
+        description="删除后照片不再出现在旅行相册和分享页；存储清理会自动完成。"
         pending={pending}
         onConfirm={() => void confirmDelete()}
       />

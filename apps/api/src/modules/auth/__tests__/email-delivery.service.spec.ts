@@ -72,6 +72,35 @@ describe("EmailDeliveryService delivery outcome", () => {
       expect.objectContaining({ to: "new@roamlog.test", idempotencyKey: "log-1" }),
     );
   });
+
+  it("sends the email-change confirmation to the current address and logs the template", async () => {
+    const prismaClient = prisma();
+    const mailer = {
+      send: vi.fn().mockResolvedValue({ provider: "smtp", providerId: "<m@roamlog.test>", latencyMs: 4 }),
+    };
+    const delivery = service(mailer, prismaClient);
+
+    await delivery.sendChangeEmailConfirmation(
+      { id: "user-1", email: "old@roamlog.test", name: "Old" },
+      "new@roamlog.test",
+      "http://x/verify?token=abc",
+    );
+
+    // Better Auth's sendChangeEmailConfirmation goes to the CURRENT address.
+    expect(prismaClient.client.emailLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        to: "old@roamlog.test",
+        template: "auth.change-email",
+        userId: "user-1",
+      }),
+      select: { id: true },
+    });
+    const payload = mailer.send.mock.calls[0]?.[0] as { html: string; text: string };
+    expect(payload.text).toContain("new@roamlog.test");
+    expect(payload.html).toContain("new@roamlog.test");
+    expect(payload.html).toContain("http://x/verify?token=abc");
+    expect(payload.html).not.toContain("old@roamlog.test");
+  });
 });
 
 describe("trackEmailDelivery", () => {

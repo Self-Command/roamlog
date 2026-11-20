@@ -183,8 +183,11 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
       await changeEmail(newEmail.trim(), callbackURL);
     },
     onSuccess: () => {
+      // Better Auth's two-step flow: the confirmation goes to the CURRENT
+      // address, the verification link to the new one only after that.
+      const currentEmail = sessionQuery.data?.user.email ?? "当前邮箱";
       setEmailNotice(
-        `验证邮件已发送到 ${newEmail.trim()}。点击邮件中的链接后，新邮箱才会生效。`,
+        `确认邮件已发送到 ${currentEmail}。点击确认后，验证邮件会发到 ${newEmail.trim()}；两封都完成后新邮箱才生效。`,
       );
       setEmailError(null);
       setNewEmail("");
@@ -296,8 +299,8 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
     }
     setConfirm({
       title: "确认修改邮箱？",
-      description: `我们会向 ${trimmed} 发送验证邮件，验证通过后新邮箱生效。`,
-      confirmLabel: "发送验证邮件",
+      description: `我们会先向当前邮箱 ${sessionQuery.data?.user.email ?? ""} 发送确认邮件，确认后再向 ${trimmed} 发送验证邮件；两封都完成后新邮箱才生效。`,
+      confirmLabel: "发送确认邮件",
       tone: "primary",
     });
     setEmailConfirmOpen(true);

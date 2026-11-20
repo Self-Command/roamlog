@@ -312,15 +312,41 @@ describe("GET /media/limits answers the configured values", () => {
   });
 });
 
+describe("malformed upload limits fail safe", () => {
+  it("falls back to defaults for undefined, NaN, zero and negative settings", () => {
+    const malformed = {
+      ...DEFAULT_LIMITS_RUNTIME,
+      uploadMaxFilesPerBatch: undefined,
+      uploadMaxFileBytes: Number.NaN,
+      uploadMaxBatchBytes: 0,
+      uploadPerMinute: -7,
+    } as unknown as LimitsRuntime;
+
+    expect(toEffectiveUploadLimits(malformed)).toEqual(
+      toEffectiveUploadLimits(DEFAULT_LIMITS_RUNTIME),
+    );
+  });
+});
+
 describe("per-account presign allowance", () => {
-  function makeGuard(limits: LimitsRuntime, state = { count: 0 }) {
+  function makeGuard(
+    limits: LimitsRuntime,
+    state = { count: 0 },
+    overrides: {
+      incrby?: (key: string, by: number) => Promise<unknown>;
+      ttl?: () => Promise<unknown>;
+    } = {},
+  ) {
     const redis = {
       client: {
-        incrby: vi.fn(async (_key: string, by: number) => {
-          state.count += by;
-          return state.count;
-        }),
-        ttl: vi.fn(async () => 42),
+        incrby: vi.fn(
+          overrides.incrby ??
+            (async (_key: string, by: number) => {
+              state.count += by;
+              return state.count;
+            }),
+        ),
+        ttl: vi.fn(overrides.ttl ?? (async () => 42)),
         expire: vi.fn(async () => 1),
       },
     };
@@ -364,6 +390,28 @@ describe("per-account presign allowance", () => {
     );
     expect(rejected).toEqual({ status: 429, code: "RATE_LIMITED" });
     expect(headers.get("Retry-After")).toBe("42");
+  });
+
+  it("accumulates INCRBY charges, repairs a missing TTL, and bills the whole batch", async () => {
+    const limits: LimitsRuntime = { ...DEFAULT_LIMITS_RUNTIME, uploadPerMinute: 20 };
+    const { guard, context, headers, redis } = makeGuard(limits, undefined, {
+      ttl: async () => -1,
+    });
+
+    await expect(
+      guard.canActivate(context({ files: Array.from({ length: 3 }, () => file()) })),
+    ).resolves.toBe(true);
+    expect(headers.get("RateLimit-Remaining")).toBe("17");
+    expect(headers.get("RateLimit-Reset")).toBe("60");
+    expect(redis.client.expire).toHaveBeenCalledWith(
+      expect.stringContaining("rate-limit:mediaUpload:"),
+      60,
+    );
+
+    await expect(
+      guard.canActivate(context({ files: Array.from({ length: 4 }, () => file()) })),
+    ).resolves.toBe(true);
+    expect(headers.get("RateLimit-Remaining")).toBe("13");
   });
 
   it("charges one token for the single-file presign route", async () => {
@@ -412,7 +460,61 @@ describe("per-account presign allowance", () => {
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(headers.get("X-RateLimit-Degraded")).toBe("true");
+    expect(headers.get("RateLimit-Remaining")).toBe("0");
+    expect(headers.get("RateLimit-Remaining")).not.toBe("NaN");
     const rejected = await codeOf(guard.canActivate(context));
     expect(rejected).toEqual({ status: 429, code: "RATE_LIMITED" });
+  });
+
+  it("degrades instead of poisoning the bucket when INCRBY returns a non-number", async () => {
+    const limits: LimitsRuntime = { ...DEFAULT_LIMITS_RUNTIME, uploadPerMinute: 20 };
+    const { guard, context, headers } = makeGuard(limits, undefined, {
+      incrby: async () => "OK",
+    });
+
+    await expect(
+      guard.canActivate(context({ files: Array.from({ length: 3 }, () => file()) })),
+    ).resolves.toBe(true);
+    expect(headers.get("RateLimit-Remaining")).toBe("17");
+    expect(headers.get("RateLimit-Remaining")).not.toBe("NaN");
+    expect(headers.get("X-RateLimit-Degraded")).toBe("true");
+
+    // The local window keeps counting; this 429 is a real overage (3 + 18 > 20),
+    // not the permanent 429 caused by comparing "OK" with a number.
+    const rejected = await codeOf(
+      guard.canActivate(context({ files: Array.from({ length: 18 }, () => file()) })),
+    );
+    expect(rejected).toEqual({ status: 429, code: "RATE_LIMITED" });
+    expect(headers.get("RateLimit-Remaining")).toBe("0");
+  });
+
+  it("expires the process-local fallback window instead of locking the account forever", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-20T00:00:00.000Z"));
+    try {
+      const service = new MediaUploadLimitsService(
+        { resolve: async () => ({ ...DEFAULT_LIMITS_RUNTIME, uploadPerMinute: 20 }) },
+        { rateLimitWindowSeconds: 60 } as never,
+        {
+          client: {
+            incrby: vi.fn(async () => {
+              throw new Error("redis down");
+            }),
+            ttl: vi.fn(async () => 42),
+            expire: vi.fn(async () => 1),
+          },
+        } as never,
+        createLogger(),
+      );
+
+      const first = await service.consume(USER_ID, 20, 20);
+      expect(first).toMatchObject({ allowed: true, remaining: 0, degraded: true });
+
+      vi.advanceTimersByTime(60_001);
+      const second = await service.consume(USER_ID, 20, 20);
+      expect(second).toMatchObject({ allowed: true, remaining: 0, degraded: true });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

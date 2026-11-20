@@ -354,8 +354,8 @@ export function StopsTab({ tripId }: { tripId: string }) {
               <DialogTitle>{editTarget ? "编辑行程节点" : "添加行程节点"}</DialogTitle>
               <DialogDescription>
                 {editTarget
-                  ? `写入 \`PATCH /v1/stops/${editTarget.id}\`，携带 version ${editTarget.version}。冲突会打开版本冲突对话框。`
-                  : `写入 \`POST /v1/trips/${tripId}/stops\`。地点搜索由 Photon 提供方后续接入，这里手动录入时 \`provider\` 留空。`}
+                  ? "修改这趟停留的城市、日期与备注；保存时会检查是否与最新修改冲突，冲突会打开版本冲突对话框。"
+                  : "记录停留的城市、国家、日期与坐标，可补充备注；不确定坐标时可以留空。"}
               </DialogDescription>
             </DialogHeader>
 
@@ -455,7 +455,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
         title="删除这个行程节点？"
         description={
           deleteTarget
-            ? `${deleteTarget.city}（${formatDateRange(deleteTarget.startDate, deleteTarget.endDate)}）会被软删除，顺序会保留空位。`
+            ? `${deleteTarget.city}（${formatDateRange(deleteTarget.startDate, deleteTarget.endDate)}）会从行程节点中移除，顺序会保留空位。`
             : ""
         }
         pending={pending}

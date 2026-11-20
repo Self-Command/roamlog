@@ -16,6 +16,14 @@ const SIGN_UP_PATH = "/v1/auth/sign-up/email";
  */
 const REQUEST_PASSWORD_RESET_PATH = "/v1/auth/request-password-reset";
 const SEND_VERIFICATION_PATH = "/v1/auth/send-verification-email";
+/**
+ * Two-step email change: Better Auth sends the confirmation link to the current
+ * address and answers `{ status: true }` even when that callback throws, so the
+ * gateway appends the same delivery marker the reset route carries. Without it
+ * the settings page cannot tell "a confirmation is on its way" from "the
+ * transport rejected the mail".
+ */
+const CHANGE_EMAIL_PATH = "/v1/auth/change-email";
 const MAIL_NOT_CONFIGURED_CODE = "MAIL_NOT_CONFIGURED";
 
 const SKIPPED_REQUEST_HEADERS = new Set([
@@ -160,11 +168,11 @@ export class AuthController {
     }
     if (
       webResponse.ok &&
-      target.pathname === REQUEST_PASSWORD_RESET_PATH &&
+      (target.pathname === REQUEST_PASSWORD_RESET_PATH || target.pathname === CHANGE_EMAIL_PATH) &&
       outcome === "failed"
     ) {
       this.logger.warn(
-        { event: "email.delivery_failed", route: "request-password-reset" },
+        { event: "email.delivery_failed", route: target.pathname },
         "email.delivery_failed",
       );
       bodyBuffer = withEmailDeliveryMarker(bodyBuffer, "failed");

@@ -94,19 +94,37 @@ async function settle(page: Page): Promise<void> {
   });
 }
 
-/** Assert every visible string against the forbidden-copy rules. */
-async function expectCleanCopy(page: Page, where: string): Promise<void> {
+/**
+ * Assert every visible string against the forbidden-copy rules.
+ *
+ * `allowJsonValueEditor` is the one sanctioned exception and only on
+ * `/admin/settings`: some settings *are* JSON documents, so the editor labels a
+ * value as `值（JSON）`. That is a data-format label the operator must see; it is
+ * not transport talk. The allowance strips exactly those labels and still
+ * rejects any other appearance of "JSON".
+ */
+async function expectCleanCopy(
+  page: Page,
+  where: string,
+  options: { allowJsonValueEditor?: boolean } = {},
+): Promise<void> {
   const text = await visibleText(page);
+  const jsonEditorLabels = /值（JSON）|JSON 值|JSON 键/g;
+  const copyText = options.allowJsonValueEditor
+    ? text.replace(jsonEditorLabels, "")
+    : text;
   const violations: string[] = [];
 
   for (const rule of FORBIDDEN_COPY) {
-    const match = rule.pattern.exec(text);
+    const haystack = rule.label.includes("JSON") ? copyText : text;
+    const match = rule.pattern.exec(haystack);
     if (match) violations.push(`${rule.label} → "${match[0]}"`);
   }
 
   // Printing the sweep result makes the list reporter itself the evidence.
   console.log(
-    `[ops-copy] ${where}: ${text.length} chars visible, ${violations.length} violation(s)`,
+    `[ops-copy] ${where}: ${text.length} chars visible, ${violations.length} violation(s)` +
+      (options.allowJsonValueEditor ? " (json value editor allowed)" : ""),
   );
   expect(violations, `${where}: forbidden copy is visible on screen`).toEqual([]);
 }
@@ -229,6 +247,26 @@ test.describe("admin operations copy", () => {
     await expect(page.getByText("无法确认")).toBeVisible();
 
     await expectCleanCopy(page, "/admin/system → 版本与迁移");
+  });
+
+  test("settings page states which keys take effect without naming deployment config", async ({
+    page,
+  }) => {
+    await page.goto("/admin/settings");
+    await settle(page);
+
+    // The "does not take effect" truth must survive; only the mechanism is gone.
+    await expect(page.getByText(/未接入（不生效）/).first()).toBeVisible();
+    await expect(page.getByText(/上传限流在部署配置中固定，在此修改不生效/)).toBeVisible();
+    await expect(page.getByText(/仍读环境变量，|上传限流未接入/)).toHaveCount(0);
+
+    // No env var names, no endpoint paths on the configuration surface.
+    await expect(page.getByText(/ROAMLOG_|NEXT_PUBLIC_/)).toHaveCount(0);
+    await expect(page.getByText(/\/v1\//)).toHaveCount(0);
+
+    // Only the JSON value editor may mention JSON; nothing else may.
+    await expectCleanCopy(page, "/admin/settings", { allowJsonValueEditor: true });
+    await shoot(page, "15-settings");
   });
 
   test("the same copy holds at 390px", async ({ page }) => {

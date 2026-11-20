@@ -87,6 +87,21 @@ export function ProfileSettings({ workspaceSlug }: { workspaceSlug: string }) {
     }
   }, [me]);
 
+  /**
+   * A signed avatar URL is only valid for 15 minutes. The API stores the media
+   * id and re-signs it on every read, so a single refetch replaces the expiring
+   * URL before `<img>` breaks. `healedAvatarUrl` limits that to one request per
+   * URL: a legacy row that still stores a raw URL stays expired (with the
+   * warning below) instead of refetching in a loop.
+   */
+  const healedAvatarUrl = useRef<string | null>(null);
+  useEffect(() => {
+    const url = me?.image;
+    if (!url || healedAvatarUrl.current === url || !isImageUrlExpired(url)) return;
+    healedAvatarUrl.current = url;
+    void meQuery.refetch();
+  }, [me?.image, meQuery]);
+
   // Object URLs from the picked file must be released on unmount.
   useEffect(
     () => () => {
@@ -335,7 +350,7 @@ export function ProfileSettings({ workspaceSlug }: { workspaceSlug: string }) {
 
           {avatarExpired ? (
             <p className="mt-3 rounded-control border border-accent-yellow/25 bg-accent-yellow/5 px-3 py-2 text-[11px] leading-5 text-accent-yellow">
-              这张头像的图片链接已过期，其他页面会显示姓名首字母。重新上传即可恢复。
+              这张头像保存的是旧版短期图片链接，已经过期，其他页面会显示姓名首字母。重新上传即可换成长期有效的头像。
             </p>
           ) : null}
         </section>

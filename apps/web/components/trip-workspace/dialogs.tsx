@@ -84,7 +84,7 @@ export function DeleteTripDialog({
         <DialogHeader>
           <DialogTitle>删除这趟旅行？</DialogTitle>
           <DialogDescription>
-            旅行会被软删除，日程节点、费用、行李和分享链接都随之失效。这个操作不会立即物理清除数据，但界面上不再可见。
+            删除后，这趟旅行及其日程节点、费用、行李和分享链接都会从界面上消失。
           </DialogDescription>
         </DialogHeader>
         <FormField
@@ -148,7 +148,7 @@ export function DuplicateTripDialog({
         <DialogHeader>
           <DialogTitle>复制这趟旅行</DialogTitle>
           <DialogDescription>
-            会复制旅行信息、日程节点和行李清单。留空标题时由服务端决定副本名称。
+            会复制旅行信息、日程节点和行李清单。留空标题时会自动生成副本名称。
           </DialogDescription>
         </DialogHeader>
         <FormField label="副本标题（可选）" hint={`原旅行：${trip.title}`} id="duplicate-trip-title">

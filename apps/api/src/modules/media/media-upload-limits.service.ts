@@ -68,13 +68,32 @@ export const DEFAULT_LIMITS_RUNTIME: LimitsRuntime = Object.freeze({
   uploadMaxBatchBytes: DEFAULT_UPLOAD_MAX_BATCH_BYTES,
 });
 
-/** Maps one `LimitsRuntime` onto the public contract shape. */
+/**
+ * Maps one `LimitsRuntime` onto the public contract shape.
+ *
+ * Every field is re-validated: a resolver that hands back `undefined`/`NaN` (a
+ * stored row the consumer could not parse, a broken settings read) must not
+ * become `NaN` in a response header or in a `count <= limit` comparison. Bad
+ * fields fall back to the code defaults instead.
+ */
 export function toEffectiveUploadLimits(runtime: LimitsRuntime): EffectiveMediaUploadLimits {
   return {
-    maxFilesPerBatch: runtime.uploadMaxFilesPerBatch,
-    maxFileBytes: runtime.uploadMaxFileBytes,
-    maxBatchBytes: runtime.uploadMaxBatchBytes,
-    presignPerMinute: runtime.uploadPerMinute,
+    maxFilesPerBatch: finitePositiveOr(
+      runtime.uploadMaxFilesPerBatch,
+      DEFAULT_LIMITS_RUNTIME.uploadMaxFilesPerBatch,
+    ),
+    maxFileBytes: finitePositiveOr(
+      runtime.uploadMaxFileBytes,
+      DEFAULT_LIMITS_RUNTIME.uploadMaxFileBytes,
+    ),
+    maxBatchBytes: finitePositiveOr(
+      runtime.uploadMaxBatchBytes,
+      DEFAULT_LIMITS_RUNTIME.uploadMaxBatchBytes,
+    ),
+    presignPerMinute: finitePositiveOr(
+      runtime.uploadPerMinute,
+      DEFAULT_LIMITS_RUNTIME.uploadPerMinute,
+    ),
   };
 }
 
@@ -110,14 +129,22 @@ export class MediaUploadLimitsService {
    * All-or-nothing: a batch whose N links would cross the allowance is refused
    * whole, because the alternative — issuing a truncated batch — would silently
    * drop photos the user selected.
+   *
+   * Fail-safe, not fail-429: every number that reaches `decision()` is checked
+   * first. A proxy, a client-version skew or an ACL-denied `INCRBY` can answer a
+   * non-integer (a local Redis stub answering `"OK"` is exactly that shape), and
+   * comparing `"OK" <= 20` would be `false` forever: every upload for the account
+   * would stay 429 with `RateLimit-Remaining: NaN`. Non-finite counters therefore
+   * throw, land in the `catch` below, and degrade to the process-local window.
    */
   async consume(
     identity: string,
     tokens: number,
     limit: number,
   ): Promise<MediaUploadAllowance> {
-    const charge = Math.max(1, Math.trunc(tokens));
-    const windowSeconds = this.config.rateLimitWindowSeconds;
+    const safeLimit = finitePositiveOr(limit, DEFAULT_LIMITS_RUNTIME.uploadPerMinute);
+    const charge = Math.max(1, Math.trunc(Number.isFinite(tokens) ? tokens : 1));
+    const windowSeconds = this.windowSecondsOr(60);
     const key = `${RATE_LIMIT_KEY_PREFIX}${sha256(identity)}`;
 
     try {
@@ -126,7 +153,7 @@ export class MediaUploadLimitsService {
         COUNTER_TIMEOUT_MS,
         "Media upload rate-limit counter timed out",
       );
-      return this.decision(counter.count, counter.ttlSeconds, limit, false);
+      return this.decision(counter.count, counter.ttlSeconds, safeLimit, false);
     } catch (error) {
       this.warn("media.upload_rate_limit_redis_fallback", error);
     }
@@ -135,7 +162,7 @@ export class MediaUploadLimitsService {
     return this.decision(
       counter.count,
       Math.max(1, Math.ceil((counter.expiresAt - Date.now()) / 1_000)),
-      limit,
+      safeLimit,
       true,
     );
   }
@@ -146,13 +173,20 @@ export class MediaUploadLimitsService {
     windowSeconds: number,
   ): Promise<{ count: number; ttlSeconds: number }> {
     const client = this.redis.client;
-    const count = await client.incrby(key, charge);
-    let remainingTtl = await client.ttl(key);
+    // Throws (→ in-memory fallback) rather than letting a bad answer poison every
+    // later comparison for this account.
+    const count = requireFiniteCounter(await client.incrby(key, charge), "INCRBY");
+    const rawTtl = await client.ttl(key);
+    let remainingTtl = Number.isFinite(rawTtl) ? rawTtl : -1;
     if (remainingTtl < 0) {
       await client.expire(key, windowSeconds);
       remainingTtl = windowSeconds;
     }
     return { count, ttlSeconds: Math.max(1, remainingTtl) };
+  }
+
+  private windowSecondsOr(fallback: number): number {
+    return finitePositiveOr(this.config.rateLimitWindowSeconds, fallback);
   }
 
   private countInMemory(key: string, charge: number, windowSeconds: number): MemoryCounter {
@@ -173,11 +207,15 @@ export class MediaUploadLimitsService {
     limit: number,
     degraded: boolean,
   ): MediaUploadAllowance {
+    // Both inputs are validated upstream; the guard keeps a future caller from
+    // publishing `NaN` through a response header.
+    const safeCount = Number.isFinite(count) ? count : Number.POSITIVE_INFINITY;
+    const safeLimit = finitePositiveOr(limit, DEFAULT_LIMITS_RUNTIME.uploadPerMinute);
     return {
-      allowed: count <= limit,
-      limit,
-      remaining: Math.max(0, limit - count),
-      retryAfterSeconds: Math.max(1, ttlSeconds),
+      allowed: safeCount <= safeLimit,
+      limit: safeLimit,
+      remaining: Math.max(0, safeLimit - safeCount),
+      retryAfterSeconds: Number.isFinite(ttlSeconds) ? Math.max(1, ttlSeconds) : 60,
       degraded,
     };
   }
@@ -197,4 +235,27 @@ export class MediaUploadLimitsService {
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+/** A finite, positive integer, else `fallback` (settings can be malformed). */
+function finitePositiveOr(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  const whole = Math.trunc(value);
+  return whole > 0 ? whole : fallback;
+}
+
+/**
+ * A Redis counter must arrive as a finite number. Anything else is an environment
+ * fault (proxy, stub, client skew, ACL refusal) and must send the caller down its
+ * documented fallback instead of poisoning every comparison with `NaN`.
+ */
+function requireFiniteCounter(value: unknown, what: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(
+      `media upload rate-limit ${what} returned ${typeof value}: ${String(value)}`,
+    );
+  }
+  return value;
 }

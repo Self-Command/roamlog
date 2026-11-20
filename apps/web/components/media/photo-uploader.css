@@ -1,0 +1,221 @@
+/*
+ * Roamlog skin for the ported Uppy Dashboard.
+ *
+ * `@uppy/dashboard` ships Sass variables (declared unstable in
+ * `src/style.scss`) and only 8 `var(--…)` uses in the published CSS, so a token
+ * theme is not possible. This file therefore overrides the class names the
+ * Dashboard actually emits — the same "class-name override" adaptation the
+ * spec calls out (§D1.3) — and keeps the dark-theme markers Uppy applies so the
+ * upstream defaults stay overridden rather than fighting them.
+ *
+ * Colours come from `@roamlog/ui/tokens.css`: black canvas, hairline dividers,
+ * one white primary action.
+ */
+
+.photo-uploader-mount {
+  width: 100%;
+}
+
+.photo-uploader-mount .uppy-Dashboard,
+.photo-uploader-mount .uppy-Dashboard * {
+  font-family: var(--roamlog-font-sans);
+}
+
+.photo-uploader-mount .uppy-Dashboard-inner,
+.photo-uploader-mount .uppy-Dashboard-innerWrap {
+  width: 100%;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--roamlog-radius-card);
+  background-color: var(--surface-1);
+  color: var(--ink);
+}
+
+.photo-uploader-mount .uppy-Dashboard-innerWrap {
+  border: 0;
+}
+
+.photo-uploader-mount .uppy-Dashboard-inner {
+  box-shadow: none;
+}
+
+.photo-uploader-mount .uppy-Dashboard-AddFiles {
+  border-color: var(--hairline-strong);
+  border-radius: var(--roamlog-radius-control);
+  background-color: var(--surface-deep);
+}
+
+.photo-uploader-mount .uppy-Dashboard-AddFiles-title {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.photo-uploader-mount .uppy-Dashboard-AddFiles-title button,
+.photo-uploader-mount .uppy-Dashboard-browse {
+  color: var(--accent-orange);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.photo-uploader-mount .uppy-Dashboard-note,
+.photo-uploader-mount .uppy-Dashboard-AddFiles-info {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.photo-uploader-mount .uppy-Dashboard-note {
+  padding: 8px 12px;
+}
+
+.photo-uploader-mount .uppy-Dashboard-files {
+  background-color: transparent;
+}
+
+.photo-uploader-mount .uppy-Dashboard-Item {
+  border: 1px solid var(--hairline);
+  border-radius: var(--roamlog-radius-control);
+  background-color: var(--surface-2);
+}
+
+.photo-uploader-mount .uppy-Dashboard-Item-name,
+.photo-uploader-mount .uppy-Dashboard-Item-fileName {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.photo-uploader-mount .uppy-Dashboard-Item-status,
+.photo-uploader-mount .uppy-Dashboard-Item-statusSize,
+.photo-uploader-mount .uppy-Dashboard-Item-errorDetails {
+  color: var(--stone);
+  font-family: var(--roamlog-font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.photo-uploader-mount .uppy-Dashboard-Item-action {
+  color: var(--stone);
+}
+
+.photo-uploader-mount .uppy-Dashboard-Item-action:hover {
+  color: var(--ink);
+}
+
+.photo-uploader-mount .uppy-Dashboard-Item-previewInnerWrap {
+  border-radius: 4px;
+  background-color: var(--surface-deep);
+}
+
+.photo-uploader-mount .uppy-Dashboard-Item-errorMessage {
+  color: var(--accent-red);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.photo-uploader-mount .uppy-Dashboard-Item-progressIndicator circle {
+  stroke: var(--accent-blue);
+}
+
+.photo-uploader-mount .uppy-StatusBar {
+  border-top: 1px solid var(--hairline);
+  background-color: var(--surface-1);
+  color: var(--body);
+  font-size: 11px;
+}
+
+.photo-uploader-mount .uppy-StatusBar-content {
+  color: var(--body);
+}
+
+.photo-uploader-mount .uppy-StatusBar-statusSecondary,
+.photo-uploader-mount .uppy-StatusBar-statusSecondaryHint {
+  color: var(--stone);
+}
+
+.photo-uploader-mount .uppy-StatusBar-progress {
+  background-color: var(--accent-blue);
+}
+
+.photo-uploader-mount .uppy-StatusBar::before {
+  background-color: var(--surface-2);
+}
+
+.photo-uploader-mount .uppy-StatusBar-actionBtn {
+  color: var(--muted);
+}
+
+.photo-uploader-mount .uppy-StatusBar-actionBtn:hover {
+  color: var(--ink);
+}
+
+.photo-uploader-mount .uppy-StatusBar-actionBtn--upload {
+  padding: 0 14px;
+  border-radius: var(--roamlog-radius-control);
+  background-color: var(--ink);
+  color: #000;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.photo-uploader-mount .uppy-StatusBar-actionBtn--upload:hover {
+  background-color: #e6e8ec;
+  color: #000;
+}
+
+.photo-uploader-mount .uppy-StatusBar-actionBtn--retry {
+  color: var(--accent-orange);
+}
+
+.photo-uploader-mount .uppy-StatusBar.is-waiting .uppy-StatusBar-actionBtn--upload {
+  display: inline-flex;
+}
+
+.photo-uploader-mount .uppy-StatusBar-actions {
+  align-items: center;
+}
+
+.photo-uploader-mount .uppy-StatusBar.is-waiting .uppy-StatusBar::before,
+.photo-uploader-mount .uppy-StatusBar.is-waiting .uppy-StatusBar-progress {
+  display: none;
+}
+
+.photo-uploader-mount .uppy-c-btn {
+  border-radius: var(--roamlog-radius-control);
+  color: var(--muted);
+}
+
+.photo-uploader-mount .uppy-c-btn:hover {
+  color: var(--ink);
+}
+
+.photo-uploader-mount .uppy-c-btn-primary {
+  background-color: var(--ink);
+  color: #000;
+}
+
+.photo-uploader-mount .uppy-c-btn-primary:hover {
+  background-color: #e6e8ec;
+  color: #000;
+}
+
+.photo-uploader-mount .uppy-Informer p {
+  border-radius: var(--roamlog-radius-control);
+  background-color: var(--surface-2);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.photo-uploader-mount .uppy-Informer p[data-uppy-theme="dark"] {
+  background-color: var(--surface-2);
+}
+
+.photo-uploader-mount .uppy-Dashboard-close {
+  color: var(--muted);
+}
+
+.photo-uploader-mount .uppy-Dashboard-close:hover {
+  color: var(--ink);
+}

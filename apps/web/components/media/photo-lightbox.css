@@ -1,0 +1,35 @@
+/*
+ * YARL is fully tokenized: every colour and spacing it paints has a
+ * `--yarl__*` variable with a fallback (see `dist/styles.css`). That makes this
+ * the one ported package that can adopt Roamlog's tokens directly instead of
+ * shadowing class names.
+ */
+
+.roamlog-photo-lightbox {
+  --yarl__color_backdrop: rgba(0, 0, 0, 0.94);
+  --yarl__color_button: rgba(252, 253, 255, 0.72);
+  --yarl__color_button_active: #fcfdff;
+  --yarl__color_button_disabled: rgba(252, 253, 255, 0.28);
+  --yarl__slide_captions_container_background: rgba(0, 0, 0, 0.72);
+  --yarl__counter_color: rgba(252, 253, 255, 0.72);
+  --yarl__thumbnails_thumbnail_background: #101012;
+  --yarl__thumbnails_thumbnail_border_color: rgba(255, 255, 255, 0.14);
+  --yarl__thumbnails_thumbnail_active_border_color: #ff801f;
+  --yarl__thumbnails_thumbnail_fade_in_animation_duration: 0.18s;
+  font-family: var(--roamlog-font-sans);
+}
+
+.roamlog-photo-lightbox .yarl__thumbnails_thumbnail {
+  border-radius: var(--roamlog-radius-control);
+  overflow: hidden;
+}
+
+.roamlog-photo-lightbox .yarl__toolbar {
+  padding: 12px;
+}
+
+.roamlog-photo-lightbox .yarl__counter {
+  font-family: var(--roamlog-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}

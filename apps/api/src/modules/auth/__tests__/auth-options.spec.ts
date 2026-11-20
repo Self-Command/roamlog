@@ -141,6 +141,57 @@ describe("Better Auth options", () => {
     await expect(databaseHooks.session.create.before({ userId: "u2" })).resolves.toBe(false);
     await expect(databaseHooks.session.create.before({ userId: "u3" })).resolves.toBe(true);
   });
+
+  it("enables email changes and sends the confirmation to the current address", async () => {
+    const sendChangeEmailConfirmation = vi.fn().mockResolvedValue(undefined);
+    const options = buildAuthOptions({
+      config: {
+        isProduction: false,
+        appUrl: "http://localhost:3000",
+        adminUrl: "http://localhost:3001",
+        apiUrl: "http://localhost:4000",
+        betterAuthUrl: "http://localhost:4000",
+        betterAuthSecret: "test-secret-that-is-at-least-32-bytes",
+        corsOrigins: [],
+        sessionCookieDomain: undefined,
+      } as unknown as AppConfigService,
+      prisma: {
+        client: { user: { findUnique: vi.fn() } },
+      } as unknown as PrismaService,
+      email: { sendChangeEmailConfirmation } as unknown as EmailDeliveryService,
+      prismaAdapter: vi.fn(),
+      twoFactor: vi.fn(),
+    });
+
+    const user = options.user as {
+      changeEmail: {
+        enabled: boolean;
+        sendChangeEmailConfirmation: (data: {
+          user: { id: string; email: string; name: string };
+          newEmail: string;
+          url: string;
+          token: string;
+        }) => Promise<void>;
+      };
+    };
+
+    // Without `enabled: true` better-auth answers 400 CHANGE_EMAIL_DISABLED.
+    expect(user.changeEmail.enabled).toBe(true);
+
+    const payload = {
+      user: { id: "u1", email: "old@roamlog.test", name: "Old Address" },
+      newEmail: "new@roamlog.test",
+      url: "http://localhost:4000/v1/auth/verify-email?token=abc",
+      token: "abc",
+    };
+    await user.changeEmail.sendChangeEmailConfirmation(payload);
+
+    expect(sendChangeEmailConfirmation).toHaveBeenCalledWith(
+      payload.user,
+      payload.newEmail,
+      payload.url,
+    );
+  });
 });
 
 describe("generateUuidV7", () => {

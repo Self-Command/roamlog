@@ -78,7 +78,7 @@ function participantRoleError(error: unknown): string {
     // it as 「HTTP 200」 would name a successful status as the error, so keep
     // the two cases distinct.
     if (error.code === "INVALID_RESPONSE") {
-      return "服务器返回的参与者数据无法识别，请刷新页面后重试。";
+      return "参与者数据无法识别，请刷新页面后重试。";
     }
     return `角色调整失败（HTTP ${error.status}），请稍后重试。`;
   }
@@ -366,7 +366,7 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
             <DialogHeader>
               <DialogTitle>添加参与者</DialogTitle>
               <DialogDescription>
-                写入 `POST /v1/trips/{tripId}/participants`。只有当前工作区成员可以被加入。
+                从当前工作区成员中选择一位加入这趟旅行；只有当前工作区成员可以被加入。
               </DialogDescription>
             </DialogHeader>
             <div>

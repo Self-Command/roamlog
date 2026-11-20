@@ -1,16 +1,31 @@
 "use client";
 
-import type { Stop, Trip } from "@roamlog/contracts";
+import type { Media, Stop, Trip } from "@roamlog/contracts";
 import { Button, EmptyState, PageHeader } from "@roamlog/ui";
-import { MapPin, Pencil } from "lucide-react";
+import { Crosshair, MapPin, Pencil, ImageOff } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { routeCoordinates, stopToPoint, type MapPoint } from "@/components/map/map-types";
+import { PhotoLayerToggle } from "@/components/map/photo-layer";
+import { photosFromMedia } from "@/components/map/photo-points";
+import type { PhotoLightboxItem } from "@/components/media/photo-lightbox";
 import { useWorkspaceBySlug } from "@/lib/query";
 import { formatDateRange } from "@/lib/trip-presentation";
 
+import { mediaViewerUrl } from "@/components/trip-workspace/media-urls";
+
 import { TripStopMap } from "./trip-stop-map";
+
+/**
+ * YARL is client-only (it portals into `document.body`) and 12 KB gzip, so the
+ * viewer loads on demand even on the map page.
+ */
+const PhotoLightbox = dynamic(
+  () => import("@/components/media/photo-lightbox").then((module) => module.PhotoLightbox),
+  { ssr: false },
+);
 
 function coordinateLabel(stop: Stop): string | null {
   if (stop.lat === null || stop.lng === null) return null;
@@ -22,11 +37,14 @@ export function TripMapPage({
   tripId,
   trip,
   stops,
+  media = [],
 }: {
   workspaceSlug: string;
   tripId: string;
   trip: Trip;
   stops: Stop[];
+  /** Photos read for this trip (`Media.lat/lng` are the map coordinates). */
+  media?: Media[];
 }) {
   const { workspace } = useWorkspaceBySlug(workspaceSlug);
   const workspaceRoot = `/w/${workspaceSlug}`;
@@ -34,6 +52,9 @@ export function TripMapPage({
   const editHref = `${tripHref}/edit`;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showPhotos, setShowPhotos] = useState(true);
+  const [focusPhotosToken, setFocusPhotosToken] = useState(0);
+  const [viewerId, setViewerId] = useState<string | null>(null);
 
   // `stopToPoint` drops stops without coordinates, and `routeCoordinates`
   // keeps the stored `order`, so markers and the dashed polyline are the same
@@ -45,6 +66,28 @@ export function TripMapPage({
   const route = useMemo(() => routeCoordinates(stops), [stops]);
   const unmappedCount = stops.length - points.length;
   const selectedStop = selectedId ? stops.find((stop) => stop.id === selectedId) : undefined;
+
+  // Only rows with both coordinates become photo points; a photo without GPS is
+  // simply not on the map, which is exactly "有位置才上图".
+  const photoPoints = useMemo(() => photosFromMedia(media), [media]);
+  const absentPhotos = media.length - photoPoints.length;
+
+  const viewerItems = useMemo<PhotoLightboxItem[]>(() => {
+    const items: PhotoLightboxItem[] = [];
+    for (const item of media) {
+      const src = mediaViewerUrl(item);
+      if (!src) continue;
+      items.push({
+        id: item.id,
+        src,
+        alt: item.caption ?? "旅行照片",
+        width: item.width,
+        height: item.height,
+      });
+    }
+    return items;
+  }, [media]);
+  const viewerIndex = viewerId ? viewerItems.findIndex((item) => item.id === viewerId) : -1;
 
   if (!stops.length) {
     return (
@@ -117,7 +160,7 @@ export function TripMapPage({
         <div className="flex flex-col gap-3 border-b border-hairline p-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="type-eyebrow">
-              ROUTE / {points.length} MAPPED STOPS
+              ROUTE / {points.length} MAPPED STOPS · {photoPoints.length} PHOTOS
             </p>
             <h2 className="mt-1 font-serif text-2xl tracking-[-0.025em] text-ink">
               路线与停靠点
@@ -127,7 +170,35 @@ export function TripMapPage({
                 ? `地图只标注带坐标的停靠点；${unmappedCount} 个停靠点还没有坐标。`
                 : "按停靠点顺序绘制路线；瓦片或 WebGL 不可用时自动切换为示意图。"}
             </p>
+            {photoPoints.length > 0 ? (
+              <p className="mt-1 text-[11px] text-muted">
+                照片按拍摄位置显示；点击单个照片标记打开全屏查看，点击聚合数字会先放大散开。
+              </p>
+            ) : media.length > 0 ? (
+              <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted">
+                <ImageOff aria-hidden="true" className="size-3 text-stone" />
+                {absentPhotos} 张照片没有拍摄位置，不会出现在地图上。
+              </p>
+            ) : null}
           </div>
+          {photoPoints.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <PhotoLayerToggle
+                enabled={showPhotos}
+                photoCount={photoPoints.length}
+                onToggle={() => setShowPhotos((current) => !current)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFocusPhotosToken((token) => token + 1)}
+              >
+                <Crosshair aria-hidden="true" />
+                缩放到照片
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px] lg:divide-x lg:divide-hairline">
@@ -138,6 +209,10 @@ export function TripMapPage({
                 route={route}
                 selectedId={selectedId ?? undefined}
                 onSelect={setSelectedId}
+                photos={photoPoints}
+                showPhotos={showPhotos && photoPoints.length > 0}
+                focusPhotosToken={focusPhotosToken}
+                onOpenPhoto={setViewerId}
               />
             ) : (
               <div className="p-4">
@@ -231,6 +306,13 @@ export function TripMapPage({
           </aside>
         </div>
       </section>
+
+      <PhotoLightbox
+        open={viewerIndex >= 0}
+        index={viewerIndex >= 0 ? viewerIndex : 0}
+        items={viewerItems}
+        onClose={() => setViewerId(null)}
+      />
     </div>
   );
 }

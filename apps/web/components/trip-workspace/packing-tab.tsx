@@ -314,7 +314,7 @@ export function PackingTab({ tripId }: { tripId: string }) {
             <DialogHeader>
               <DialogTitle>添加行李</DialogTitle>
               <DialogDescription>
-                写入 `POST /v1/trips/{tripId}/packing`，顺序取当前清单长度。
+                把要带的物品加入清单，按分类整理并填写数量。
               </DialogDescription>
             </DialogHeader>
             <FormField label="名称" id="packing-name">

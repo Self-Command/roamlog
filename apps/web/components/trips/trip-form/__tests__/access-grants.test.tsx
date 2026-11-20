@@ -422,6 +422,35 @@ describe("行程表单指定可见范围", () => {
     expect(screen.queryByText(/保存成功/)).not.toBeInTheDocument();
   });
 
+  it("可见范围响应无法识别时使用用户语言，不暴露传输层", async () => {
+    const trip = makeTrip({
+      id: TRIP_ID,
+      version: 3,
+      visibility: "custom",
+      createdById: TEST_USER_ID,
+    });
+    stubFetch([
+      ...commonOptionRoutes(),
+      route("GET", "/v1/me", makeUser({ id: TEST_USER_ID })),
+      route("GET", `/v1/trips/${TRIP_ID}/access-grants`, grantsResponse()),
+      route(
+        "PATCH",
+        `/v1/trips/${TRIP_ID}`,
+        makeTrip({ id: TRIP_ID, version: 4, visibility: "custom" }),
+      ),
+      route("PUT", `/v1/trips/${TRIP_ID}/access-grants`, { invalid: true }),
+    ]);
+    const user = userEvent.setup();
+    renderWithQuery(<EditHarness trip={trip} />);
+
+    await user.click(await screen.findByRole("checkbox", { name: "选择可见成员 沈青禾" }));
+    await user.click(screen.getByRole("button", { name: "保存旅行" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("可见范围已提交，但返回的数据无法识别。");
+    expect(alert).not.toHaveTextContent("服务器返回");
+  });
+
   it("custom 空选阻止保存并提示危险状态", async () => {
     stubFetch(commonOptionRoutes());
     const onSubmit = vi.fn(async () => undefined);

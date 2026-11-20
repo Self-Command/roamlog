@@ -73,6 +73,36 @@ export function buildAuthOptions(dependencies: AuthOptionsDependencies): Record<
         await email.sendVerificationEmail(data.user, data.url);
       },
     },
+    /**
+     * Email changes are opt-in in Better Auth (`changeEmail.enabled` defaults to
+     * `false`, so `POST /change-email` answered `400 CHANGE_EMAIL_DISABLED`).
+     *
+     * `sendChangeEmailConfirmation` is the documented second step: the
+     * confirmation link goes to the **current** address first
+     * (`better-auth.com/docs/concepts/users-accounts#confirming-with-current-email`),
+     * and only after it is clicked does Better Auth send the
+     * `sendVerificationEmail` link above to the **new** address. Both mailboxes
+     * therefore hear about the change, and the row's email only moves once the
+     * new address is verified — `updateEmailWithoutVerification` stays at its
+     * `false` default so an unverified request cannot hijack the account.
+     *
+     * Field names and payload verified against the installed
+     * `@better-auth/core@1.7.25/dist/types/init-options.d.mts:884-905` and
+     * `better-auth@1.7.25/dist/api/routes/update-user.mjs:434-503`.
+     */
+    user: {
+      changeEmail: {
+        enabled: true,
+        sendChangeEmailConfirmation: async (data: {
+          user: { id: string; email: string; name: string };
+          newEmail: string;
+          url: string;
+          token: string;
+        }) => {
+          await email.sendChangeEmailConfirmation(data.user, data.newEmail, data.url);
+        },
+      },
+    },
     socialProviders,
     session: {
       expiresIn: 7 * 24 * 60 * 60,

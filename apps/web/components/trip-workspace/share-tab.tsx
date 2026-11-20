@@ -130,7 +130,7 @@ function ShareTabBody({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/trips/${tripId}/share-links`);
         const parsed = ShareLinkCreatedSchema.safeParse(response.data);
         if (!parsed.success) {
-          throw failureFrom(200, null, "分享链接响应", "分享链接已创建，但响应不符合契约。");
+          throw failureFrom(200, null, "分享链接响应", "分享链接已创建，但返回的数据无法识别，请刷新页面确认。");
         }
         return parsed.data;
       },
@@ -178,7 +178,7 @@ function ShareTabBody({ tripId }: { tripId: string }) {
         <section className="surface-card overflow-hidden" aria-label="新建的分享链接">
           <div className="border-b border-hairline bg-accent-orange/5 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="orange">令牌只显示一次</Badge>
+              <Badge tone="orange">链接只显示一次</Badge>
               {created.hasPassword ? <Badge tone="neutral">密码</Badge> : null}
               {created.showBudget ? <Badge tone="neutral">含预算</Badge> : null}
             </div>
@@ -201,7 +201,7 @@ function ShareTabBody({ tripId }: { tripId: string }) {
           </div>
           <p className="flex items-start gap-1.5 px-4 py-3 text-[10px] leading-5 text-muted">
             <TriangleAlert aria-hidden="true" className="mt-0.5 size-3 shrink-0 text-accent-yellow" />
-            域名与路径来自服务端返回的 `url`，前端不拼接。令牌相当于访问凭证，撤销后立即失效。
+            链接地址由系统生成。访问凭证只在创建时显示一次，撤销后立即失效。
           </p>
         </section>
       ) : null}
@@ -232,7 +232,7 @@ function ShareTabBody({ tripId }: { tripId: string }) {
           <EmptyBlock
             icon={Share2}
             title="还没有分享链接"
-            description="创建后会把只读公开页的地址返回一次，可设置访问密码和过期时间。"
+            description="创建后会显示只读公开页的地址，可设置访问密码和过期时间。"
             action={
               <Button
                 type="button"
@@ -270,7 +270,7 @@ function ShareTabBody({ tripId }: { tripId: string }) {
             <DialogHeader>
               <DialogTitle>创建分享链接</DialogTitle>
               <DialogDescription>
-                写入 `POST /v1/trips/{tripId}/share-links`。公开页只展示旅行、日志和照片，不展示评论、邮箱和内部备注。
+                创建后，拿到链接的人可以阅读这趟旅行的公开内容；公开页只展示旅行、日志和照片，不展示评论、邮箱和内部备注。
               </DialogDescription>
             </DialogHeader>
 
@@ -331,7 +331,7 @@ function ShareTabBody({ tripId }: { tripId: string }) {
                     允许搜索引擎收录
                   </Label>
                   <p className="mt-0.5 text-[10px] leading-4 text-muted">
-                    默认关闭。打开后公开页会被 `robots` 允许索引。
+                    默认关闭。打开后公开页可能出现在搜索引擎结果中。
                   </p>
                 </div>
               </div>

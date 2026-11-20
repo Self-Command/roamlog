@@ -250,7 +250,7 @@ export function ExpensesTab({ tripId }: { tripId: string }) {
           <EmptyBlock
             icon={Receipt}
             title="还没有记录支出"
-            description="金额按 minor units 存储、按币种分开展示，不做汇率折算。记账后预算摘要会立刻更新。"
+            description="金额按币种分开展示，不做汇率折算。记账后预算摘要会立刻更新。"
             action={
               <Button
                 type="button"
@@ -310,7 +310,7 @@ export function ExpensesTab({ tripId }: { tripId: string }) {
             <DialogHeader>
               <DialogTitle>记录一笔支出</DialogTitle>
               <DialogDescription>
-                写入 `POST /v1/trips/{tripId}/expenses`，金额以 minor units 提交，分摊模式为均摊。
+                记录这笔支出的日期、分类、金额与付款人；费用由选中的参与者平分。
               </DialogDescription>
             </DialogHeader>
 
@@ -338,7 +338,7 @@ export function ExpensesTab({ tripId }: { tripId: string }) {
                   ))}
                 </Select>
               </FormField>
-              <FormField label="金额" hint="按原币种输入，服务端存 minor units" id="expense-amount">
+              <FormField label="金额" hint="按原币种输入金额" id="expense-amount">
                 <Input
                   id="expense-amount"
                   value={draft.amount}
@@ -381,7 +381,7 @@ export function ExpensesTab({ tripId }: { tripId: string }) {
 
             <fieldset className="rounded-control border border-hairline bg-surface-2/40 p-3">
               <legend className="px-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
-                分摊参与者（均摊）
+                分摊参与者（平分）
               </legend>
               {directory.members.length === 0 ? (
                 <p className="text-[11px] leading-5 text-stone">工作区还没有可分摊的成员。</p>
@@ -438,7 +438,7 @@ export function ExpensesTab({ tripId }: { tripId: string }) {
         title="删除这笔支出？"
         description={
           deleteTarget
-            ? `${formatMinor(deleteTarget.amountMinor, deleteTarget.currency)} 会被软删除，预算摘要随之减少。`
+            ? `${formatMinor(deleteTarget.amountMinor, deleteTarget.currency)} 会从费用记录中移除，预算摘要随之减少。`
             : ""
         }
         pending={pending}
