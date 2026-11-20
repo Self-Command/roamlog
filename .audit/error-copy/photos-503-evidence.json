@@ -1,0 +1,34 @@
+{
+  "target": {
+    "workspace": {
+      "id": "019b7946-1c12-72e5-b2f5-ba152dee90d6",
+      "slug": "roamlog-crew"
+    },
+    "trip": {
+      "id": "019b7a6f-24fc-78df-98d4-214f1c0779f7",
+      "title": "京都十一月"
+    }
+  },
+  "desktop": {
+    "url": "http://localhost:3000/w/roamlog-crew/trips/019b7a6f-24fc-78df-98d4-214f1c0779f7",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "interceptedMediaRequests": 2,
+    "alertText": "照片读取失败\n\n读取失败，请稍后重试。\n\n重试",
+    "bodyHasApiPath": false,
+    "bodyHasHttpStatus": false
+  },
+  "mobile": {
+    "url": "http://localhost:3000/w/roamlog-crew/trips/019b7a6f-24fc-78df-98d4-214f1c0779f7",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "interceptedMediaRequests": 2,
+    "alertText": "照片读取失败\n\n读取失败，请稍后重试。\n\n重试",
+    "bodyHasApiPath": false,
+    "bodyHasHttpStatus": false
+  }
+}

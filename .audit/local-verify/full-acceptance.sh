@@ -75,6 +75,7 @@ echo "== 4. honesty gates (no fake features, no developer copy) =="
 # Developer-facing copy must never reach a user-visible surface.
 contains "copy-dev-web"   "(?i)live api|local fixture|数据来源：mock|演示数据" apps/web/components apps/web/app --glob '!**/*.test.*'
 contains "copy-dev-admin" "(?i)演示预览|admin api error|fixture" apps/admin/components apps/admin/app --glob '!**/*.test.*'
+gate copy-dev-semantics "node .audit/local-verify/copy-gate.mjs"
 # The vague "backend wired" phrasing hid settings that nothing read. It must stay dead.
 contains "label-vague"    "已接入后端" apps/admin
 # Build artifacts must carry no fixture or demo code.

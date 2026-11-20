@@ -782,3 +782,165 @@ assistant : 你刚才让我用一句话介绍自己并且不要调用任何工�
 ### 环境备注
 重建库后 seed 用户 `passwordHash = null` 无法登录。我注册了 `verify@roamlog.test`，`emailVerified=true`，加入 `roamlog-crew` 为 **admin**（owner 唯一约束只允许一个 owner，已由 demo 用户占用）。
 AI 设置直接写 `SystemSetting`（`value` 是 JSONB，必须 `to_jsonb(...)`）：`ai.baseUrl=http://127.0.0.1:3425/v1`、`ai.model=auto/deepseek-v4.1-flash`。**改完必须重启 API**（settings 有进程内缓存）。
+
+---
+
+## 🚀 rc.5 已推送（2026-11-20 14:26）
+
+### 本地门禁全绿（我自己逐条跑的）
+| 门禁 | 结果 |
+|---|---|
+| `pnpm typecheck` | **11/11 successful**（33s） |
+| `pnpm lint` | **11/11 successful**，0 errors（19 warnings，全是 `any`） |
+| `pnpm test` | **10/10 successful**（3m02s）；api **140 文件 / 1207 测试通过 + 12 skipped** |
+| `pnpm contracts:check` | fresh：113 paths / 213 schemas / 25 endpoint files / 792 schema files |
+| `pnpm build` | **5/5 successful**（44.7s），web 26 条路由全部生成 |
+| `pnpm staging:validate` | passed |
+
+**关键：全量测试必须用干净库。** 我第一次在 `roamlog_local` 上跑挂了 `seed.integration.test.ts`（断言 seed 工作区 3 个成员，而我加了测试账号变成 5）。于是建了 `roamlog_ci` 库（15 迁移）再跑，全绿——这与 CI 的做法一致。
+
+### 推送
+```
+git push origin main --follow-tags
+061ef23..bff50c7  main -> main
+* [new tag]  v0.1.0-rc.5 -> v0.1.0-rc.5
+```
+- CI run `44687794597`（push main）→ in_progress
+- Release gate `44687789529`（tag v0.1.0-rc.5）→ queued
+
+### 推送前安全检查
+扫描了 `origin/main..HEAD` 全部提交：无真实密钥（只命中 `re_xxxxxxxx` 占位符与测试夹具 `re_supersecretproductionkey`）。`.env.local` 未被跟踪（只跟踪 3 个 `.env.example` 模板）。
+
+### 提交清单（rc.5 相对 rc.4）
+`bff50c7` / `ea9353d` 等，共 **171 个 commit**。
+
+---
+
+## 用户对 AI 交互的严厉批评（2026-11-20 14:55）
+> 「ai和用户交互好差，为什么给用户回复的是英文？应该是ai自己判断用什么语言回复吗？还有为什么没有任何交互？hermes 调用工具或者做什么都有工具卡片或者什么的，一直显示思考」
+> 「去重新调研找到合适的 AI 项目……别人怎么把AI聊天页面嵌入自己项目附带 Hermes 这样的完整交互的」「全部重写」
+
+### 我核实到的两个结构性根因（不是调参能修的）
+
+**1. 回复英文：系统提示词是 100% 英文，且没有任何语言约束**
+`apps/api/src/modules/ai/ai-plan.service.ts:120-136` 的 `systemPrompt()` 全文英文，13 条规则里**没有一条**要求「用用户的语言回复」，也没有把用户 locale 传下去。所以模型自然用英文思考+英文前导句（`I'll start by checking the workspace…`）。
+
+**2. 「没有任何交互」：SSE 协议里根本没有工具调用事件**
+`packages/contracts/src/api/ai.ts:323-331` 只有 7 种事件：
+```
+meta / text.delta / plan / usage / error / done / progress
+```
+`progress` 只带一个 `label: string`（如「正在思考…」）。**没有任何事件携带工具名、参数、结果、耗时、错误。**
+→ 前端**物理上不可能**渲染工具卡片。这不是 UI 没做好，是协议层就缺。
+
+### 处置
+- 已派 `AI_CHAT_UX_RESEARCH`（`1ec00de0`）：调研 Hermes / LibreChat / assistant-ui / vercel-chatbot 的工具卡片实现与数据契约、以及成熟项目的「回复语言跟随用户」system prompt 原文，产出 `.audit/ai-chat-ux-spec.md`。
+- 要求每条结论带 repo+path+commit 或官方文档 URL；**LobeHub 只能看不能抄**（LobeHub Community License 不允许衍生分发）。
+- 研究完按「移植」方式重写，禁止自造。
+
+---
+
+## 2026-11-20 16:25 — 六个 agent 同时失败后的恢复
+
+### 失败情况（同时失败，判断为基础设施/额度问题，非任务失败）
+`AI_CHAT_FULL_PORT` / `PLACES_PELIAS_PORT` / `MAP_FLAT_FIX` / `AI_PLAN_REVIEW_RESEARCH` / `AI_TOOL_SURFACE_EXPAND_2` / `AI_CHAT_UI_PORT` 全部 `failed`，无收尾消息。
+
+### 但工作区里实际落了大量成果，我盘点后已提交 4 个
+| 提交 | 内容 | 验证 |
+|---|---|---|
+| `1f00344` | **Pelias 地点排序移植**：10 个 ranking 文件 + 三 provider 适配器 | places **16 文件 / 200 测试** |
+| `a1794f0` | **AI 工具 9 → 26**（stops/itinerary/packing CRUD+reorder、expenses、entries、participants、trips.update 扩展） | api ai **18 文件 / 190 测试** |
+| `6df25df` | **AI 聊天 UI 移植**（tool-card / message / reasoning / code-block / use-messages） | web ai **8 文件 / 62 测试** |
+| `188b2cd` | **地图平面高度修复** | Playwright 实测 |
+
+### 地图平面修复实测（我亲自跑的）
+```
+flat-1440  canvas 758×440  亮度 230.6  暗像素 0
+flat-390   canvas 356×320  亮度 206.2  暗像素 0.0005
+globe-1440 canvas 758×440  亮度 160.1  （黑太空正常）
+1 passed (7.9s)
+```
+根因：`MapCanvas` 根元素 `h-full` + MapLibre `height:100%`，父级 `auto` 高度 → canvas 0px。修法：套一层 `h-[320px] sm:h-[440px]`，与 GlobeView 一致。
+
+### 我自己补的适配层（`copy.ts`）
+26 个工具的中文标签 + `describePlannedCall` 分支（新增 `EXPENSE_CATEGORIES`）。这是 AGENTS.md §00 允许的 i18n 适配层，不是产品功能。
+
+### 待办（已重派）
+- `AI_CHAT_COMPLETE`（`28752a0f`）：加载动画 + 附件/图片 + 模型切换 + 思考深度（合并了原 `AI_LOADING_UX`，因为「完整移植」就该包含）
+- `AI_PLAN_REVIEW_RESEARCH`（`2ee91d70`）：计划卡重做的带来源规格
+- `MAP_ATLAS_LAYOUT`：地图卡被 grid stretch 拉伸 → 1155px 高但地图只有 440px，下方大片空白
+
+### 环境备忘
+`npx playwright` 在此 shell **exit 126**，必须用 `node node_modules/@playwright/test/cli.js test <spec>`。
+
+---
+
+## 2026-11-20 16:45 — 计划卡调研结论 + 两条事故
+
+### 事故 1：我引用了过期截图
+我向调研 agent 引用 `.audit/ai-chat-ux/final-1440.png` 说「满屏添加装备」。agent 查证后指出该图已是失败态。
+核实：文件 mtime **16:07**，是 UI agent 重跑 Playwright 时**覆盖**的（我读它是在 16:03 前后，看到的是旧内容）。
+**教训：引用 `.audit/` 里的截图必须同时记下 mtime；agent 重跑会覆盖同名文件。**
+真实结论不变：`plan-card.tsx` L231–L243 平铺 20+ 行、无分组，投诉在结构上成立。
+
+### 事故 2：AI 网关偶发 AI_UPSTREAM
+同一时刻：`用一句话介绍自己` → `AI_UPSTREAM`（provider did not answer correctly）；30 秒后重试 → 14 个 delta 正常。
+magpie 网关本身 200，直连 `/v1/chat/completions` 能返回（模型是 reasoning 模型，先出 `reasoning_content`）。
+**结论：偶发，非配置错误。任何 AI 的 UI 验收必须带重试，并把重试次数写进报告。**
+
+### 许可证事实（已实测 LICENSE 文件）
+| 参考 | 许可证 | 能否抄 |
+|---|---|---|
+| terraform v1.9.8 | BUSL-1.1 | ❌ |
+| opentofu v1.9.4 | MPL-2.0 | ⚠️ 不在白名单 |
+| payloadcms | MIT | ✅ |
+| assistant-ui | MIT | ✅ |
+| n8n | Sustainable Use License | ❌ |
+| directus | MSCL-1.0-GPL | ❌ |
+
+**用户已拍板：纯 MIT 方案，不用 OpenTofu。** → `AI_PLAN_CARD_REBUILD`（`6768a5d4`）
+信息架构用中文动作词（新增/修改/移除）而非 OpenTofu 的 `+/~/-`，这是信息架构不是代码移植。
+
+### 已提交
+`a0aaba9` 总览页 grid 拉伸修复（卡片 519→258px，空白 261→1px；真实浏览器扫了 12 路由 11 个两列 grid）
+
+---
+
+## 2026-11-20 17:05 — 日志编辑器 AI：决定「干净完整移植 Novel」
+
+### 调研结论（`EDITOR_AI_RESEARCH`，`.audit/editor-ai-spec.md` 569 行）
+- **Novel 许可证实测通过**：`web_fetch raw.githubusercontent.com/steven-tey/novel/main/LICENSE` → **Apache-2.0** 全文。
+- **固定 commit**：`fa95098e66476c466faebb8211baa5869c101a9c`（与现有 `journal-ai-rewrite.tsx:33` 注释引用的是同一个）。
+- **Novel 的 AI 功能全集**（4 组件 + 1 路由 + 2 headless）：
+  `generative-menu-switch` / `ai-selector` / `ai-selector-commands` / `ai-completion-command` / `ai-highlight.ts` / `getPrevText`
+- **指令全集**：`continue / improve / shorter / longer / fix / zap`
+- **三操作**：Replace selection / Insert below / Discard
+- **里程碑发现：上游自己有 bug** —— `route.ts:119` `prompt: messages[last].content` 只取 user 消息，**system prompt 实际从未生效**。移植时不能照抄这个 bug。
+- Novel 该 commit **没有** autocomplete 续写扩展；`extensions/` 仅 8 文件。
+- **TiPTap 2→3 破坏性差异 12 项**（报告 §5 逐项给改法）。
+
+### 第二候选全部排除（实测 LICENSE）
+| 候选 | 实测 | 结论 |
+|---|---|---|
+| TypeCellOS/BlockNote @1bea7c7 | LICENSE.txt = **MPL-2.0**（XL 包 GPL-3.0/商业） | ❌ |
+| tiptap 官方 AI | 官方标注 **AI Paid** | ❌ 商业 |
+
+### 用户决策（原话）
+> 「删除我们的所有功能，然后干净完整的移植 novel 所有功能」
+> 第二问选：「全按 Novel，diff 也去掉」
+
+**因此全部废弃我们的自创**：
+- 指令 `tone_formal` / `tone_casual`（上游没有 = 自创）
+- 我们自己的 6 个指令命名 → 换成 Novel 的 6 个
+- **diff 预览**（自创）→ 换成 Novel 的纯文本预览 + Replace/Insert below/Discard
+- 我们的自定义交互模型 → Novel 的 bubble menu + ai-highlight mark
+
+### 保留的适配层（因为物理不兼容）
+- **D12**：我们没有 AI SDK（`apps/web` / `apps/api` 都没装 `ai`/`@ai-sdk`），不能搬 `useCompletion`/`toDataStreamResponse`；必须接既有 SSE（`apps/web/lib/api/ai.ts` + 冻结的 v1 事件）。
+- 未信任文本仍用分隔块包裹（防注入），这是 3 处刻意偏离之一。
+
+### 依赖变更（我批准，均为 MIT）
+`@tiptap/core@3.34.0`、`@tiptap/pm@3.34.0`、`@tiptap/extension-bubble-menu@3.34.0`、`@floating-ui/dom@^1.6.0`、`cmdk`（Novel 命令面板用它，自写键盘导航=自创交互，违反铁律）
+
+### 待办
+`EDITOR_AI_PORT`：整文件移植 5 个 + 契约 `+continue +zap +contextBefore` + 后端 prompt 逐字抄录 + 删除我们自创的一切。

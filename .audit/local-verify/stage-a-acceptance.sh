@@ -55,6 +55,7 @@ echo "== 2. copy gates (source, tests excluded) =="
 # case-sensitive grep silently misses them (found the hard way).
 contains "copy-web"   "(?i)live api|msw|local fixture|本地演示数据|admin api error|data mode|useDataMode" apps/web/components apps/web/app --glob '!**/*.test.*'
 contains "copy-admin" "(?i)msw|fixture|演示预览|live api|admin api error" apps/admin/components apps/admin/app --glob '!**/*.test.*'
+gate copy-dev-semantics "node .audit/local-verify/copy-gate.mjs"
 contains "dead-branch" 'mode\s*===\s*"mock"|mode\s*!==\s*"api"' apps/web apps/admin --glob '!**/*.test.*'
 
 # The retired build flag must not exist as a *definition*. A migration note in
