@@ -1,6 +1,8 @@
 import { PlaceSchema, type Place, type PlaceType } from "@roamlog/contracts";
 import gcoord from "gcoord";
 
+import type { TencentCandidate } from "./ranking/pelias-document.js";
+
 /**
  * Normalizes Tencent Map WebService payloads into the strict `Place` contract.
  *
@@ -173,11 +175,16 @@ function composeAddress(...parts: readonly (string | undefined)[]): string | nul
 }
 
 /**
- * One `suggestion` entry. Returns `undefined` when the entry cannot satisfy the
- * strict contract (no usable name or no usable coordinate); one bad row must not
- * degrade a whole search.
+ * One `suggestion` entry, including the raw fields the Pelias adapter needs
+ * (`type`, `adcode`, administrative names). Returns `undefined` when the entry
+ * cannot satisfy the strict contract; one bad row must not degrade a whole
+ * search.
+ *
+ * 【适配层，本仓库原创】`level` does not exist on `place/v1/suggestion`; only
+ * `type` and the `adcode` structure are forwarded. The layer is decided by the
+ * adapter, not here.
  */
-function suggestionItem(value: unknown): Place | undefined {
+function suggestionCandidate(value: unknown, providerRank: number): TencentCandidate | undefined {
   const item = asRecord(value);
   if (item === undefined) {
     return undefined;
@@ -198,8 +205,13 @@ function suggestionItem(value: unknown): Place | undefined {
   const district = boundedText(ad.district, MAX_NAME_LENGTH);
   const city = boundedText(ad.city, MAX_NAME_LENGTH);
   const street = boundedText(item.address, MAX_ADDRESS_LENGTH);
+  const adcodeValue = ad.adcode;
+  const adcode =
+    typeof adcodeValue === "number" && Number.isFinite(adcodeValue)
+      ? String(adcodeValue)
+      : boundedText(adcodeValue, 40);
 
-  return PlaceSchema.parse({
+  const place = PlaceSchema.parse({
     provider: "tencent",
     providerPlaceId: providerPlaceId(item.id),
     name,
@@ -221,10 +233,25 @@ function suggestionItem(value: unknown): Place | undefined {
     importance: null,
     type: suggestionType(item.type),
   });
+
+  return {
+    source: "tencent",
+    place,
+    providerRank,
+    ...(typeof item.type === "number" ? { sourceType: item.type } : {}),
+    ...(adcode === undefined ? {} : { adcode }),
+    ...(boundedText(item.category, 200) === undefined
+      ? {}
+      : { category: boundedText(item.category, 200) }),
+    ...(province === undefined ? {} : { province }),
+    ...(city === undefined ? {} : { city }),
+    ...(district === undefined ? {} : { district }),
+    ...(street === undefined ? {} : { street }),
+  };
 }
 
-/** `place/v1/suggestion` response body → `Place[]`. */
-export function normalizeTencentSuggestionPayload(payload: unknown): Place[] {
+/** `place/v1/suggestion` response body → candidates, preserving provider order. */
+export function normalizeTencentSuggestionCandidates(payload: unknown): TencentCandidate[] {
   const root = asRecord(payload);
   if (root === undefined) {
     throw new TencentPayloadError("Tencent suggestion payload is not an object");
@@ -233,18 +260,29 @@ export function normalizeTencentSuggestionPayload(payload: unknown): Place[] {
     throw new TencentPayloadError("Tencent suggestion payload has no data array");
   }
 
-  const places: Place[] = [];
-  for (const entry of root.data) {
-    const place = suggestionItem(entry);
-    if (place !== undefined) {
-      places.push(place);
+  const candidates: TencentCandidate[] = [];
+  root.data.forEach((entry, index) => {
+    const candidate = suggestionCandidate(entry, index);
+    if (candidate !== undefined) {
+      candidates.push(candidate);
     }
-  }
-  return places;
+  });
+  return candidates;
 }
 
-/** `geocoder/v1?address=` response body → `Place`. */
-export function normalizeTencentGeocodePayload(payload: unknown): Place {
+/** `place/v1/suggestion` response body → `Place[]`. */
+export function normalizeTencentSuggestionPayload(payload: unknown): Place[] {
+  return normalizeTencentSuggestionCandidates(payload).map((candidate) => candidate.place);
+}
+
+/**
+ * `geocoder/v1?address=` response body → candidate. `level` is the documented
+ * 解析级别 (1 city … 9 门址 … 11 POI) that drives the Pelias layer.
+ */
+export function normalizeTencentGeocodeCandidate(
+  payload: unknown,
+  providerRank = 0,
+): TencentCandidate {
   const root = asRecord(payload);
   const result = root === undefined ? undefined : asRecord(root.result);
   if (result === undefined) {
@@ -271,7 +309,15 @@ export function normalizeTencentGeocodePayload(payload: unknown): Place {
     throw new TencentPayloadError("Tencent geocoder result has no usable name");
   }
 
-  return PlaceSchema.parse({
+  const level = typeof result.level === "number" && Number.isFinite(result.level) ? result.level : undefined;
+  const adInfo = asRecord(result.ad_info);
+  const adcodeValue = adInfo?.adcode ?? components?.adcode;
+  const adcode =
+    typeof adcodeValue === "number" && Number.isFinite(adcodeValue)
+      ? String(adcodeValue)
+      : boundedText(adcodeValue, 40);
+
+  const place = PlaceSchema.parse({
     provider: "tencent",
     providerPlaceId: null,
     name,
@@ -285,6 +331,24 @@ export function normalizeTencentGeocodePayload(payload: unknown): Place {
     importance: null,
     type: geocodeType(result.level),
   });
+
+  return {
+    source: "tencent",
+    place,
+    providerRank,
+    ...(level === undefined ? {} : { level }),
+    ...(adcode === undefined ? {} : { adcode }),
+    ...(province === undefined ? {} : { province }),
+    ...(city === undefined ? {} : { city }),
+    ...(district === undefined ? {} : { district }),
+    ...(street === undefined ? {} : { street }),
+    ...(streetNumber === undefined ? {} : { streetNumber }),
+  };
+}
+
+/** `geocoder/v1?address=` response body → `Place`. */
+export function normalizeTencentGeocodePayload(payload: unknown): Place {
+  return normalizeTencentGeocodeCandidate(payload).place;
 }
 
 /**

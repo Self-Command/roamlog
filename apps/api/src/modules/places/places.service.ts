@@ -10,106 +10,44 @@ import { parseRequest } from "../../common/services/request-validation.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { GeoapifyClient } from "./geoapify.client.js";
 import { PhotonClient } from "./photon.client.js";
-import { PlacesCacheService } from "./places-cache.service.js";
+import { PlacesCacheService, type PlacesCacheRoute } from "./places-cache.service.js";
+import {
+  PlacesMergeService,
+  type ProviderFailureInfo,
+  type ProviderRecall,
+} from "./places-merge.service.js";
 import { PlacesQuotaService } from "./places-quota.service.js";
 import {
   PLACES_SETTINGS,
   type PlacesResponseProvider,
   type PlacesSettings,
   type PlacesSettingsSource,
+  type PlacesSource,
 } from "./places.settings.js";
 import { TencentClient } from "./tencent.client.js";
+import type { ProviderCandidate } from "./ranking/pelias-document.js";
+import { HAN_SCRIPT, queryVariants } from "./ranking/query-variants.js";
 
-interface UpstreamFailure {
-  readonly reason: string;
-  readonly httpStatus?: number;
-  /** Uppercase failure code, set by the Tencent client. */
-  readonly code?: string;
-  /** Tencent's JSON `status`, when the upstream answered with an error. */
-  readonly upstreamStatus?: number;
-}
+/**
+ * Multi-source place search.
+ *
+ * Pelias is the only ranking authority: every provider answer is normalized to
+ * a Pelias `Document` (`ranking/pelias-document.ts`) and merged by
+ * `PlacesMergeService` with Pelias confidence + `pelias-sorting`. This service
+ * only does the parts Pelias' own service does outside the ranking middleware:
+ * request validation, parallel querying of its data sources, daily quotas,
+ * caching, `degraded`/`map_pick` reporting, and observability.
+ *
+ * 【适配层，本仓库原创】Provider eligibility (`eligibleSources`) is a routing
+ * policy, not Pelias: Tencent is only eligible for mainland queries (country=CN
+ * or Han script without an explicit foreign country), Geoapify only when a key
+ * is configured, Photon always (spec §5.2). Provider order in the recall array
+ * follows `PLACES_SOURCE_ORDER` and is Pelias' stable-sort tie-break (§5.7).
+ */
 
 /** Han script. `\p{Script=Han}` also covers the CJK ideographs outside the BMP. */
-const HAN_SCRIPT = /\p{Script=Han}/u;
+export { HAN_SCRIPT };
 
-/**
- * Characters that mark a **mainland Chinese address**: the administrative
- * divisions (省/市/区/县/镇/乡/村), the street and house-number vocabulary
- * (路/街/号/弄/巷), and the building vocabulary (栋/室/楼/大厦/广场/小区).
- *
- * Rationale, and why this replaced "any Han character". Han script alone says
- * nothing about *where* a place is: `东京`, `京都`, `巴黎`, `首尔`, `纽约` and
- * `伦敦` are all Han, but Tencent's coverage ends at the mainland border, so it
- * answered those with wrong Chinese places — `东京` → 东京城镇 (黑龙江省牡丹江市
- * 宁安市), `巴黎` → 巴黎春天(成山店) (上海市浦东新区), `纽约` → 南通纽约时代
- * (江苏省南通市). Those wrong coordinates are worse than no result, and the
- * China route allows storing them. The characters above, by contrast, are
- * effectively exclusive to mainland addresses and street signage: none of the
- * six overseas names contains one, while `建国路87号` and
- * `北京市朝阳区建国路87号` each contain several.
- */
-const CHINA_ADDRESS_MARKERS =
-  /[省市区县镇乡村路街号弄巷栋室楼厦广场小区]/u;
-
-/**
- * Decides whether a query belongs to the mainland-China route.
- *
- * Two geographic signals, either of which is enough:
- * - `country=CN` — the caller told us the place is in China;
- * - the keyword is Han **and** looks like a Chinese address, i.e. it contains at
- *   least one `CHINA_ADDRESS_MARKERS` character.
- *
- * `lang` is deliberately **not** a signal: it only states the display-language
- * preference, and `places.lang` defaults to `zh`. Reading it as "the place is in
- * China" sent *every* query typed in the Chinese UI — `Paris`, `London` — to
- * Tencent, whose coverage ends at the mainland border.
- *
- * A bare Han place name (`天安门`, `清水寺`, `东京`) deliberately takes the
- * global route: OSM knows 天安门, 清水寺 really is in Japan, and a wrong Chinese
- * town is far worse than an empty list.
- *
- * A Chinese *address* must still never be answered by a global gazetteer: Photon
- * returns wrong house numbers on the same street (`北京市朝阳区建国路87号` →
- * `建国路75号`), which is worse than returning nothing.
- */
-export function isChinaQuery(query: {
-  readonly q: string;
-  /** Accepted so a parsed query object can be passed whole; never a signal. */
-  readonly lang?: string | undefined;
-  readonly country?: string | undefined;
-}): boolean {
-  if (query.country === "CN") {
-    return true;
-  }
-  return HAN_SCRIPT.test(query.q) && CHINA_ADDRESS_MARKERS.test(query.q);
-}
-
-/**
- * Whether Photon may be consulted as the Geoapify fallback.
- *
- * Photon does the right thing for romanized queries — `Paris`, `Tokyo`,
- * `5th Avenue` — which is exactly why it stays as the fallback. It is
- * **unsuitable for a Han-script query**, because it has no `lang=zh` support
- * (its public instance answers the forwarded `lang` with a 400, see
- * `photon.client.ts`) and its lexical match then resolves a Han place name
- * against the Han names its index holds, which come overwhelmingly from OSM
- * data inside China. Measured 2026-11-19: `东京` → a village called 东京 in
- * Zhejiang/Heilongjiang instead of Tokyo, while Geoapify answers the same
- * query with 东京都/日本 (35.677, 139.764). A wrong mainland coordinate is
- * worse than an empty list, so for a Han query a Geoapify failure degrades
- * straight to `map_pick` and Photon is never called.
- *
- * This is one hard condition — "does the query contain a Han character" — and
- * deliberately not a heuristic that inspects a result for a plausible country.
- */
-export function allowsPhotonFallback(q: string): boolean {
-  return !HAN_SCRIPT.test(q);
-}
-
-/**
- * Applies `places.limit` / `places.lang` only when the caller omitted them.
- * An explicit query value always wins; the contract then validates the range.
- */
 function withSettingsDefaults(rawQuery: unknown, settings: PlacesSettings): unknown {
   if (rawQuery === null || typeof rawQuery !== "object" || Array.isArray(rawQuery)) {
     return rawQuery;
@@ -125,31 +63,98 @@ function withSettingsDefaults(rawQuery: unknown, settings: PlacesSettings): unkn
 }
 
 /**
+ * Recall route (cache namespace):
+ * - `china`: explicit `country=CN`;
+ * - `mixed`: Han query without a country — Tencent participates together with
+ *   the global providers (this is the `东京` / `京都` case);
+ * - `global`: everything else.
+ */
+export function routeFor(query: {
+  readonly q: string;
+  readonly country?: string | undefined;
+}): PlacesCacheRoute {
+  if (query.country === "CN") {
+    return "china";
+  }
+  if (query.country === undefined && HAN_SCRIPT.test(query.q)) {
+    return "mixed";
+  }
+  return "global";
+}
+
+/** `eligible` from spec §5.2, ordered by `settings.sourceOrder`. */
+export function eligibleSources(
+  query: { readonly q: string; readonly country?: string | undefined },
+  settings: PlacesSettings,
+): PlacesSource[] {
+  const enabled = new Set(settings.sources);
+  const hanRoute = query.country === "CN" || (query.country === undefined && HAN_SCRIPT.test(query.q));
+  const eligible: PlacesSource[] = [];
+
+  if (enabled.has("tencent") && hanRoute) {
+    eligible.push("tencent");
+  }
+  if (enabled.has("geoapify") && settings.geoapifyApiKey !== null) {
+    eligible.push("geoapify");
+  }
+  if (enabled.has("photon")) {
+    eligible.push("photon");
+  }
+
+  const order = settings.sourceOrder;
+  return eligible.sort((left, right) => {
+    const leftIndex = order.indexOf(left);
+    const rightIndex = order.indexOf(right);
+    return (leftIndex === -1 ? order.length : leftIndex) - (rightIndex === -1 ? order.length : rightIndex);
+  });
+}
+
+interface RecallInput {
+  readonly q: string;
+  readonly limit: number;
+  readonly lang?: "zh" | "en";
+}
+
+function failureOf(outcome: {
+  readonly reason: string;
+  readonly code?: string;
+  readonly httpStatus?: number;
+  readonly upstreamStatus?: number;
+}): ProviderFailureInfo {
+  return {
+    reason: outcome.reason,
+    ...(outcome.code === undefined ? {} : { code: outcome.code }),
+    ...(outcome.httpStatus === undefined ? {} : { httpStatus: outcome.httpStatus }),
+    ...(outcome.upstreamStatus === undefined ? {} : { upstreamStatus: outcome.upstreamStatus }),
+  };
+}
+
+function withRank(candidates: readonly ProviderCandidate[], offset: number): ProviderCandidate[] {
+  return candidates.map((candidate, index) => ({ ...candidate, providerRank: offset + index }));
+}
+
+function servedProvider(item: Place | undefined, fallback: PlacesResponseProvider): PlacesResponseProvider {
+  const provider = item?.provider;
+  return provider === "tencent" || provider === "geoapify" || provider === "photon"
+    ? provider
+    : fallback;
+}
+
+/**
  * `GET /v1/places/search` use case.
  *
- * Two routes, chosen by `isChinaQuery`:
- *
- * - **China** → `TencentClient` (`place/v1/suggestion`). This is the only route
- *   that can answer a Chinese street address at door-plate level. Photon is
- *   never consulted here; when Tencent is unconfigured, over quota or failing the
- *   response is `200 { items: [], degraded: true, fallback: "map_pick" }` so the
- *   client offers "pick on the map" instead of a wrong house number.
- * - **Global** → `settings.provider` (`geoapify` by default, `photon` as the
- *   rollback switch). When Geoapify fails and `fallbackToPhoton` is on, Photon
- *   answers — but only for a query without Han script (`allowsPhotonFallback`).
- *   A Han query degrades to `200 { items: [], degraded: true, fallback:
- *   "map_pick" }` instead, because Photon resolves Han names against the
- *   Chinese OSM names in its index and returns a same-named mainland village
- *   for a query such as `东京`. Geoapify is never called once its Redis daily
- *   cap is exhausted.
+ * A query runs every eligible source in parallel. Each source has its own
+ * timeout and quota, and one failing source never blocks the others. The merge
+ * service then applies Pelias confidence, layer filtering, dedupe, sorting and
+ * `degraded`.
  *
  * Shared behaviour:
- * - When no source produces items the response is `200 { items: [], degraded:
- *   true }`; search never turns an upstream outage into a 5xx.
- * - `provider` names the source that produced the returned items (or the
- *   configured primary when no items exist), matching `items[].provider`.
- * - The cache key carries the route's provider, so a Tencent answer is never
- *   replayed for a global query (or the other way round).
+ * - No source produces items → `200 { items: [], degraded: true }`; search
+ *   never turns an upstream outage into a 5xx.
+ * - `provider` names the source of the first returned item, or the route's
+ *   primary source when the list is empty.
+ * - The cache key carries the recall route, so a China answer is never replayed
+ *   for a global query (or the other way round).
  */
 @Injectable()
 export class PlacesService {
@@ -159,6 +164,7 @@ export class PlacesService {
     @Inject(PhotonClient) private readonly photon: PhotonClient,
     @Inject(TencentClient) private readonly tencent: TencentClient,
     @Inject(PlacesQuotaService) private readonly quota: PlacesQuotaService,
+    @Inject(PlacesMergeService) private readonly merge: PlacesMergeService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
     @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource,
   ) {}
@@ -167,13 +173,16 @@ export class PlacesService {
     const settings = await this.settings.resolve();
     const query = parseRequest(PlaceSearchQuerySchema, withSettingsDefaults(rawQuery, settings));
     const startedAt = Date.now();
-    const china = isChinaQuery(query);
-    const primary: PlacesResponseProvider = china ? "tencent" : settings.provider;
+    const route = routeFor(query);
+    const primary: PlacesResponseProvider = route === "china" ? "tencent" : settings.provider;
+    const focus = settings.focusPoint ?? undefined;
     const cacheKey = this.cache.key({
       q: query.q,
       limit: query.limit,
       ...(query.lang ? { lang: query.lang } : {}),
-      provider: primary,
+      route,
+      ...(query.country ? { country: query.country } : {}),
+      ...(focus ? { focus } : {}),
     });
 
     const cached = await this.cache.read(cacheKey);
@@ -182,7 +191,7 @@ export class PlacesService {
         {
           event: "places.search",
           cache: "hit",
-          route: china ? "china" : "global",
+          route,
           queryLength: query.q.length,
           limit: query.limit,
           lang: query.lang ?? null,
@@ -195,170 +204,60 @@ export class PlacesService {
       return PlaceSearchResponseSchema.parse({ ...cached, cached: true });
     }
 
-    const request = {
+    const input: RecallInput = {
       q: query.q,
       limit: query.limit,
       ...(query.lang ? { lang: query.lang } : {}),
     };
+    const sources = eligibleSources(query, settings);
+    const recalls = await Promise.all(
+      sources.map((source) => this.recall(source, input, settings)),
+    );
 
-    let items: Place[] = [];
-    let servedBy: PlacesResponseProvider = primary;
-    let degraded = false;
-    let photonFallbackServed = false;
-    let fallback: "map_pick" | undefined;
-    let primaryFailure: UpstreamFailure | undefined;
-    let fallbackFailure: UpstreamFailure | undefined;
-    let upstreamDurationMs = 0;
+    const merged = this.merge.merge({
+      q: query.q,
+      limit: query.limit,
+      ...(query.lang ? { lang: query.lang } : {}),
+      ...(query.country ? { country: query.country } : {}),
+      ...(focus ? { focus } : {}),
+      recalls,
+    });
 
-    if (china) {
-      // Mainland-China route. Photon is deliberately not reachable from here.
-      if (settings.tencentApiKey === null) {
-        primaryFailure = { reason: "not_configured", code: "NOT_CONFIGURED" };
-        degraded = true;
-        fallback = "map_pick";
-      } else {
-        const quota = await this.quota.consumeTencent();
-        if (!quota.allowed) {
-          primaryFailure = { reason: "quota_exceeded", code: "QUOTA_EXCEEDED" };
-          degraded = true;
-          fallback = "map_pick";
-        } else {
-          const outcome = await this.tencent.suggest(request);
-          upstreamDurationMs += outcome.durationMs;
-          if (outcome.ok) {
-            items = outcome.items;
-            servedBy = "tencent";
-          } else {
-            primaryFailure = {
-              reason: outcome.reason,
-              code: outcome.code,
-              ...(outcome.httpStatus === undefined ? {} : { httpStatus: outcome.httpStatus }),
-              ...(outcome.upstreamStatus === undefined
-                ? {}
-                : { upstreamStatus: outcome.upstreamStatus }),
-            };
-            degraded = true;
-            fallback = "map_pick";
-          }
-        }
-      }
-    } else if (primary === "geoapify") {
-      const quota = await this.quota.consume();
-      if (!quota.allowed) {
-        primaryFailure = { reason: "quota_exceeded" };
-        degraded = true;
-        // Quota is checked before the upstream call, so a Han query never even
-        // reaches Photon here; the client gets `map_pick`.
-        if (!allowsPhotonFallback(query.q)) {
-          fallback = "map_pick";
-        }
-      } else {
-        const outcome = await this.geoapify.search(request);
-        upstreamDurationMs += outcome.durationMs;
-        if (outcome.ok) {
-          items = outcome.items;
-          servedBy = "geoapify";
-        } else {
-          primaryFailure = {
-            reason: outcome.reason,
-            ...(outcome.httpStatus === undefined ? {} : { httpStatus: outcome.httpStatus }),
-          };
-          degraded = true;
-        }
-      }
-    } else {
-      const outcome = await this.photon.search(request);
-      upstreamDurationMs += outcome.durationMs;
-      if (outcome.ok) {
-        items = outcome.items;
-        servedBy = "photon";
-      } else {
-        primaryFailure = {
-          reason: outcome.reason,
-          ...(outcome.httpStatus === undefined ? {} : { httpStatus: outcome.httpStatus }),
-        };
-        degraded = true;
-      }
-    }
-
-    if (!china && degraded && primary === "geoapify" && settings.fallbackToPhoton) {
-      if (!allowsPhotonFallback(query.q)) {
-        // A Han-script query. Photon would answer it with a same-named Chinese
-        // village, so it is skipped and the client gets `map_pick` instead.
-        fallback = "map_pick";
-      } else {
-        const fallbackOutcome = await this.photon.search(request);
-        upstreamDurationMs += fallbackOutcome.durationMs;
-        if (fallbackOutcome.ok) {
-          items = fallbackOutcome.items;
-          servedBy = "photon";
-          photonFallbackServed = true;
-        } else {
-          fallbackFailure = {
-            reason: fallbackOutcome.reason,
-            ...(fallbackOutcome.httpStatus === undefined
-              ? {}
-              : { httpStatus: fallbackOutcome.httpStatus }),
-          };
-        }
-      }
-    }
-
-    const capped = items.slice(0, query.limit);
-    // Which fallback the client should see: the China route's `map_pick`, an
-    // explicit skip of Photon, or the Photon answer that served the request.
-    const reportedFallback = china || fallback !== undefined
-      ? (fallback ?? null)
-      : photonFallbackServed
-        ? "photon"
-        : null;
+    const degraded = merged.degraded;
+    const fallback = degraded && merged.items.length === 0 ? "map_pick" : undefined;
     const response = PlaceSearchResponseSchema.parse({
-      items: capped,
-      provider: degraded && capped.length === 0 ? primary : servedBy,
+      items: merged.items,
+      provider: servedProvider(merged.items[0], primary),
       degraded,
       cached: false,
       ...(fallback === undefined ? {} : { fallback }),
     });
 
-    if (!degraded) {
-      this.logger.log(
-        {
-          event: "places.search",
-          cache: "miss",
-          route: china ? "china" : "global",
-          queryLength: query.q.length,
-          limit: query.limit,
-          lang: query.lang ?? null,
-          provider: servedBy,
-          resultCount: capped.length,
-          degraded: false,
-          durationMs: Date.now() - startedAt,
-        },
-        "places.search_completed",
-      );
-    } else {
+    const failedRecalls = recalls.filter((recall) => recall.failure !== undefined);
+    const upstreamDurationMs = recalls.reduce((total, recall) => total + recall.durationMs, 0);
+
+    if (degraded || failedRecalls.length > 0) {
+      const firstFailure = failedRecalls[0];
       this.logger.warn(
         {
           event: "places.upstream_failed",
-          provider: primary,
-          route: china ? "china" : "global",
-          reason: primaryFailure?.reason ?? "unknown",
-          ...(primaryFailure?.code === undefined ? {} : { code: primaryFailure.code }),
-          ...(primaryFailure?.httpStatus === undefined
+          provider: firstFailure?.provider ?? primary,
+          route,
+          reason: firstFailure?.failure?.reason ?? "all_results_fallback",
+          ...(firstFailure?.failure?.code === undefined ? {} : { code: firstFailure.failure.code }),
+          ...(firstFailure?.failure?.httpStatus === undefined
             ? {}
-            : { httpStatus: primaryFailure.httpStatus }),
-          ...(primaryFailure?.upstreamStatus === undefined
+            : { httpStatus: firstFailure.failure.httpStatus }),
+          ...(firstFailure?.failure?.upstreamStatus === undefined
             ? {}
-            : { upstreamStatus: primaryFailure.upstreamStatus }),
-          fallback: reportedFallback,
-          ...(fallbackFailure === undefined
-            ? {}
-            : {
-                fallbackReason: fallbackFailure.reason,
-                ...(fallbackFailure.httpStatus === undefined
-                  ? {}
-                  : { fallbackHttpStatus: fallbackFailure.httpStatus }),
-              }),
+            : { upstreamStatus: firstFailure.failure.upstreamStatus }),
+          providers: recalls.map((recall) => ({
+            provider: recall.provider,
+            candidates: recall.candidates.length,
+            failed: recall.failure !== undefined,
+            durationMs: recall.durationMs,
+          })),
+          fallback: fallback ?? null,
           durationMs: upstreamDurationMs,
           queryLength: query.q.length,
           limit: query.limit,
@@ -368,16 +267,190 @@ export class PlacesService {
       );
     }
 
-    // `TENCENT_MAPS_CACHE_TTL_SECONDS` (300 s) bounds the China route; the other
-    // routes keep `places.cacheTtlSeconds`.
+    if (!degraded) {
+      this.logger.log(
+        {
+          event: "places.search",
+          cache: "miss",
+          route,
+          queryLength: query.q.length,
+          limit: query.limit,
+          lang: query.lang ?? null,
+          provider: response.provider,
+          resultCount: merged.items.length,
+          layers: merged.layers,
+          providers: recalls.map((recall) => ({
+            provider: recall.provider,
+            candidates: recall.candidates.length,
+            failed: recall.failure !== undefined,
+            durationMs: recall.durationMs,
+          })),
+          degraded: false,
+          durationMs: Date.now() - startedAt,
+        },
+        "places.search_completed",
+      );
+    }
+
+    // Tencent results are cached for 5 minutes; the global-only route keeps the
+    // 15-minute `places.cacheTtlSeconds`.
     const ttlSeconds =
       response.degraded || response.items.length === 0
         ? settings.emptyCacheTtlSeconds
-        : china
-          ? settings.tencentCacheTtlSeconds
-          : settings.cacheTtlSeconds;
+        : route === "global"
+          ? settings.cacheTtlSeconds
+          : settings.tencentCacheTtlSeconds;
     await this.cache.write(cacheKey, response, ttlSeconds);
 
     return response;
+  }
+
+  private async recall(
+    source: PlacesSource,
+    input: RecallInput,
+    settings: PlacesSettings,
+  ): Promise<ProviderRecall> {
+    switch (source) {
+      case "tencent":
+        return this.recallTencent(input, settings);
+      case "geoapify":
+        return this.recallGeoapify(input, settings);
+      case "photon":
+        return this.recallPhoton(input, settings);
+    }
+  }
+
+  /**
+   * Tencent has two documented endpoints that answer different questions:
+   * `geocoder/v1?address=` returns the structured administrative level
+   * (`level=1` city … `level=9` door plate), while `place/v1/suggestion`
+   * returns POI/address autocomplete rows. Both are queried in parallel so a
+   * city query gets the authoritative `locality` and an address query gets the
+   * POI. One quota decision covers the provider call, not each endpoint.
+   */
+  private async recallTencent(input: RecallInput, settings: PlacesSettings): Promise<ProviderRecall> {
+    if (settings.tencentApiKey === null) {
+      return {
+        provider: "tencent",
+        candidates: [],
+        failure: { reason: "not_configured", code: "NOT_CONFIGURED" },
+        durationMs: 0,
+      };
+    }
+    const quota = await this.quota.consumeTencent();
+    if (!quota.allowed) {
+      return {
+        provider: "tencent",
+        candidates: [],
+        failure: { reason: "quota_exceeded", code: "QUOTA_EXCEEDED" },
+        durationMs: 0,
+      };
+    }
+
+    const [geocode, suggest] = await Promise.all([
+      this.tencent.geocodeCandidate({ address: input.q }),
+      this.tencent.suggestCandidates({ q: input.q, limit: input.limit }),
+    ]);
+
+    const geocodeCandidates = geocode.ok ? [geocode.candidate] : [];
+    const suggestCandidates = suggest.ok ? suggest.candidates : [];
+    const candidates = [
+      ...withRank(geocodeCandidates, 0),
+      ...withRank(suggestCandidates, geocodeCandidates.length),
+    ];
+    const durationMs = geocode.durationMs + suggest.durationMs;
+    const failures = [geocode, suggest].filter((outcome) => !outcome.ok);
+    const firstFailure = failures[0];
+
+    return {
+      provider: "tencent",
+      candidates,
+      ...(candidates.length === 0 && firstFailure !== undefined
+        ? { failure: failureOf(firstFailure) }
+        : {}),
+      durationMs,
+    };
+  }
+
+  private async recallGeoapify(input: RecallInput, settings: PlacesSettings): Promise<ProviderRecall> {
+    if (settings.geoapifyApiKey === null) {
+      return {
+        provider: "geoapify",
+        candidates: [],
+        failure: { reason: "not_configured" },
+        durationMs: 0,
+      };
+    }
+    const quota = await this.quota.consume();
+    if (!quota.allowed) {
+      return {
+        provider: "geoapify",
+        candidates: [],
+        failure: { reason: "quota_exceeded" },
+        durationMs: 0,
+      };
+    }
+
+    const variants = queryVariants("geoapify", input.q);
+    const outcomes = await Promise.all(
+      variants.map((variant) =>
+        this.geoapify.searchCandidates({
+          q: variant,
+          limit: input.limit,
+          ...(input.lang ? { lang: input.lang } : {}),
+        }),
+      ),
+    );
+
+    const candidates: ProviderCandidate[] = [];
+    let durationMs = 0;
+    let firstFailure: ProviderFailureInfo | undefined;
+    for (const outcome of outcomes) {
+      durationMs += outcome.durationMs;
+      if (outcome.ok) {
+        candidates.push(...withRank(outcome.candidates, candidates.length));
+      } else {
+        firstFailure ??= failureOf(outcome);
+      }
+    }
+
+    return {
+      provider: "geoapify",
+      candidates,
+      ...(candidates.length === 0 && firstFailure !== undefined ? { failure: firstFailure } : {}),
+      durationMs,
+    };
+  }
+
+  private async recallPhoton(input: RecallInput, _settings: PlacesSettings): Promise<ProviderRecall> {
+    const variants = queryVariants("photon", input.q);
+    const outcomes = await Promise.all(
+      variants.map((variant) =>
+        this.photon.searchCandidates({
+          q: variant,
+          limit: input.limit,
+          ...(input.lang ? { lang: input.lang } : {}),
+        }),
+      ),
+    );
+
+    const candidates: ProviderCandidate[] = [];
+    let durationMs = 0;
+    let firstFailure: ProviderFailureInfo | undefined;
+    for (const outcome of outcomes) {
+      durationMs += outcome.durationMs;
+      if (outcome.ok) {
+        candidates.push(...withRank(outcome.candidates, candidates.length));
+      } else {
+        firstFailure ??= failureOf(outcome);
+      }
+    }
+
+    return {
+      provider: "photon",
+      candidates,
+      ...(candidates.length === 0 && firstFailure !== undefined ? { failure: firstFailure } : {}),
+      durationMs,
+    };
   }
 }

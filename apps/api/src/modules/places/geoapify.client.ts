@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Place } from "@roamlog/contracts";
 
-import { GeoapifyPayloadError, normalizeGeoapifyPayload } from "./geoapify-normalizer.js";
+import { GeoapifyPayloadError, normalizeGeoapifyPayloadCandidates } from "./geoapify-normalizer.js";
 import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
+import type { GeoapifyCandidate } from "./ranking/pelias-document.js";
 
 /**
  * Reasons a Geoapify search degrades. They are safe to log: no query text and
@@ -55,6 +56,21 @@ export class GeoapifyClient {
   constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource) {}
 
   async search(input: GeoapifySearchInput): Promise<GeoapifySearchOutcome> {
+    const outcome = await this.searchCandidates(input);
+    return outcome.ok
+      ? {
+          ok: true,
+          items: outcome.candidates.map((candidate) => candidate.place),
+          durationMs: outcome.durationMs,
+        }
+      : outcome;
+  }
+
+  /**
+   * Candidate-preserving form of `search`: keeps `result_type`,
+   * `rank.confidence` and address parts for the Pelias adapter.
+   */
+  async searchCandidates(input: GeoapifySearchInput): Promise<GeoapifyCandidatesOutcome> {
     const settings = await this.settings.resolve();
     const apiKey = settings.geoapifyApiKey;
     if (!apiKey) {
@@ -113,7 +129,7 @@ export class GeoapifyClient {
       try {
         return {
           ok: true,
-          items: normalizeGeoapifyPayload(payload),
+          candidates: normalizeGeoapifyPayloadCandidates(payload),
           durationMs: Date.now() - startedAt,
         };
       } catch (error) {
@@ -133,3 +149,16 @@ export class GeoapifyClient {
     }
   }
 }
+
+export type GeoapifyCandidatesOutcome =
+  | {
+      readonly ok: true;
+      readonly candidates: GeoapifyCandidate[];
+      readonly durationMs: number;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: GeoapifyFailureReason;
+      readonly durationMs: number;
+      readonly httpStatus?: number;
+    };

@@ -52,6 +52,10 @@ export function testSettings(overrides: Partial<PlacesSettings> = {}): PlacesSet
      * provider test below exercises the Chinese UI's actual configuration.
      */
     defaultLang: "zh",
+    sources: ["tencent", "geoapify", "photon"],
+    sourceOrder: ["tencent", "geoapify", "photon"],
+    photonLanguages: ["en"],
+    focusPoint: null,
     ...overrides,
   };
 }
@@ -65,7 +69,7 @@ export interface FakeRedis {
 
 export function fakeRedis(): FakeRedis {
   const store = new Map<string, string>();
-  let counter = 0;
+  const counters = new Map<string, number>();
 
   return {
     store,
@@ -73,9 +77,10 @@ export function fakeRedis(): FakeRedis {
     set: vi.fn(async (key: string, value: string) => {
       store.set(key, value);
     }),
-    incrementFixedWindow: vi.fn(async () => {
-      counter += 1;
-      return { count: counter, ttlSeconds: 60 };
+    incrementFixedWindow: vi.fn(async (key: string) => {
+      const count = (counters.get(key) ?? 0) + 1;
+      counters.set(key, count);
+      return { count, ttlSeconds: 60 };
     }),
   };
 }
@@ -126,6 +131,10 @@ export interface PhotonFeatureOverrides {
   postcode?: unknown;
   city?: unknown;
   state?: unknown;
+  county?: unknown;
+  district?: unknown;
+  suburb?: unknown;
+  extra?: unknown;
   extent?: unknown;
   importance?: unknown;
 }
@@ -167,6 +176,10 @@ export function photonFeature(overrides: PhotonFeatureOverrides = {}) {
     "postcode",
     "city",
     "state",
+    "county",
+    "district",
+    "suburb",
+    "extra",
     "extent",
     "importance",
   ] as const) {
@@ -194,6 +207,14 @@ export interface GeoapifyFeatureOverrides {
   formatted?: unknown;
   address_line1?: unknown;
   address_line2?: unknown;
+  state?: unknown;
+  city?: unknown;
+  county?: unknown;
+  district?: unknown;
+  suburb?: unknown;
+  street?: unknown;
+  housenumber?: unknown;
+  postcode?: unknown;
   timezone?: unknown;
   bbox?: unknown;
   propertyBbox?: unknown;
@@ -250,6 +271,14 @@ export function geoapifyFeature(overrides: GeoapifyFeatureOverrides = {}) {
     "formatted",
     "address_line1",
     "address_line2",
+    "state",
+    "city",
+    "county",
+    "district",
+    "suburb",
+    "street",
+    "housenumber",
+    "postcode",
     "timezone",
     "rank",
   ] as const) {

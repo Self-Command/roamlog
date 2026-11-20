@@ -16,6 +16,7 @@ import { RedisService } from "../../redis/redis.service.js";
 import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
 import { PlacesCacheService } from "../places-cache.service.js";
+import { PlacesMergeService } from "../places-merge.service.js";
 import { PlaceSearchRateLimitGuard } from "../places-rate-limit.guard.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesRateLimiter } from "../places-rate-limiter.service.js";
@@ -27,7 +28,6 @@ import { LIMITS_SETTINGS } from "../../settings/limits-settings.consumer.js";
 import {
   asLogger,
   fakeRedis,
-  firstFetchCall,
   jsonResponse,
   makeLogger,
   photonPayload,
@@ -69,6 +69,7 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
       TencentClient,
       PlacesCacheService,
       PlacesQuotaService,
+      PlacesMergeService,
       PlacesRateLimiter,
       PlacesService,
       SessionGuard,
@@ -159,21 +160,31 @@ describe("GET /v1/places/search", () => {
     const cached = await request(app.getHttpServer())
       .get("/v1/places/search?q=paris&lang=zh")
       .expect(200);
-    // Han script is the keyword signal: this request must reach Tencent, not
-    // Photon. `lang=zh` alone is not enough to pick the mainland source.
+    // Han script makes Tencent eligible (`mixed` route) alongside the global
+    // providers; `lang=zh` alone is not enough to pick the mainland source.
     const chinese = await request(app.getHttpServer())
       .get(`/v1/places/search?q=${encodeURIComponent("建国路87号")}&lang=zh`)
       .expect(200);
 
-    const first = firstFetchCall(fetchMock).url;
-    expect(first.searchParams.get("limit")).toBe("6");
-    // The client forwards `lang` only where the upstream supports it (`en`);
-    // `zh` is a display preference and is dropped before the Photon request.
-    expect(first.searchParams.get("lang")).toBeNull();
-    const tencentCall = (fetchMock.mock.calls[1] as unknown as [URL])[0];
-    expect(tencentCall.hostname).toBe("tencent.example.test");
-    expect(tencentCall.searchParams.get("keyword")).toBe("建国路87号");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstGeoapify = (fetchMock.mock.calls as unknown as [URL][])
+      .map(([url]) => url)
+      .find((url) => url.hostname.startsWith("geoapify"));
+    expect(firstGeoapify?.hostname).toBe("geoapify.example.test");
+    expect(firstGeoapify?.searchParams.get("limit")).toBe("6");
+    // Geoapify accepts `lang=zh`; Photon drops it because its public instance
+    // only supports default/de/en/fr.
+    expect(firstGeoapify?.searchParams.get("lang")).toBe("zh");
+    const firstPhoton = (fetchMock.mock.calls as unknown as [URL][])
+      .map(([url]) => url)
+      .find((url) => url.hostname.startsWith("photon"));
+    expect(firstPhoton?.searchParams.get("lang")).toBeNull();
+    const tencentCall = (fetchMock.mock.calls as unknown as [URL][])
+      .map(([url]) => url)
+      .find((url) => url.hostname.startsWith("tencent") && url.pathname.includes("suggestion"));
+    expect(tencentCall?.searchParams.get("keyword")).toBe("建国路87号");
+    // paris: geoapify + photon; 建国路87号 (two Han variants): tencent geocoder +
+    // suggestion + two geoapify + two photon.
+    expect(fetchMock).toHaveBeenCalledTimes(8);
     expect(cached.body.cached).toBe(true);
     expect(chinese.body.provider).toBe("tencent");
   });
@@ -186,13 +197,14 @@ describe("GET /v1/places/search", () => {
     const first = await request(app.getHttpServer())
       .get("/v1/places/search?q=paris")
       .expect(200);
+    const callsAfterFirst = fetchMock.mock.calls.length;
     const second = await request(app.getHttpServer())
       .get("/v1/places/search?q=paris")
       .expect(200);
 
     expect(first.body.cached).toBe(false);
     expect(second.body.cached).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterFirst);
   });
 
   it("returns a degraded 200 when Photon fails", async () => {
@@ -208,6 +220,7 @@ describe("GET /v1/places/search", () => {
       provider: "photon",
       degraded: true,
       cached: false,
+      fallback: "map_pick",
     });
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ event: "places.upstream_failed", httpStatus: 503 }),

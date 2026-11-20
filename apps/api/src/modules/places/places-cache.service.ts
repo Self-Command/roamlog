@@ -12,27 +12,38 @@ import {
 } from "./places.settings.js";
 
 /**
- * Versioned, provider-scoped cache namespace. The `v3` segment invalidates the
- * Photon-only payload shape, and the provider segment prevents a search issued
- * after switching `PLACES_PROVIDER` from hitting data produced by the other
- * source.
+ * Versioned, route-scoped cache namespace. The `v3` segment invalidates the
+ * Photon-only payload shape, and the route segment prevents a cache entry
+ * produced by one recall set (China / mixed / global) from being replayed for
+ * another. Provider is no longer part of the key: a search now reads from
+ * several providers at once (spec §6.1).
  */
 const CACHE_KEY_PREFIX = "places:v3:";
 const CACHE_WARN_THROTTLE_MS = 10_000;
+
+export type PlacesCacheRoute = "china" | "mixed" | "global";
 
 export interface PlacesCacheKeyInput {
   readonly q: string;
   readonly limit: number;
   readonly lang?: string;
-  /** Primary provider; part of the key so switching sources misses old entries. */
-  readonly provider: PlacesResponseProvider;
+  /** Recall route: `china` (country=CN), `mixed` (Han, no country), `global`. */
+  readonly route?: PlacesCacheRoute;
+  readonly country?: string;
+  readonly focus?: { readonly lat: number; readonly lon: number };
+  /**
+   * Legacy provider segment, kept for callers/tests written before the
+   * multi-source switch. New code must pass `route`; when both are absent the
+   * key falls back to `global`.
+   */
+  readonly provider?: PlacesResponseProvider;
 }
 
 /**
  * Redis-backed cache for normalized place searches.
  *
- * - The key is `places:v3:{provider}:{sha256(trim+lowercase(q) | limit | lang)}`,
- *   so raw queries never appear in Redis keys or logs.
+ * - The key is `places:v3:{route}:{sha256(trim+lowercase(q) | limit | lang |
+ *   country | focus)}`, so raw queries never appear in Redis keys or logs.
  * - Redis is best-effort: read/write failures and timeouts are swallowed and
  *   logged once per throttle window. A search must keep working without Redis.
  * - Cached payloads are re-validated against the strict response contract.
@@ -50,9 +61,17 @@ export class PlacesCacheService {
   ) {}
 
   key(input: PlacesCacheKeyInput): string {
-    const normalized = [input.q.trim().toLowerCase(), input.limit, input.lang ?? ""].join("\u0000");
+    const normalized = [
+      input.q.trim().toLowerCase(),
+      input.limit,
+      input.lang ?? "",
+      input.country ?? "",
+      input.focus ? `${input.focus.lat},${input.focus.lon}` : "",
+    ].join("\u0000");
     const digest = createHash("sha256").update(normalized, "utf8").digest("hex");
-    return `${CACHE_KEY_PREFIX}${input.provider}:${digest}`;
+    const route =
+      input.route ?? (input.provider === "tencent" ? "china" : "global");
+    return `${CACHE_KEY_PREFIX}${route}:${digest}`;
   }
 
   async read(key: string): Promise<PlaceSearchResponse | undefined> {

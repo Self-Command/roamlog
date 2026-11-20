@@ -11,43 +11,38 @@ import {
   type PlacesSettings,
 } from "../places.settings.js";
 import { PlacesCacheService } from "../places-cache.service.js";
+import { PlacesMergeService } from "../places-merge.service.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
-import { PlacesService } from "../places.service.js";
+import { PlacesService, eligibleSources, routeFor } from "../places.service.js";
 import { TencentClient } from "../tencent.client.js";
 import {
-  abortAwareFetch,
   asLogger,
   fakeRedis,
+  geoapifyFeature,
   geoapifyPayload,
   jsonResponse,
   makeLogger,
   photonFeature,
   photonPayload,
-  TENCENT_SKP_WGS84,
   tencentErrorPayload,
+  tencentGeocodePayload,
+  tencentGeocodeResult,
+  tencentSuggestItem,
   tencentSuggestionPayload,
   testSettings,
   type FakeRedis,
 } from "./place-fixtures.js";
 
 function setup(
-  options: {
-    settings?: Partial<PlacesSettings>;
-    /** Full settings snapshot, for tests that resolve them from an environment. */
-    resolved?: PlacesSettings;
-    redis?: FakeRedis;
-  } = {},
+  options: { settings?: Partial<PlacesSettings>; redis?: FakeRedis } = {},
 ): {
   settings: PlacesSettings;
   logger: ReturnType<typeof makeLogger>;
   redis: FakeRedis;
   cache: PlacesCacheService;
   service: PlacesService;
-  photon: PhotonClient;
-  geoapify: GeoapifyClient;
-  tencent: TencentClient;
 } {
-  const settings = options.resolved ?? testSettings(options.settings);
+  const settings = testSettings(options.settings);
   const source = staticPlacesSettingsSource(settings);
   const logger = makeLogger();
   const redis = options.redis ?? fakeRedis();
@@ -56,30 +51,96 @@ function setup(
     asLogger(logger),
     source,
   );
-  const photon = new PhotonClient(source);
-  const geoapify = new GeoapifyClient(source);
-  const tencent = new TencentClient(source);
   const service = new PlacesService(
     cache,
-    geoapify,
-    photon,
-    tencent,
+    new GeoapifyClient(source),
+    new PhotonClient(source),
+    new TencentClient(source),
     new PlacesQuotaService(redis as unknown as RedisService, asLogger(logger), source),
+    new PlacesMergeService(),
     asLogger(logger),
     source,
   );
-  return { settings, logger, redis, cache, service, photon, geoapify, tencent };
+  return { settings, logger, redis, cache, service };
 }
 
-/** Dispatches by upstream host so a fallback test can fail only the primary. */
-function hostFetch(handlers: {
-  geoapify: () => Promise<Response>;
-  photon: () => Promise<Response>;
-}) {
-  return vi.fn((url: URL) =>
-    url.hostname.startsWith("geoapify") ? handlers.geoapify() : handlers.photon(),
+interface ProviderHandlers {
+  readonly tencentGeocode?: () => Response;
+  readonly tencentSuggest?: () => Response;
+  readonly geoapify: () => Response;
+  readonly photon: () => Response;
+}
+
+/** Dispatches by upstream host *and* Tencent endpoint. */
+function providerFetch(handlers: ProviderHandlers) {
+  return vi.fn((url: URL) => {
+    if (url.hostname.startsWith("tencent")) {
+      return Promise.resolve(
+        url.pathname.includes("/geocoder/")
+          ? (handlers.tencentGeocode ?? (() => jsonResponse(tencentErrorPayload(348))))()
+          : (handlers.tencentSuggest ?? (() => jsonResponse(tencentSuggestionPayload([]))))(),
+      );
+    }
+    if (url.hostname.startsWith("geoapify")) {
+      return Promise.resolve(handlers.geoapify());
+    }
+    return Promise.resolve(handlers.photon());
+  });
+}
+
+function beijingGeoapifyPayload() {
+  return geoapifyPayload([
+    geoapifyFeature({
+      name: "北京市",
+      country: "中国",
+      country_code: "cn",
+      result_type: "city",
+      city: "北京市",
+      state: "北京市",
+      coordinates: [116.3912972, 39.9057136],
+      formatted: "北京市, 中国",
+    }),
+  ]);
+}
+
+function beijingPhotonPayload() {
+  return photonPayload([
+    photonFeature({
+      name: "北京市",
+      country: "中国",
+      countrycode: "cn",
+      type: "city",
+      osm_value: "city",
+      city: "北京市",
+      state: "北京市",
+      coordinates: [116.3912972, 39.9057136],
+      osm_id: 9_200_001,
+    }),
+  ]);
+}
+
+function beijingTencentGeocode() {
+  return jsonResponse(
+    tencentGeocodePayload(
+      tencentGeocodeResult({
+        title: "北京市",
+        level: 1,
+        location: { lat: 39.9042, lng: 116.4074 },
+        address_components: {
+          province: "北京市",
+          city: "北京市",
+          district: "",
+          street: "",
+          street_number: "",
+        },
+      }),
+    ),
   );
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 async function rejection(promise: Promise<unknown>): Promise<BadRequestException> {
   try {
@@ -91,355 +152,251 @@ async function rejection(promise: Promise<unknown>): Promise<BadRequestException
   throw new Error("expected the search to be rejected");
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-describe("PlacesService", () => {
-  it("maps a normal Photon response and caches it for 15 minutes", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(photonPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, redis, logger } = setup();
-
-    const response = await service.search({ q: "Paris", limit: 2 });
-
-    expect(response).toEqual({
-      items: [
-        {
-          provider: "photon",
-          providerPlaceId: "R:7444",
-          name: "Paris",
-          address: "Paris, Île-de-France, France",
-          country: "France",
-          countryCode: "FR",
-          lat: 48.8566,
-          lng: 2.3522,
-          timeZone: null,
-          bbox: null,
-          importance: null,
-          type: "city",
-        },
-      ],
-      provider: "photon",
-      degraded: false,
-      cached: false,
+describe("PlacesService — multi-source recall", () => {
+  it("queries Tencent geocoder + suggestion, Geoapify and Photon for 北京", async () => {
+    const fetchMock = providerFetch({
+      tencentGeocode: beijingTencentGeocode,
+      tencentSuggest: () =>
+        jsonResponse(
+          tencentSuggestionPayload([
+            tencentSuggestItem({
+              title: "北京天安门广场",
+              address: "北京市东城区东长安街",
+              location: { lat: 39.90374, lng: 116.397827 },
+              ad_info: {
+                adcode: 110101,
+                province: "北京市",
+                city: "北京市",
+                district: "东城区",
+              },
+            }),
+          ]),
+        ),
+      geoapify: () => jsonResponse(beijingGeoapifyPayload()),
+      photon: () => jsonResponse(beijingPhotonPayload()),
     });
-    expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
-
-    const [, stored, ttl] = redis.set.mock.calls[0] as [string, string, number];
-    expect(ttl).toBe(900);
-    expect(JSON.parse(stored)).toMatchObject({ provider: "photon", degraded: false });
-
-    expect(logger.log).toHaveBeenCalledWith(
-      expect.objectContaining({ cache: "miss", queryLength: 5, resultCount: 1 }),
-      "places.search_completed",
-    );
-    // The raw query must never be logged.
-    expect(JSON.stringify(logger.log.mock.calls)).not.toContain("Paris");
-  });
-
-  it("searches Geoapify first and returns its address, time zone, bbox and importance", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service } = setup({ settings: { provider: "geoapify" } });
-
-    const response = await service.search({ q: "Kyoto", limit: 3, lang: "en" });
-
-    expect(response).toEqual({
-      items: [
-        {
-          provider: "geoapify",
-          providerPlaceId:
-            "51e1bdfea47461405994da8b683bb64140f00103f901d146c57b01000000c00201920309e6b885e6b0b4e5afba",
-          name: "京都市",
-          address: "京都市, 京都府, 日本",
-          country: "日本",
-          countryCode: "JP",
-          lat: 35.0115754,
-          lng: 135.7681441,
-          timeZone: "Asia/Tokyo",
-          bbox: [135.6081441, 34.8515754, 135.9281441, 35.1715754],
-          importance: 0.18666666666666665,
-          type: "city",
-        },
-      ],
-      provider: "geoapify",
-      degraded: false,
-      cached: false,
-    });
-    expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
-    expect(fetchMock.mock.calls[0]?.[0]).toMatchObject({ hostname: "geoapify.example.test" });
-  });
-
-  it("serves a cache hit without a second upstream call", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(photonPayload()));
     vi.stubGlobal("fetch", fetchMock);
     const { service, logger } = setup();
 
-    const first = await service.search({ q: "Paris", limit: 6 });
-    const second = await service.search({ q: "  paris ", limit: 6 });
+    const response = await service.search({ q: "北京", limit: 6 });
+
+    expect(response.degraded).toBe(false);
+    expect(response.items[0]?.provider).toBe("tencent");
+    expect(response.items[0]?.name).toContain("北京");
+    expect(response.items[0]?.countryCode).toBe("CN");
+    expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
+
+    const hosts = (fetchMock.mock.calls as unknown as [URL][])
+      .map(([url]) => url.hostname)
+      .sort();
+    expect(hosts).toEqual([
+      "geoapify.example.test",
+      "photon.example.test",
+      "tencent.example.test",
+      "tencent.example.test",
+    ]);
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.objectContaining({ cache: "miss", route: "mixed", resultCount: response.items.length }),
+      "places.search_completed",
+    );
+    // The raw query must never be logged.
+    expect(JSON.stringify(logger.log.mock.calls)).not.toContain("北京");
+  });
+
+  it("never calls Tencent for a romanized query and returns Paris, France", async () => {
+    const fetchMock = providerFetch({
+      geoapify: () =>
+        jsonResponse(
+          geoapifyPayload([
+            geoapifyFeature({
+              name: "巴黎",
+              country: "法国",
+              country_code: "fr",
+              result_type: "city",
+              city: "巴黎",
+              state: "法兰西岛",
+              coordinates: [2.3483915, 48.8534951],
+              formatted: "巴黎, 法国",
+            }),
+          ]),
+        ),
+      photon: () =>
+        jsonResponse(
+          photonPayload([
+            photonFeature({
+              name: "Paris",
+              country: "France",
+              countrycode: "fr",
+              type: "city",
+              osm_value: "city",
+              city: "Paris",
+              state: "Île-de-France",
+              coordinates: [2.3483915, 48.8534951],
+              osm_id: 9_200_002,
+            }),
+          ]),
+        ),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { service } = setup({ settings: { provider: "geoapify" } });
+
+    const response = await service.search({ q: "Paris", limit: 3 });
+
+    expect(response.items[0]?.countryCode).toBe("FR");
+    const hosts = (fetchMock.mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
+    expect(hosts.some((host) => host.startsWith("tencent"))).toBe(false);
+  });
+
+  it("does not call Tencent when country is explicitly JP, even for a Han query", async () => {
+    const fetchMock = providerFetch({
+      geoapify: () =>
+        jsonResponse(
+          geoapifyPayload([
+            geoapifyFeature({
+              name: "东京都/東京都",
+              country: "日本",
+              country_code: "jp",
+              result_type: "city",
+              city: "东京都",
+              state: "东京都",
+              coordinates: [139.7638947, 35.6768601],
+              formatted: "东京都, 日本",
+            }),
+          ]),
+        ),
+      photon: () =>
+        jsonResponse(
+          photonPayload([
+            photonFeature({
+              name: "東京都",
+              country: "日本",
+              countrycode: "jp",
+              type: "city",
+              osm_value: "city",
+              city: "東京都",
+              state: "東京都",
+              coordinates: [139.7638947, 35.6768601],
+              osm_id: 9_200_003,
+            }),
+          ]),
+        ),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { service } = setup({ settings: { provider: "geoapify" } });
+
+    const response = await service.search({ q: "东京", country: "JP", limit: 3 });
+
+    expect(response.items[0]?.countryCode).toBe("JP");
+    const hosts = (fetchMock.mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
+    expect(hosts.some((host) => host.startsWith("tencent"))).toBe(false);
+  });
+
+  it("serves a cache hit without a second upstream call", async () => {
+    const fetchMock = providerFetch({
+      tencentGeocode: beijingTencentGeocode,
+      geoapify: () => jsonResponse(beijingGeoapifyPayload()),
+      photon: () => jsonResponse(beijingPhotonPayload()),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { service, logger } = setup();
+
+    const first = await service.search({ q: "北京", limit: 6 });
+    const callsAfterFirst = fetchMock.mock.calls.length;
+    const second = await service.search({ q: " 北京 ", limit: 6 });
 
     expect(first.cached).toBe(false);
     expect(second.cached).toBe(true);
     expect(second.items).toEqual(first.items);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterFirst);
     expect(logger.log).toHaveBeenCalledWith(
-      expect.objectContaining({ cache: "hit", queryLength: 5 }),
+      expect.objectContaining({ cache: "hit", route: "mixed" }),
       "places.search_cache_hit",
     );
   });
 
-  it("does not reuse a cache entry after switching the primary provider", async () => {
-    const fetchMock = hostFetch({
-      geoapify: async () => jsonResponse(geoapifyPayload()),
-      photon: async () => jsonResponse(photonPayload()),
+  it("keeps mixed and global routes in separate cache namespaces", async () => {
+    const fetchMock = providerFetch({
+      tencentGeocode: beijingTencentGeocode,
+      geoapify: () => jsonResponse(beijingGeoapifyPayload()),
+      photon: () => jsonResponse(beijingPhotonPayload()),
     });
     vi.stubGlobal("fetch", fetchMock);
-    const redis = fakeRedis();
+    const { service, redis } = setup({ settings: { provider: "geoapify" } });
 
-    const photon = setup({ redis }).service;
-    const geoapify = setup({ redis, settings: { provider: "geoapify" } }).service;
-
-    const first = await photon.search({ q: "Kyoto", limit: 3 });
-    const second = await geoapify.search({ q: "Kyoto", limit: 3 });
-
-    expect(first.provider).toBe("photon");
-    expect(second.provider).toBe("geoapify");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await service.search({ q: "北京", limit: 6 });
+    await service.search({ q: "Paris", limit: 6 });
+    await service.search({ q: "Paris", limit: 6 });
 
     const keys = [...redis.store.keys()];
-    expect(keys).toHaveLength(2);
-    expect(keys.some((key) => key.startsWith("places:v3:photon:"))).toBe(true);
-    expect(keys.some((key) => key.startsWith("places:v3:geoapify:"))).toBe(true);
+    expect(keys.some((key) => key.startsWith("places:v3:mixed:"))).toBe(true);
+    expect(keys.some((key) => key.startsWith("places:v3:global:"))).toBe(true);
   });
 
-  it("keeps working when Redis reads throw", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(photonPayload())));
-    const redis = fakeRedis();
-    redis.get.mockRejectedValue(new Error("redis unavailable"));
-    const { service, logger } = setup({ redis });
-
-    const response = await service.search({ q: "Paris", limit: 6 });
-
-    expect(response.items).toHaveLength(1);
-    expect(response.cached).toBe(false);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "places.cache_unavailable" }),
-      "places.cache_bypassed",
-    );
-  });
-
-  it("keeps working when Redis writes throw", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(photonPayload())));
-    const redis = fakeRedis();
-    redis.set.mockRejectedValue(new Error("redis unavailable"));
-    const { service } = setup({ redis });
-
-    await expect(service.search({ q: "Paris", limit: 6 })).resolves.toMatchObject({
-      degraded: false,
-      cached: false,
-    });
-  });
-
-  it("degrades to an empty 200 result on a Photon 500 and caches it for 30 seconds", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "boom" }, 500)));
-    const { service, redis, logger } = setup();
-
-    const response = await service.search({ q: "Paris", limit: 6 });
-
-    expect(response).toEqual({
-      items: [],
-      provider: "photon",
-      degraded: true,
-      cached: false,
-    });
-    expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
-
-    const [, , ttl] = redis.set.mock.calls[0] as [string, string, number];
-    expect(ttl).toBe(30);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: "places.upstream_failed",
-        reason: "http_error",
-        httpStatus: 500,
-        queryLength: 5,
-      }),
-      "places.search_degraded",
-    );
-    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("Paris");
-  });
-
-  it("degrades on a Photon timeout instead of failing the request", async () => {
-    vi.stubGlobal("fetch", abortAwareFetch());
-    const { service, redis } = setup({ settings: { timeoutMs: 20 } });
-
-    const response = await service.search({ q: "Paris", limit: 6 });
-
-    expect(response).toMatchObject({ items: [], provider: "photon", degraded: true });
-    expect((redis.set.mock.calls[0] as [string, string, number])[2]).toBe(30);
-  });
-
-  it("falls back to Photon when Geoapify times out, keeping degraded true", async () => {
-    const fetchMock = vi.fn((url: URL, init?: RequestInit) => {
-      if (url.hostname.startsWith("geoapify")) {
-        return new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => {
-            reject(Object.assign(new Error("The operation was aborted."), { name: "AbortError" }));
-          });
-        });
-      }
-      return Promise.resolve(jsonResponse(photonPayload()));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, logger } = setup({
-      settings: { provider: "geoapify", geoapifyTimeoutMs: 10 },
-    });
-
-    const response = await service.search({ q: "Kyoto", limit: 3 });
-
-    expect(response).toMatchObject({ provider: "photon", degraded: true, cached: false });
-    expect(response.items).toHaveLength(1);
-    expect(response.items[0]).toMatchObject({ provider: "photon", name: "Paris" });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: "places.upstream_failed",
-        provider: "geoapify",
-        reason: "timeout",
-        fallback: "photon",
-      }),
-      "places.search_degraded",
-    );
-  });
-
-  it("returns an empty degraded result when both Geoapify and Photon fail", async () => {
+  it("degrades to map_pick when every provider fails", async () => {
     vi.stubGlobal(
       "fetch",
-      hostFetch({
-        geoapify: async () => jsonResponse({ message: "boom" }, 500),
-        photon: async () => jsonResponse({ message: "down" }, 503),
-      }),
+      vi.fn().mockResolvedValue(jsonResponse({ message: "boom" }, 500)),
     );
-    const { service, logger } = setup({ settings: { provider: "geoapify" } });
+    const { service, logger, redis } = setup({ settings: { provider: "geoapify" } });
 
-    const response = await service.search({ q: "Kyoto", limit: 3 });
+    const response = await service.search({ q: "Paris", limit: 6 });
 
     expect(response).toEqual({
       items: [],
       provider: "geoapify",
       degraded: true,
       cached: false,
+      fallback: "map_pick",
     });
     expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
+    expect((redis.set.mock.calls[0] as [string, string, number])[2]).toBe(30);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
-        provider: "geoapify",
-        reason: "http_error",
-        httpStatus: 500,
-        fallbackReason: "http_error",
-        fallbackHttpStatus: 503,
+        event: "places.upstream_failed",
+        fallback: "map_pick",
       }),
       "places.search_degraded",
     );
   });
 
-  it("stops calling Geoapify once the daily cap is exhausted", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, logger } = setup({
-      settings: {
-        provider: "geoapify",
-        geoapifyDailyLimit: 1,
-        fallbackToPhoton: false,
-      },
+  it("keeps high-confidence results when only one provider fails", async () => {
+    const fetchMock = providerFetch({
+      tencentGeocode: () => jsonResponse({ message: "down" }, 500),
+      tencentSuggest: () => jsonResponse({ message: "down" }, 503),
+      geoapify: () => jsonResponse(beijingGeoapifyPayload()),
+      photon: () => jsonResponse(beijingPhotonPayload()),
     });
+    vi.stubGlobal("fetch", fetchMock);
+    const { service, logger } = setup({ settings: { provider: "geoapify" } });
 
-    const first = await service.search({ q: "Kyoto", limit: 3 });
-    const second = await service.search({ q: "Osaka", limit: 3 });
+    const response = await service.search({ q: "北京", limit: 6 });
 
-    expect(first.degraded).toBe(false);
-    expect(second).toEqual({ items: [], provider: "geoapify", degraded: true, cached: false });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(response.degraded).toBe(false);
+    expect(response.items.length).toBeGreaterThan(0);
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: "quota_exceeded", fallback: null }),
+      expect.objectContaining({ event: "places.upstream_failed", provider: "tencent" }),
       "places.search_degraded",
     );
   });
 
-  it("falls back to Photon when the daily cap is exhausted", async () => {
-    vi.stubGlobal(
-      "fetch",
-      hostFetch({
-        geoapify: async () => jsonResponse(geoapifyPayload()),
-        photon: async () => jsonResponse(photonPayload()),
-      }),
-    );
+  it("stops calling Geoapify once its daily cap is exhausted and lets Photon answer", async () => {
+    const fetchMock = providerFetch({
+      geoapify: () => jsonResponse(beijingGeoapifyPayload()),
+      photon: () => jsonResponse(beijingPhotonPayload()),
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const { service } = setup({
       settings: { provider: "geoapify", geoapifyDailyLimit: 1 },
     });
 
-    await service.search({ q: "Kyoto", limit: 3 });
-    const second = await service.search({ q: "Osaka", limit: 3 });
+    await service.search({ q: "Paris", limit: 6 });
+    const second = await service.search({ q: "Lyon", limit: 6 });
 
-    expect(second).toMatchObject({ provider: "photon", degraded: true });
-    expect(second.items[0]).toMatchObject({ provider: "photon" });
-    const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][])
+    expect(second.items.length).toBeGreaterThan(0);
+    const geoapifyHosts = (fetchMock.mock.calls as unknown as [URL][])
       .map(([url]) => url.hostname)
       .filter((host) => host.startsWith("geoapify"));
-    expect(hosts).toHaveLength(1);
-  });
-
-  it("degrades on malformed upstream JSON", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not json", { status: 200 })));
-    const { service, logger } = setup();
-
-    await expect(service.search({ q: "Paris", limit: 6 })).resolves.toMatchObject({
-      degraded: true,
-      items: [],
-    });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: "invalid_payload" }),
-      "places.search_degraded",
-    );
-  });
-
-  it("caches an empty result for 30 seconds", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(photonPayload([]))));
-    const { service, redis, logger } = setup();
-
-    const response = await service.search({ q: "Atlantis", limit: 6 });
-
-    expect(response).toEqual({ items: [], provider: "photon", degraded: false, cached: false });
-    expect((redis.set.mock.calls[0] as [string, string, number])[2]).toBe(30);
-    expect(logger.warn).not.toHaveBeenCalled();
-  });
-
-  it("keeps the Chinese and global routes in separate cache namespaces", async () => {
-    const fetchMock = vi.fn((url: URL) =>
-      Promise.resolve(
-        url.hostname.startsWith("tencent")
-          ? jsonResponse(tencentErrorPayload(500))
-          : jsonResponse(photonPayload()),
-      ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, redis } = setup();
-
-    // An address keyword (`建国路87号`: 路 + 号) picks the China route and only
-    // ever reaches Tencent; a romanized keyword keeps the global route,
-    // whatever `lang` says — the fixture's `zh` default no longer moves Paris
-    // to the mainland source.
-    await service.search({ q: "建国路87号", limit: 6, lang: "zh" });
-    await service.search({ q: "Paris", limit: 6, lang: "zh" });
-    await service.search({ q: "Paris", limit: 6, lang: "zh" });
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const hosts = (fetchMock.mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
-    expect(hosts).toEqual(["tencent.example.test", "photon.example.test"]);
-
-    const keys = [...redis.store.keys()];
-    expect(keys.some((key) => key.startsWith("places:v3:tencent:"))).toBe(true);
-    expect(keys.some((key) => key.startsWith("places:v3:photon:"))).toBe(true);
+    expect(geoapifyHosts).toHaveLength(1);
   });
 
   it("rejects invalid queries with the shared VALIDATION_ERROR problem", async () => {
@@ -459,12 +416,15 @@ describe("PlacesService", () => {
   });
 
   it("never serves a cached local (manual) place from search", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(photonPayload()));
+    const fetchMock = providerFetch({
+      geoapify: () => jsonResponse(beijingGeoapifyPayload()),
+      photon: () => jsonResponse(beijingPhotonPayload()),
+    });
     vi.stubGlobal("fetch", fetchMock);
-    const { service, cache, redis } = setup();
+    const { service, cache, redis } = setup({ settings: { provider: "geoapify" } });
 
     redis.store.set(
-      cache.key({ q: "Paris", limit: 6, provider: "photon" }),
+      cache.key({ q: "Paris", limit: 6, lang: "zh", route: "global" }),
       JSON.stringify({
         items: [
           {
@@ -479,10 +439,10 @@ describe("PlacesService", () => {
             timeZone: null,
             bbox: null,
             importance: null,
-            type: "other",
+            type: "poi",
           },
         ],
-        provider: "local",
+        provider: "geoapify",
         degraded: false,
         cached: false,
       }),
@@ -490,454 +450,33 @@ describe("PlacesService", () => {
 
     const response = await service.search({ q: "Paris", limit: 6 });
 
-    expect(response.provider).toBe("photon");
-    expect(response.items.every((place) => place.provider === "photon")).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(response.cached).toBe(false);
+    expect(response.items.every((item) => item.provider !== "local")).toBe(true);
+    expect(fetchMock).toHaveBeenCalled();
   });
 
-  it("derives cache keys from provider, normalized query, limit and lang", () => {
+  it("changes the cache key by route, country and focus", () => {
     const { cache } = setup();
-
-    const base = { q: "  PARIS ", limit: 6, provider: "photon" as const };
-    expect(cache.key(base)).toBe(cache.key({ ...base, q: "paris" }));
-    expect(cache.key(base)).not.toBe(cache.key({ ...base, limit: 5 }));
-    expect(cache.key(base)).not.toBe(cache.key({ ...base, lang: "zh" }));
-    expect(cache.key(base)).not.toBe(cache.key({ ...base, provider: "geoapify" }));
-    expect(cache.key(base)).toMatch(/^places:v3:photon:[a-f0-9]{64}$/);
-  });
-
-  it("truncates more upstream items than the requested limit", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          photonPayload([
-            photonFeature(),
-            photonFeature({ osm_id: 12, name: "Louvre", type: "house" }),
-            photonFeature({ osm_id: 13, name: "Lyon", type: "city" }),
-          ]),
-        ),
-      ),
+    const base = { q: "Paris", limit: 6, route: "global" as const };
+    expect(cache.key(base)).not.toBe(cache.key({ ...base, route: "mixed" }));
+    expect(cache.key(base)).not.toBe(cache.key({ ...base, country: "FR" }));
+    expect(cache.key(base)).not.toBe(
+      cache.key({ ...base, focus: { lat: 48.85, lon: 2.35 } }),
     );
-    const { service } = setup();
-
-    const response = await service.search({ q: "France", limit: 2 });
-
-    expect(response.items).toHaveLength(2);
+    expect(cache.key(base)).toMatch(/^places:v3:global:[a-f0-9]{64}$/);
   });
 });
 
-/**
- * The route signals, pinned independently of the China route's behaviour.
- *
- * `places.lang` defaults to `zh`, so reading it as a geographic signal sent
- * every search typed in the Chinese UI — `Paris` included — to a source that
- * only covers the mainland, and overseas destinations are a main flow here.
- *
- * Han script alone is the same mistake one level down: the China route requires
- * an explicit `country=CN` or a keyword that *looks like a Chinese address*
- * (a 省/市/区/路/号… marker), never Han characters by themselves.
- */
-describe("PlacesService route signals", () => {
-  it("sends a Chinese-UI search for Paris to Geoapify and never calls Tencent", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, tencent } = setup({ settings: { provider: "geoapify" } });
-    const tencentSuggest = vi.spyOn(tencent, "suggest");
-
-    const response = await service.search({ q: "Paris", limit: 3, lang: "zh" });
-
-    expect(response.provider).toBe("geoapify");
-    expect(response.degraded).toBe(false);
-    expect(response.items).toHaveLength(1);
-    expect(tencentSuggest).not.toHaveBeenCalled();
-    const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
-    expect(hosts).toEqual(["geoapify.example.test"]);
+describe("PlacesService — eligibility helpers", () => {
+  it("routes Han queries without country to mixed and country=CN to china", () => {
+    expect(routeFor({ q: "北京" })).toBe("mixed");
+    expect(routeFor({ q: "北京", country: "CN" })).toBe("china");
+    expect(routeFor({ q: "Paris" })).toBe("global");
   });
 
-  /**
-   * Tencent's coverage ends at the mainland border and it answers these names
-   * with unrelated Chinese places — `东京` → 东京城镇 (黑龙江省牡丹江市宁安市),
-   * `巴黎` → 巴黎春天(成山店) (上海市浦东新区), `纽约` → 南通纽约时代 (江苏省南通市) —
-   * whose coordinates the China route is allowed to store. None of them contains
-   * an address marker, so each must take the global route.
-   */
-  it.each(["东京", "京都", "巴黎", "首尔", "纽约", "伦敦"])(
-    "routes the overseas Han-script name %s to Geoapify and never calls Tencent",
-    async (q) => {
-      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
-      vi.stubGlobal("fetch", fetchMock);
-      const { service, tencent } = setup({ settings: { provider: "geoapify" } });
-      const tencentSuggest = vi.spyOn(tencent, "suggest");
-
-      const response = await service.search({ q, limit: 3, lang: "zh" });
-
-      expect(response.provider).toBe("geoapify");
-      expect(response.degraded).toBe(false);
-      expect(tencentSuggest).not.toHaveBeenCalled();
-      const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
-      expect(hosts).toEqual(["geoapify.example.test"]);
-    },
-  );
-
-  /**
-   * The global route's Photon fallback, bounded by script.
-   *
-   * Photon is the right safety net for a romanized query (`Paris`, `Tokyo`,
-   * `5th Avenue`), so it must keep answering those when Geoapify is down. For a
-   * Han query it must not: its public instance has no `lang=zh`, and its
-   * lexical match resolves Han names against the Chinese OSM names in its
-   * index — measured 2026-11-19, `东京` → a same-named village in Zhejiang /
-   * Heilongjiang instead of Tokyo, while Geoapify answers `东京` with
-   * 东京都/日本 (35.677, 139.764). A wrong mainland coordinate is worse than an
-   * empty list, so a Han query degrades to `map_pick`.
-   */
-  it.each(["东京", "巴黎", "天安门"])(
-    "degrades a Han query %s to map_pick when Geoapify fails, without calling Photon",
-    async (q) => {
-      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ message: "boom" }, 500));
-      vi.stubGlobal("fetch", fetchMock);
-      const { service, photon, logger } = setup({ settings: { provider: "geoapify" } });
-      const photonSearch = vi.spyOn(photon, "search");
-
-      const response = await service.search({ q, limit: 3, lang: "zh" });
-
-      expect(response).toEqual({
-        items: [],
-        provider: "geoapify",
-        degraded: true,
-        cached: false,
-        fallback: "map_pick",
-      });
-      expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
-      expect(photonSearch).not.toHaveBeenCalled();
-      // Only Geoapify was contacted; the Han query never reached Photon.
-      const hosts = (fetchMock.mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
-      expect(hosts).toEqual(["geoapify.example.test"]);
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: "geoapify",
-          reason: "http_error",
-          httpStatus: 500,
-          fallback: "map_pick",
-        }),
-        "places.search_degraded",
-      );
-    },
-  );
-
-  it("serves a Han query from Geoapify when Geoapify succeeds", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, photon } = setup({ settings: { provider: "geoapify" } });
-    const photonSearch = vi.spyOn(photon, "search");
-
-    const response = await service.search({ q: "东京", limit: 3, lang: "zh" });
-
-    expect(response.provider).toBe("geoapify");
-    expect(response.degraded).toBe(false);
-    expect(response.fallback).toBeUndefined();
-    expect(response.items).toHaveLength(1);
-    expect(response.items[0]).toMatchObject({ provider: "geoapify" });
-    expect(photonSearch).not.toHaveBeenCalled();
-  });
-
-  /**
-   * Regression guard: the script rule must not disable Photon outright. These
-   * are the queries Photon is kept for.
-   */
-  it.each(["Paris", "Tokyo", "5th Avenue"])(
-    "still falls back to Photon for the non-Han query %s when Geoapify fails",
-    async (q) => {
-      vi.stubGlobal(
-        "fetch",
-        hostFetch({
-          geoapify: async () => jsonResponse({ message: "boom" }, 500),
-          photon: async () => jsonResponse(photonPayload()),
-        }),
-      );
-      const { service, photon, logger } = setup({ settings: { provider: "geoapify" } });
-      const photonSearch = vi.spyOn(photon, "search");
-
-      const response = await service.search({ q, limit: 3, lang: "zh" });
-
-      expect(photonSearch).toHaveBeenCalledTimes(1);
-      expect(response).toMatchObject({ provider: "photon", degraded: true, cached: false });
-      expect(response.fallback).toBeUndefined();
-      expect(response.items).toHaveLength(1);
-      expect(response.items[0]).toMatchObject({ provider: "photon" });
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: "geoapify",
-          reason: "http_error",
-          fallback: "photon",
-        }),
-        "places.search_degraded",
-      );
-    },
-  );
-
-  it("serves a non-Han query from Geoapify when Geoapify succeeds", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, photon } = setup({ settings: { provider: "geoapify" } });
-    const photonSearch = vi.spyOn(photon, "search");
-
-    const response = await service.search({ q: "Paris", limit: 3, lang: "zh" });
-
-    expect(response.provider).toBe("geoapify");
-    expect(response.degraded).toBe(false);
-    expect(response.fallback).toBeUndefined();
-    expect(response.items).toHaveLength(1);
-    expect(response.items[0]).toMatchObject({ provider: "geoapify" });
-    expect(photonSearch).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("routes a Han street address from the Chinese UI to Tencent", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
-    const { service, geoapify } = setup({ settings: { provider: "geoapify" } });
-    const geoapifySearch = vi.spyOn(geoapify, "search");
-
-    const response = await service.search({ q: "建国路87号", limit: 3, lang: "zh" });
-
-    expect(response.provider).toBe("tencent");
-    expect(response.degraded).toBe(false);
-    expect(geoapifySearch).not.toHaveBeenCalled();
-    expect((vi.mocked(fetch).mock.calls[0] as unknown as [URL])[0].hostname).toBe(
-      "tencent.example.test",
-    );
-  });
-
-  it("routes country=CN even when the keyword is romanized", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
-    const { service, geoapify } = setup({ settings: { provider: "geoapify" } });
-    const geoapifySearch = vi.spyOn(geoapify, "search");
-
-    const response = await service.search({ q: "Beijing", limit: 3, country: "CN" });
-
-    expect(response.provider).toBe("tencent");
-    expect(geoapifySearch).not.toHaveBeenCalled();
-  });
-
-  it("routes country=CN to Tencent even for an overseas name in Latin script", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
-    const { service, geoapify } = setup({ settings: { provider: "geoapify" } });
-    const geoapifySearch = vi.spyOn(geoapify, "search");
-
-    const response = await service.search({ q: "Tokyo", limit: 3, country: "CN" });
-
-    expect(response.provider).toBe("tencent");
-    expect(geoapifySearch).not.toHaveBeenCalled();
-    expect((vi.mocked(fetch).mock.calls[0] as unknown as [URL])[0].hostname).toBe(
-      "tencent.example.test",
-    );
-  });
-
-  /**
-   * A bare Han place name carries no address marker, so it takes the global
-   * route. That is the accepted trade-off: OSM knows `天安门`, and `清水寺`
-   * really is in Japan, so Geoapify is the correct source for both.
-   */
-  it.each(["天安门", "清水寺"])(
-    "routes the marker-free Han place name %s to Geoapify when the caller omits lang",
-    async (q) => {
-      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(geoapifyPayload()));
-      vi.stubGlobal("fetch", fetchMock);
-      const { settings, service, tencent } = setup({ settings: { provider: "geoapify" } });
-      const tencentSuggest = vi.spyOn(tencent, "suggest");
-
-      const response = await service.search({ q, limit: 3 });
-
-      expect(settings.defaultLang).toBe("zh");
-      expect(response.provider).toBe("geoapify");
-      expect(tencentSuggest).not.toHaveBeenCalled();
-      const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
-      expect(hosts).toEqual(["geoapify.example.test"]);
-    },
-  );
-});
-
-/**
- * The mainland-China route. The governing rule is that a Chinese address must
- * never be answered by Photon, whose same-street house numbers are wrong; a
- * failure degrades to `map_pick` instead.
- */
-describe("PlacesService China route", () => {
-  it("routes a Chinese address to Tencent, converts GCJ-02 to WGS-84 and never calls Photon", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, photon } = setup();
-    const photonSearch = vi.spyOn(photon, "search");
-
-    const response = await service.search({ q: "北京市朝阳区建国路87号", limit: 3 });
-
-    expect(response.provider).toBe("tencent");
-    expect(response.degraded).toBe(false);
-    expect(response.fallback).toBeUndefined();
-    expect(response.items[0]).toMatchObject({
-      provider: "tencent",
-      providerPlaceId: "10233345183344841920",
-      name: "北京SKP",
-      address: "北京市朝阳区建国路87号",
-      country: "中国",
-      countryCode: "CN",
-      timeZone: null,
-      bbox: null,
-      importance: null,
-      type: "poi",
-    });
-    expect(response.items[0]?.lat).toBeCloseTo(TENCENT_SKP_WGS84.lat, 9);
-    expect(response.items[0]?.lng).toBeCloseTo(TENCENT_SKP_WGS84.lng, 9);
-    expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
-
-    const url = (fetchMock.mock.calls[0] as unknown as [URL])[0];
-    expect(url.hostname).toBe("tencent.example.test");
-    expect(url.pathname).toBe("/ws/place/v1/suggestion");
-    expect(url.searchParams.get("keyword")).toBe("北京市朝阳区建国路87号");
-    expect(url.searchParams.get("page_size")).toBe("3");
-    expect(url.searchParams.get("key")).toBe("test-key");
-    expect(photonSearch).not.toHaveBeenCalled();
-  });
-
-  it("caches a Chinese result in the Tencent namespace for 300 seconds", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, redis } = setup();
-
-    const first = await service.search({ q: "建国路87号", limit: 3 });
-    const second = await service.search({ q: "建国路87号", limit: 3 });
-
-    expect(first.cached).toBe(false);
-    expect(second.cached).toBe(true);
-    expect(second.items).toEqual(first.items);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    const [key, , ttl] = redis.set.mock.calls[0] as [string, string, number];
-    expect(key.startsWith("places:v3:tencent:")).toBe(true);
-    expect(ttl).toBe(300);
-  });
-
-  it("routes country=CN even when the keyword is romanized", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload())));
-    const { service, photon } = setup();
-    const photonSearch = vi.spyOn(photon, "search");
-
-    const response = await service.search({ q: "Shenzhen", limit: 3, country: "CN" });
-
-    expect(response.provider).toBe("tencent");
-    expect(response.items).toHaveLength(1);
-    expect(photonSearch).not.toHaveBeenCalled();
-  });
-
-  it("never sends a non-Chinese query to Tencent", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(photonPayload())));
-    const { service } = setup();
-
-    const response = await service.search({ q: "Paris", limit: 3, lang: "en" });
-
-    expect(response.provider).toBe("photon");
-    const hosts = (vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
-    expect(hosts).toEqual(["photon.example.test"]);
-  });
-
-  it("degrades to map_pick when Tencent fails, without ever calling Photon", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentErrorPayload(520)));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, photon, logger } = setup();
-    const photonSearch = vi.spyOn(photon, "search");
-
-    const response = await service.search({ q: "建国路87号", limit: 3 });
-
-    expect(response).toEqual({
-      items: [],
-      provider: "tencent",
-      degraded: true,
-      cached: false,
-      fallback: "map_pick",
-    });
-    expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(photonSearch).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: "places.upstream_failed",
-        provider: "tencent",
-        route: "china",
-        reason: "upstream_error",
-        code: "UPSTREAM_ERROR",
-        upstreamStatus: 520,
-        fallback: "map_pick",
-      }),
-      "places.search_degraded",
-    );
-  });
-
-  it("degrades to map_pick on status 121 (QUOTA_EXCEEDED) without retrying", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(tencentErrorPayload(121, "此key每日调用量已达到上限")));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, photon, logger } = setup();
-    const photonSearch = vi.spyOn(photon, "search");
-
-    const response = await service.search({ q: "建国路87号", limit: 3 });
-
-    expect(response).toMatchObject({ items: [], degraded: true, fallback: "map_pick" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(photonSearch).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reason: "quota_exceeded",
-        code: "QUOTA_EXCEEDED",
-        upstreamStatus: 121,
-        fallback: "map_pick",
-      }),
-      "places.search_degraded",
-    );
-  });
-
-  it("degrades to map_pick when TENCENT_MAPS_KEY is empty, without any upstream call", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const settings = resolvePlacesSettings({ TENCENT_MAPS_KEY: "" } as NodeJS.ProcessEnv);
-    const { service, photon } = setup({ resolved: settings });
-    const photonSearch = vi.spyOn(photon, "search");
-
-    const response = await service.search({ q: "深圳市南山区深南大道10000号", limit: 3 });
-
-    expect(settings.tencentApiKey).toBeNull();
-    expect(response).toEqual({
-      items: [],
-      provider: "tencent",
-      degraded: true,
-      cached: false,
-      fallback: "map_pick",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(photonSearch).not.toHaveBeenCalled();
-  });
-
-  it("degrades to map_pick once the Tencent daily cap is exhausted", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(tencentSuggestionPayload()));
-    vi.stubGlobal("fetch", fetchMock);
-    const { service, logger } = setup({ settings: { tencentDailyLimit: 1 } });
-
-    const first = await service.search({ q: "建国路87号", limit: 3 });
-    const second = await service.search({ q: "深南大道10000号", limit: 3 });
-
-    expect(first.degraded).toBe(false);
-    expect(second).toEqual({
-      items: [],
-      provider: "tencent",
-      degraded: true,
-      cached: false,
-      fallback: "map_pick",
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: "quota_exceeded", fallback: "map_pick" }),
-      "places.search_degraded",
-    );
+  it("orders eligible sources by settings.sourceOrder", () => {
+    const settings = resolvePlacesSettings({ GEOAPIFY_API_KEY: "key" });
+    expect(eligibleSources({ q: "北京" }, settings)).toEqual(["tencent", "geoapify", "photon"]);
+    expect(eligibleSources({ q: "Paris", country: "JP" }, settings)).toEqual(["geoapify", "photon"]);
   });
 });

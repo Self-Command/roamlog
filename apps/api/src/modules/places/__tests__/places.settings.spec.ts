@@ -4,6 +4,7 @@ import { SettingsService } from "../../settings/settings.service.js";
 import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
 import { PlacesCacheService } from "../places-cache.service.js";
+import { PlacesMergeService } from "../places-merge.service.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesService } from "../places.service.js";
 import { TencentClient } from "../tencent.client.js";
@@ -80,6 +81,7 @@ function harness(stored: Record<string, unknown> | Error, logger: LoggerMock = m
     photon,
     new TencentClient(resolver),
     new PlacesQuotaService(redis as unknown as RedisService, asLogger(logger), resolver),
+    new PlacesMergeService(),
     asLogger(logger),
     resolver,
   );
@@ -103,8 +105,8 @@ describe("PlacesSettingsResolver", () => {
     const { service, resolver, geoapify, photon } = harness(
       storedPlaces({ "places.provider": "photon" }),
     );
-    const geoapifySearch = vi.spyOn(geoapify, "search");
-    const photonSearch = vi.spyOn(photon, "search");
+    const geoapifySearch = vi.spyOn(geoapify, "searchCandidates");
+    const photonSearch = vi.spyOn(photon, "searchCandidates");
 
     const settings = await resolver.resolve();
     const response = await service.search({ q: "Kyoto" });
@@ -185,9 +187,11 @@ describe("PlacesSettingsResolver", () => {
 
     const first = await service.search({ q: "Kyoto" });
     const [cacheKey, , cacheTtl] = redis.set.mock.calls[0] as [string, string, number];
-    const url = (fetchMock.mock.calls[0] as unknown as [URL])[0];
+    const url = (fetchMock.mock.calls as unknown as [URL][])
+      .map(([candidate]) => candidate)
+      .find((candidate) => candidate.hostname.includes("geoapify")) as URL;
 
-    expect(cacheKey).toContain(":geoapify:");
+    expect(cacheKey).toContain(":global:");
     expect(cacheTtl).toBe(120);
     expect(url.searchParams.get("apiKey")).toBe("db-key-9999");
     expect(url.searchParams.get("lang")).toBe("en");
@@ -199,9 +203,9 @@ describe("PlacesSettingsResolver", () => {
     // second distinct search must not spend another Geoapify call.
     const second = await service.search({ q: "Osaka" });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect((fetchMock.mock.calls[1] as unknown as [URL])[0].hostname).toContain("photon");
-    expect(second.degraded).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect((fetchMock.mock.calls[2] as unknown as [URL])[0].hostname).toContain("photon");
+    expect(second.degraded).toBe(false);
     expect(second.provider).toBe("photon");
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ event: "places.upstream_failed", reason: "quota_exceeded" }),

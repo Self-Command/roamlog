@@ -2,11 +2,12 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Place } from "@roamlog/contracts";
 
 import { PLACES_SETTINGS, type PlacesSettings, type PlacesSettingsSource } from "./places.settings.js";
+import type { TencentCandidate } from "./ranking/pelias-document.js";
 import {
   TencentPayloadError,
-  normalizeTencentGeocodePayload,
+  normalizeTencentGeocodeCandidate,
   normalizeTencentReversePayload,
-  normalizeTencentSuggestionPayload,
+  normalizeTencentSuggestionCandidates,
 } from "./tencent-normalizer.js";
 
 /**
@@ -36,6 +37,21 @@ export class TencentClient {
 
   /** `place/v1/suggestion` — the autocomplete used for Chinese address entry. */
   async suggest(input: TencentSuggestInput): Promise<TencentSuggestOutcome> {
+    const outcome = await this.suggestCandidates(input);
+    return outcome.ok
+      ? {
+          ok: true,
+          items: outcome.candidates.map((candidate) => candidate.place),
+          durationMs: outcome.durationMs,
+        }
+      : outcome;
+  }
+
+  /**
+   * Candidate-preserving form of `suggest`: keeps `type` / `adcode` /
+   * administrative parts for the Pelias layer adapter.
+   */
+  async suggestCandidates(input: TencentSuggestInput): Promise<TencentCandidatesOutcome> {
     const settings = await this.settings.resolve();
     const startedAt = Date.now();
     const target = endpointOf(settings, "place/v1/suggestion");
@@ -52,16 +68,27 @@ export class TencentClient {
       target.url,
       settings.tencentTimeoutMs,
       startedAt,
-      normalizeTencentSuggestionPayload,
+      normalizeTencentSuggestionCandidates,
       [],
     );
     return outcome.ok
-      ? { ok: true, items: outcome.value, durationMs: Date.now() - startedAt }
+      ? { ok: true, candidates: outcome.value, durationMs: Date.now() - startedAt }
       : outcome;
   }
 
   /** `geocoder/v1?address=` — forward geocoding of one structured address. */
   async geocode(input: TencentGeocodeInput): Promise<TencentPlaceOutcome> {
+    const outcome = await this.geocodeCandidate(input);
+    return outcome.ok
+      ? { ok: true, place: outcome.candidate.place, durationMs: outcome.durationMs }
+      : outcome;
+  }
+
+  /**
+   * Candidate-preserving form of `geocode`: keeps `level` and
+   * `address_components` so the Pelias adapter can map `level=9` to `address`.
+   */
+  async geocodeCandidate(input: TencentGeocodeInput): Promise<TencentCandidateOutcome> {
     const settings = await this.settings.resolve();
     const startedAt = Date.now();
     const target = endpointOf(settings, "geocoder/v1");
@@ -76,10 +103,10 @@ export class TencentClient {
       target.url,
       settings.tencentTimeoutMs,
       startedAt,
-      normalizeTencentGeocodePayload,
+      (payload) => normalizeTencentGeocodeCandidate(payload),
     );
     return outcome.ok
-      ? { ok: true, place: outcome.value, durationMs: Date.now() - startedAt }
+      ? { ok: true, candidate: outcome.value, durationMs: Date.now() - startedAt }
       : outcome;
   }
 
@@ -317,6 +344,14 @@ export type TencentSuggestOutcome =
   | { readonly ok: true; readonly items: Place[]; readonly durationMs: number }
   | TencentFailure;
 
+export type TencentCandidatesOutcome =
+  | { readonly ok: true; readonly candidates: TencentCandidate[]; readonly durationMs: number }
+  | TencentFailure;
+
 export type TencentPlaceOutcome =
   | { readonly ok: true; readonly place: Place; readonly durationMs: number }
+  | TencentFailure;
+
+export type TencentCandidateOutcome =
+  | { readonly ok: true; readonly candidate: TencentCandidate; readonly durationMs: number }
   | TencentFailure;

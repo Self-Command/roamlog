@@ -28,13 +28,23 @@ export const PLACES_SETTINGS = Symbol("ROAMLOG_PLACES_SETTINGS");
 
 export type PlacesProvider = "geoapify" | "photon";
 export type PlacesLanguage = "zh" | "en";
+/** Providers that can appear in a multi-source recall (spec §5.2). */
+export type PlacesSource = "tencent" | "geoapify" | "photon";
 
 export const DEFAULT_PLACES_PROVIDER: PlacesProvider = "geoapify";
 export const DEFAULT_PHOTON_URL = "https://photon.komoot.io/api";
 export const DEFAULT_PHOTON_TIMEOUT_MS = 2_500;
 export const DEFAULT_GEOAPIFY_URL = "https://api.geoapify.com/v1/geocode/autocomplete";
-/** The design sets a 1.2 s budget for the primary source (Photon's TTFB is ~1.6 s). */
-export const DEFAULT_GEOAPIFY_TIMEOUT_MS = 1_200;
+/**
+ * Hard Geoapify budget enforced with an AbortController.
+ *
+ * The original single-provider design used 1.2 s. Multi-source recall needs the
+ * global provider to answer Han city names too: measured 2026-11-20,
+ * `text=京都&lang=zh` consistently takes ~3.0 s from this network while
+ * `东京`/`Paris` take <1 s. 4 s keeps `京都` reachable; a slower provider still
+ * degrades independently and never blocks Tencent/Photon.
+ */
+export const DEFAULT_GEOAPIFY_TIMEOUT_MS = 4_000;
 /** Geoapify's free plan allows 3,000 requests per day. */
 export const DEFAULT_GEOAPIFY_DAILY_LIMIT = 3_000;
 export const DEFAULT_PLACES_FALLBACK_TO_PHOTON = true;
@@ -47,6 +57,31 @@ export const DEFAULT_PLACES_REDIS_TIMEOUT_MS = 500;
 /** Contract default for `GET /v1/places/search` and the `places.limit` default. */
 export const DEFAULT_PLACES_LIMIT = 6;
 export const DEFAULT_PLACES_LANG: PlacesLanguage = "zh";
+
+/**
+ * Provider eligibility list (`PLACES_SOURCES`). Removing a source disables it
+ * without removing its credentials; unknown names are ignored.
+ */
+export const DEFAULT_PLACES_SOURCES: readonly PlacesSource[] = Object.freeze([
+  "tencent",
+  "geoapify",
+  "photon",
+]);
+/**
+ * Deterministic tie-break order for equal-layer, equal-population results
+ * (spec §5.7): `tencent → geoapify → photon`.
+ */
+export const DEFAULT_PLACES_SOURCE_ORDER: readonly PlacesSource[] = Object.freeze([
+  "tencent",
+  "geoapify",
+  "photon",
+]);
+/**
+ * Languages Photon may receive via `?lang=`. The public instance only supports
+ * `default/de/en/fr` and rejects `zh`; a self-hosted instance imported with
+ * `-languages zh` can add `zh` here.
+ */
+export const DEFAULT_PHOTON_LANGUAGES: readonly string[] = Object.freeze(["en"]);
 
 /**
  * Tencent Map WebService (mainland-China source; see
@@ -63,8 +98,9 @@ export const DEFAULT_TENCENT_CACHE_TTL_SECONDS = 300;
 export const DEFAULT_TENCENT_DAILY_LIMIT = 10_000;
 
 /**
- * Provider that produced a response. `tencent` is only reachable through the
- * China route (`isChinaQuery`), never through `PLACES_PROVIDER`.
+ * Provider that produced a response. `tencent` participates whenever the
+ * recall route is `china` or `mixed` (spec §5.2), not through
+ * `PLACES_PROVIDER`; `PLACES_PROVIDER` remains the empty-result fallback label.
  */
 export type PlacesResponseProvider = PlacesProvider | "tencent";
 
@@ -112,6 +148,14 @@ export interface PlacesSettings {
   readonly defaultLimit: number;
   /** Default language when a request omits `?lang` (admin `places.lang`). */
   readonly defaultLang: PlacesLanguage;
+  /** Enabled recall sources (`PLACES_SOURCES`); unknown names are ignored. */
+  readonly sources: readonly PlacesSource[];
+  /** Stable tie-break order for equal Pelias layers (`PLACES_SOURCE_ORDER`). */
+  readonly sourceOrder: readonly PlacesSource[];
+  /** `?lang` values Photon may receive (`PHOTON_LANGUAGES`). */
+  readonly photonLanguages: readonly string[];
+  /** Optional default Pelias `focus.point` (`PLACES_FOCUS_POINT=lat,lon`). */
+  readonly focusPoint: { readonly lat: number; readonly lon: number } | null;
 }
 
 function integerSetting(
@@ -156,6 +200,81 @@ function booleanSetting(env: NodeJS.ProcessEnv, name: string, fallback: boolean)
     return false;
   }
   return fallback;
+}
+
+const PLACES_SOURCE_NAMES: readonly PlacesSource[] = Object.freeze([
+  "tencent",
+  "geoapify",
+  "photon",
+]);
+
+function isPlacesSource(value: string): value is PlacesSource {
+  return (PLACES_SOURCE_NAMES as readonly string[]).includes(value);
+}
+
+/** `PLACES_SOURCES` / `PLACES_SOURCE_ORDER`: comma-separated source names. */
+function sourceListSetting(
+  env: NodeJS.ProcessEnv,
+  name: string,
+  fallback: readonly PlacesSource[],
+): readonly PlacesSource[] {
+  const raw = env[name]?.trim();
+  if (!raw) {
+    return fallback;
+  }
+  const values: PlacesSource[] = [];
+  for (const part of raw.split(",")) {
+    const candidate = part.trim().toLowerCase();
+    if (isPlacesSource(candidate) && !values.includes(candidate)) {
+      values.push(candidate);
+    }
+  }
+  return values.length > 0 ? values : fallback;
+}
+
+/** `PHOTON_LANGUAGES`: comma-separated BCP-47-ish language tags. */
+function languageListSetting(
+  env: NodeJS.ProcessEnv,
+  name: string,
+  fallback: readonly string[],
+): readonly string[] {
+  const raw = env[name]?.trim();
+  if (!raw) {
+    return fallback;
+  }
+  const values: string[] = [];
+  for (const part of raw.split(",")) {
+    const candidate = part.trim().toLowerCase();
+    if (/^[a-z]{2}(?:-[a-z]{2})?$/.test(candidate) && !values.includes(candidate)) {
+      values.push(candidate);
+    }
+  }
+  return values.length > 0 ? values : fallback;
+}
+
+/** `PLACES_FOCUS_POINT=lat,lon` → Pelias `focus.point`. */
+function focusPointSetting(
+  env: NodeJS.ProcessEnv,
+  name: string,
+): { readonly lat: number; readonly lon: number } | null {
+  const raw = env[name]?.trim();
+  if (!raw) {
+    return null;
+  }
+  const parts = raw.split(",");
+  if (parts.length !== 2) {
+    return null;
+  }
+  const lat = Number(parts[0]?.trim());
+  const lon = Number(parts[1]?.trim());
+  return Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+    ? { lat, lon }
+    : null;
 }
 
 export function resolvePlacesSettings(env: NodeJS.ProcessEnv = process.env): PlacesSettings {
@@ -251,6 +370,10 @@ export function resolvePlacesSettings(env: NodeJS.ProcessEnv = process.env): Pla
     ),
     defaultLimit: integerSetting(env, "PLACES_LIMIT", DEFAULT_PLACES_LIMIT, 1, 10),
     defaultLang: languageSetting(env),
+    sources: sourceListSetting(env, "PLACES_SOURCES", DEFAULT_PLACES_SOURCES),
+    sourceOrder: sourceListSetting(env, "PLACES_SOURCE_ORDER", DEFAULT_PLACES_SOURCE_ORDER),
+    photonLanguages: languageListSetting(env, "PHOTON_LANGUAGES", DEFAULT_PHOTON_LANGUAGES),
+    focusPoint: focusPointSetting(env, "PLACES_FOCUS_POINT"),
   };
 }
 

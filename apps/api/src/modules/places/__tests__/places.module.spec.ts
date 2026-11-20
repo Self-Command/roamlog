@@ -13,7 +13,7 @@ it("wires the places module into AppModule", async () => {
   expect(settings.baseUrl).toBe("https://photon.komoot.io/api");
   expect(settings.timeoutMs).toBe(2_500);
   expect(settings.geoapifyBaseUrl).toBe("https://api.geoapify.com/v1/geocode/autocomplete");
-  expect(settings.geoapifyTimeoutMs).toBe(1_200);
+  expect(settings.geoapifyTimeoutMs).toBe(4_000);
   expect(settings.geoapifyApiKey).toBeNull();
   expect(settings.geoapifyDailyLimit).toBe(3_000);
   expect(settings.fallbackToPhoton).toBe(true);
@@ -76,7 +76,7 @@ it("falls back to defaults for invalid overrides", () => {
     provider: "geoapify",
     baseUrl: "https://photon.komoot.io/api",
     timeoutMs: 2_500,
-    geoapifyTimeoutMs: 1_200,
+    geoapifyTimeoutMs: 4_000,
     geoapifyDailyLimit: 3_000,
     fallbackToPhoton: true,
     cacheTtlSeconds: 900,

@@ -1,5 +1,7 @@
 import { PlaceSchema, type Place, type PlaceBbox, type PlaceType } from "@roamlog/contracts";
 
+import type { PhotonCandidate } from "./ranking/pelias-document.js";
+
 /**
  * Photon returns GeoJSON FeatureCollections. This module converts the subset we
  * accept into the strict `Place` contract.
@@ -160,10 +162,32 @@ function placeType(candidate: string | undefined, osmKey: string | undefined): P
 }
 
 /**
- * Normalizes a single Photon feature. Returns `null` when the feature cannot be
- * expressed as a contract-valid `Place` without inventing data.
+ * 【适配层，本仓库原创】Photon's public API does not expose population by
+ * default; a self-hosted instance configured with `-extra-tags population`
+ * puts it in `properties.extra.population` (spec §4.2 / `photon/docs/usage.md`
+ * 163-170). Only a real numeric value is accepted — never inferred.
  */
-export function normalizePhotonFeature(feature: unknown): Place | null {
+function populationFromExtra(extra: unknown): number | undefined {
+  const record = asRecord(extra);
+  const value = record?.population;
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d+$/.test(value.trim())
+        ? Number.parseInt(value.trim(), 10)
+        : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+/**
+ * Normalizes a single Photon feature into the Pelias adapter candidate. The
+ * contract `Place` is embedded unchanged; raw `type` / `osm_value` /
+ * `extra.population` / address parts stay available for the layer adapter.
+ */
+export function normalizePhotonFeatureCandidate(
+  feature: unknown,
+  providerRank = 0,
+): PhotonCandidate | null {
   const featureRecord = asRecord(feature);
   const properties = asRecord(featureRecord?.properties);
   const geometry = asRecord(featureRecord?.geometry);
@@ -199,8 +223,65 @@ export function normalizePhotonFeature(feature: unknown): Place | null {
     importance: importance(properties.importance),
     type: placeType(upstreamType ?? osmValue, osmKey),
   });
+  if (!parsed.success) {
+    return null;
+  }
 
-  return parsed.success ? parsed.data : null;
+  const state = boundedText(properties.state, 120);
+  const county = boundedText(properties.county, 120);
+  const city = boundedText(properties.city, 120);
+  const district = boundedText(properties.district, 120);
+  const street = boundedText(properties.street, 160);
+  const housenumber = boundedText(properties.housenumber, 40);
+  const postcode = boundedText(properties.postcode, 20);
+  const population = populationFromExtra(properties.extra);
+
+  return {
+    source: "photon",
+    place: parsed.data,
+    providerRank,
+    ...(upstreamType === undefined ? {} : { type: upstreamType }),
+    ...(osmValue === undefined ? {} : { osmValue }),
+    ...(osmKey === undefined ? {} : { osmKey }),
+    ...(population === undefined ? {} : { population }),
+    country,
+    ...(state === undefined ? {} : { state }),
+    ...(county === undefined ? {} : { county }),
+    ...(city === undefined ? {} : { city }),
+    ...(district === undefined ? {} : { district }),
+    ...(street === undefined ? {} : { street }),
+    ...(housenumber === undefined ? {} : { housenumber }),
+    ...(postcode === undefined ? {} : { postcode }),
+  };
+}
+
+/**
+ * Normalizes a single Photon feature. Returns `null` when the feature cannot be
+ * expressed as a contract-valid `Place` without inventing data.
+ */
+export function normalizePhotonFeature(feature: unknown): Place | null {
+  return normalizePhotonFeatureCandidate(feature)?.place ?? null;
+}
+
+/**
+ * Normalizes a Photon FeatureCollection payload into candidates. Throws
+ * `PhotonPayloadError` when the payload is not a FeatureCollection; individual
+ * invalid features are dropped.
+ */
+export function normalizePhotonPayloadCandidates(payload: unknown): PhotonCandidate[] {
+  const record = asRecord(payload);
+  if (!record || !Array.isArray(record.features)) {
+    throw new PhotonPayloadError("Photon response is not a FeatureCollection");
+  }
+
+  const candidates: PhotonCandidate[] = [];
+  record.features.forEach((feature, index) => {
+    const candidate = normalizePhotonFeatureCandidate(feature, index);
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  });
+  return candidates;
 }
 
 /**
@@ -209,17 +290,5 @@ export function normalizePhotonFeature(feature: unknown): Place | null {
  * dropped.
  */
 export function normalizePhotonPayload(payload: unknown): Place[] {
-  const record = asRecord(payload);
-  if (!record || !Array.isArray(record.features)) {
-    throw new PhotonPayloadError("Photon response is not a FeatureCollection");
-  }
-
-  const places: Place[] = [];
-  for (const feature of record.features) {
-    const place = normalizePhotonFeature(feature);
-    if (place) {
-      places.push(place);
-    }
-  }
-  return places;
+  return normalizePhotonPayloadCandidates(payload).map((candidate) => candidate.place);
 }

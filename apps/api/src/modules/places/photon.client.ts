@@ -2,7 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Place } from "@roamlog/contracts";
 
 import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
-import { PhotonPayloadError, normalizePhotonPayload } from "./photon-normalizer.js";
+import { PhotonPayloadError, normalizePhotonPayloadCandidates } from "./photon-normalizer.js";
+import type { PhotonCandidate } from "./ranking/pelias-document.js";
 
 /**
  * Reasons a search degrades. They are safe to log: no query text is included.
@@ -36,22 +37,27 @@ export interface PhotonSearchInput {
 }
 
 type AttemptResult =
-  | { readonly status: "ok"; readonly items: Place[] }
+  | { readonly status: "ok"; readonly candidates: PhotonCandidate[] }
   | { readonly status: "http_error"; readonly httpStatus: number }
   | { readonly status: "invalid_payload" };
 
 /**
- * Photon only supports `default|de|en|fr`. The public instance rejects
- * `lang=zh` with `400 {"lang":[{"message":"Language is not supported..."}]}`
- * (verified 2026-11-18), and that rejection can take ~2.4 s, so blindly
- * forwarding `zh` would burn the whole timeout budget and degrade every
- * Chinese search. `zh` therefore falls back to the upstream default (local OSM
- * names); `en` is forwarded.
+ * Photon only supports the languages its index carries. The public instance
+ * supports `default/de/en/fr` and rejects `zh` (verified 2026-11-18), so
+ * `PHOTON_LANGUAGES` defaults to `en`; a self-hosted instance imported with
+ * `-languages zh` can add `zh` (spec §5.3). Values outside the configured list
+ * are dropped before the request.
  */
 const FORWARDED_UPSTREAM_LANGS = new Set(["en"]);
 
-function forwardedLang(lang: "zh" | "en" | undefined): string | undefined {
-  return lang && FORWARDED_UPSTREAM_LANGS.has(lang) ? lang : undefined;
+function forwardedLang(
+  lang: "zh" | "en" | undefined,
+  allowed: readonly string[] = [...FORWARDED_UPSTREAM_LANGS],
+): string | undefined {
+  if (!lang) {
+    return undefined;
+  }
+  return allowed.includes(lang) ? lang : undefined;
 }
 
 /**
@@ -74,6 +80,21 @@ export class PhotonClient {
   constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource) {}
 
   async search(input: PhotonSearchInput): Promise<PhotonSearchOutcome> {
+    const outcome = await this.searchCandidates(input);
+    return outcome.ok
+      ? {
+          ok: true,
+          items: outcome.candidates.map((candidate) => candidate.place),
+          durationMs: outcome.durationMs,
+        }
+      : outcome;
+  }
+
+  /**
+   * Candidate-preserving form of `search`: keeps `type` / `osm_value` /
+   * `extra.population` for the Pelias adapter.
+   */
+  async searchCandidates(input: PhotonSearchInput): Promise<PhotonCandidatesOutcome> {
     const settings = await this.settings.resolve();
     let endpoint: URL;
     try {
@@ -84,7 +105,7 @@ export class PhotonClient {
 
     endpoint.searchParams.set("q", input.q);
     endpoint.searchParams.set("limit", String(input.limit));
-    const lang = forwardedLang(input.lang);
+    const lang = forwardedLang(input.lang, settings.photonLanguages);
     if (lang) {
       endpoint.searchParams.set("lang", lang);
     }
@@ -108,7 +129,7 @@ export class PhotonClient {
       }
 
       if (result.status === "ok") {
-        return { ok: true, items: result.items, durationMs: Date.now() - startedAt };
+        return { ok: true, candidates: result.candidates, durationMs: Date.now() - startedAt };
       }
       if (result.status === "http_error") {
         return {
@@ -151,7 +172,7 @@ export class PhotonClient {
     }
 
     try {
-      return { status: "ok", items: normalizePhotonPayload(payload) };
+      return { status: "ok", candidates: normalizePhotonPayloadCandidates(payload) };
     } catch (error) {
       if (error instanceof PhotonPayloadError) {
         return { status: "invalid_payload" };
@@ -160,3 +181,16 @@ export class PhotonClient {
     }
   }
 }
+
+export type PhotonCandidatesOutcome =
+  | {
+      readonly ok: true;
+      readonly candidates: PhotonCandidate[];
+      readonly durationMs: number;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: PhotonFailureReason;
+      readonly durationMs: number;
+      readonly httpStatus?: number;
+    };

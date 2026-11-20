@@ -6,6 +6,8 @@ import {
   type PlaceType,
 } from "@roamlog/contracts";
 
+import type { GeoapifyCandidate } from "./ranking/pelias-document.js";
+
 /**
  * Normalizes a Geoapify `v1/geocode/autocomplete` FeatureCollection into the
  * strict `Place` contract.
@@ -155,10 +157,51 @@ function placeType(resultType: string | undefined): PlaceType {
 }
 
 /**
- * Normalizes a single Geoapify feature. Returns `null` when the feature cannot
- * be expressed as a contract-valid `Place` without inventing data.
+ * 【适配层，本仓库原创】Geoapify sometimes puts `street` + house number in
+ * `address_line1` and omits the dedicated fields. Splitting only a trailing
+ * numeric token is the documented shape (`address_line1` is a display line), and
+ * nothing is invented when the pattern does not match.
  */
-export function normalizeGeoapifyFeature(feature: unknown): Place | null {
+function addressParts(properties: Record<string, unknown>): {
+  readonly street?: string;
+  readonly housenumber?: string;
+} {
+  const street = boundedText(properties.street, 160);
+  const housenumber = boundedText(properties.housenumber, 40);
+  if (street !== undefined || housenumber !== undefined) {
+    return {
+      ...(street === undefined ? {} : { street }),
+      ...(housenumber === undefined ? {} : { housenumber }),
+    };
+  }
+
+  const line1 = boundedText(properties.address_line1, 200);
+  if (line1 === undefined) {
+    return {};
+  }
+  const match = /^(.+?)\s+(\d[\w-]*)$/u.exec(line1);
+  return match && match[1] !== undefined && match[2] !== undefined
+    ? { street: match[1], housenumber: match[2] }
+    : { street: line1 };
+}
+
+/** `properties.rank.confidence` — the documented 0–1 provider score. */
+function rankConfidence(rank: Record<string, unknown> | undefined): number | undefined {
+  const value = rank?.confidence;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : undefined;
+}
+
+/**
+ * Normalizes a single Geoapify feature into the Pelias adapter candidate. The
+ * contract `Place` is embedded unchanged; raw `result_type` / `rank.confidence`
+ * / administrative parts stay available for the layer + `_score` adapter.
+ */
+export function normalizeGeoapifyFeatureCandidate(
+  feature: unknown,
+  providerRank = 0,
+): GeoapifyCandidate | null {
   const featureRecord = asRecord(feature);
   const properties = asRecord(featureRecord?.properties);
   const geometry = asRecord(featureRecord?.geometry);
@@ -189,6 +232,8 @@ export function normalizeGeoapifyFeature(feature: unknown): Place | null {
     return null;
   }
 
+  const resultType = boundedText(properties.result_type, 40)?.toLowerCase();
+  const parts = addressParts(properties);
   const parsed = PlaceSchema.safeParse({
     provider: "geoapify",
     providerPlaceId,
@@ -201,10 +246,65 @@ export function normalizeGeoapifyFeature(feature: unknown): Place | null {
     timeZone: timeZone(properties.timezone),
     bbox: placeBbox(featureRecord, properties),
     importance: importance(asRecord(properties.rank)?.importance),
-    type: placeType(boundedText(properties.result_type, 40)?.toLowerCase()),
+    type: placeType(resultType),
   });
+  if (!parsed.success) {
+    return null;
+  }
 
-  return parsed.success ? parsed.data : null;
+  const state = boundedText(properties.state, 120);
+  const county = boundedText(properties.county, 120);
+  const city = boundedText(properties.city, 120);
+  const suburb = boundedText(properties.suburb, 120);
+  const district = boundedText(properties.district, 120);
+  const postcode = boundedText(properties.postcode, 20);
+  const rankConfidenceValue = rankConfidence(asRecord(properties.rank));
+
+  return {
+    source: "geoapify",
+    place: parsed.data,
+    providerRank,
+    ...(resultType === undefined ? {} : { resultType }),
+    ...(rankConfidenceValue === undefined ? {} : { providerConfidence: rankConfidenceValue }),
+    country,
+    ...(state === undefined ? {} : { state }),
+    ...(county === undefined ? {} : { county }),
+    ...(city === undefined ? {} : { city }),
+    ...(suburb === undefined ? {} : { suburb }),
+    ...(district === undefined ? {} : { district }),
+    ...(parts.street === undefined ? {} : { street: parts.street }),
+    ...(parts.housenumber === undefined ? {} : { housenumber: parts.housenumber }),
+    ...(postcode === undefined ? {} : { postcode }),
+  };
+}
+
+/**
+ * Normalizes a single Geoapify feature. Returns `null` when the feature cannot
+ * be expressed as a contract-valid `Place` without inventing data.
+ */
+export function normalizeGeoapifyFeature(feature: unknown): Place | null {
+  return normalizeGeoapifyFeatureCandidate(feature)?.place ?? null;
+}
+
+/**
+ * Normalizes a Geoapify FeatureCollection payload into candidates. Throws
+ * `GeoapifyPayloadError` when the payload is not a FeatureCollection;
+ * individual invalid features are dropped.
+ */
+export function normalizeGeoapifyPayloadCandidates(payload: unknown): GeoapifyCandidate[] {
+  const record = asRecord(payload);
+  if (!record || !Array.isArray(record.features)) {
+    throw new GeoapifyPayloadError("Geoapify response is not a FeatureCollection");
+  }
+
+  const candidates: GeoapifyCandidate[] = [];
+  record.features.forEach((feature, index) => {
+    const candidate = normalizeGeoapifyFeatureCandidate(feature, index);
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  });
+  return candidates;
 }
 
 /**
@@ -213,17 +313,5 @@ export function normalizeGeoapifyFeature(feature: unknown): Place | null {
  * dropped.
  */
 export function normalizeGeoapifyPayload(payload: unknown): Place[] {
-  const record = asRecord(payload);
-  if (!record || !Array.isArray(record.features)) {
-    throw new GeoapifyPayloadError("Geoapify response is not a FeatureCollection");
-  }
-
-  const places: Place[] = [];
-  for (const feature of record.features) {
-    const place = normalizeGeoapifyFeature(feature);
-    if (place) {
-      places.push(place);
-    }
-  }
-  return places;
+  return normalizeGeoapifyPayloadCandidates(payload).map((candidate) => candidate.place);
 }

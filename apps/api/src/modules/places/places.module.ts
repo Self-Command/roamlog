@@ -10,6 +10,7 @@ import { GeoapifyClient } from "./geoapify.client.js";
 import { PhotonClient } from "./photon.client.js";
 import { PlacesCacheService } from "./places-cache.service.js";
 import { PlaceSearchRateLimitGuard } from "./places-rate-limit.guard.js";
+import { PlacesMergeService } from "./places-merge.service.js";
 import { PlacesQuotaService } from "./places-quota.service.js";
 import { PlacesRateLimiter } from "./places-rate-limiter.service.js";
 import { PlacesController } from "./places.controller.js";
@@ -37,6 +38,7 @@ import { TencentClient } from "./tencent.client.js";
     TencentClient,
     PlacesCacheService,
     PlacesQuotaService,
+    PlacesMergeService,
     PlacesRateLimiter,
     PlacesService,
     PlaceSearchRateLimitGuard,
