@@ -1,8 +1,29 @@
-# Release checklist — rc.4
+# Release checklist — rc.5
 
 Pre-release gate for the next production cut. Work top to bottom; a failed item
 stops the release. Record the command output (or a hash of it) in the release
 ticket or `.audit/` evidence — "it looked fine" is not evidence.
+
+## rc.5 additions before the normal gate
+
+rc.5 ships fifteen migrations, while production's `_prisma_migrations` table
+only records `0001`–`0003` and its live schema already contains a few later
+objects. **Do not run `prisma migrate deploy` before reconciling that.**
+
+1. Run appendix A (A1–A7) of `.audit/prod-migration-plan.md` — read-only
+   `information_schema` probes. **A6 must report 0 for all ten 0004+ tables.**
+2. Back up with D.1 of the same document (`pg_dump -Fc`, size + SHA-256 +
+   `pg_restore --list`).
+3. If A6 is all zero, `docker compose … run --rm migrate` is enough. If any A6
+   count is non-zero, follow plan 1 in section C and its appendix E supplement —
+   `prisma migrate diff` alone silently omits CHECK constraints, some indexes,
+   COMMENTs and the 0010/0012 backfills.
+4. Verify the object counts afterwards: 40 tables / 468 columns / 135 indexes /
+   165 constraints.
+
+The migration plan also documents a known `DROP INDEX
+"TripDestination_tripId_deletedAt_idx"` emitted by `migrate diff` because
+`schema.prisma` does not declare it — do not execute that DROP.
 
 Placeholders in angle brackets are deliberate. **Never paste a real domain
 credential, API key, SMTP password, or `re_...` key into this file, a ticket, or
