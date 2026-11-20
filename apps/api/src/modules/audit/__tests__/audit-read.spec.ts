@@ -1,5 +1,6 @@
 import { AuditLogSchema } from "@roamlog/contracts";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { AuditLogReadSchema } from "../audit-read.js";
 
@@ -31,12 +32,21 @@ describe("AuditLogReadSchema", () => {
   it("accepts a PostgreSQL uuid that RFC 4122 rejects as targetId", () => {
     const legacy = row({ targetId: PG_UUID });
 
-    // Documents the defect: the strict RFC 4122 shape rejects data PostgreSQL
-    // stored, which is how the whole admin audit page became a 500.
-    expect(AuditLogSchema.safeParse(legacy).success).toBe(false);
+    // The contract now encodes what the column actually stores, so the read
+    // path accepts it. RFC 4122 rejects this value, which is exactly how the
+    // whole admin audit page used to become a 500.
+    expect(z.uuid().safeParse(PG_UUID).success).toBe(false);
+    expect(AuditLogSchema.safeParse(legacy).success).toBe(true);
     const parsed = AuditLogReadSchema.safeParse(legacy);
     expect(parsed.success).toBe(true);
     expect(parsed.success && parsed.data.targetId).toBe(PG_UUID);
+  });
+
+  it("is the contract itself: the read rule has a single source of truth", () => {
+    // Guards the convergence: a second, locally-defined uuid rule must not
+    // reappear here, because a divergence between writer and reader contracts
+    // is how the audit page broke in the first place.
+    expect(AuditLogReadSchema).toBe(AuditLogSchema);
   });
 
   it("accepts a non-RFC uuid in every uuid reference, still rejecting junk", () => {

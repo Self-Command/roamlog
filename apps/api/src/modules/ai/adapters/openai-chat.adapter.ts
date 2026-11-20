@@ -59,6 +59,7 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
         })),
         tool_choice: "auto",
         max_tokens: input.maxTokens,
+        ...reasoningEffortField(this.settings),
       },
     });
 
@@ -130,6 +131,7 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
         stream: true,
         // Required by OpenAI to receive the final `choices: []` usage chunk.
         stream_options: { include_usage: true },
+        ...reasoningEffortField(this.settings),
       },
     });
 
@@ -218,6 +220,24 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
   }
 }
 
+/**
+ * Reasoning depth, forwarded on the wire exactly as configured.
+ *
+ * Value set: vercel/chatbot `lib/ai/models.ts` L23 — `"none" | "minimal" |
+ * "low" | "medium" | "high"`. Upstream hands it to the gateway as
+ * `providerOptions.openai.reasoningEffort` (`app/(chat)/api/chat/route.ts`
+ * L301–L302); the OpenAI Chat Completions parameter is `reasoning_effort`, so
+ * that is the field name here. `"none"` is expressed by *omitting* the field:
+ * it is the absence of the parameter, not a value the wire format defines.
+ * Nothing else is mapped or "improved" — the string goes through verbatim.
+ */
+export function reasoningEffortField(
+  settings: AiSettings,
+): Record<string, string> {
+  const effort = settings.reasoningEffort;
+  return effort && effort !== "none" ? { reasoning_effort: effort } : {};
+}
+
 function parseJsonRecord(data: string): Record<string, unknown> {
   let parsed: unknown;
   try {
@@ -257,9 +277,36 @@ function toToolCalls(
     );
 }
 
+/**
+ * One user turn: plain string content for text-only turns, the multi-part
+ * `[{type:"text"},{type:"image_url"}]` shape once images are attached.
+ *
+ * Port of vercel/chatbot's `convertToModelMessages` result for a user message
+ * carrying image parts: the AI SDK's `{type:"image", image}` becomes an
+ * `image_url` part on an OpenAI-compatible gateway. The original URL is a
+ * `data:` URL produced by `AiPlanService` from the media pipeline, so the
+ * gateway never needs egress to Roamlog's object storage.
+ */
 function toMessages(message: AiConversationMessage): Record<string, unknown>[] {
   if (message.role === "user") {
-    return [{ role: "user", content: message.content }];
+    const images = message.images ?? [];
+    if (images.length === 0) {
+      return [{ role: "user", content: message.content }];
+    }
+    return [
+      {
+        role: "user",
+        content: [
+          ...(message.content.trim().length > 0
+            ? [{ type: "text", text: message.content }]
+            : []),
+          ...images.map((image) => ({
+            type: "image_url",
+            image_url: { url: image.dataUrl },
+          })),
+        ],
+      },
+    ];
   }
   if (message.role === "tool") {
     return message.results.map((result) => ({

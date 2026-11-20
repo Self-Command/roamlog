@@ -24,6 +24,7 @@
  */
 
 import { Inject, Injectable, Optional } from "@nestjs/common";
+import type { AiReasoningEffort } from "@roamlog/contracts";
 
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { SETTINGS_BY_KEY } from "../settings/settings.registry.js";
@@ -58,11 +59,74 @@ export interface AiSettings {
   readonly baseUrl: string | null;
   readonly apiKey: string | null;
   readonly model: string;
+  /**
+   * Models a single request may select (port of vercel/chatbot
+   * `lib/ai/models.ts` L152–L156 `getActiveModels` / `allowedModelIds`).
+   *
+   * The list is never client input: it is the admin-configured default model
+   * (`ai.model`, which is first and always allowed) plus the operator's
+   * `AI_ALLOWED_MODELS` comma-separated allow-list. With no allow-list env the
+   * only selectable model is the admin default, so the selector can never offer
+   * a model this deployment cannot serve.
+   */
+  readonly allowedModels: readonly string[];
+  /**
+   * Optional per-request reasoning depth (`AI_REASONING_EFFORT` fallback). The
+   * value set is upstream's `ChatModel["reasoningEffort"]` union
+   * (`lib/ai/models.ts` L23); the per-request body value overrides it.
+   */
+  readonly reasoningEffort?: AiReasoningEffort;
   readonly timeoutMs: number;
   readonly maxOutputTokens: number;
   /** Per-user daily plan-run cap. `0` disables the cap. */
   readonly dailyQuota: number;
   readonly configured: boolean;
+}
+
+/** Operator allow-list of extra selectable models, comma separated. */
+export const AI_ALLOWED_MODELS_ENV = "AI_ALLOWED_MODELS";
+/** Optional deployment-wide reasoning depth fallback. */
+export const AI_REASONING_EFFORT_ENV = "AI_REASONING_EFFORT";
+
+/** The upstream reasoning-depth union, restated for the environment parser. */
+const REASONING_EFFORTS: readonly AiReasoningEffort[] = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+];
+
+function reasoningEffortFromValue(value: string | undefined): AiReasoningEffort | undefined {
+  const raw = text(value)?.toLowerCase();
+  return raw && (REASONING_EFFORTS as readonly string[]).includes(raw)
+    ? (raw as AiReasoningEffort)
+    : undefined;
+}
+
+/**
+ * `allowedModels` = the admin default first, then the operator allow-list.
+ * Order matters: the UI's fallback is `allowedModels[0]`, which must always be a
+ * model this deployment is configured to serve.
+ */
+export function parseAllowedModels(
+  env: NodeJS.ProcessEnv,
+  model: string,
+): readonly string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  const push = (value: string | undefined): void => {
+    const trimmed = text(value);
+    if (!trimmed || seen.has(trimmed) || result.length >= 20) return;
+    seen.add(trimmed);
+    result.push(trimmed);
+  };
+
+  push(model);
+  for (const entry of (env[AI_ALLOWED_MODELS_ENV] ?? "").split(",")) {
+    push(entry);
+  }
+  return result;
 }
 
 function text(value: string | undefined): string | undefined {
@@ -97,6 +161,10 @@ export function resolveAiSettings(env: NodeJS.ProcessEnv = process.env): AiSetti
     baseUrl,
     apiKey,
     model,
+    allowedModels: parseAllowedModels(env, model),
+    ...(reasoningEffortFromValue(env[AI_REASONING_EFFORT_ENV])
+      ? { reasoningEffort: reasoningEffortFromValue(env[AI_REASONING_EFFORT_ENV]) }
+      : {}),
     timeoutMs: integer(env.AI_TIMEOUT_MS, DEFAULT_AI_TIMEOUT_MS, 5_000, 120_000),
     maxOutputTokens: integer(env.AI_MAX_OUTPUT_TOKENS, DEFAULT_AI_MAX_OUTPUT_TOKENS, 256, 32_000),
     dailyQuota: integer(env.AI_DAILY_QUOTA, DEFAULT_AI_DAILY_QUOTA, 0, 100_000),
@@ -344,6 +412,8 @@ export function resolveAiSettingsFromStored(
       baseUrl: mergedBaseUrl,
       apiKey: mergedApiKey,
       model: mergedModel,
+      // Recomputed after the merge: the stored/DB model must lead the list.
+      allowedModels: parseAllowedModels(env, mergedModel),
       // Configured needs both the endpoint and the model, whatever layer supplied
       // each half; the key stays optional so a local gateway can run keyless.
       configured: Boolean(mergedBaseUrl && mergedModel),

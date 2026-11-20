@@ -1,0 +1,13 @@
+{
+  "capturedAt": "2026-11-20T09:36:23.061Z",
+  "retry": 0,
+  "terminalCounts": {
+    "ai-thinking-skeleton": 0,
+    "ai-stream-status": 0,
+    ".roamlog-ai-dot": 0,
+    "停止生成": 0
+  },
+  "sawToolCard": true,
+  "sawStreamingStatus": true,
+  "finalTextPreview": "搜索地点 完成 2.8 秒 正在查询地点（1/1） 模型服务暂时不可用 计划没有生成，工作区没有被写入任何内容。请稍后重试。 这条回复中断了。工作区没有被写入任何内容，请重新发送。"
+}

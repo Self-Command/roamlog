@@ -2,13 +2,18 @@ import { randomUUID } from "node:crypto";
 
 import { HttpException, HttpStatus, Inject, Injectable, Optional } from "@nestjs/common";
 import {
+  AI_ATTACHMENT_MAX_BYTES,
   AI_ERROR_CODES,
   AI_TOOL_NAMES,
   AiChatRequestSchema,
+  type AiAttachment,
+  type AiChatModelsResponse,
   type AiChatRequest,
   type AiChatResponse,
   type AiErrorCode,
+  type AiPlanSubjects,
   type AiPlanWarning,
+  type AiReasoningEffort,
   type AiStreamEvent,
   type AiStreamPlanEvent,
   type AiStreamProgressEvent,
@@ -20,10 +25,12 @@ import {
 import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { parseRequest } from "../../common/services/request-validation.js";
+import { MediaService } from "../media/media.service.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type {
   AiConversationMessage,
+  AiImagePart,
   AiProtocolAdapter,
   AiStepInput,
   AiStepResult,
@@ -103,6 +110,11 @@ interface PlanLoopOutcome {
   readonly plannedCalls: AiToolCall[];
   readonly readOnlyTrace: AiToolCall[];
   readonly warnings: AiPlanWarning[];
+  /**
+   * Optional `id → { label }` names for the ids `plannedCalls` reference.
+   * Absent when nothing could be resolved; never fails the plan.
+   */
+  readonly subjects?: AiPlanSubjects;
   readonly usage: { readonly inputTokens: number; readonly outputTokens: number };
   readonly expiresAt: string;
   readonly createdAt: string;
@@ -186,6 +198,9 @@ function toConversationMessages(messages: readonly unknown[]): AiConversationMes
 
 @Injectable()
 export class AiPlanService {
+  /** `id → display_name` cache for the model selector; see `gatewayModelNames`. */
+  private modelNamesCache?: { at: number; names: Map<string, string> };
+
   constructor(
     @Inject(AI_SETTINGS_SOURCE) private readonly settingsSource: AiSettingsSource,
     @Inject(AI_ADAPTER_FACTORY) private readonly adapterFactory: AiAdapterFactory,
@@ -204,6 +219,11 @@ export class AiPlanService {
     @Optional()
     @Inject(PrismaService)
     private readonly prisma?: PrismaService,
+    // Attachments are resolved from the media pipeline; optional for the same
+    // hand-built-test reason as the conversation service above.
+    @Optional()
+    @Inject(MediaService)
+    private readonly media?: MediaService,
   ) {}
 
   /**
@@ -220,11 +240,25 @@ export class AiPlanService {
     rawBody: unknown,
   ): Promise<AiChatResponse> {
     const body = parseRequest(AiChatRequestSchema, rawBody);
-    const { settings, adapter } = await this.resolveAdapter();
+    const { settings, adapter } = await this.resolveAdapter({
+      ...(body.model === undefined ? {} : { model: body.model }),
+      ...(body.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: body.reasoningEffort }),
+    });
+    const images = await this.resolveAttachmentImages(
+      actor,
+      membership,
+      body.attachments,
+    );
     await this.consumeQuota(actor);
 
     const messages: AiConversationMessage[] = [
-      { role: "user", content: this.userMessage(body) },
+      {
+        role: "user",
+        content: this.userMessage(body),
+        ...(images.length > 0 ? { images } : {}),
+      },
     ];
     const loop = this.runPlanLoop({
       actor,
@@ -247,6 +281,9 @@ export class AiPlanService {
       plannedCalls: outcome.plannedCalls,
       readOnlyTrace: outcome.readOnlyTrace,
       ...(outcome.warnings.length > 0 ? { warnings: outcome.warnings } : {}),
+      ...(outcome.subjects && Object.keys(outcome.subjects).length > 0
+        ? { subjects: outcome.subjects }
+        : {}),
       usage: aiUsage(outcome.usage),
       provider: { protocol: settings.protocol, model: settings.model },
       expiresAt: outcome.expiresAt,
@@ -276,7 +313,19 @@ export class AiPlanService {
     }
 
     const startedAt = Date.now();
-    const { settings, adapter } = await this.resolveAdapter();
+    const { settings, adapter } = await this.resolveAdapter({
+      ...(body.model === undefined ? {} : { model: body.model }),
+      ...(body.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: body.reasoningEffort }),
+    });
+    // Resolved before the commit point: a bad attachment is still a 400 JSON
+    // response, never an in-stream failure after `meta`.
+    const images = await this.resolveAttachmentImages(
+      actor,
+      membership,
+      body.attachments,
+    );
     const conversations = this.conversations;
 
     const conversation = await conversations.getOrCreate({
@@ -336,7 +385,11 @@ export class AiPlanService {
     }
     const messages: AiConversationMessage[] = [
       ...history,
-      { role: "user", content: this.userMessage(body) },
+      {
+        role: "user",
+        content: this.userMessage(body),
+        ...(images.length > 0 ? { images } : {}),
+      },
     ];
 
     const firstByteMs = Date.now() - startedAt;
@@ -412,6 +465,9 @@ export class AiPlanService {
         plannedCalls: outcome.plannedCalls,
         readOnlyTrace: outcome.readOnlyTrace,
         ...(outcome.warnings.length > 0 ? { warnings: outcome.warnings } : {}),
+        ...(outcome.subjects && Object.keys(outcome.subjects).length > 0
+          ? { subjects: outcome.subjects }
+          : {}),
         expiresAt: outcome.expiresAt,
       };
       const shownText = text || outcome.finalText || outcome.message;
@@ -610,15 +666,189 @@ export class AiPlanService {
     );
   }
 
-  /** Resolves the per-request provider settings and refuses an unconfigured gateway. */
-  private async resolveAdapter(): Promise<{
+  /**
+   * Resolves the per-request provider settings and refuses an unconfigured
+   * gateway.
+   *
+   * A per-request `model` is checked against `settings.allowedModels` — the
+   * admin-configured default plus the operator allow-list — so the endpoint can
+   * never be used to drive an arbitrary model id (port of vercel/chatbot
+   * `app/(chat)/api/chat/route.ts` L97–L99, where an unknown id falls back
+   * instead of being forwarded). Roamlog rejects instead of silently falling
+   * back: a client that asked for model X must not receive answers from model Y
+   * without noticing.
+   */
+  private async resolveAdapter(
+    overrides: { model?: string; reasoningEffort?: AiReasoningEffort } = {},
+  ): Promise<{
     settings: AiSettings;
     adapter: AiProtocolAdapter;
   }> {
     const settings = await this.settingsSource.resolve();
-    const adapter = this.adapterFactory(settings);
-    this.assertConfigured(settings, adapter);
-    return { settings, adapter };
+    const model = overrides.model?.trim();
+    if (model !== undefined && !settings.allowedModels.includes(model)) {
+      throw new HttpException(
+        {
+          code: "AI_MODEL_NOT_ALLOWED",
+          message: "That model is not enabled for this workspace.",
+          allowedModels: settings.allowedModels,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // The adapter reads one snapshot; the override is expressed there, exactly
+    // like the upstream route passes `model: getLanguageModel(chatModel)`.
+    const effective: AiSettings = {
+      ...settings,
+      ...(model === undefined ? {} : { model }),
+      ...(overrides.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: overrides.reasoningEffort }),
+    };
+    const adapter = this.adapterFactory(effective);
+    this.assertConfigured(effective, adapter);
+    return { settings: effective, adapter };
+  }
+
+  /** The model list the selector renders (`GET .../ai/models`). */
+  async chatModels(): Promise<AiChatModelsResponse> {
+    const settings = await this.settingsSource.resolve();
+    // Only the OpenAI-family protocols define a reasoning-effort parameter; the
+    // Anthropic Messages adapter ignores it (see its `toMessage`).
+    const reasoningSupported = settings.protocol !== "anthropic-messages";
+    const displayNames = await this.gatewayModelNames(settings);
+    return {
+      models: settings.allowedModels.map((id) => ({
+        id,
+        // Upstream's selector renders `ChatModel.name` (`lib/ai/models.ts` L17–L24),
+        // a human name curated next to the id. Roamlog has no curated table, so
+        // the gateway's own `display_name` is preferred and a readable
+        // derivation of the id is the fallback — never a hard-coded frontend map.
+        name: (displayNames.get(id) ?? readableModelName(id)).slice(0, 80),
+        provider: id.includes("/") ? id.split("/")[0]! : "gateway",
+        reasoning: reasoningSupported,
+        vision: true,
+      })),
+      defaultModel: settings.model,
+      reasoningSupported,
+    };
+  }
+
+  /**
+   * `id → display_name`, read from the gateway catalog once per five minutes.
+   *
+   * Port of vercel/chatbot `lib/ai/models.ts` L122–L150 (`getAllGatewayModels`,
+   * which maps the gateway's `/models` payload into `ChatModel[]`): the catalog
+   * already carries a human name, so the selector does not have to invent one.
+   * Any failure (offline gateway, non-OpenAI shape, timeout) is silent: the
+   * caller falls back to `readableModelName`.
+   */
+  private async gatewayModelNames(settings: AiSettings): Promise<Map<string, string>> {
+    const cached = this.modelNamesCache;
+    if (cached && Date.now() - cached.at < MODEL_NAMES_TTL_MS) return cached.names;
+    const names = new Map<string, string>();
+
+    if (settings.baseUrl) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), MODEL_NAMES_TIMEOUT_MS);
+      try {
+        const response = await fetch(`${settings.baseUrl}/models`, {
+          headers: {
+            accept: "application/json",
+            ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
+          },
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          const payload = (await response.json()) as {
+            data?: Array<{ id?: unknown; display_name?: unknown; name?: unknown }>;
+          };
+          for (const entry of payload.data ?? []) {
+            const id = typeof entry.id === "string" ? entry.id : undefined;
+            const name =
+              typeof entry.display_name === "string"
+                ? entry.display_name
+                : typeof entry.name === "string"
+                  ? entry.name
+                  : undefined;
+            if (id && name && name.trim()) names.set(id, name.trim());
+          }
+        }
+      } catch {
+        // Catalog lookup is cosmetic: keep serving ids.
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    this.modelNamesCache = { at: Date.now(), names };
+    return names;
+  }
+
+  /**
+   * Turns attachment references into image content parts the model can read.
+   *
+   * Chain (no new upload system): the browser already ran the existing media
+   * presign→PUT→complete flow, so each `mediaId` is a media row in this
+   * workspace. `MediaService.getOne` enforces the workspace boundary and returns
+   * a signed read URL; the bytes are fetched here and inlined as a `data:` URL so
+   * the gateway never needs egress to object storage.
+   *
+   * Port reference: vercel/chatbot stores the uploaded URL on the message
+   * (`multimodal-input.tsx` L286–L292) and lets AI SDK `convertToModelMessages`
+   * turn the image part into provider content. Roamlog has no AI SDK, so the
+   * equivalent conversion happens here, once, for all three adapters.
+   */
+  private async resolveAttachmentImages(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    attachments: readonly AiAttachment[] | undefined,
+  ): Promise<AiImagePart[]> {
+    if (!attachments || attachments.length === 0) return [];
+    if (!this.media) {
+      throw new HttpException(
+        {
+          code: "AI_ATTACHMENT_INVALID",
+          message: "Attachments are not available on this deployment.",
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const images: AiImagePart[] = [];
+    for (const attachment of attachments) {
+      let read: Awaited<ReturnType<MediaService["getOne"]>>;
+      try {
+        // Same entry point the media HTTP route uses: workspace boundary plus
+        // the caller's `media:read` permission, so an attachment can never widen
+        // what this user is allowed to see.
+        read = await this.media.getOne(actor, membership, attachment.mediaId);
+      } catch {
+        throw new HttpException(
+          { code: "AI_ATTACHMENT_INVALID", message: "Attachment not found." },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const url = read.url ?? read.thumbUrl;
+      if (!url || read.status !== "ready") {
+        throw new HttpException(
+          {
+            code: "AI_ATTACHMENT_INVALID",
+            message: "Attachment is not ready yet.",
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const bytes = await fetchAttachmentBytes(url);
+      images.push({
+        mimeType: read.mimeType,
+        dataUrl: `data:${read.mimeType};base64,${bytes.toString("base64")}`,
+      });
+    }
+    return images;
   }
 
   /** Daily quota check shared by the blocking and streaming endpoints. */
@@ -679,6 +909,12 @@ export class AiPlanService {
     const context = { actor: input.actor, membership: input.membership, runId, candidates };
     const plannedCalls: AiToolCall[] = [];
     const readOnlyTrace: AiToolCall[] = [];
+    /**
+     * Names the planner already read this run (`places.search` → place name,
+     * `stops.list` → city, `trips.*` → title). Fed into `planSubjects` so most
+     * ids never need a second lookup.
+     */
+    const seenLabels = new Map<string, string>();
     const usage: { inputTokens: number; outputTokens: number } = { inputTokens: 0, outputTokens: 0 };
 
     // Everything from the current user message onward is this turn's model
@@ -881,6 +1117,9 @@ export class AiPlanService {
             });
             continue;
           }
+          if (outcome.ok) {
+            this.toolbox.rememberLabels(call, outcome.payload, seenLabels);
+          }
           const aborted = input.signal?.aborted === true;
           if (input.streaming) {
             yield {
@@ -1005,6 +1244,19 @@ export class AiPlanService {
       );
     }
 
+    // Names for the plan card, resolved after the plan is final. Best-effort:
+    // a failed lookup is logged through `logger.debug` and the id stays
+    // nameless instead of failing the plan.
+    const subjects =
+      plannedCalls.length === 0
+        ? undefined
+        : await this.toolbox.planSubjects(plannedCalls, context, seenLabels, (message) =>
+            this.logger.debug(
+              { event: "ai.plan_subject_lookup_failed", subject: message },
+              "ai.plan_subject_lookup_failed",
+            ),
+          );
+
     const createdAt = new Date();
     const message = (finalText ?? fallbackMessage(plannedCalls, warnings, today)).slice(0, 4000);
     const run: StoredAiRun = {
@@ -1032,6 +1284,7 @@ export class AiPlanService {
       plannedCalls,
       readOnlyTrace,
       warnings,
+      ...(subjects && Object.keys(subjects).length > 0 ? { subjects } : {}),
       usage,
       expiresAt: new Date(createdAt.getTime() + AI_RUN_TTL_SECONDS * 1_000).toISOString(),
       createdAt: createdAt.toISOString(),
@@ -1272,4 +1525,71 @@ export function describeToolError(error: unknown): { code: string; message: stri
     return { code: code.slice(0, 60), message: message.slice(0, 300) };
   }
   return { code: "AI_TOOL_FAILED", message: "The tool could not run." };
+}
+
+/**
+ * Reads one media object's bytes for inlining as a `data:` URL.
+ *
+ * Separate from `resolveAttachmentImages` so the size/timeout guards are
+ * readable in one place. The cap is the contract's per-attachment ceiling and
+ * the timeout keeps a hung object store from stalling a chat turn.
+ */
+async function fetchAttachmentBytes(url: string): Promise<Buffer> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new HttpException(
+        { code: "AI_ATTACHMENT_INVALID", message: "Attachment could not be read." },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const declared = Number(response.headers.get("content-length") ?? "0");
+    if (Number.isFinite(declared) && declared > AI_ATTACHMENT_MAX_BYTES) {
+      throw new HttpException(
+        { code: "AI_ATTACHMENT_INVALID", message: "Attachment is too large." },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.byteLength > AI_ATTACHMENT_MAX_BYTES) {
+      throw new HttpException(
+        { code: "AI_ATTACHMENT_INVALID", message: "Attachment is too large." },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return bytes;
+  } catch (error) {
+    if (error instanceof HttpException) throw error;
+    throw new HttpException(
+      { code: "AI_ATTACHMENT_INVALID", message: "Attachment could not be read." },
+      HttpStatus.BAD_REQUEST,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** How long the gateway model catalog is reused for display names. */
+const MODEL_NAMES_TTL_MS = 5 * 60_000;
+/** A cosmetic lookup must never delay the model selector. */
+const MODEL_NAMES_TIMEOUT_MS = 2_500;
+
+/**
+ * Readable fallback for a model id (`auto/deepseek-v4.1-flash` →
+ * `Deepseek V4.1 Flash`). Only used when the gateway does not publish a
+ * `display_name`; the frontend never owns such a mapping.
+ */
+export function readableModelName(id: string): string {
+  const slug = id.includes("/") ? id.slice(id.indexOf("/") + 1) : id;
+  return (
+    slug
+      .split(/[-_.]+/u)
+      .filter((word) => word.length > 0)
+      .map((word) =>
+        /^[a-z]+$/iu.test(word) ? `${word[0]!.toUpperCase()}${word.slice(1)}` : word,
+      )
+      .join(" ") || id
+  );
 }

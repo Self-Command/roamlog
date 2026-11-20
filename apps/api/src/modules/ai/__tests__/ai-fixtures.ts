@@ -15,16 +15,23 @@ export const WORKSPACE_ID = "01942f30-1200-7000-8000-000000000001";
 export const USER_ID = "01942f30-1200-7000-8000-000000000002";
 
 export function aiSettings(overrides: Partial<AiSettings> = {}): AiSettings {
-  return {
+  const settings: AiSettings = {
     protocol: "openai-chat",
     baseUrl: "http://127.0.0.1:3425/v1",
     apiKey: null,
     model: "auto/deepseek-v4.1-flash",
+    allowedModels: ["auto/deepseek-v4.1-flash"],
     timeoutMs: 60_000,
     maxOutputTokens: 6_000,
     dailyQuota: 20,
     configured: true,
     ...overrides,
+  };
+  // Keep the allow-list consistent with an overridden model unless the test says
+  // otherwise: the default model is always selectable (`parseAllowedModels`).
+  return {
+    ...settings,
+    allowedModels: overrides.allowedModels ?? [settings.model],
   };
 }
 

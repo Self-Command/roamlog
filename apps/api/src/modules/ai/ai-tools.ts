@@ -1,10 +1,11 @@
-import { Inject, Injectable, Optional } from "@nestjs/common";
+import { HttpException, Inject, Injectable, Optional } from "@nestjs/common";
 import {
   CreateItineraryItemRequestSchema,
   CreatePackingItemRequestSchema,
   CreateStopRequestSchema,
   CreateTripRequestSchema,
   isReadOnlyAiTool,
+  type AiPlanSubjects,
   type AiToolCall,
   type AiToolError,
   type AiToolName,
@@ -1043,6 +1044,47 @@ function tripTargetError(code: string, message: string): AiToolOutcome {
   return { ok: false, payload: { error: code }, error: { code, message: message.slice(0, 300) } };
 }
 
+/** Upper bound on the `subjects` map sent with a plan (ids referenced, not rows). */
+const MAX_PLAN_SUBJECTS = 80;
+/** Subject lookups probe at most this many distinct trips, never a workspace scan. */
+const MAX_SUBJECT_TRIPS = 3;
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function recordList(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is Record<string, unknown> =>
+      typeof item === "object" && item !== null && !Array.isArray(item),
+  );
+}
+
+function textValue(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** Problem code for a lookup failure, for the debug log only (never the response). */
+function lookupErrorCode(error: unknown): string {
+  if (error instanceof HttpException) {
+    const response = error.getResponse();
+    if (typeof response === "object" && response !== null) {
+      const code = (response as Record<string, unknown>).code;
+      if (typeof code === "string") return code.slice(0, 60);
+    }
+  }
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string") return code.slice(0, 60);
+  }
+  return "AI_TOOL_FAILED";
+}
+
 type TripTargetResolution =
   | { readonly kind: "ok"; readonly call: AiToolCall }
   | { readonly kind: "error"; readonly outcome: AiToolOutcome };
@@ -1141,6 +1183,204 @@ export class AiToolbox {
       }
     }
     return null;
+  }
+
+  /**
+   * Remembers human-readable names a read-only tool already returned, so a
+   * later write call can be named instead of shown by id.
+   *
+   * Additive and non-fatal: an unexpected payload is ignored. `places.search`
+   * names are keyed by `providerPlaceId` (that is what `stops.add` carries),
+   * `stops.list` by `stopId`, `trips.get`/`trips.list` by `tripId`.
+   */
+  rememberLabels(call: AiToolCall, payload: unknown, into: Map<string, string>): void {
+    const body = recordValue(payload);
+    if (!body) return;
+    const remember = (id: unknown, label: unknown): void => {
+      const key = textValue(id);
+      const value = textValue(label);
+      if (key && value && !into.has(key)) into.set(key, value.slice(0, 160));
+    };
+
+    switch (call.tool) {
+      case "places.search":
+        for (const candidate of recordList(body.candidates)) {
+          remember(candidate.providerPlaceId, candidate.name);
+        }
+        break;
+      case "stops.list":
+        for (const stop of recordList(body.stops)) remember(stop.stopId, stop.city);
+        break;
+      case "trips.get":
+        remember(body.tripId, body.title);
+        break;
+      case "trips.list":
+        for (const trip of recordList(body.trips)) remember(trip.tripId, trip.title);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Builds the optional `plan.subjects` map (`id → { label }`) for the ids the
+   * plan's calls reference.
+   *
+   * Sources, in order: names the planner already read (`rememberLabels`),
+   * permission-checked single lookups (`entries.get`), and one listing per real
+   * trip id for stops / itinerary / packing / expenses when a call carries only
+   * an item id. Participants are not resolved because the trip participant
+   * projection only exposes `userId` (no display name) — those ids stay
+   * nameless and the UI falls back to its generic copy.
+   *
+   * A failed lookup is reported through `onLookupError` and never fails the
+   * plan; a plan with no resolvable names returns an empty map.
+   */
+  async planSubjects(
+    calls: readonly AiToolCall[],
+    context: AiToolContext,
+    seen: ReadonlyMap<string, string>,
+    onLookupError?: (message: string) => void,
+  ): Promise<AiPlanSubjects> {
+    const names = new Map(seen);
+    const referenced = new Set<string>();
+    const trips = new Set<string>();
+    const stopTargets = new Set<string>();
+    const itemTargets = new Set<string>();
+    const expenseTargets = new Set<string>();
+    const entryTargets = new Set<string>();
+
+    const track = (id: unknown, bucket?: Set<string>): void => {
+      const value = textValue(id);
+      if (!value) return;
+      referenced.add(value);
+      if (bucket && !names.has(value)) bucket.add(value);
+    };
+
+    for (const call of calls) {
+      const args = recordValue(call.args) ?? {};
+      const tripId = textValue(args.tripId);
+      if (tripId && !isTripIdPlaceholder(tripId)) {
+        trips.add(tripId);
+        // `trips.update` is shown by the trip's current title (From column).
+        referenced.add(tripId);
+      }
+      switch (call.tool) {
+        case "stops.add":
+          track(args.providerPlaceId);
+          break;
+        case "stops.update":
+        case "stops.delete":
+          track(args.stopId, stopTargets);
+          break;
+        case "itinerary.update":
+        case "itinerary.delete":
+        case "packing.update":
+        case "packing.delete":
+          track(args.itemId, itemTargets);
+          break;
+        case "expenses.update":
+        case "expenses.delete":
+          track(args.expenseId, expenseTargets);
+          break;
+        case "entries.update":
+          track(args.entryId, entryTargets);
+          break;
+        case "participants.add":
+        case "participants.remove":
+        case "participants.role":
+          track(args.memberId);
+          break;
+        default:
+          break;
+      }
+    }
+
+    const report = (scope: string, error: unknown): void => {
+      onLookupError?.(`${scope}: ${lookupErrorCode(error)}`);
+    };
+
+    const entries = this.entries;
+    if (entries) {
+      for (const entryId of entryTargets) {
+        try {
+          const entry = await entries.get(context.actor, context.membership, entryId);
+          names.set(entryId, entry.title.slice(0, 160));
+        } catch (error) {
+          report(`entries.get(${entryId})`, error);
+        }
+      }
+    }
+
+    const expensesService = this.expenses;
+
+    for (const tripId of [...trips].slice(0, MAX_SUBJECT_TRIPS)) {
+      if (!names.has(tripId)) {
+        try {
+          const trip = await this.trips.get(context.actor, context.membership, tripId);
+          names.set(tripId, trip.title.slice(0, 160));
+        } catch (error) {
+          report(`trips.get(${tripId})`, error);
+        }
+      }
+
+      if (stopTargets.size > 0) {
+        try {
+          const stops = await this.stops.list(context.actor, context.membership, tripId);
+          for (const stop of stops) {
+            if (!names.has(stop.id)) names.set(stop.id, stop.city.slice(0, 160));
+            stopTargets.delete(stop.id);
+          }
+        } catch (error) {
+          report(`stops.list(${tripId})`, error);
+        }
+      }
+
+      if (itemTargets.size > 0) {
+        try {
+          const items = await this.itinerary.list(context.actor, context.membership, tripId);
+          for (const item of items) {
+            if (!names.has(item.id)) names.set(item.id, item.title.slice(0, 160));
+            itemTargets.delete(item.id);
+          }
+          const packing = await this.packing.list(context.actor, context.membership, tripId, {
+            limit: 100,
+          });
+          for (const item of packing.items) {
+            if (!names.has(item.id)) names.set(item.id, item.name.slice(0, 160));
+            itemTargets.delete(item.id);
+          }
+        } catch (error) {
+          report(`items.list(${tripId})`, error);
+        }
+      }
+
+      if (expenseTargets.size > 0 && expensesService) {
+        try {
+          const expenses = await expensesService.list(context.actor, context.membership, tripId, {
+            limit: 100,
+          });
+          for (const expense of expenses.items) {
+            const label = textValue(expense.note);
+            if (label && !names.has(expense.id)) names.set(expense.id, label.slice(0, 160));
+            expenseTargets.delete(expense.id);
+          }
+        } catch (error) {
+          report(`expenses.list(${tripId})`, error);
+        }
+      }
+    }
+
+    const subjects: AiPlanSubjects = {};
+    let count = 0;
+    for (const id of referenced) {
+      if (count >= MAX_PLAN_SUBJECTS) break;
+      const label = names.get(id);
+      if (!label) continue;
+      subjects[id] = { label: label.slice(0, 160) };
+      count += 1;
+    }
+    return subjects;
   }
 
   async execute(call: AiToolCall, context: AiToolContext): Promise<AiToolOutcome> {

@@ -64,6 +64,7 @@ function settings(protocol: AiSettings["protocol"]): AiSettings {
     baseUrl: "http://gateway.test/v1",
     apiKey: "test-key",
     model: "test-model",
+    allowedModels: ["test-model"],
     timeoutMs: 5_000,
     maxOutputTokens: 1_000,
     dailyQuota: 20,

@@ -272,9 +272,43 @@ function toToolCalls(
     );
 }
 
+/**
+ * One Anthropic message. Image attachments become `image` content blocks with a
+ * base64 `source` — the Messages API accepts no URL for images, so the data URL
+ * resolved by the planner is split into `media_type` + `data`.
+ *
+ * Note: Anthropic Messages has no `reasoningEffort` equivalent, so
+ * `settings.reasoningEffort` is deliberately not forwarded on this protocol
+ * (declared in the delivery report; the UI marks that per model).
+ */
+/** `data:<mime>;base64,<payload>` → `<payload>`; anything else is passed through. */
+export function base64Payload(dataUrl: string): string {
+  const comma = dataUrl.indexOf(",");
+  return dataUrl.startsWith("data:") && comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+}
+
 function toMessage(message: AiConversationMessage): Record<string, unknown> {
   if (message.role === "user") {
-    return { role: "user", content: [{ type: "text", text: message.content }] };
+    const images = message.images ?? [];
+    if (images.length === 0) {
+      return { role: "user", content: [{ type: "text", text: message.content }] };
+    }
+    return {
+      role: "user",
+      content: [
+        ...(message.content.trim().length > 0
+          ? [{ type: "text", text: message.content }]
+          : []),
+        ...images.map((image) => ({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: image.mimeType,
+            data: base64Payload(image.dataUrl),
+          },
+        })),
+      ],
+    };
   }
   if (message.role === "tool") {
     return {

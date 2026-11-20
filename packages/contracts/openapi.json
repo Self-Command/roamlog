@@ -270,16 +270,16 @@
               "properties": {
                 "id": {
                   "type": "string",
-                  "format": "uuid",
-                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "actorId": {
                   "type": [
                     "string",
                     "null"
                   ],
-                  "format": "uuid",
-                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "actorType": {
                   "type": "string",
@@ -301,16 +301,16 @@
                 },
                 "targetId": {
                   "type": "string",
-                  "format": "uuid",
-                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "workspaceId": {
                   "type": [
                     "string",
                     "null"
                   ],
-                  "format": "uuid",
-                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "ip": {
                   "type": [
@@ -4700,16 +4700,16 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid",
-            "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "actorId": {
             "type": [
               "string",
               "null"
             ],
-            "format": "uuid",
-            "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "actorType": {
             "type": "string",
@@ -4731,16 +4731,16 @@
           },
           "targetId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "workspaceId": {
             "type": [
               "string",
               "null"
             ],
-            "format": "uuid",
-            "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "ip": {
             "type": [
@@ -20620,16 +20620,16 @@
               "properties": {
                 "id": {
                   "type": "string",
-                  "format": "uuid",
-                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "actorId": {
                   "type": [
                     "string",
                     "null"
                   ],
-                  "format": "uuid",
-                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "actorType": {
                   "type": "string",
@@ -20651,16 +20651,16 @@
                 },
                 "targetId": {
                   "type": "string",
-                  "format": "uuid",
-                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "workspaceId": {
                   "type": [
                     "string",
                     "null"
                   ],
-                  "format": "uuid",
-                  "description": "Opaque audit-record UUID; accepts legacy UUIDv4 and current UUIDv7 values."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "ip": {
                   "type": [
@@ -30744,8 +30744,8 @@
                   "properties": {
                     "runId": {
                       "type": "string",
-                      "pattern": "^[0-9a-f]{32}$",
-                      "description": "Opaque plan-run identifier returned by POST .../ai/chat."
+                      "pattern": "^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i",
+                      "description": "Opaque plan-run identifier: legacy 32-hex digits or an RFC 4122 UUID (8-4-4-4-12)."
                     },
                     "message": {
                       "type": "string",
@@ -31278,11 +31278,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[0-9a-f]{32}$",
-              "description": "Opaque plan-run identifier returned by POST .../ai/chat."
+              "pattern": "^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i",
+              "description": "Opaque plan-run identifier: legacy 32-hex digits or an RFC 4122 UUID (8-4-4-4-12)."
             },
             "required": true,
-            "description": "Opaque plan-run identifier returned by POST .../ai/chat.",
+            "description": "Opaque plan-run identifier: legacy 32-hex digits or an RFC 4122 UUID (8-4-4-4-12).",
             "name": "runId",
             "in": "path"
           },

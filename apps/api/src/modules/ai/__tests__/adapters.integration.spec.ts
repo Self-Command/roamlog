@@ -204,7 +204,11 @@ describe.skipIf(!hasGateway)("AI plan loop against a real gateway", () => {
             `\n[${protocol}] usage=${JSON.stringify(response.usage)}`,
         );
 
-        expect(response.runId).toMatch(/^[0-9a-f]{32}$/u);
+        // `newRunId()` mints a real RFC 4122 UUIDv7 now: a 32-hyphenless-hex
+        // value is what PostgreSQL rewrote into an invalid `AuditLog.targetId`.
+        expect(response.runId).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+        );
         expect(response.provider.protocol).toBe(protocol);
         // The planner must have searched real candidates (read-only) and must not
         // have written anything.

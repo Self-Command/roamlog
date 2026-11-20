@@ -1,10 +1,14 @@
 import {
+  AiChatModelsResponseSchema,
   AiChatResponseSchema,
   AiRunExecuteResponseSchema,
   AiStreamEventSchema,
+  type AiAttachment,
+  type AiChatModelsResponse,
   type AiChatResponse,
   type AiPlanHint,
   type AiPlanWarning,
+  type AiReasoningEffort,
   type AiRunExecuteResponse,
   type AiStreamEvent,
   type AiToolCall,
@@ -202,6 +206,53 @@ async function postJson<T>(path: string, body: unknown, schema: SchemaLike<T>): 
   return parsed.data;
 }
 
+/**
+ * `GET .../ai/models` — the selectable model list.
+ *
+ * Port of vercel/chatbot's model-selector data source
+ * (`components/chat/multimodal-input.tsx` L794–L803 → `app/(chat)/api/models/route.ts`).
+ * Only models this deployment accepts are returned, so the selector can never
+ * offer an id the API would reject with `AI_MODEL_NOT_ALLOWED`.
+ */
+export async function fetchAiModels(workspaceId: string): Promise<AiChatModelsResponse> {
+  const path = `/v1/workspaces/${encodeURIComponent(workspaceId)}/ai/models`;
+  let response: Response;
+  let payload: unknown = null;
+
+  try {
+    response = await fetch(path, {
+      credentials: "include",
+      headers: { accept: "application/json" },
+    });
+    const text = await response.text();
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+    }
+  } catch (cause) {
+    throw toAiRequestError(cause);
+  }
+
+  if (!response.ok) {
+    throw toAiRequestError(errorFromResponse(response.status, payload, path));
+  }
+
+  const parsed = AiChatModelsResponseSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new AiRequestError(
+      response.status,
+      parsed.error.issues[0]?.message ?? `The model list at ${path} did not match the contract.`,
+      "INVALID_RESPONSE",
+      "invalid_response",
+    );
+  }
+
+  return parsed.data;
+}
+
 export interface AiPlanInput {
   message: string;
   hints?: AiPlanHint;
@@ -240,6 +291,12 @@ export interface AiStreamPlanInput extends AiPlanInput {
   conversationId?: string;
   clientMessageId?: string;
   assistantMessageId?: string;
+  /** Per-turn model override; the API rejects ids outside its allow-list. */
+  model?: string;
+  /** Per-turn reasoning depth, forwarded verbatim by the API. */
+  reasoningEffort?: AiReasoningEffort;
+  /** Media already uploaded through the media presign→PUT→complete pipeline. */
+  attachments?: AiAttachment[];
 }
 
 export type AiStreamPlanOptions = AbortSignal | { signal?: AbortSignal };
@@ -516,6 +573,11 @@ export async function* streamAiPlan(
   if (input.conversationId) body.conversationId = input.conversationId;
   if (input.clientMessageId) body.clientMessageId = input.clientMessageId;
   if (input.assistantMessageId) body.assistantMessageId = input.assistantMessageId;
+  if (input.model) body.model = input.model;
+  if (input.reasoningEffort) body.reasoningEffort = input.reasoningEffort;
+  if (input.attachments && input.attachments.length > 0) {
+    body.attachments = input.attachments;
+  }
 
   let response: Response;
   try {

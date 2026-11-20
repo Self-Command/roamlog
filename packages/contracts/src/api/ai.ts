@@ -274,11 +274,30 @@ export const AiChatRequestSchema = z
   .strict();
 export type AiChatRequest = z.infer<typeof AiChatRequestSchema>;
 
-/** Opaque, server-generated poll handle for a plan that has not been executed. */
+/**
+ * Opaque, server-generated poll handle for a plan that has not been executed.
+ *
+ * Two shapes are accepted on purpose; this is a pure widening, never a
+ * narrowing:
+ *  - `newRunId()` used to return 32 hyphenless hex digits, and those plans are
+ *    still alive in Redis (`ai:run:*`, 15-minute TTL) and were already echoed to
+ *    clients as `AiChatResponse.runId` / `AiStreamPlanEvent.runId`. They must
+ *    keep confirming against `POST .../ai/runs/:runId/execute`;
+ *  - the current UUIDv7 form (`generateUuidV7()`, 8-4-4-4-12), which is what
+ *    `newRunId()` returns now and what survives a PostgreSQL `uuid` column
+ *    (`AuditLog.targetId`) without changing its version/variant nibbles.
+ *
+ * Never drop the 32-hex branch: doing so would 400 every plan minted by a
+ * process that has not restarted since the writer fix deployed.
+ */
 export const AiRunIdSchema = z
   .string()
-  .regex(/^[0-9a-f]{32}$/)
-  .describe("Opaque plan-run identifier returned by POST .../ai/chat.");
+  .regex(
+    /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+  )
+  .describe(
+    "Opaque plan-run identifier: legacy 32-hex digits or an RFC 4122 UUID (8-4-4-4-12).",
+  );
 
 export const AiUsageSchema = z
   .object({

@@ -6,6 +6,8 @@ import {
   type AiToolName,
 } from "@roamlog/contracts";
 
+import type { PlanAction, PlanBucket } from "./plan-preview";
+
 /**
  * All user-facing copy for the AI page lives here.
  *
@@ -64,6 +66,42 @@ const EXPENSE_CATEGORIES: Readonly<Record<string, string>> = {
 
 export function toolLabel(tool: AiToolName): string {
   return TOOL_LABELS[tool];
+}
+
+/**
+ * Group headings for the plan preview.
+ *
+ * These are the only Chinese names for the nine buckets; `plan-preview.ts`
+ * looks them up instead of carrying a second list (§C9 of the review spec).
+ */
+const PLAN_BUCKET_TITLES: Readonly<Record<PlanBucket, string>> = {
+  trip: "行程",
+  stops: "停靠点",
+  itinerary: "每日行程",
+  packing: "打包清单",
+  budget: "预算",
+  expenses: "开销",
+  entries: "日志",
+  participants: "同行人",
+  orphan: "无法归属",
+};
+
+export function planBucketTitle(bucket: PlanBucket): string {
+  return PLAN_BUCKET_TITLES[bucket];
+}
+
+/**
+ * Chinese action words replace OpenTofu's `+ ~ -` symbols (a deliberate
+ * information-architecture adaptation, not a code port).
+ */
+const PLAN_ACTION_LABELS: Readonly<Record<PlanAction, string>> = {
+  add: "新增",
+  change: "修改",
+  remove: "移除",
+};
+
+export function planActionLabel(action: PlanAction): string {
+  return PLAN_ACTION_LABELS[action];
 }
 
 const TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(TOOL_LABELS));

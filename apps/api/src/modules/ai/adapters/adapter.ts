@@ -20,9 +20,27 @@ export interface AiToolResultMessage {
   readonly content: string;
 }
 
-/** One normalized conversation, translated per protocol by each adapter. */
+/** One image the model may read, already normalized to a `data:` URL. */
+export interface AiImagePart {
+  readonly mimeType: string;
+  /** `data:<mimeType>;base64,<…>`; resolved from the media pipeline by the planner. */
+  readonly dataUrl: string;
+}
+
+/**
+ * One normalized conversation, translated per protocol by each adapter.
+ *
+ * `images` exists only on the user turn that carried attachments (port of
+ * vercel/chatbot `convertToModelMessages`: a `file` part with an image media
+ * type becomes an image content part for the model). It is optional, so every
+ * text-only turn keeps the previous wire shape byte for byte.
+ */
 export type AiConversationMessage =
-  | { readonly role: "user"; readonly content: string }
+  | {
+      readonly role: "user";
+      readonly content: string;
+      readonly images?: readonly AiImagePart[];
+    }
   | {
       readonly role: "assistant";
       readonly content: string | null;

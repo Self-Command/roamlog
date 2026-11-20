@@ -54,6 +54,7 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
         })),
         tool_choice: "auto",
         max_output_tokens: input.maxTokens,
+        ...reasoningField(this.settings),
       },
     });
 
@@ -126,6 +127,7 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
         tool_choice: "auto",
         max_output_tokens: input.maxTokens,
         stream: true,
+        ...reasoningField(this.settings),
       },
     });
 
@@ -271,9 +273,40 @@ function toToolCalls(
     );
 }
 
+/**
+ * Reasoning depth for the Responses API.
+ *
+ * Same upstream value set (vercel/chatbot `lib/ai/models.ts` L23) and the same
+ * rule as the Chat Completions adapter: the exact string is forwarded as
+ * `reasoning.effort`, and `"none"` is expressed by omitting the object.
+ */
+export function reasoningField(settings: AiSettings): Record<string, unknown> {
+  const effort = settings.reasoningEffort;
+  return effort && effort !== "none" ? { reasoning: { effort } } : {};
+}
+
 function toInputItems(message: AiConversationMessage): Record<string, unknown>[] {
   if (message.role === "user") {
-    return [{ role: "user", content: message.content }];
+    const images = message.images ?? [];
+    if (images.length === 0) {
+      return [{ role: "user", content: message.content }];
+    }
+    // Responses input items: `input_text` / `input_image` parts (the Responses
+    // equivalent of the `image_url` part used by Chat Completions).
+    return [
+      {
+        role: "user",
+        content: [
+          ...(message.content.trim().length > 0
+            ? [{ type: "input_text", text: message.content }]
+            : []),
+          ...images.map((image) => ({
+            type: "input_image",
+            image_url: image.dataUrl,
+          })),
+        ],
+      },
+    ];
   }
   if (message.role === "tool") {
     return message.results.map((result) => ({

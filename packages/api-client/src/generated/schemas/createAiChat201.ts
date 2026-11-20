@@ -14,8 +14,8 @@ import type { CreateAiChat201WarningsItem } from "./createAiChat201WarningsItem"
 
 export type CreateAiChat201 = {
   /**
-   * Opaque plan-run identifier returned by POST .../ai/chat.
-   * @pattern ^[0-9a-f]{32}$
+   * Opaque plan-run identifier: legacy 32-hex digits or an RFC 4122 UUID (8-4-4-4-12).
+   * @pattern ^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
    */
   runId: string;
   /** @maxLength 4000 */

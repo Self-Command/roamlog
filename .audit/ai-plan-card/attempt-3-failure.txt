@@ -1,0 +1,230 @@
+error
+
+查找旅行
+完成
+<1 秒
+搜索地点
+完成
+1.4 秒
+正在查询地点（1/3）
+搜索地点
+完成
+1.2 秒
+正在查询地点（2/3）
+搜索地点
+完成
+1.3 秒
+正在查询地点（3/3）
+搜索地点
+完成
+1.0 秒
+正在查询地点（1/2）
+搜索地点
+完成
+<1 秒
+正在查询地点（2/2）
+
+模型服务暂时不可用
+
+计划没有生成，工作区没有被写入任何内容。请稍后重试。
+
+这条回复中断了。工作区没有被写入任何内容，请重新发送。
+
+# 200 http://localhost:3000/v1/workspaces/019b7946-1c12-72e5-b2f5-ba152dee90d6/ai/chat/stream
+
+: ok
+
+id: 000001
+event: meta
+data: {"type":"meta","v":1,"conversationId":"01a1f851-e6fa-75a9-82d0-4b0f882fc462","userMessageId":"01a1f851-e783-71cf-a873-853aaf7e562f","assistantMessageId":"NY1u00S","provider":{"protocol":"openai-chat","model":"auto/deepseek-v4.1-flash"}}
+
+id: 000002
+event: progress
+data: {"type":"progress","stage":"thinking","label":"正在思考…"}
+
+: hb 2026-11-20T09:38:14.702Z
+
+id: 000003
+event: tool.start
+data: {"type":"tool.start","toolCallId":"round-1-call-0","name":"trips.list","stepId":"round-1","args":{"query":"PRODCOPY-PLANCARD-20261120093757"},"startedAt":"2026-11-20T09:38:28.552Z"}
+
+id: 000004
+event: progress
+data: {"type":"progress","stage":"reading","label":"正在读取行程…"}
+
+id: 000005
+event: tool.end
+data: {"type":"tool.end","toolCallId":"round-1-call-0","status":"ok","result":{"trips":[{"tripId":"01a1f851-e364-75e8-99f6-33fee474230a","title":"PRODCOPY-PLANCARD-20261120093757","startDate":"2027-04-01","endDate":"2027-04-03","destination":"京都"}]},"finishedAt":"2026-11-20T09:38:28.559Z","durationMs":7}
+
+id: 000006
+event: progress
+data: {"type":"progress","stage":"thinking","label":"正在思考…"}
+
+: hb 2026-11-20T09:38:29.709Z
+
+: hb 2026-11-20T09:38:44.718Z
+
+id: 000007
+event: error
+data: {"type":"error","code":"AI_UPSTREAM","message":"The AI provider did not answer correctly. Try again.","retryable":true,"runId":"b146843eadf66e7161fc732b553de157"}
+
+id: 000008
+event: done
+data: {"type":"done","messageId":"NY1u00S","finishReason":"error"}
+
+
+
+# 200 http://localhost:3000/v1/workspaces/019b7946-1c12-72e5-b2f5-ba152dee90d6/ai/chat/stream
+
+: ok
+
+id: 000001
+event: meta
+data: {"type":"meta","v":1,"conversationId":"01a1f852-e5e6-7619-9163-c641aad64450","userMessageId":"01a1f852-e6a9-77ce-be36-2a7123602cdc","assistantMessageId":"QCLXh6O","provider":{"protocol":"openai-chat","model":"auto/deepseek-v4.1-flash"}}
+
+id: 000002
+event: progress
+data: {"type":"progress","stage":"thinking","label":"正在思考…"}
+
+: hb 2026-11-20T09:39:20.025Z
+
+: hb 2026-11-20T09:39:35.028Z
+
+id: 000003
+event: error
+data: {"type":"error","code":"AI_UPSTREAM","message":"The AI provider did not answer correctly. Try again.","retryable":true,"runId":"436f9cce79203eec007c56ff4f420a06"}
+
+id: 000004
+event: done
+data: {"type":"done","messageId":"QCLXh6O","finishReason":"error"}
+
+
+
+# 200 http://localhost:3000/v1/workspaces/019b7946-1c12-72e5-b2f5-ba152dee90d6/ai/chat/stream
+
+: ok
+
+id: 000001
+event: meta
+data: {"type":"meta","v":1,"conversationId":"01a1f853-7740-7480-b48e-e3a555f9a2a0","userMessageId":"01a1f853-785b-7405-85d3-4547fc22502d","assistantMessageId":"l7qRU5H","provider":{"protocol":"openai-chat","model":"auto/deepseek-v4.1-flash"}}
+
+id: 000002
+event: progress
+data: {"type":"progress","stage":"thinking","label":"正在思考…"}
+
+id: 000003
+event: tool.start
+data: {"type":"tool.start","toolCallId":"round-1-call-0","name":"trips.list","stepId":"round-1","args":{"query":"PRODCOPY-PLANCARD-20261120093757"},"startedAt":"2026-11-20T09:39:50.996Z"}
+
+id: 000004
+event: progress
+data: {"type":"progress","stage":"reading","label":"正在读取行程…"}
+
+id: 000005
+event: tool.end
+data: {"type":"tool.end","toolCallId":"round-1-call-0","status":"ok","result":{"trips":[{"tripId":"01a1f851-e364-75e8-99f6-33fee474230a","title":"PRODCOPY-PLANCARD-20261120093757","startDate":"2027-04-01","endDate":"2027-04-03","destination":"京都"}]},"finishedAt":"2026-11-20T09:39:51.029Z","durationMs":33}
+
+id: 000006
+event: tool.start
+data: {"type":"tool.start","toolCallId":"round-1-call-1","name":"places.search","stepId":"round-1","args":{"q":"清水寺"},"startedAt":"2026-11-20T09:39:51.029Z"}
+
+id: 000007
+event: progress
+data: {"type":"progress","stage":"searching","label":"正在查询地点（1/3）"}
+
+id: 000008
+event: tool.progress
+data: {"type":"tool.progress","toolCallId":"round-1-call-1","label":"正在查询地点（1/3）"}
+
+id: 000009
+event: tool.end
+data: {"type":"tool.end","toolCallId":"round-1-call-1","status":"ok","result":{"candidates":[]},"finishedAt":"2026-11-20T09:39:52.438Z","durationMs":1409}
+
+id: 000010
+event: tool.start
+data: {"type":"tool.start","toolCallId":"round-1-call-2","name":"places.search","stepId":"round-1","args":{"q":"伏见稻荷大社"},"startedAt":"2026-11-20T09:39:52.438Z"}
+
+id: 000011
+event: progress
+data: {"type":"progress","stage":"searching","label":"正在查询地点（2/3）"}
+
+id: 000012
+event: tool.progress
+data: {"type":"tool.progress","toolCallId":"round-1-call-2","label":"正在查询地点（2/3）"}
+
+id: 000013
+event: tool.end
+data: {"type":"tool.end","toolCallId":"round-1-call-2","status":"ok","result":{"candidates":[{"providerPlaceId":"5167c17a926af86040593271ab20067c4140f00103f9012dba0e9a02000000c00201920312e4bc8fe8a68be7a8b2e88db7e5a4a7e7a4be","name":"伏見稲荷大社","country":"日本","countryCode":"JP","lat":34.968937,"lng":135.7630093,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"51ccb39256bcf8604059315ef3aace7b4140f00103f901524509be02000000c00201920312e4bc8fe8a68be7a8b2e88db7e5a4a7e7a4be","name":"伏見稲荷大社","country":"日本","countryCode":"JP","lat":34.9672445,"lng":135.7729905,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"518c8752d6caf8604059dc645419c67b4140f00103f9019de3349901000000c00201920312e4bc8fe8a68be7a8b2e88db7e5a4a7e7a4be","name":"伏見稲荷大社","country":"日本","countryCode":"JP","lat":34.966983,"lng":135.7747604,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"51c366800bb26961405989f83da022c24140f00102f9016dd2014300000000c00201920312e4bc8fe8a68be7a8b2e88db7e5a4a7e7a4be","name":"伏見稲荷大社","country":"日本","countryCode":"JP","lat":35.5166817,"lng":139.302984,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"519b61591fc51a61405963145f48e2404140f00103f901f03b648101000000c00201920312e4bc8fe8a68be7a8b2e88db7e5a4a7e7a4be","name":"伏見稲荷大社","country":"日本","countryCode":"JP","lat":34.5069056,"lng":136.8365628,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"N:6465797104","name":"伏見稲荷大社","country":"日本","countryCode":"JP","lat":34.5069056,"lng":136.8365628,"timeZone":null}]},"finishedAt":"2026-11-20T09:39:53.594Z","durationMs":1156}
+
+id: 000014
+event: tool.start
+data: {"type":"tool.start","toolCallId":"round-1-call-3","name":"places.search","stepId":"round-1","args":{"q":"岚山竹林"},"startedAt":"2026-11-20T09:39:53.594Z"}
+
+id: 000015
+event: progress
+data: {"type":"progress","stage":"searching","label":"正在查询地点（3/3）"}
+
+id: 000016
+event: tool.progress
+data: {"type":"tool.progress","toolCallId":"round-1-call-3","label":"正在查询地点（3/3）"}
+
+id: 000017
+event: tool.end
+data: {"type":"tool.end","toolCallId":"round-1-call-3","status":"ok","result":{"candidates":[]},"finishedAt":"2026-11-20T09:39:54.909Z","durationMs":1315}
+
+id: 000018
+event: progress
+data: {"type":"progress","stage":"thinking","label":"正在思考…"}
+
+: hb 2026-11-20T09:39:57.320Z
+
+: hb 2026-11-20T09:40:12.323Z
+
+id: 000019
+event: tool.start
+data: {"type":"tool.start","toolCallId":"round-2-call-0","name":"places.search","stepId":"round-2","args":{"q":"Kiyomizu-dera"},"startedAt":"2026-11-20T09:40:22.858Z"}
+
+id: 000020
+event: progress
+data: {"type":"progress","stage":"searching","label":"正在查询地点（1/2）"}
+
+id: 000021
+event: tool.progress
+data: {"type":"tool.progress","toolCallId":"round-2-call-0","label":"正在查询地点（1/2）"}
+
+id: 000022
+event: tool.end
+data: {"type":"tool.end","toolCallId":"round-2-call-0","status":"ok","result":{"candidates":[{"providerPlaceId":"51baa69b1f1af960405948a81952457f4140f00102f90153bc101400000000c00201920309e6b885e6b0b4e5afba","name":"清水寺","country":"日本","countryCode":"JP","lat":34.994303,"lng":135.7844389,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"51b5a09c0ddef8604059fb4cac42b97f4140f00103f9011a4af2bf02000000c00201920309e6b885e6b0b4e5afba","name":"清水寺","country":"日本","countryCode":"JP","lat":34.9978412,"lng":135.7771061,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"51b3075a8121f9604059afe0c84d1e7f4140f00103f9019c4754cf00000000c00201920318e6b885e6b0b4e5afbae38080e5a5a5e381aee999a2e98193","name":"清水寺　奥の院道","country":"日本","countryCode":"JP","lat":34.9931123,"lng":135.78534,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"51bca7172121f9604059c6e12769597f4140f00103f90115fe21cf00000000c00201920318e6b885e6b0b4e5afbae5a283e58685e6a188e58685e59bb3","name":"清水寺境内案内図","country":"日本","countryCode":"JP","lat":34.9949161,"lng":135.7852941,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"5158923cd737f96040598c7ed9e2bf7e4140f00103f9019651f54501000000c00201920332e6b885e6b0b4e5afba20284b69796f6d697a752d646572612054656d706c6529efbe8d353030efbd8de98193e6a188e58685","name":"清水寺 (Kiyomizu-dera Temple)ﾍ500ｍ道案内","country":"日本","countryCode":"JP","lat":34.9902309,"lng":135.7880665,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"51dbbfb2d2e46260405951f701486d664040f00103f9011d6cac0e02000000c00201920309e6b885e6b0b4e5afba","name":"清水寺","country":"日本","countryCode":"JP","lat":32.80021,"lng":131.0904325,"timeZone":"Asia/Tokyo"}]},"finishedAt":"2026-11-20T09:40:23.865Z","durationMs":1007}
+
+id: 000023
+event: tool.start
+data: {"type":"tool.start","toolCallId":"round-2-call-1","name":"places.search","stepId":"round-2","args":{"q":"Arashiyama Bamboo Grove"},"startedAt":"2026-11-20T09:40:23.866Z"}
+
+id: 000024
+event: progress
+data: {"type":"progress","stage":"searching","label":"正在查询地点（2/2）"}
+
+id: 000025
+event: tool.progress
+data: {"type":"tool.progress","toolCallId":"round-2-call-1","label":"正在查询地点（2/2）"}
+
+id: 000026
+event: tool.end
+data: {"type":"tool.end","toolCallId":"round-2-call-1","status":"ok","result":{"candidates":[{"providerPlaceId":"519e38ca0b7af5604059887c3c9924824140f00101f9013e6b0d0100000000c0020192030ce5b590e5b1b1e7abb9e69e97","name":"嵐山竹林","country":"日本","countryCode":"JP","lat":35.0167419,"lng":135.6711482,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"51f19991e634255e4059f95f538c98683040f00101f9018bf3ed0000000000c002019203214d697261646f7227732041726173686979616d612042616d626f6f2047726f7665","name":"Mirador's Arashiyama Bamboo Grove","country":"菲律宾;菲律賓","countryCode":"PH","lat":16.4085777,"lng":120.5813538,"timeZone":"Asia/Manila"},{"providerPlaceId":"51a146c60f3a255e4059188bf040ae683040f00103f901e1b8498402000000c002019203214d697261646f7227732041726173686979616d612042616d626f6f2047726f7665","name":"Mirador's Arashiyama Bamboo Grove","country":"菲律宾;菲律賓","countryCode":"PH","lat":16.4089089,"lng":120.5816688,"timeZone":"Asia/Manila"},{"providerPlaceId":"518b3d6a027bf5604059521b8b5c26824140f00103f9016c47a93303000000c0020192030ce7abb9e69e97e381aee98193","name":"竹林の道","country":"日本","countryCode":"JP","lat":35.0167957,"lng":135.6712658,"timeZone":"Asia/Tokyo"},{"providerPlaceId":"N:10809358561","name":"Mirador's Arashiyama Bamboo Grove","country":"Philippines","countryCode":"PH","lat":16.4089089,"lng":120.5816688,"timeZone":null},{"providerPlaceId":"R:17656638","name":"嵐山竹林","country":"日本","countryCode":"JP","lat":35.0167419,"lng":135.6711482,"timeZone":null}]},"finishedAt":"2026-11-20T09:40:24.636Z","durationMs":770}
+
+id: 000027
+event: progress
+data: {"type":"progress","stage":"thinking","label":"正在思考…"}
+
+: hb 2026-11-20T09:40:27.336Z
+
+: hb 2026-11-20T09:40:42.349Z
+
+id: 000028
+event: error
+data: {"type":"error","code":"AI_UPSTREAM","message":"The AI provider did not answer correctly. Try again.","retryable":true,"runId":"2a2121e9b7c4df89aed00c1bebb8d2f2"}
+
+id: 000029
+event: done
+data: {"type":"done","messageId":"l7qRU5H","finishReason":"error"}
+

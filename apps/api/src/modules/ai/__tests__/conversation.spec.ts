@@ -72,6 +72,7 @@ const unconfiguredSettings: AiSettings = {
   baseUrl: null,
   apiKey: null,
   model: "",
+  allowedModels: [],
   timeoutMs: 60_000,
   maxOutputTokens: 6_000,
   dailyQuota: 20,

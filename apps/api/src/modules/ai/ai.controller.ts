@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -13,7 +14,12 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { AI_ERROR_CODES, AiChatRequestSchema, AiRunIdSchema } from "@roamlog/contracts";
-import type { AiErrorCode, AiStreamErrorEvent, AiStreamEvent } from "@roamlog/contracts";
+import type {
+  AiChatModelsResponse,
+  AiErrorCode,
+  AiStreamErrorEvent,
+  AiStreamEvent,
+} from "@roamlog/contracts";
 import type { Request, Response } from "express";
 
 import {
@@ -68,6 +74,23 @@ export class AiController {
     @Body() body: unknown,
   ) {
     return this.planner.chat(actor, membership, body);
+  }
+
+  /**
+   * `GET /v1/workspaces/:workspaceId/ai/models` — the selectable model list.
+   *
+   * Port of vercel/chatbot `app/(chat)/api/models/route.ts` L1–L20, which the
+   * model selector reads (`components/chat/multimodal-input.tsx` L794–L803).
+   * Upstream serves a curated gateway catalog + capabilities; Roamlog serves the
+   * admin-configured model plus the operator allow-list, so every id the selector
+   * offers is one the API will accept.
+   */
+  @Get("models")
+  @RequirePermission("trip:create", "trip")
+  models(
+    @CurrentWorkspaceMembership() _membership: WorkspaceMembershipAccess,
+  ): Promise<AiChatModelsResponse> {
+    return this.planner.chatModels();
   }
 
   /**

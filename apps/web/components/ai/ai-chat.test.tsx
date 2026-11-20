@@ -222,7 +222,11 @@ describe("AiChat plan confirmation", () => {
     await sendPrompt(user);
 
     const card = await screen.findByLabelText("计划确认卡");
-    expect(await within(card).findByText("京都一周：古寺与咖啡馆")).toBeInTheDocument();
+    expect(
+      await within(card).findByRole("heading", { name: "京都一周：古寺与咖啡馆" }),
+    ).toBeInTheDocument();
+    // Non-destructive groups start folded; open the packing group to inspect it.
+    await user.click(within(card).getByRole("button", { name: /打包清单/ }));
     expect(within(card).getByText("添加装备")).toBeInTheDocument();
     expect(within(card).getByText(/已选 2 \/ 2/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重新生成" })).toBeInTheDocument();
@@ -252,10 +256,10 @@ describe("AiChat plan confirmation", () => {
     await sendPrompt(user);
 
     const card = await screen.findByLabelText("计划确认卡");
-    const checkboxes = within(card).getAllByRole("checkbox");
-    const second = checkboxes[1];
-    if (!second) throw new Error("expected two planned calls in the card");
-    await user.click(second);
+    // Each group header owns a select-all checkbox, so target the row itself.
+    await user.click(within(card).getByRole("button", { name: /打包清单/ }));
+    const packingRow = within(card).getByRole("checkbox", { name: /选择「添加装备」/ });
+    await user.click(packingRow);
 
     const confirm = within(card).getByRole("button", { name: "执行选中的 1 项" });
     await user.click(confirm);
@@ -273,6 +277,109 @@ describe("AiChat plan confirmation", () => {
     expect(within(results).getAllByText("已保存")).toHaveLength(2);
     expect(within(results).getByText("2 action(s) applied.")).toBeInTheDocument();
     expect(within(card).getByText(/1 项已确认/)).toBeInTheDocument();
+  });
+
+  it("groups the plan by entity and folds a group until it is opened", async () => {
+    const user = userEvent.setup();
+    mockStreamPlan(makePlan());
+    renderChat();
+
+    await sendPrompt(user);
+
+    const card = await screen.findByLabelText("计划确认卡");
+    const packingSection = within(card).getByRole("region", { name: /打包清单 1 项/ });
+    expect(within(packingSection).getByText("新增 1")).toBeInTheDocument();
+    // Folded by default: the row exists only after opening its group.
+    expect(within(card).queryByText("护照")).not.toBeInTheDocument();
+
+    await user.click(within(packingSection).getByRole("button", { name: /打包清单/ }));
+    expect(within(card).getByText("护照")).toBeInTheDocument();
+    expect(within(card).getByText("添加装备")).toBeInTheDocument();
+
+    await user.click(within(packingSection).getByRole("button", { name: /打包清单/ }));
+    expect(within(card).queryByText("护照")).not.toBeInTheDocument();
+  });
+
+  it("disables the confirmation when every group is cleared", async () => {
+    const user = userEvent.setup();
+    mockStreamPlan(makePlan());
+    renderChat();
+
+    await sendPrompt(user);
+
+    const card = await screen.findByLabelText("计划确认卡");
+    await user.click(within(card).getByRole("checkbox", { name: /选择「行程」全部 1 项/ }));
+    await user.click(
+      within(card).getByRole("checkbox", { name: /选择「打包清单」全部 1 项/ }),
+    );
+
+    expect(within(card).getByText(/已选 0 \/ 2/)).toBeInTheDocument();
+    expect(within(card).getByText("至少选择 1 项才能执行。")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "执行选中的 0 项" })).toBeDisabled();
+  });
+
+  it("shows an empty-plan explanation instead of an empty list", async () => {
+    const user = userEvent.setup();
+    mockStreamPlan(makePlan({ plannedCalls: [], readOnlyTrace: [] }));
+    renderChat();
+
+    await sendPrompt(user);
+
+    const card = await screen.findByLabelText("计划确认卡");
+    expect(within(card).getByTestId("plan-empty")).toHaveTextContent(
+      "这次没有需要写入的操作",
+    );
+    expect(within(card).queryByTestId("plan-group")).not.toBeInTheDocument();
+    expect(within(card).queryByTestId("plan-confirm")).not.toBeInTheDocument();
+  });
+
+  it("turns an expired plan into a read-only receipt", async () => {
+    const user = userEvent.setup();
+    mockStreamPlan(makePlan({ expiresAt: new Date(Date.now() - 60_000).toISOString() }));
+    renderChat();
+
+    await sendPrompt(user);
+
+    const card = await screen.findByLabelText("计划确认卡");
+    expect(within(card).getByTestId("plan-receipt")).toHaveTextContent(
+      "计划已过期，未执行任何操作。请重新发送这条需求。",
+    );
+    expect(within(card).queryByTestId("plan-confirm")).not.toBeInTheDocument();
+    for (const checkbox of within(card).getAllByRole("checkbox")) {
+      expect(checkbox).toBeDisabled();
+    }
+  });
+
+  it("asks twice before a destructive plan is executed", async () => {
+    const user = userEvent.setup();
+    mockStreamPlan(
+      makePlan({
+        plannedCalls: [
+          {
+            tool: "trips.create",
+            args: { title: "危险计划", startDate: "2026-12-01", endDate: "2026-12-03" },
+          },
+          { tool: "stops.delete", args: { stopId: TRIP_ID } },
+        ],
+      }),
+    );
+    executeMock.mockResolvedValue(makeExecution());
+    renderChat();
+
+    await sendPrompt(user);
+
+    const card = await screen.findByLabelText("计划确认卡");
+    expect(within(card).getByText(/其中移除 1 项，删除后无法恢复/)).toBeInTheDocument();
+    const confirm = within(card).getByTestId("plan-confirm");
+    await user.click(confirm);
+    expect(executeMock).not.toHaveBeenCalled();
+    expect(within(card).getByText(/再次点击按钮会移除 1 项/)).toBeInTheDocument();
+    expect(within(card).getByTestId("plan-confirm")).toHaveTextContent(
+      "再次点击确认移除 1 项",
+    );
+
+    await user.click(within(card).getByTestId("plan-confirm"));
+    await waitFor(() => expect(executeMock).toHaveBeenCalledTimes(1));
   });
 
   it("disables the confirmation for viewers", async () => {

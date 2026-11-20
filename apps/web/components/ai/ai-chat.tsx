@@ -12,6 +12,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { PLAN_TOOL_NAME, createAiChatModelAdapter } from "./chat-model-adapter";
+import { createMediaAttachmentAdapter } from "./media-attachment-adapter";
 import { WorkspaceChatProvider } from "./plan-card";
 import {
   createRemoteThreadListAdapter,
@@ -147,13 +148,20 @@ export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
     () => createRemoteThreadListAdapter(workspaceId),
     [workspaceId],
   );
+  // One attachment pipeline per page: uploads go straight into the media store,
+  // so a remount mid-upload does not orphan a second upload of the same file.
+  const attachmentAdapter = useMemo(
+    () => createMediaAttachmentAdapter({ workspaceId }),
+    [workspaceId],
+  );
 
   const runtimeHook = useCallback(
     () =>
       useLocalRuntime(chatModel, {
         unstable_humanToolNames: [PLAN_TOOL_NAME],
+        adapters: { attachments: attachmentAdapter },
       }),
-    [chatModel],
+    [chatModel, attachmentAdapter],
   );
 
   const runtime = useRemoteThreadListRuntime({
@@ -227,7 +235,7 @@ export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
             <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="banner" />
 
             <div className="min-h-0 flex-1">
-              <ChatThread onOpenSidebar={() => setDrawerOpen(true)} />
+              <ChatThread workspaceId={workspaceId} onOpenSidebar={() => setDrawerOpen(true)} />
             </div>
           </div>
         </div>

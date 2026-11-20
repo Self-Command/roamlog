@@ -1,6 +1,6 @@
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import { AI_REWRITE_MAX_INPUT_CHARS } from "@roamlog/contracts";
+import { AI_REWRITE_MAX_INPUT_CHARS, AiRunIdSchema } from "@roamlog/contracts";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -196,7 +196,14 @@ describe("POST /v1/workspaces/:workspaceId/ai/chat", () => {
       provider: { protocol: "openai-chat" },
       usage: { inputTokens: 12, outputTokens: 6 },
     });
-    expect(response.body.runId).toMatch(/^[0-9a-f]{32}$/u);
+    // `newRunId()` must now mint a real RFC 4122 UUIDv7: the old 32-hyphenless-hex
+    // value is what PostgreSQL turned into a variant-`f` `AuditLog.targetId` and
+    // 500'd the admin audit page. Assert the exact wire shape, not just the contract.
+    const runId = response.body.runId as string;
+    expect(AiRunIdSchema.safeParse(runId).success).toBe(true);
+    expect(runId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
   });
 
   it("rejects a message that is too long with 400 VALIDATION_ERROR", async () => {
@@ -218,7 +225,7 @@ describe("POST /v1/workspaces/:workspaceId/ai/rewrite", () => {
   function body(overrides: Record<string, unknown> = {}) {
     return {
       text: SELECTION,
-      instruction: "polish",
+      instruction: "improve",
       selectionHash: selectionHashOf(SELECTION),
       ...overrides,
     };
@@ -356,5 +363,20 @@ describe("POST /v1/workspaces/:workspaceId/ai/runs/:runId/execute", () => {
       .expect(400);
 
     expect(response.body).toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("still accepts the legacy 32-hex run id minted before the UUID fix", async () => {
+    // Plans created before `newRunId()` minted real UUIDs are still alive in
+    // Redis for 15 minutes. The controller gate must not 400 them.
+    const { app } = await createApp();
+    const legacyRunId = "726d652afcfc877cf34f593a6ec94c59";
+
+    await request(app.getHttpServer())
+      .post(`/v1/workspaces/${WORKSPACE_ID}/ai/runs/${legacyRunId}/execute`)
+      .send({
+        calls: [{ tool: "trips.create", args: { title: "Kyoto" } }],
+        idempotencyKey: "execute-legacy-1",
+      })
+      .expect(201);
   });
 });

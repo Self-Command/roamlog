@@ -24,7 +24,6 @@ import {
   CheckCircle,
   ChevronDown,
   Circle,
-  Clock,
   Wrench,
   XCircle,
 } from "lucide-react";
@@ -161,8 +160,27 @@ export const Tool = ({ className, ...props }: ToolProps) => (
   />
 );
 
+/**
+ * Pulses while one tool call is in flight.
+ *
+ * Upstream's running state is `<Badge>运行中</Badge>` with a pulsing clock
+ * (`ai-elements/tool.tsx` L109–L118 `state === "input-available"` branch). The
+ * task requires a visible pulse-dot indicator next to the live `progress.label`,
+ * so the badge icon is the three-dot `dot-pulse` animation from
+ * vercel/chatbot `app/globals.css` L287–L298 / L364–L366 (`@utility dot-pulse`),
+ * applied to `roamlog-ai-dot` in `ai-motion.tsx`. The label text is unchanged so
+ * the existing accessible name (`搜索地点 运行中`) stays stable.
+ */
+const RunningDots = () => (
+  <span aria-hidden="true" className="flex items-end gap-0.5">
+    <i className="roamlog-ai-dot" />
+    <i className="roamlog-ai-dot" />
+    <i className="roamlog-ai-dot" />
+  </span>
+);
+
 const statusIcons: Record<ToolCardState, ReactNode> = {
-  running: <Clock aria-hidden="true" className="size-3 animate-pulse" />,
+  running: <RunningDots />,
   complete: <CheckCircle aria-hidden="true" className="size-3 text-accent-green" />,
   error: <XCircle aria-hidden="true" className="size-3 text-accent-red" />,
   cancelled: <XCircle aria-hidden="true" className="size-3 text-accent-slate" />,

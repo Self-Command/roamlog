@@ -1,8 +1,9 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import { Inject, Injectable } from "@nestjs/common";
 import type { AiToolCall } from "@roamlog/contracts";
 
+import { generateUuidV7 } from "../auth/uuid.js";
 import { RedisService } from "../redis/redis.service.js";
 import type { AiPlaceCandidate } from "./ai-tools.js";
 
@@ -28,8 +29,23 @@ export interface ConsumedAiRun {
   readonly workspaceId: string;
 }
 
+/**
+ * A plan id must be a real RFC 4122 UUID, not merely 16 random bytes.
+ *
+ * `runId` is written verbatim into `AuditLog.targetId`, a PostgreSQL `uuid`
+ * column. PostgreSQL accepts 32 hyphenless hex digits but canonicalises them to
+ * 8-4-4-4-12 *without* touching the version/variant nibbles, so the stored value
+ * can carry a variant byte RFC 4122 forbids (e.g. `726d652a-fcfc-877c-
+ * f34f-593a6ec94c59`, variant `f`) and `z.uuid()` then rejects the row. Minting
+ * a proper UUID at the source is the only way to keep new audit rows valid.
+ *
+ * Reuses the repository's existing UUIDv7 generator (`generateUuidV7`, the one
+ * `MediaService` and the realtime publisher already use) instead of inventing a
+ * second implementation; time-ordered ids also keep audit rows roughly sortable
+ * and match every other id this API mints.
+ */
 export function newRunId(): string {
-  return randomBytes(16).toString("hex");
+  return generateUuidV7();
 }
 
 function runKey(workspaceId: string, runId: string): string {
