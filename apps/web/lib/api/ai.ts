@@ -1,10 +1,12 @@
 import {
   AiChatResponseSchema,
   AiRunExecuteResponseSchema,
+  AiStreamEventSchema,
   type AiChatResponse,
   type AiPlanHint,
   type AiPlanWarning,
   type AiRunExecuteResponse,
+  type AiStreamEvent,
   type AiToolCall,
 } from "@roamlog/contracts";
 
@@ -231,6 +233,254 @@ export async function createAiPlan(
     body,
     AiChatResponseSchema,
   );
+}
+
+/** Extends the blocking plan input with the optional conversation identifiers. */
+export interface AiStreamPlanInput extends AiPlanInput {
+  conversationId?: string;
+  clientMessageId?: string;
+  assistantMessageId?: string;
+}
+
+export type AiStreamPlanOptions = AbortSignal | { signal?: AbortSignal };
+
+function resolveAbortSignal(options: AiStreamPlanOptions | undefined): AbortSignal | undefined {
+  if (!options) return undefined;
+  if (typeof options === "object" && "signal" in options) {
+    return (options as { signal?: AbortSignal }).signal;
+  }
+  return options as AbortSignal;
+}
+
+function streamProtocolError(detail: string): AiRequestError {
+  return new AiRequestError(200, detail, "INVALID_RESPONSE", "invalid_response");
+}
+
+interface ParsedSseFrame {
+  data: string;
+  event?: string;
+  id?: string;
+}
+
+/**
+ * Parses one SSE frame body (the text between two blank lines).
+ *
+ * `data:` lines are joined with `\n` per the SSE spec, so pretty-printed JSON
+ * still arrives intact. Comment lines (`: hb ...`) are the keep-alive frames
+ * the API emits every few seconds; they carry no data and are ignored.
+ */
+function parseSseFrame(raw: string): ParsedSseFrame | null {
+  const data: string[] = [];
+  let event: string | undefined;
+  let id: string | undefined;
+
+  for (const line of raw.split(/\r\n|\r|\n/)) {
+    if (line.length === 0) continue;
+    if (line.startsWith(":")) continue;
+
+    const colon = line.indexOf(":");
+    const field = colon === -1 ? line : line.slice(0, colon);
+    let value = colon === -1 ? "" : line.slice(colon + 1);
+    if (value.startsWith(" ")) value = value.slice(1);
+
+    switch (field) {
+      case "data":
+        data.push(value);
+        break;
+      case "event":
+        event = value;
+        break;
+      case "id":
+        id = value;
+        break;
+      default:
+        // `retry:` and unknown fields are not part of this contract.
+        break;
+    }
+  }
+
+  if (data.length === 0) return null;
+  return {
+    data: data.join("\n"),
+    ...(event === undefined ? {} : { event }),
+    ...(id === undefined ? {} : { id }),
+  };
+}
+
+function takeFrame(buffer: string): { frame: string; rest: string } | null {
+  const boundary = /\r?\n\r?\n/.exec(buffer);
+  if (!boundary) return null;
+  return {
+    frame: buffer.slice(0, boundary.index),
+    rest: buffer.slice(boundary.index + boundary[0].length),
+  };
+}
+
+/** Validates one frame against the frozen contract; never drops a bad frame. */
+function eventFromFrame(frame: ParsedSseFrame, frameIndex: number): AiStreamEvent {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(frame.data);
+  } catch {
+    throw streamProtocolError(`The AI stream frame ${frameIndex} was not valid JSON.`);
+  }
+
+  const parsed = AiStreamEventSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw streamProtocolError(
+      `The AI stream frame ${frameIndex} did not match the contract: ${
+        parsed.error.issues[0]?.message ?? "unknown schema error"
+      }`,
+    );
+  }
+  if (frame.event && frame.event !== parsed.data.type) {
+    throw streamProtocolError(
+      `The AI stream frame ${frameIndex} declared event "${frame.event}" but carried "${parsed.data.type}".`,
+    );
+  }
+  return parsed.data;
+}
+
+function markDone(event: AiStreamEvent, frameIndex: number, doneSeen: boolean): boolean {
+  if (doneSeen) {
+    throw streamProtocolError(`The AI stream frame ${frameIndex} arrived after done.`);
+  }
+  return event.type === "done";
+}
+
+/**
+ * Streams one planning turn from `POST /ai/chat/stream`.
+ *
+ * The reader is deliberately hand-written: the endpoint is POST and the
+ * project has no EventSource/SSE dependency. Every `data:` payload is validated
+ * with `AiStreamEventSchema`; a malformed frame throws instead of being
+ * silently dropped, because a dropped `plan` would strand the user on a
+ * spinner that never resolves.
+ *
+ * Aborting the returned generator (or the caller's `AbortSignal`) stops the
+ * HTTP body read and ends the generator normally — a deliberate cancellation
+ * is not an error.
+ */
+export async function* streamAiPlan(
+  workspaceId: string,
+  input: AiStreamPlanInput,
+  options?: AiStreamPlanOptions,
+): AsyncGenerator<AiStreamEvent, void, void> {
+  const signal = resolveAbortSignal(options);
+  if (signal?.aborted) return;
+
+  const path = `/v1/workspaces/${encodeURIComponent(workspaceId)}/ai/chat/stream`;
+  const body: AiStreamPlanInput = { message: input.message };
+  if (input.hints) body.hints = input.hints;
+  if (input.conversationId) body.conversationId = input.conversationId;
+  if (input.clientMessageId) body.clientMessageId = input.clientMessageId;
+  if (input.assistantMessageId) body.assistantMessageId = input.assistantMessageId;
+
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json", accept: "text/event-stream" },
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    });
+  } catch (cause) {
+    if (signal?.aborted) return;
+    throw toAiRequestError(cause);
+  }
+
+  if (!response.ok) {
+    // Pre-flight failures (validation, quota, auth, unconfigured gateway) are
+    // ordinary ProblemDetails JSON. Never start SSE parsing for them.
+    const text = await response.text().catch(() => "");
+    let payload: unknown = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+    }
+    throw toAiRequestError(errorFromResponse(response.status, payload, path));
+  }
+
+  const contentType = response.headers.get("content-type");
+  if (contentType && !contentType.toLowerCase().includes("text/event-stream")) {
+    throw streamProtocolError(
+      `The AI stream response for ${path} was not text/event-stream (got ${contentType}).`,
+    );
+  }
+  if (!response.body) {
+    throw streamProtocolError(`The AI stream response for ${path} had no body.`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let frameIndex = 0;
+  let doneSeen = false;
+
+  const onAbort = (): void => {
+    void reader.cancel().catch(() => undefined);
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    while (true) {
+      if (signal?.aborted) return;
+
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch (cause) {
+        if (signal?.aborted) return;
+        throw toAiRequestError(cause);
+      }
+
+      if (chunk.done) break;
+      if (chunk.value) {
+        // `{stream:true}` keeps split multi-byte UTF-8 (Chinese text) intact
+        // across chunk boundaries.
+        buffer += decoder.decode(chunk.value, { stream: true });
+      }
+
+      while (true) {
+        const taken = takeFrame(buffer);
+        if (!taken) break;
+        buffer = taken.rest;
+        const frame = parseSseFrame(taken.frame);
+        if (!frame) continue;
+
+        frameIndex += 1;
+        const event = eventFromFrame(frame, frameIndex);
+        doneSeen = markDone(event, frameIndex, doneSeen);
+        yield event;
+      }
+    }
+
+    buffer += decoder.decode();
+
+    // A server may flush the final frame without a trailing blank line; the
+    // trailing bytes are still a complete frame and must not be dropped.
+    if (buffer.trim().length > 0) {
+      const frame = parseSseFrame(buffer);
+      if (frame) {
+        frameIndex += 1;
+        const event = eventFromFrame(frame, frameIndex);
+        doneSeen = markDone(event, frameIndex, doneSeen);
+        yield event;
+      }
+    }
+
+    if (signal?.aborted) return;
+    if (!doneSeen) {
+      throw streamProtocolError("The AI stream ended before the done event.");
+    }
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    await reader.cancel().catch(() => undefined);
+  }
 }
 
 export interface AiExecuteInput {

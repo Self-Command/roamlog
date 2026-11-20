@@ -1,15 +1,17 @@
 import type {
-  AiChatResponse,
   AiPlanWarning,
   AiRunExecuteResponse,
+  AiStreamEvent,
   AiToolCall,
 } from "@roamlog/contracts";
 import type { ChatModelAdapter, ChatModelRunResult } from "@assistant-ui/react";
 
 import {
+  aiFailureKind,
   createAiIdempotencyKey,
   createAiPlan,
   executeAiRun,
+  streamAiPlan,
   toAiRequestError,
 } from "@/lib/api/ai";
 
@@ -26,8 +28,10 @@ import { executionFailureCopy, planFailureCopy } from "./copy";
  * and the adapter is then called again with the supplied result in `messages`.
  *
  * Only two rounds exist per conversation turn:
- *   1. plan    — `createAiPlan` (read-only) → assistant text + one pending
- *                `roamlog.plan` tool part carrying the parsed plan envelope.
+ *   1. plan    — `streamAiPlan` (SSE, read-only) → assistant text streamed
+ *                delta-by-delta + one pending `roamlog.plan` tool part carrying
+ *                the parsed plan envelope. A 404/405 deployment falls back to
+ *                the old blocking `createAiPlan`.
  *   2. execute — the user confirms inside that part (via `addResult`) →
  *                `executeAiRun` → assistant text + a `roamlog.execute` tool part
  *                holding the per-call results.
@@ -38,8 +42,20 @@ import { executionFailureCopy, planFailureCopy } from "./copy";
 export const PLAN_TOOL_NAME = "roamlog.plan";
 export const EXECUTE_TOOL_NAME = "roamlog.execute";
 
+type PlanEvent = Extract<AiStreamEvent, { type: "plan" }>;
+
+/**
+ * The fields `plan-card.tsx` actually reads. Both the blocking `AiChatResponse`
+ * and the SSE `plan` event satisfy it; the event simply omits `usage` and
+ * `provider`, which the card never renders.
+ */
+export type PlanCardPlan = Pick<
+  PlanEvent,
+  "runId" | "message" | "plannedCalls" | "readOnlyTrace" | "warnings" | "expiresAt"
+> & { warnings?: AiPlanWarning[] };
+
 export interface PlanToolArgs {
-  plan: AiChatResponse & { warnings?: AiPlanWarning[] };
+  plan: PlanCardPlan;
 }
 
 export interface ConfirmedPlanResult {
@@ -166,7 +182,13 @@ export function createAiChatModelAdapter({
   canWrite,
 }: AiChatModelOptions): ChatModelAdapter {
   return {
-    async *run({ messages, unstable_getMessage }) {
+    async *run({
+      messages,
+      abortSignal,
+      unstable_getMessage,
+      unstable_assistantMessageId,
+      unstable_threadId,
+    }) {
       const last = messages[messages.length - 1];
 
       // Round 2: the user confirmed a plan inside the tool part.
@@ -255,24 +277,144 @@ export function createAiChatModelAdapter({
         }
       }
 
-      // Round 1: plan only. `createAiPlan` is read-only by contract.
+      // Round 1: plan only. `streamAiPlan` is read-only by contract; the
+      // blocking endpoint is kept solely as a 404/405 deployment fallback.
       const request = [...messages].reverse().find((message) => message.role === "user");
       const prompt = request ? userText(request) : "";
       const toolCallId = `plan-${createAiIdempotencyKey()}`;
 
+      let text = "";
+      let planEvent: PlanEvent | undefined;
+      let errorEvent: Extract<AiStreamEvent, { type: "error" }> | undefined;
+      let doneEvent: Extract<AiStreamEvent, { type: "done" }> | undefined;
+
       try {
-        const plan = await createAiPlan(workspaceId, { message: prompt });
-        yield {
-          content: [textPart(plan.message), toolPart(PLAN_TOOL_NAME, toolCallId, { plan })],
-          status: { type: "requires-action", reason: "tool-calls" },
-        };
+        const stream = streamAiPlan(
+          workspaceId,
+          {
+            message: prompt,
+            // `useLocalRuntime` seeds this with `threadListItem.remoteId`, i.e.
+            // the persisted conversation id, so follow-up turns keep context.
+            ...(unstable_threadId ? { conversationId: unstable_threadId } : {}),
+            ...(request?.id ? { clientMessageId: request.id } : {}),
+            ...(unstable_assistantMessageId
+              ? { assistantMessageId: unstable_assistantMessageId }
+              : {}),
+          },
+          abortSignal,
+        );
+
+        for await (const event of stream) {
+          switch (event.type) {
+            case "text.delta":
+              text += event.delta;
+              // Each delta yields the full text so far; assistant-ui replaces
+              // the previous snapshot, so words are never duplicated.
+              yield {
+                content: [textPart(text)],
+                status: { type: "running" },
+              };
+              break;
+            case "plan":
+              planEvent = event;
+              break;
+            case "error":
+              errorEvent = event;
+              break;
+            case "done":
+              doneEvent = event;
+              break;
+            default:
+              break;
+          }
+        }
       } catch (error) {
-        const copy = planFailureCopy(toAiRequestError(error).kind);
+        if (abortSignal.aborted) return;
+
+        const failure = toAiRequestError(error);
+        if (failure.status === 404 || failure.status === 405) {
+          // The streaming endpoint is not deployed yet: fall back to the old
+          // blocking plan endpoint. Any other failure must not silently retry.
+          try {
+            const plan = await createAiPlan(workspaceId, { message: prompt });
+            yield {
+              content: [textPart(plan.message), toolPart(PLAN_TOOL_NAME, toolCallId, { plan })],
+              status: { type: "requires-action", reason: "tool-calls" },
+            };
+          } catch (fallbackError) {
+            const copy = planFailureCopy(toAiRequestError(fallbackError).kind);
+            yield {
+              content: [textPart(`${copy.title}\n\n${copy.description}`)],
+              status: { type: "complete", reason: "stop" },
+            };
+          }
+          return;
+        }
+
+        const copy = planFailureCopy(failure.kind);
+        // If text already streamed, keep it and mark the message incomplete;
+        // a pre-flight failure has no text and keeps the old single bubble.
+        yield {
+          content: [
+            textPart(
+              text
+                ? `${text}\n\n${copy.title}\n\n${copy.description}`
+                : `${copy.title}\n\n${copy.description}`,
+            ),
+          ],
+          status: text
+            ? { type: "incomplete", reason: "error" }
+            : { type: "complete", reason: "stop" },
+        };
+        return;
+      }
+
+      if (abortSignal.aborted) return;
+
+      const finishReason = doneEvent?.finishReason ?? (errorEvent ? "error" : "stop");
+
+      if (finishReason === "aborted" || errorEvent?.code === "AI_ABORTED") {
+        // The message is `incomplete/cancelled`; `thread.tsx` renders the
+        // single 「已停止」 label, so no duplicate text part is added here.
+        yield {
+          content: text ? [textPart(text)] : [],
+          status: { type: "incomplete", reason: "cancelled" },
+        };
+        return;
+      }
+
+      if (errorEvent || finishReason === "error") {
+        const kind = errorEvent ? aiFailureKind(200, errorEvent.code) : "invalid_response";
+        const copy = planFailureCopy(kind);
         yield {
           content: [textPart(`${copy.title}\n\n${copy.description}`)],
-          status: { type: "complete", reason: "stop" },
+          status: { type: "incomplete", reason: "error" },
         };
+        return;
       }
+
+      if (planEvent) {
+        yield {
+          content: [
+            textPart(text || planEvent.message),
+            toolPart(PLAN_TOOL_NAME, toolCallId, { plan: planEvent }),
+          ],
+          status: { type: "requires-action", reason: "tool-calls" },
+        };
+        return;
+      }
+
+      if (finishReason === "length") {
+        yield {
+          content: text ? [textPart(text)] : [],
+          status: { type: "incomplete", reason: "length" },
+        };
+        return;
+      }
+
+      // Text-only reply: the last running snapshot is enough; the local
+      // runtime closes the message when this generator ends.
+      return;
     },
   };
 }

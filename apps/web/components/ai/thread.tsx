@@ -2,12 +2,15 @@
 
 import type { TextMessagePartProps } from "@assistant-ui/react";
 import {
+  ActionBarPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAui,
+  useAuiState,
 } from "@assistant-ui/react";
 import { Button } from "@roamlog/ui";
-import { ArrowUp, PanelLeft, Square } from "lucide-react";
+import { ArrowUp, PanelLeft, RotateCcw, Square } from "lucide-react";
 
 import { Markdown } from "./markdown";
 import { AI_TOOL_COMPONENTS } from "./plan-card";
@@ -17,9 +20,10 @@ import { AI_TOOL_COMPONENTS } from "./plan-card";
  *
  * Structure ported from the assistant-ui "Thread" composition —
  * `ThreadPrimitive.Root/Viewport/Messages/Empty`, `MessagePrimitive.Root/Parts`,
- * `ComposerPrimitive.Root/Input/Send/Cancel` and `ThreadPrimitive.Suggestion`
- * (see `@assistant-ui/react/dist/primitives/thread.js`, `composer.js`,
- * `message.js`). Styling follows the Roamlog Resend-derived tokens.
+ * `ActionBarPrimitive.Root/Reload`, `ComposerPrimitive.Root/Input/Send` and
+ * `ThreadPrimitive.Suggestion`. Stop uses `aui.thread.cancelRun()`; reload is
+ * `ActionBarPrimitive.Reload` (which calls `aui.message.reload()`).
+ * Styling follows the Roamlog Resend-derived tokens.
  */
 
 const SUGGESTIONS = [
@@ -46,6 +50,17 @@ function UserMessage() {
   );
 }
 
+/** `cancelRun()` leaves the message `incomplete/cancelled`; label it plainly. */
+function AssistantRunStatus() {
+  const status = useAuiState((state) => state.message.status);
+  if (status?.type !== "incomplete" || status.reason !== "cancelled") return null;
+  return (
+    <p role="status" className="text-xs leading-5 text-muted">
+      已停止
+    </p>
+  );
+}
+
 function AssistantMessage() {
   return (
     <MessagePrimitive.Root className="flex justify-start">
@@ -61,6 +76,14 @@ function AssistantMessage() {
             这条回复中断了。工作区没有被写入任何内容，请重新发送。
           </p>
         </MessagePrimitive.Error>
+        <AssistantRunStatus />
+        <ActionBarPrimitive.Root className="flex items-center gap-1" hideWhenRunning>
+          <ActionBarPrimitive.Reload asChild>
+            <Button type="button" variant="ghost" size="sm" aria-label="重新生成">
+              <RotateCcw aria-hidden="true" className="size-3.5" />
+            </Button>
+          </ActionBarPrimitive.Reload>
+        </ActionBarPrimitive.Root>
       </div>
     </MessagePrimitive.Root>
   );
@@ -94,6 +117,25 @@ function EmptyState() {
   );
 }
 
+function StopButton() {
+  const aui = useAui();
+  const running = useAuiState((state) => state.thread.isRunning);
+  if (!running) return null;
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      aria-label="停止生成"
+      className="shrink-0"
+      onClick={() => aui.thread.cancelRun()}
+    >
+      <Square aria-hidden="true" className="size-3.5" />
+    </Button>
+  );
+}
+
 function Composer() {
   return (
     <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-card border border-hairline-strong bg-surface-1 px-2 py-2 focus-within:border-ink/40">
@@ -104,17 +146,7 @@ function Composer() {
         maxRows={8}
         className="max-h-48 min-h-9 w-full resize-none bg-transparent px-2 py-1.5 text-sm leading-6 text-ink outline-none placeholder:text-stone"
       />
-      <ComposerPrimitive.Cancel asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label="停止生成"
-          className="shrink-0"
-        >
-          <Square aria-hidden="true" className="size-3.5" />
-        </Button>
-      </ComposerPrimitive.Cancel>
+      <StopButton />
       <ComposerPrimitive.Send asChild>
         <Button type="button" variant="primary" size="sm" aria-label="发送" className="shrink-0">
           <ArrowUp aria-hidden="true" className="size-4" />

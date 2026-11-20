@@ -1,9 +1,14 @@
-import type { AiChatResponse } from "@roamlog/contracts";
+import type { AiChatResponse, AiStreamEvent } from "@roamlog/contracts";
 import { AiChatResponseSchema } from "@roamlog/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
-import { createAiPlan, executeAiRun } from "@/lib/api/ai";
+import {
+  AiRequestError,
+  createAiPlan,
+  executeAiRun,
+  streamAiPlan,
+} from "@/lib/api/ai";
 
 import {
   EXECUTE_TOOL_NAME,
@@ -15,7 +20,12 @@ import {
 
 vi.mock("@/lib/api/ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/ai")>();
-  return { ...actual, createAiPlan: vi.fn(), executeAiRun: vi.fn() };
+  return {
+    ...actual,
+    createAiPlan: vi.fn(),
+    executeAiRun: vi.fn(),
+    streamAiPlan: vi.fn(),
+  };
 });
 
 const WORKSPACE_ID = "018f0a00-0000-7000-8000-0000000000aa";
@@ -23,6 +33,32 @@ const RUN_ID = "0123456789abcdef0123456789abcdef";
 
 const planMock = vi.mocked(createAiPlan);
 const executeMock = vi.mocked(executeAiRun);
+const streamMock = vi.mocked(streamAiPlan);
+
+const CONVERSATION_ID = "018f0a00-0000-7000-8000-0000000000cc";
+
+function streamOfPlan(plan: AiChatResponse): AsyncGenerator<AiStreamEvent, void, void> {
+  return (async function* () {
+    yield {
+      type: "meta",
+      v: 1,
+      conversationId: CONVERSATION_ID,
+      userMessageId: "u1",
+      assistantMessageId: "a1",
+      provider: { protocol: "openai-chat", model: "auto/test" },
+    };
+    yield {
+      type: "plan",
+      runId: plan.runId,
+      message: plan.message,
+      plannedCalls: plan.plannedCalls,
+      readOnlyTrace: plan.readOnlyTrace,
+      ...(plan.warnings ? { warnings: plan.warnings } : {}),
+      expiresAt: plan.expiresAt,
+    };
+    yield { type: "done", messageId: "a1", finishReason: "tool-calls" };
+  })();
+}
 
 function makePlan(overrides: Partial<AiChatResponse> = {}): AiChatResponse {
   return AiChatResponseSchema.parse({
@@ -48,7 +84,10 @@ async function collect(
   messages: readonly unknown[],
 ): Promise<{ status?: unknown; content: PartLike[] }[]> {
   const adapter = createAiChatModelAdapter({ workspaceId: WORKSPACE_ID, canWrite: true });
-  const stream = adapter.run({ messages } as never);
+  const stream = adapter.run({
+    messages,
+    abortSignal: new AbortController().signal,
+  } as never);
   const resolved = stream instanceof Promise ? await stream : stream;
   if (!("next" in (resolved as object))) {
     return [resolved as unknown as { status?: unknown; content: PartLike[] }];
@@ -82,18 +121,49 @@ beforeEach(() => {
 
 describe("createAiChatModelAdapter", () => {
   it("maps a user turn to an assistant text part plus one pending plan tool part", async () => {
-    planMock.mockResolvedValue(makePlan());
+    streamMock.mockImplementation(() => streamOfPlan(makePlan()));
 
     const chunks = await collect([USER_MESSAGE]);
     expect(chunks).toHaveLength(1);
     expect(first(chunks).status).toEqual({ type: "requires-action", reason: "tool-calls" });
-    expect(planMock).toHaveBeenCalledWith(WORKSPACE_ID, { message: "想去京都" });
+    expect(streamMock).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      { message: "想去京都", clientMessageId: "u1" },
+      expect.any(AbortSignal),
+    );
+    expect(planMock).not.toHaveBeenCalled();
 
     const tool = first(chunks).content.find((part) => part.type === "tool-call");
     expect(tool?.toolName).toBe(PLAN_TOOL_NAME);
     expect(tool?.result).toBeUndefined();
     expect(tool?.args?.plan?.plannedCalls).toHaveLength(1);
     expect(executeMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the blocking plan only when the stream endpoint returns 404", async () => {
+    streamMock.mockImplementation(() => {
+      throw new AiRequestError(404, "Not Found", "NOT_FOUND", "unknown");
+    });
+    planMock.mockResolvedValue(makePlan());
+
+    const chunks = await collect([USER_MESSAGE]);
+
+    expect(planMock).toHaveBeenCalledWith(WORKSPACE_ID, { message: "想去京都" });
+    expect(chunks).toHaveLength(1);
+    expect(first(chunks).status).toEqual({ type: "requires-action", reason: "tool-calls" });
+  });
+
+  it("does not fall back for a non-404 streaming failure", async () => {
+    streamMock.mockImplementation(() => {
+      throw new AiRequestError(503, "AI is not configured", "AI_NOT_CONFIGURED", "not_configured");
+    });
+    planMock.mockResolvedValue(makePlan());
+
+    const chunks = await collect([USER_MESSAGE]);
+
+    expect(planMock).not.toHaveBeenCalled();
+    expect(first(chunks).status).toEqual({ type: "complete", reason: "stop" });
+    expect(JSON.stringify(first(chunks).content)).toContain("AI 尚未配置");
   });
 
   it("runs executeAiRun only for the calls the user confirmed", async () => {
@@ -175,7 +245,9 @@ describe("createAiChatModelAdapter", () => {
   });
 
   it("keeps plan failures as assistant text with no tool part", async () => {
-    planMock.mockRejectedValue(new ApiError(503, "nope", "AI_NOT_CONFIGURED"));
+    streamMock.mockImplementation(() => {
+      throw new ApiError(503, "nope", "AI_NOT_CONFIGURED");
+    });
 
     const chunks = await collect([USER_MESSAGE]);
     expect(first(chunks).status).toEqual({ type: "complete", reason: "stop" });

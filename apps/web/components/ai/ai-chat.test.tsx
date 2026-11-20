@@ -1,11 +1,16 @@
-import type { AiChatResponse, AiPlanWarning, AiRunExecuteResponse } from "@roamlog/contracts";
+import type {
+  AiChatResponse,
+  AiPlanWarning,
+  AiRunExecuteResponse,
+  AiStreamEvent,
+} from "@roamlog/contracts";
 import { AiChatResponseSchema } from "@roamlog/contracts";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
-import { createAiPlan, executeAiRun } from "@/lib/api/ai";
+import { executeAiRun, streamAiPlan } from "@/lib/api/ai";
 
 import { AiChat } from "./ai-chat";
 
@@ -15,6 +20,7 @@ vi.mock("@/lib/api/ai", async (importOriginal) => {
     ...actual,
     createAiPlan: vi.fn(),
     executeAiRun: vi.fn(),
+    streamAiPlan: vi.fn(),
   };
 });
 
@@ -81,8 +87,98 @@ function makeWarning(overrides: Partial<AiPlanWarning> = {}): AiPlanWarning {
   };
 }
 
-const planMock = vi.mocked(createAiPlan);
 const executeMock = vi.mocked(executeAiRun);
+const streamMock = vi.mocked(streamAiPlan);
+const CONVERSATION_ID = "018f0a00-0000-7000-8000-0000000000cc";
+const REMOTE_CONVERSATION_ID = "018f0a00-0000-7000-8000-0000000000c1";
+const USER_ID = "018f0a00-0000-7000-8000-0000000000bb";
+
+const REMOTE_CONVERSATION = {
+  id: REMOTE_CONVERSATION_ID,
+  workspaceId: WORKSPACE_ID,
+  userId: USER_ID,
+  title: null,
+  titleSource: "placeholder",
+  status: "regular",
+  lastMessageAt: null,
+  createdAt: "2026-11-20T08:00:00.000Z",
+  updatedAt: "2026-11-20T08:00:00.000Z",
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** Keeps the remote conversation adapter quiet while these tests only assert the chat turn. */
+function installConversationFetch(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (url.includes("/ai/conversations?")) {
+        return jsonResponse({ items: [], nextCursor: null });
+      }
+      if (url.endsWith("/ai/conversations") && method === "POST") {
+        return jsonResponse(REMOTE_CONVERSATION, 201);
+      }
+      if (url.endsWith("/title/generate")) {
+        return jsonResponse({ title: "京都" });
+      }
+      if (url.includes("/messages") && method === "GET") {
+        return jsonResponse({ headId: null, messages: [] });
+      }
+      if (url.includes("/messages/") && method === "PUT") {
+        const clientId = decodeURIComponent(url.split("/messages/")[1] ?? "m1");
+        return jsonResponse({
+          id: clientId,
+          role: "user",
+          content: [],
+          createdAt: "2026-11-20T08:00:00.000Z",
+          clientId,
+        });
+      }
+      return jsonResponse(REMOTE_CONVERSATION);
+    }),
+  );
+}
+
+function planEventFrom(plan: AiChatResponse): AiStreamEvent {
+  return {
+    type: "plan",
+    runId: plan.runId,
+    message: plan.message,
+    plannedCalls: plan.plannedCalls,
+    readOnlyTrace: plan.readOnlyTrace,
+    ...(plan.warnings ? { warnings: plan.warnings } : {}),
+    expiresAt: plan.expiresAt,
+  };
+}
+
+function mockStreamPlan(plan: AiChatResponse): void {
+  streamMock.mockImplementation(async function* () {
+    yield {
+      type: "meta",
+      v: 1,
+      conversationId: CONVERSATION_ID,
+      userMessageId: "u1",
+      assistantMessageId: "a1",
+      provider: { protocol: "openai-chat", model: "auto/test" },
+    };
+    yield { type: "text.delta", delta: plan.message };
+    yield planEventFrom(plan);
+    yield { type: "done", messageId: "a1", finishReason: "tool-calls" };
+  });
+}
+
+function mockStreamFailure(error: unknown): void {
+  streamMock.mockImplementation(() => {
+    throw error;
+  });
+}
 
 function renderChat(role: "owner" | "editor" | "viewer" = "editor") {
   return render(
@@ -92,12 +188,17 @@ function renderChat(role: "owner" | "editor" | "viewer" = "editor") {
 
 async function sendPrompt(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole("button", { name: PROMPT }));
-  await waitFor(() => expect(planMock).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(streamMock).toHaveBeenCalledTimes(1));
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
+  installConversationFetch();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("AiChat empty state", () => {
@@ -115,7 +216,7 @@ describe("AiChat empty state", () => {
 describe("AiChat plan confirmation", () => {
   it("renders the plan as a card inside the assistant message, not a side panel", async () => {
     const user = userEvent.setup();
-    planMock.mockResolvedValue(makePlan());
+    mockStreamPlan(makePlan());
     renderChat();
 
     await sendPrompt(user);
@@ -124,12 +225,13 @@ describe("AiChat plan confirmation", () => {
     expect(await within(card).findByText("京都一周：古寺与咖啡馆")).toBeInTheDocument();
     expect(within(card).getByText("添加装备")).toBeInTheDocument();
     expect(within(card).getByText(/已选 2 \/ 2/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重新生成" })).toBeInTheDocument();
     expect(executeMock).not.toHaveBeenCalled();
   });
 
   it("keeps the server warnings and the read-only trace of the plan", async () => {
     const user = userEvent.setup();
-    planMock.mockResolvedValue(makePlan({ warnings: [makeWarning()] }));
+    mockStreamPlan(makePlan({ warnings: [makeWarning()] }));
     renderChat();
 
     await sendPrompt(user);
@@ -143,7 +245,7 @@ describe("AiChat plan confirmation", () => {
 
   it("executes only the selected calls, once the user confirms", async () => {
     const user = userEvent.setup();
-    planMock.mockResolvedValue(makePlan());
+    mockStreamPlan(makePlan());
     executeMock.mockResolvedValue(makeExecution());
     renderChat();
 
@@ -175,7 +277,7 @@ describe("AiChat plan confirmation", () => {
 
   it("disables the confirmation for viewers", async () => {
     const user = userEvent.setup();
-    planMock.mockResolvedValue(makePlan());
+    mockStreamPlan(makePlan());
     renderChat("viewer");
 
     await sendPrompt(user);
@@ -190,9 +292,7 @@ describe("AiChat plan confirmation", () => {
 describe("AiChat failures", () => {
   it("renders the 503 AI-not-configured copy with the admin link", async () => {
     const user = userEvent.setup();
-    planMock.mockRejectedValue(
-      new ApiError(503, "AI is not configured", "AI_NOT_CONFIGURED"),
-    );
+    mockStreamFailure(new ApiError(503, "AI is not configured", "AI_NOT_CONFIGURED"));
     renderChat();
 
     await sendPrompt(user);
@@ -204,7 +304,7 @@ describe("AiChat failures", () => {
 
   it("renders the quota copy without leaking the raw error code", async () => {
     const user = userEvent.setup();
-    planMock.mockRejectedValue(new ApiError(429, "AI_QUOTA_EXCEEDED", "AI_QUOTA_EXCEEDED"));
+    mockStreamFailure(new ApiError(429, "AI_QUOTA_EXCEEDED", "AI_QUOTA_EXCEEDED"));
     renderChat();
 
     await sendPrompt(user);
