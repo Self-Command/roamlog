@@ -9,19 +9,29 @@ import type { WorkspaceMemberRole } from "./workspaceMemberRole";
 import type { WorkspaceMemberStatus } from "./workspaceMemberStatus";
 
 export interface WorkspaceMember {
-  /** Sortable UUIDv7 identifier. */
+  /**
+   * PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included).
+   * @pattern ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+   */
   id: string;
-  /** Sortable UUIDv7 identifier. */
+  /**
+   * PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included).
+   * @pattern ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+   */
   workspaceId: string;
-  /** Sortable UUIDv7 identifier. */
+  /**
+   * PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included).
+   * @pattern ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+   */
   userId: string;
   role: WorkspaceMemberRole;
   status: WorkspaceMemberStatus;
   /** ISO 8601 timestamp with an explicit UTC offset. */
   joinedAt: string;
   /**
-   * Sortable UUIDv7 identifier.
+   * PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included).
    * @nullable
+   * @pattern ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
    */
   invitedById: string | null;
   /** ISO 8601 timestamp with an explicit UTC offset. */

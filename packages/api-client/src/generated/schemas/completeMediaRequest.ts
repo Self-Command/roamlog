@@ -9,7 +9,7 @@ import type { CompleteMediaRequestExif } from "./completeMediaRequestExif";
 
 export interface CompleteMediaRequest {
   /**
-   * @maximum 26214400
+   * @maximum 1073741824
    * @exclusiveMinimum 0
    */
   size?: number;

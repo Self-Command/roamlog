@@ -17,7 +17,7 @@ export interface MediaPresignRequest {
   /** @pattern ^image\/(jpeg|png|webp|avif|heic|heif)$ */
   mimeType: string;
   /**
-   * @maximum 26214400
+   * @maximum 1073741824
    * @exclusiveMinimum 0
    */
   size: number;

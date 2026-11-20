@@ -44,3 +44,10 @@
 - 原因：`@next/next/no-img-element` 规则未在 `eslint.config.mjs` 注册，两个 disable 注释变成未定义规则；`workspace-settings-page.tsx` 的 `pending` 初始 `null` 永不被读取。
 - 修复：移除无效 disable 注释、保留说明；`pending` 改为无初始值。`@roamlog/web lint` 通过，settings/AI 91/91，typecheck 通过。
 - 按“失败 tag 不覆盖”原则，`v0.1.0-rc.6` 保留为失败记录，修复版打 `v0.1.0-rc.7`。
+
+## rc.7 门禁结果
+
+- CI `44764587807` 与 Release gate `44764836540` 在 `Contract and generated client freshness` 失败。
+- 原因：`packages/contracts/openapi.json` 与 Orval 客户端未跟随媒体大小上限、成员 UUID 契约更新。
+- 修复：执行 `pnpm --filter @roamlog/contracts contracts:generate` 与 `pnpm --filter @roamlog/api-client api-client:generate`；`pnpm contracts:check` 输出 OpenAPI fresh（113 paths / 213 schemas）与 client fresh（25 endpoint files / 801 schema files）。
+- `v0.1.0-rc.7` 保留为失败记录，修复版打 `v0.1.0-rc.8`。

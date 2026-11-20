@@ -5673,7 +5673,7 @@
           "size": {
             "type": "integer",
             "exclusiveMinimum": 0,
-            "maximum": 26214400
+            "maximum": 1073741824
           },
           "width": {
             "type": "integer",
@@ -11290,7 +11290,7 @@
           "size": {
             "type": "integer",
             "exclusiveMinimum": 0,
-            "maximum": 26214400
+            "maximum": 1073741824
           },
           "width": {
             "type": "integer",
@@ -19374,18 +19374,18 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "workspaceId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "userId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "role": {
             "type": "string",
@@ -19413,8 +19413,8 @@
               "string",
               "null"
             ],
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "createdAt": {
             "type": "string",
@@ -20921,18 +20921,18 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "workspaceId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "userId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "role": {
             "type": "string",
@@ -20960,8 +20960,8 @@
               "string",
               "null"
             ],
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "createdAt": {
             "type": "string",
@@ -20997,18 +20997,18 @@
               "properties": {
                 "id": {
                   "type": "string",
-                  "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "workspaceId": {
                   "type": "string",
-                  "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "userId": {
                   "type": "string",
-                  "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "role": {
                   "type": "string",
@@ -21036,8 +21036,8 @@
                     "string",
                     "null"
                   ],
-                  "format": "uuid",
-                  "description": "Sortable UUIDv7 identifier."
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+                  "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
                 },
                 "createdAt": {
                   "type": "string",
@@ -21228,18 +21228,18 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "workspaceId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "userId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "role": {
             "type": "string",
@@ -21267,8 +21267,8 @@
               "string",
               "null"
             ],
-            "format": "uuid",
-            "description": "Sortable UUIDv7 identifier."
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
           },
           "createdAt": {
             "type": "string",
@@ -23971,11 +23971,11 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid",
-              "description": "Sortable UUIDv7 identifier."
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+              "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
             },
             "required": true,
-            "description": "Sortable UUIDv7 identifier.",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included).",
             "name": "memberId",
             "in": "path"
           }
@@ -24084,11 +24084,11 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid",
-              "description": "Sortable UUIDv7 identifier."
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i",
+              "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included)."
             },
             "required": true,
-            "description": "Sortable UUIDv7 identifier.",
+            "description": "PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (legacy rows included).",
             "name": "memberId",
             "in": "path"
           }
