@@ -66,7 +66,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {demoEnabled ? <Badge tone="orange">演示预填</Badge> : null}
+              {demoEnabled ? <Badge tone="orange">演示模式</Badge> : null}
               <Badge tone="green">安全认证</Badge>
             </div>
           </header>
@@ -114,7 +114,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                       setMessage(
                         error instanceof Error
                           ? error.message
-                          : "无法连接认证服务，请检查 API 状态。",
+                          : "无法连接认证服务，请稍后重试。",
                       );
                     } finally {
                       setIsSubmitting(false);
@@ -127,7 +127,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     required
                     hint={
                       demoEnabled
-                        ? "演示：已通过 NEXT_PUBLIC_ADMIN_DEMO=1 预填演示邮箱，请勿用于生产。"
+                        ? "演示模式：已填入示例账号，请勿用于生产。"
                         : undefined
                     }
                   >
@@ -143,7 +143,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     id="admin-password"
                     label="密码"
                     required
-                    hint="通过同源 /v1/auth 代理登录，会话 Cookie 为 httpOnly。"
+                    hint="同源接入认证服务，会话 Cookie 为 httpOnly。"
                   >
                     <Input
                       autoComplete="current-password"
@@ -198,7 +198,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                       setMessage(
                         error instanceof Error
                           ? error.message
-                          : "无法连接认证服务，请检查 API 状态。",
+                          : "无法连接认证服务，请稍后重试。",
                       );
                     } finally {
                       setIsSubmitting(false);
@@ -264,7 +264,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-4">
             <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-              Better Auth / 同源 /v1 代理
+              统一认证 · 同源接入
             </p>
             <p className="font-mono text-[9px] text-stone">后台 :3001</p>
           </footer>
@@ -303,7 +303,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
             <p className="type-eyebrow">环境</p>
             <div className="mt-3 space-y-2 font-mono text-[9px] text-muted">
               <div className="flex justify-between gap-3">
-                <span>API</span>
+                <span>后台服务</span>
                 <span className="text-accent-green">同源代理</span>
               </div>
               <div className="flex justify-between gap-3">

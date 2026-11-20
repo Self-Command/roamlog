@@ -591,7 +591,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
 
   const detailLoading = detail.isLoading && !detail.data;
   const countValue = (value: number | undefined): string | number =>
-    value === undefined ? "未接入" : value;
+    value === undefined ? "暂不可用" : value;
 
   return (
     <div className="space-y-5">
@@ -852,7 +852,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                       {typeof user.activeSessionCount === "number" ? (
                         user.activeSessionCount
                       ) : (
-                        <span title="列表响应未提供活跃会话计数，请打开详情读取 GET /v1/admin/users/:id">
+                        <span title="列表未提供活跃会话计数，打开详情可查看">
                           —
                         </span>
                       )}
@@ -1142,11 +1142,8 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                     detailLoading ? (
                       "…"
                     ) : detailData?.twoFactorEnabled === undefined ? (
-                      <span
-                        key="2fa-unavailable"
-                        title="需要 GET /v1/admin/users/:id 返回 twoFactorEnabled；当前详情响应未提供该字段"
-                      >
-                        未接入
+                      <span key="2fa-unavailable" title="详情暂未提供该字段">
+                        暂不可用
                       </span>
                     ) : detailData.twoFactorEnabled ? (
                       "已启用"
@@ -1187,7 +1184,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                       className="mt-1.5 font-serif text-2xl text-ink"
                       title={
                         value === undefined
-                          ? "需要 GET /v1/admin/users/:id 返回该计数；当前详情响应未提供"
+                          ? "详情暂未提供该计数"
                           : undefined
                       }
                     >
@@ -1207,7 +1204,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                       {sessions === undefined
                         ? detailLoading
                           ? "读取中"
-                          : "未接入"
+                          : "暂不可用"
                         : `${sessions.length} 条记录`}
                     </span>
                   </div>
@@ -1215,7 +1212,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                     <p className="mt-2 text-[11px] leading-5 text-muted">
                       {detailLoading
                         ? "正在读取会话明细…"
-                        : "未接入：需要 GET /v1/admin/users/:id 返回 sessions[]（id、ipAddress、userAgent、createdAt、expiresAt）。"}
+                        : "会话明细暂时读不到，请重试或重新打开详情。"}
                     </p>
                   ) : sessions.length > 0 ? (
                     <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
@@ -1244,7 +1241,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                       {memberships === undefined
                         ? detailLoading
                           ? "读取中"
-                          : "未接入"
+                          : "暂不可用"
                         : `${memberships.length} 条记录`}
                     </span>
                   </div>
@@ -1252,7 +1249,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                     <p className="mt-2 text-[11px] leading-5 text-muted">
                       {detailLoading
                         ? "正在读取工作区成员关系…"
-                        : "未接入：需要 GET /v1/admin/users/:id 返回 workspaces[]（workspaceId、workspaceName、role、status、joinedAt）。"}
+                        : "工作区成员关系暂时读不到，请重试或重新打开详情。"}
                     </p>
                   ) : memberships.length > 0 ? (
                     <ul className="mt-2 divide-y divide-hairline border-y border-hairline">

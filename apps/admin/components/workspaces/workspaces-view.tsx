@@ -428,7 +428,7 @@ export function WorkspacesView({
   const copy = pendingAction ? actionCopy[pendingAction.kind] : null;
   const detailLoading = detail.isLoading && !detail.data;
   const countValue = (value: number | undefined): string | number =>
-    detailLoading ? "…" : value === undefined ? "未接入" : value;
+    detailLoading ? "…" : value === undefined ? "暂不可用" : value;
 
   const apiMembers = detail.data?.members;
   const members: ReadonlyArray<{
@@ -775,9 +775,9 @@ export function WorkspacesView({
                       ) : (
                         <span
                           className="font-mono text-[10px] text-muted"
-                          title="列表响应未提供所有者；需要 GET /v1/admin/workspaces 返回 owner"
+                          title="列表未提供所有者"
                         >
-                          未接入
+                          暂不可用
                         </span>
                       )}
                     </td>
@@ -793,23 +793,23 @@ export function WorkspacesView({
                         className="px-3 py-1.5 font-mono text-[10px] text-muted"
                         title={
                           value === undefined
-                            ? `列表响应未提供${label}计数；需要 GET /v1/admin/workspaces 返回 ${label} 计数`
+                            ? `列表未提供${label}计数`
                             : undefined
                         }
                       >
-                        {value ?? "未接入"}
+                        {value ?? "暂不可用"}
                       </td>
                     ))}
                     <td
                       className="px-3 py-1.5 font-mono text-[10px] text-muted"
                       title={
                         workspace.mediaBytes === undefined
-                          ? "列表响应未提供媒体字节；需要 GET /v1/admin/workspaces 返回 mediaBytes"
+                          ? "列表未提供媒体字节"
                           : undefined
                       }
                     >
                       {workspace.mediaBytes === undefined
-                        ? "未接入"
+                        ? "暂不可用"
                         : formatBytes(workspace.mediaBytes)}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
@@ -953,9 +953,9 @@ export function WorkspacesView({
 
               <div className="mt-6 rounded-control border border-hairline bg-surface-1 p-3">
                 <p className="type-eyebrow">所有者</p>
-                <p className="mt-2 text-sm text-ink">{ownerName ?? "未接入"}</p>
+                <p className="mt-2 text-sm text-ink">{ownerName ?? "暂不可用"}</p>
                 <p className="mt-1 font-mono text-[9px] text-muted">
-                  {ownerEmail ?? "需要 GET /v1/admin/workspaces/:id 返回 owner"}
+                  {ownerEmail ?? "详情暂未提供所有者邮箱"}
                 </p>
               </div>
 
@@ -966,14 +966,14 @@ export function WorkspacesView({
                     className="mt-1.5 font-serif text-xl text-ink"
                     title={
                       detailData?.mediaBytes === undefined
-                        ? "需要 GET /v1/admin/workspaces/:id 返回 mediaBytes"
+                        ? "详情暂未提供存储用量"
                         : undefined
                     }
                   >
                     {detailData?.mediaBytes === undefined
                       ? detailLoading
                         ? "…"
-                        : "未接入"
+                        : "暂不可用"
                       : formatBytes(detailData.mediaBytes)}
                   </p>
                 </div>
@@ -994,7 +994,7 @@ export function WorkspacesView({
                     {members === undefined
                       ? detailLoading
                         ? "读取中"
-                        : "未接入"
+                        : "暂不可用"
                       : `${members.length} 条记录`}
                   </span>
                 </div>
@@ -1002,7 +1002,7 @@ export function WorkspacesView({
                   <p className="mt-2 text-[11px] leading-5 text-muted">
                     {detailLoading
                       ? "正在读取成员明细…"
-                      : "未接入：需要 GET /v1/admin/workspaces/:id 返回 members[]（userId、name、email、role、status、joinedAt）。"}
+                      : "成员明细暂时读不到，请重试或重新打开详情。"}
                   </p>
                 ) : members.length > 0 ? (
                   <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
@@ -1038,7 +1038,7 @@ export function WorkspacesView({
                     {invitations === undefined
                       ? detailLoading
                         ? "读取中"
-                        : "未接入"
+                        : "暂不可用"
                       : `${invitations.length} 条记录`}
                   </span>
                 </div>
@@ -1046,7 +1046,7 @@ export function WorkspacesView({
                   <p className="mt-2 text-[11px] leading-5 text-muted">
                     {detailLoading
                       ? "正在读取邀请记录…"
-                      : "未接入：需要 GET /v1/admin/workspaces/:id 返回 invitations[]（email、role、expiresAt、acceptedAt、revokedAt）。"}
+                      : "邀请记录暂时读不到，请重试或重新打开详情。"}
                   </p>
                 ) : invitations.length > 0 ? (
                   <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
@@ -1096,19 +1096,19 @@ export function WorkspacesView({
                     {recentTrips === undefined
                       ? trips.isLoading
                         ? "读取中"
-                        : "未接入"
+                        : "暂不可用"
                       : `${recentTrips.length} 条记录`}
                   </span>
                 </div>
                 {trips.error ? (
                   <p role="alert" className="mt-2 text-[11px] text-accent-red">
-                    最近旅行读取失败：{trips.error.code} · {trips.error.detail}
+                    最近旅行读取失败（{trips.error.code}），请稍后重试。
                   </p>
                 ) : recentTrips === undefined ? (
                   <p className="mt-2 text-[11px] leading-5 text-muted">
                     {trips.isLoading
                       ? "正在读取最近旅行…"
-                      : "未接入：需要 GET /v1/admin/trips?workspaceId=... 返回该租户旅行。"}
+                      : "最近旅行暂时读不到，请稍后重试。"}
                   </p>
                 ) : recentTrips.length > 0 ? (
                   <ul className="mt-2 divide-y divide-hairline border-y border-hairline">
@@ -1179,7 +1179,7 @@ export function WorkspacesView({
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  套餐与所有权通过 PATCH /v1/admin/workspaces/:id 实际提交，后端校验成员资格并在同一事务内写入审计。
+                  套餐与所有权的变更会直接提交后台，后端校验成员资格并在同一事务内写入审计。
                 </p>
               </div>
             </>

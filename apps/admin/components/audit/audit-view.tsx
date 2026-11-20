@@ -178,7 +178,7 @@ targetTypeFilter,
         };
         const csv = await exportCsv(params);
         downloadCsv(csv);
-        setStatusMessage(`已从后台 API 导出审计 CSV。`);
+        setStatusMessage(`已导出审计 CSV。`);
       } catch (error) {
         setStatusMessage(
           error instanceof AdminMutationError
@@ -218,7 +218,7 @@ targetTypeFilter,
               disabled={!canExport || isExporting}
               title={
                 canExport
-                  ? "从后台 API 导出当前筛选结果为 CSV": "仅分析员及以上角色可导出"
+                  ? "导出当前筛选结果为 CSV": "仅分析员及以上角色可导出"
               }
               onClick={exportAuditCsv}
             >

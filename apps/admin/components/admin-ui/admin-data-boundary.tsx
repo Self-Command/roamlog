@@ -107,7 +107,7 @@ function AdminDataContent<T>({
             </h2>
             <p className="mt-2 text-[12px] leading-6 text-muted">
               {twoFactorRequired
-                ? "后端要求平台管理员完成 TOTP 注册与验证。完成前，后台 API 会持续返回 ADMIN_2FA_REQUIRED。"
+                ? "后端要求平台管理员完成 TOTP 注册与验证。完成前，后台会拒绝所有管理请求。"
                 : "后台数据暂时无法读取，请稍后重试；多次失败请联系平台管理员。"}
             </p>
             <details className="mt-3 font-mono text-[9px] text-stone">

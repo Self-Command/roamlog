@@ -96,8 +96,7 @@ export function TwoFactorEnrollmentPanel({
           为平台管理员启用 2FA
         </h1>
         <p className="mt-3 max-w-2xl text-[13px] leading-6 text-muted">
-          平台角色由后端会话决定。完成 TOTP 绑定与验证前，所有后台 API 请求都会返回{" "}
-          <code className="font-mono text-[11px] text-body">ADMIN_2FA_REQUIRED</code>。
+          平台角色由后端会话决定。完成 TOTP 绑定与验证前，后台会拒绝所有管理请求。
         </p>
       </header>
 

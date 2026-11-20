@@ -69,14 +69,18 @@ export function QueuesView({
   const totalWaiting = queueRecords.reduce((total, queue) => total + queue.waiting, 0);
   const pausedQueues = queueRecords.filter((queue) => queue.paused).length;
   // Throughput is a measured window per queue; if Redis could not provide the
-  // window the console shows "未接入" instead of a fabricated 0.
+  // window the console shows "暂不可用" instead of a fabricated 0.
   const throughputKnown =
     queueRecords.length > 0 &&
     queueRecords.every((queue) => Number.isFinite(queue.throughputPerMinute));
   const throughput = throughputKnown
     ? queueRecords.reduce((total, queue) => total + queue.throughputPerMinute, 0)
     : UNKNOWN_THROUGHPUT;
-  const throughputLabel = formatThroughput(throughput);
+  // `formatThroughput` still falls back to the older wording for unknown windows,
+// so the label is settled here where the console owns the copy.
+  const throughputLabel = Number.isFinite(throughput)
+    ? formatThroughput(throughput)
+    : "暂不可用";
 
   const queueByJob = useMemo(
     () => new Map(queueRecords.map((queue) => [queue.name, queue])),
@@ -245,7 +249,7 @@ export function QueuesView({
         />
         <AdminMetricCard
           label="吞吐"
-          value={Number.isFinite(throughput) ? throughput.toFixed(1) : "未接入"}
+          value={Number.isFinite(throughput) ? throughput.toFixed(1) : "暂不可用"}
           detail={
             Number.isFinite(throughput)
               ? "5 分钟窗口内 BullMQ 完成时间戳推算 · 任务/分钟"
@@ -273,7 +277,7 @@ export function QueuesView({
           <EmptyState
             icon={RotateCcw}
             title="未发现队列"
-            description="Redis 中没有可识别的 BullMQ 队列状态键。队列列表来自 Redis 扫描，不再使用硬编码清单；任务进程尚未注册队列时这里保持为空。"
+            description="Redis 中没有可识别的队列状态键。队列列表来自 Redis 扫描；任务进程尚未注册队列时这里保持为空。"
             className="sm:col-span-2"
           />
         ) : null}
@@ -322,7 +326,10 @@ export function QueuesView({
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
               <span className="font-mono text-[9px] text-muted">
-                {formatThroughput(queue.throughputPerMinute)} · 5 分钟窗口
+                {Number.isFinite(queue.throughputPerMinute)
+                  ? formatThroughput(queue.throughputPerMinute)
+                  : "暂不可用"}{" "}
+                · 5 分钟窗口
               </span>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button
@@ -552,13 +559,13 @@ const workerTones = {
 const signalSources = {
   "consumer-clients": "Redis CLIENT LIST 中阻塞在 BullMQ BZPOPMIN 的消费者 + 队列计数",
   "activity-derived": "最近一次任务完成/失败时间 + 队列运行数",
-  unavailable: "未接入",
+  unavailable: "无可用的推导信号",
 } as const;
 
 /**
  * Worker health cannot be derived from queue counters alone. This panel calls
  * `/v1/admin/system` so the queue page shows the same observed worker signal,
- * and says "未接入" when the API could not prove liveness either way.
+ * and says "无法确认" when the API could not prove liveness either way.
  */
 function QueueWorkerPanel() {
   const resource = useAdminSystemResource();
@@ -585,7 +592,7 @@ function QueueWorkerPanel() {
         <div>
           <h2 className="text-[12px] font-medium text-ink">任务进程消费端</h2>
           <p className="mt-1 text-[10px] leading-5 text-muted">
-            未接入：/v1/admin/system 没有返回任务进程信号，无法判断消费者是否存活。
+            暂时读不到任务进程信号，无法判断消费者是否存活。
           </p>
         </div>
       </section>
@@ -611,7 +618,7 @@ function QueueWorkerPanel() {
           </Badge>
         ) : (
           <Badge tone="slate" title="缺少任务进程心跳，无法证明存活或不可用">
-            未接入
+            无法确认
           </Badge>
         )}
       </div>
@@ -624,22 +631,21 @@ function QueueWorkerPanel() {
         <div className="flex items-center justify-between gap-3">
           <dt className="text-muted">最近任务</dt>
           <dd className="font-mono text-[10px] text-body">
-            {signal?.lastJobAt ? formatDateTime(signal.lastJobAt) : "未接入"}
+            {signal?.lastJobAt ? formatDateTime(signal.lastJobAt) : "暂不可用"}
           </dd>
         </div>
       </dl>
 
       <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
-        推导口径：{signal ? signalSources[signal.signal] : "未接入"}
+        推导口径：{signal ? signalSources[signal.signal] : "无可用的推导信号"}
         {signal?.lastJobStatus
           ? ` · 最近${JOB_STATUS_LABELS[signal.lastJobStatus]} @ ${signal.lastJobQueue ?? "?"}`
           : ""}
       </p>
       {!observable ? (
         <p className="mt-2 text-[9px] leading-4 text-muted">
-          队列健康不再由计数推导：需要任务进程写入心跳键，或由任务进程侧暴露 BullMQ
-          <code className="mx-1 font-mono">getWorkers()</code>（当前版本的任务进程不设置 CLIENT
-          SETNAME，按连接名匹配会永久误报不可用）。
+          队列健康不由计数推导：需要任务进程写入心跳，或由任务进程侧暴露自身连接信息
+          （当前版本的任务进程不标记连接名，按连接名匹配会永久误报不可用）。
         </p>
       ) : null}
     </section>

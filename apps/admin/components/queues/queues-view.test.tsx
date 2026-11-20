@@ -189,13 +189,14 @@ describe("QueuesView", () => {
     expect(screen.getByText("跨 4 个队列（Redis 发现）")).toBeInTheDocument();
   });
 
-  it("shows 未接入 instead of 0.0 when the throughput window is unavailable", () => {
+  it("shows 暂不可用 instead of 0.0 when the throughput window is unavailable", () => {
     const queues: AdminQueueSummary[] = [
       { ...sampleQueues[0]!, throughputPerMinute: Number.NaN },
     ];
     renderWithClient(<QueuesView role="super_admin" queues={queues} failedJobs={[]} />);
 
-    expect(screen.getAllByText("未接入").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("暂不可用").length).toBeGreaterThan(0);
+    expect(screen.queryByText("未接入")).not.toBeInTheDocument();
     expect(screen.queryByText(/0\.0 jobs\/min/)).not.toBeInTheDocument();
   });
 

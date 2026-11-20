@@ -106,6 +106,8 @@ describe("EmailsView", () => {
     renderWithClient(<EmailsView role="super_admin" emails={sampleEmails} />);
 
     expect(screen.queryByRole("button", { name: /测试邮件/ })).not.toBeInTheDocument();
-    expect(screen.getByText("测试邮件入口未接入")).toBeInTheDocument();
+    expect(screen.getByText("测试邮件入口尚未开放")).toBeInTheDocument();
+    // The placeholder must not spell out the endpoint it is waiting for.
+    expect(screen.queryByText(/\/v1\/admin/)).not.toBeInTheDocument();
   });
 });

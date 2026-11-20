@@ -42,7 +42,7 @@ const workerTones = {
 const signalSources = {
   "consumer-clients": "Redis CLIENT LIST（阻塞消费者）+ 队列计数",
   "activity-derived": "最近一次任务完成/失败时间 + 队列运行数",
-  unavailable: "未接入",
+  unavailable: "无可用的推导信号",
 } as const;
 
 const UNCONFIGURED = "unconfigured";
@@ -67,7 +67,7 @@ export function SystemView({
   // says "not wired" instead of claiming DOWN.
   const signal = workerSignal?.signal ?? "unavailable";
   const workerObservable = signal !== "unavailable" && workerSignal !== null;
-  const workerDerivation = workerSignal ? signalSources[workerSignal.signal] : "未接入";
+  const workerDerivation = workerSignal ? signalSources[workerSignal.signal] : "无可用的推导信号";
 
   return (
     <div className="space-y-5">
@@ -89,12 +89,12 @@ export function SystemView({
       <section aria-label="版本与运行时间" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminMetricCard
           label="API 版本"
-          value={notWired(snapshot.apiVersion) ? "未接入" : snapshot.apiVersion}
+          value={notWired(snapshot.apiVersion) ? "未上报" : snapshot.apiVersion}
           detail={
             notWired(snapshot.apiVersion)
-              ? "需要 ROAMLOG_API_VERSION"
+              ? "后端未上报版本号"
               : `任务进程版本 ${
-                  notWired(snapshot.workerVersion) ? "未接入" : snapshot.workerVersion
+                  notWired(snapshot.workerVersion) ? "未上报" : snapshot.workerVersion
                 }`
           }
           tone="blue"
@@ -116,10 +116,10 @@ export function SystemView({
         />
         <AdminMetricCard
           label="最近构建"
-          value={notWired(snapshot.buildTime) ? "未接入" : formatDateTime(snapshot.buildTime)}
+          value={notWired(snapshot.buildTime) ? "未上报" : formatDateTime(snapshot.buildTime)}
           detail={
             notWired(snapshot.buildTime)
-              ? "需要 ROAMLOG_BUILD_TIME（不再用容器启动时间替代）"
+              ? "后端未上报构建时间（不再用容器启动时间替代）"
               : "构建元数据"
           }
           tone="orange"
@@ -138,7 +138,7 @@ export function SystemView({
             </div>
             <Badge tone={upChecks === snapshot.checks.length ? "green" : "yellow"}>
               {snapshot.checks.length === 0
-                ? "未接入"
+                ? "暂无检查项"
                 : `${upChecks} / ${snapshot.checks.length} 正常`}
             </Badge>
           </div>
@@ -166,7 +166,7 @@ export function SystemView({
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted">版本</dt>
                 <dd className="font-mono text-[10px] text-body">
-                  {notWired(snapshot.workerVersion) ? "未接入" : `v${snapshot.workerVersion}`}
+                  {notWired(snapshot.workerVersion) ? "未上报" : `v${snapshot.workerVersion}`}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -178,7 +178,7 @@ export function SystemView({
                 <dd>
                   {!workerObservable ? (
                     <Badge tone="slate" title="缺少任务进程心跳，无法证明存活或不可用">
-                      未接入
+                      无法确认
                     </Badge>
                   ) : (
                     <Badge tone={workerTones[snapshot.workerStatus]}>
@@ -192,7 +192,7 @@ export function SystemView({
                 <dd className="font-mono text-[10px] text-body">
                   {workerSignal?.lastJobAt
                     ? formatDateTime(workerSignal.lastJobAt)
-                    : "未接入"}
+                    : "暂不可用"}
                 </dd>
               </div>
             </dl>
@@ -204,9 +204,8 @@ export function SystemView({
             </p>
             {!workerObservable ? (
               <p className="mt-2 text-[9px] leading-4 text-muted">
-                任务进程未写入心跳，也没有可观测的阻塞消费者或近期任务；需要在任务进程
-                侧新增心跳键（如 <code className="font-mono">roamlog:worker:heartbeat</code>）
-                才能给出可信的健康判定。
+                任务进程未写入心跳，也没有可观测的阻塞消费者或近期任务；需要在任务进程侧补上
+                心跳上报，才能给出可信的健康判定。
               </p>
             ) : null}
           </section>
@@ -228,7 +227,7 @@ export function SystemView({
               </div>
               {queues.length === 0 ? (
                 <p className="text-[10px] leading-4 text-muted">
-                  {"Redis 中没有可识别的 BullMQ 队列键：当前没有已注册队列，或 Redis 不可达。"}
+                  {"Redis 中没有可识别的队列状态键：当前没有已注册队列，或 Redis 不可达。"}
                 </p>
               ) : (
                 <ul className="space-y-1.5">
@@ -248,7 +247,7 @@ export function SystemView({
               )}
             </div>
             <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
-              来源：Redis SCAN 匹配 BullMQ 状态键；不再渲染硬编码的 key prefix / 延迟 / 队列数。
+              来源：扫描 Redis 中的队列状态键。
             </p>
           </section>
         </aside>
@@ -265,7 +264,7 @@ export function SystemView({
           <Badge tone={snapshot.migrations.length > 0 ? "green" : "yellow"}>
             {snapshot.migrations.length > 0
               ? "最新已应用"
-              : "未接入"}
+              : "暂不可用"}
           </Badge>
         </div>
         <div className="overflow-x-auto">
@@ -291,7 +290,7 @@ export function SystemView({
               {snapshot.migrations.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-3 py-6 text-center text-[11px] text-muted">
-                    当前 API 未返回迁移版本；数据库恢复后刷新。
+                    当前读不到迁移版本；请确认数据库可用后刷新。
                   </td>
                 </tr>
               ) : (

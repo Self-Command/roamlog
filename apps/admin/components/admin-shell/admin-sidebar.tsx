@@ -149,7 +149,7 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
             </p>
           </div>
           <p className="mt-2 text-[9px] leading-4 text-stone">
-            平台角色由 /v1/me 与后端 guard 决定。
+            平台角色由后端会话与权限校验决定。
           </p>
           <button
             type="button"

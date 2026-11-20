@@ -24,8 +24,12 @@ describe("LoginPanel", () => {
     render(<LoginPanel />);
 
     expect(screen.getByLabelText(/管理员邮箱/)).toHaveValue("demo@roamlog.local");
-    expect(screen.getByText("演示预填")).toBeInTheDocument();
-    expect(screen.getByText(/NEXT_PUBLIC_ADMIN_DEMO=1/)).toBeInTheDocument();
+    expect(screen.getByText("演示模式")).toBeInTheDocument();
+    expect(
+      screen.getByText("演示模式：已填入示例账号，请勿用于生产。"),
+    ).toBeInTheDocument();
+    // The env var name is a build-time detail; it must not reach the screen.
+    expect(screen.queryByText(/NEXT_PUBLIC_ADMIN_DEMO/)).not.toBeInTheDocument();
   });
 
 

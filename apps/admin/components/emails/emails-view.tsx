@@ -347,11 +347,10 @@ export function EmailsView({
       <section className="flex items-start gap-3 rounded-card border border-hairline bg-surface-1 p-4">
         <MailCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-green" />
         <div>
-          <h2 className="text-[12px] font-medium text-ink">测试邮件入口未接入</h2>
+          <h2 className="text-[12px] font-medium text-ink">测试邮件入口尚未开放</h2>
           <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
-            当前后台 API 没有测试邮件端点，因此页面不再显示“测试邮件”按钮。补齐
-            <code className="mx-1 font-mono">POST /v1/admin/emails/test</code>
-            与固定模板、频率限制后才会上线该能力。
+            后台还没有提供发送测试邮件的入口，因此这里暂不显示「发送测试邮件」按钮。
+            该能力上线后，入口会出现在本区域。
           </p>
         </div>
       </section>
@@ -405,6 +404,6 @@ function ApiEmailCounts() {
     );
   }
 
-  return metricCards(counts, "admin/metrics · 数据库聚合");
+  return metricCards(counts, "数据库聚合 · 全部状态");
 }
 

@@ -50,11 +50,17 @@ describe("SystemView", () => {
     render(<SystemView role="admin" snapshot={snapshot} />);
 
     expect(screen.queryByText("不可用")).not.toBeInTheDocument();
-    expect(screen.getAllByText("未接入").length).toBeGreaterThan(1);
-    expect(screen.getByText(/需要.*任务进程/)).toBeInTheDocument();
-    expect(screen.getByText(/需要 ROAMLOG_API_VERSION/)).toBeInTheDocument();
-    expect(screen.getByText(/需要 ROAMLOG_BUILD_TIME/)).toBeInTheDocument();
-    expect(screen.getByText(/没有可识别的 BullMQ 队列键/)).toBeInTheDocument();
+    // Values the backend did not report stay explicit instead of being invented.
+    expect(screen.getAllByText("未上报").length).toBeGreaterThan(1);
+    expect(screen.getByText(/需要在任务进程侧补上/)).toBeInTheDocument();
+    // Unprovable worker liveness is "无法确认", never DOWN and never "未接入".
+    expect(screen.getByText("无法确认")).toBeInTheDocument();
+    expect(screen.getByText(/后端未上报版本号/)).toBeInTheDocument();
+    expect(screen.getByText(/后端未上报构建时间/)).toBeInTheDocument();
+    expect(screen.getByText(/可识别的队列状态键/)).toBeInTheDocument();
+    // No endpoint paths or env var names may leak into the console copy.
+    expect(screen.queryByText(/\/v1\//)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ROAMLOG_/)).not.toBeInTheDocument();
   });
 
   it("shows the observed consumer signal and its derivation in API mode", () => {

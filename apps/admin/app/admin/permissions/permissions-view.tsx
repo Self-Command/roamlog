@@ -183,7 +183,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           正在读取权限矩阵…
         </p>
       ) : !data ? (
-        <EmptyState title="没有权限矩阵数据" description="稍后重试或检查后台 API。" />
+        <EmptyState title="没有权限矩阵数据" description="稍后重试；若持续没有数据，请联系平台管理员检查后台状态。" />
       ) : (
         <section className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1">
           <div className="flex items-center justify-between border-b border-hairline px-4 py-3">

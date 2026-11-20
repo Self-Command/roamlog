@@ -168,7 +168,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
           <p className="type-eyebrow text-accent-red">会话错误</p>
           <h1 className="mt-2 font-serif text-2xl text-ink">无法读取账户信息</h1>
           <p className="mt-2 text-[12px] leading-6 text-muted">
-            `/v1/me` 未返回可用的管理员账户。
+            未取到可用的管理员账户。
           </p>
         </div>
       </div>

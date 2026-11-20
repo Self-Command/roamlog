@@ -111,7 +111,7 @@ describe("AuditView", () => {
 
     expect(exportCsv).toHaveBeenCalledWith(expect.objectContaining({ sort: "createdAt:desc" }));
     expect(createObjectURL).toHaveBeenCalled();
-    expect(await screen.findByText("已从后台 API 导出审计 CSV。")).toBeInTheDocument();
+    expect(await screen.findByText("已导出审计 CSV。")).toBeInTheDocument();
     click.mockRestore();
   });
 

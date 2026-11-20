@@ -68,8 +68,8 @@ async function adminJson<T>(url: string, schema: { parse: (value: unknown) => T 
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "后台 API 响应不是 JSON",
-      detail: "后台 API 返回了空响应或格式错误的响应。",
+      title: "后台响应格式异常",
+      detail: "后台没有返回内容，或返回的格式无法解析。",
       degraded: [],
     });
   }
@@ -80,8 +80,8 @@ async function adminJson<T>(url: string, schema: { parse: (value: unknown) => T 
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "后台 API 响应不符合契约",
-      detail: error instanceof Error ? error.message : "无法解析后台 API 响应。",
+      title: "后台响应与预期不符",
+      detail: error instanceof Error ? error.message : "无法解析后台响应。",
       degraded: [],
     });
   }
@@ -107,8 +107,8 @@ async function resolveReport(input: ResolveReportInput): Promise<ResolveReportRe
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "后台 API 响应不是 JSON",
-      detail: "后台 API 返回了空响应或格式错误的响应。",
+      title: "后台响应格式异常",
+      detail: "后台没有返回内容，或返回的格式无法解析。",
       degraded: [],
     });
   }
