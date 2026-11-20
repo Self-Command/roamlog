@@ -278,7 +278,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
     <div className="space-y-6">
       {header}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="surface-card overflow-hidden">
           <div className="flex min-h-14 flex-wrap items-center gap-3 border-b border-hairline px-4 py-2">
             <span className="size-1.5 rounded-pill bg-accent-orange" />
