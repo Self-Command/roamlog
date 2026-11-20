@@ -30,6 +30,7 @@ import { ContentTenant } from "../trips/content-tenant.decorator.js";
 import { ContentTenantGuard } from "../trips/content-tenant.guard.js";
 import { MediaService } from "./media.service.js";
 import { MediaTenantGuard } from "./media-tenant.guard.js";
+import { MediaUploadRateLimitGuard } from "./media-upload-rate-limit.guard.js";
 
 @Controller()
 export class MediaController {
@@ -40,13 +41,48 @@ export class MediaController {
 
   @Post("workspaces/:workspaceId/media/presign")
   @RequirePermission("media:presign", "media")
-  @UseGuards(MediaPresignRateLimitGuard, TenantGuard, RolesGuard)
+  @UseGuards(MediaPresignRateLimitGuard, TenantGuard, RolesGuard, MediaUploadRateLimitGuard)
   presign(
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
     @Body() body: unknown,
   ) {
     return this.media.presign(actor, membership, body);
+  }
+
+  /**
+   * Batch presign: N file descriptors in, N signed PUTs out, all-or-nothing.
+   *
+   * This is the endpoint that makes `limits.uploadMaxFilesPerBatch` /
+   * `limits.uploadMaxBatchBytes` server-enforced. Guards run in declaration
+   * order: the env-based per-IP shield, the tenant/membership check (which
+   * resolves the account the next guard charges), the role check, then the
+   * per-account link allowance.
+   */
+  @Post("workspaces/:workspaceId/media/presign-batch")
+  @RequirePermission("media:presign", "media")
+  @UseGuards(MediaPresignRateLimitGuard, TenantGuard, RolesGuard, MediaUploadRateLimitGuard)
+  presignBatch(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Body() body: unknown,
+  ) {
+    return this.media.presignBatch(actor, membership, body);
+  }
+
+  /**
+   * The effective upload ceilings, so neither the web uploader nor its copy
+   * hardcodes 20 / 25 MB / 150 MB. Authenticated on purpose: this is operator
+   * configuration, not anonymous content (see `isPublic: false` on the settings).
+   */
+  @Get("workspaces/:workspaceId/media/limits")
+  @RequirePermission("media:read", "media")
+  @UseGuards(TenantGuard, RolesGuard)
+  uploadLimits(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+  ) {
+    return this.media.uploadLimits(actor, membership);
   }
 
   @Post("media/:mediaId/complete")

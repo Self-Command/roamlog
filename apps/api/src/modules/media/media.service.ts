@@ -13,6 +13,7 @@ import {
   encodeCursor,
   MediaListQuerySchema,
   MediaMotionPresignRequestSchema,
+  MediaPresignBatchRequestSchema,
   MediaPresignRequestSchema,
   SetTripCoverRequestSchema,
   TripMediaListQuerySchema,
@@ -21,8 +22,10 @@ import {
   type MediaExif,
   type MediaMotionPresignResponse,
   type MediaPage,
+  type MediaPresignBatchResponse,
   type MediaPresignResponse,
   type MediaRead,
+  type MediaUploadLimits,
   type Trip,
 } from "@roamlog/contracts";
 
@@ -37,15 +40,22 @@ import { JobQueueService, deterministicJobId } from "../exports/job-queue.servic
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { StorageService } from "../storage/storage.service.js";
 import {
+  assertBatchBytesAllowed,
+  assertBatchFileCountAllowed,
   assertSafeMediaKey,
   assertSupportedImage,
   assertSupportedMotion,
+  assertUploadSizeAllowed,
   buildMediaKey,
   buildMotionKey,
   sanitizeFileName,
 } from "./media-rules.js";
 import type { MediaMotionRecord, MediaRecord } from "./media-records.js";
 import { MediaRepository } from "./media.repository.js";
+import {
+  DEFAULT_LIMITS_RUNTIME,
+  toEffectiveUploadLimits,
+} from "./media-upload-limits.service.js";
 import { MediaUrlService } from "./media-url.service.js";
 import {
   liveMotion,
@@ -55,6 +65,11 @@ import {
   type MediaVariantView,
 } from "./media.presenter.js";
 import { TripCoverService } from "./trip-cover.service.js";
+import {
+  LIMITS_SETTINGS,
+  type LimitsRuntime,
+  type LimitsSettingsSource,
+} from "../settings/limits-settings.consumer.js";
 import {
   assertTripVisible,
   sortParts,
@@ -80,9 +95,36 @@ export class MediaService {
     @Inject(MediaUrlService) private readonly mediaUrls?: MediaUrlService,
     @Inject(TripCoverService) private readonly covers?: TripCoverService,
     @Optional() @Inject(PinoLoggerService) private readonly logger?: PinoLoggerService,
+    // Upload ceilings come from the `limits.*` settings. Absent only for
+    // hand-built instances (tests): then the code defaults below apply, which
+    // are exactly the values the old hardcoded contract enforced.
+    @Optional() @Inject(LIMITS_SETTINGS) private readonly limits?: LimitsSettingsSource,
   ) {}
 
   private lastMissingBucketWarningAt = 0;
+
+  /**
+   * Effective upload ceilings for one request, read fresh from the settings so
+   * an admin edit applies on the next call (see `limits-settings.consumer.ts`).
+   */
+  private async effectiveUploadLimits(): Promise<MediaUploadLimits> {
+    const runtime: LimitsRuntime = this.limits
+      ? await this.limits.resolve()
+      : DEFAULT_LIMITS_RUNTIME;
+    return toEffectiveUploadLimits(runtime);
+  }
+
+  /**
+   * The ceilings every uploader (and the web copy) must read instead of
+   * hardcoding them: `GET /v1/workspaces/:workspaceId/media/limits`.
+   */
+  async uploadLimits(
+    _actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+  ): Promise<MediaUploadLimits> {
+    this.permissions.assertCan(membership.role, "media:read", "media");
+    return this.effectiveUploadLimits();
+  }
 
   async presign(
     actor: AuthenticatedActor,
@@ -91,7 +133,11 @@ export class MediaService {
   ): Promise<MediaPresignResponse> {
     this.permissions.assertCan(membership.role, "media:presign", "media");
     const input = parseRequest(MediaPresignRequestSchema, rawInput);
-    const mime = assertSupportedImage(input.mimeType, input.size);
+    const limits = await this.effectiveUploadLimits();
+    // The operator setting is the rule and answers 422; the contract's `size`
+    // cap is only the loose wire ceiling.
+    assertUploadSizeAllowed({ size: input.size, maxBytes: limits.maxFileBytes });
+    const mime = assertSupportedImage(input.mimeType, input.size, limits.maxFileBytes);
     sanitizeFileName(input.fileName);
 
     if (input.tripId) {
@@ -159,6 +205,134 @@ export class MediaService {
     };
   }
 
+  /**
+   * Presigns a whole batch in one call — the only place the server can enforce
+   * `limits.uploadMaxFilesPerBatch` and `limits.uploadMaxBatchBytes`, because a
+   * single-file presign never learns that the photos belong to one batch.
+   *
+   * Order of operations matters and is deliberate:
+   *
+   * 1. permission, then schema (the wire caps).
+   * 2. the three configured ceilings, cheap to expensive: file count, per-file
+   *    size, then the total. Answers `422 MEDIA_BATCH_TOO_MANY_FILES` /
+   *    `MEDIA_FILE_TOO_LARGE` / `MEDIA_BATCH_TOO_LARGE`.
+   * 3. MIME allow-list and file-name sanitising for every descriptor.
+   * 4. trip visibility, once, because a batch targets one trip.
+   * 5. sign every PUT URL *before* opening the transaction: a signing failure
+   *    must not leave `pending` rows behind.
+   * 6. write all `Media` rows and activity entries in **one** transaction.
+   *
+   * The per-account allowance is charged by `MediaUploadRateLimitGuard` before
+   * the body is parsed (N links = N tokens), so a rate-limited batch never
+   * reaches this method.
+   */
+  async presignBatch(
+    actor: AuthenticatedActor,
+    membership: WorkspaceMembershipAccess,
+    rawInput: unknown,
+  ): Promise<MediaPresignBatchResponse> {
+    this.permissions.assertCan(membership.role, "media:presign", "media");
+    const input = parseRequest(MediaPresignBatchRequestSchema, rawInput);
+    const limits = await this.effectiveUploadLimits();
+
+    assertBatchFileCountAllowed({
+      fileCount: input.files.length,
+      maxFilesPerBatch: limits.maxFilesPerBatch,
+    });
+    let totalBytes = 0;
+    for (const file of input.files) {
+      assertUploadSizeAllowed({ size: file.size, maxBytes: limits.maxFileBytes });
+      totalBytes += file.size;
+    }
+    assertBatchBytesAllowed({ totalBytes, maxBatchBytes: limits.maxBatchBytes });
+
+    const mimes = input.files.map((file) => {
+      sanitizeFileName(file.fileName);
+      return assertSupportedImage(file.mimeType, file.size, limits.maxFileBytes);
+    });
+
+    if (input.tripId) {
+      const trip = await this.trips.findTrip(membership.workspaceId, input.tripId);
+      if (!trip) {
+        throw new NotFoundException({
+          code: "TRIP_NOT_FOUND",
+          message: "The requested trip was not found.",
+        });
+      }
+      assertTripVisible(membership, trip);
+    }
+
+    const bucket = await this.storage.currentBucket();
+    const prepared = input.files.map((file, index) => {
+      const mediaId = generateUuidV7();
+      const capturedAt = file.date ? new Date(`${file.date}T00:00:00.000Z`) : undefined;
+      return {
+        mediaId,
+        mime: mimes[index]!,
+        capturedAt,
+        key: buildMediaKey({
+          workspaceId: membership.workspaceId,
+          mediaId,
+          mimeType: mimes[index]!,
+          variant: "original",
+          ...(capturedAt ? { capturedAt } : {}),
+        }),
+      };
+    });
+
+    const uploads = await Promise.all(
+      prepared.map((item) => this.storage.createPresignedUpload(item.key, item.mime, undefined, bucket)),
+    );
+
+    await this.repository.transaction(async (tx) => {
+      for (const [index, item] of prepared.entries()) {
+        const file = input.files[index]!;
+        await this.repository.createMedia(
+          {
+            id: item.mediaId,
+            workspaceId: membership.workspaceId,
+            tripId: input.tripId ?? null,
+            uploaderId: actor.user.id,
+            bucket,
+            key: item.key,
+            mimeType: item.mime,
+            size: file.size,
+            width: file.width ?? null,
+            height: file.height ?? null,
+            caption: file.caption ?? null,
+            date: item.capturedAt ?? null,
+            location: file.location ?? null,
+            status: "pending",
+            variants: {},
+          },
+          tx,
+        );
+        await this.activities.record(tx, {
+          workspaceId: membership.workspaceId,
+          tripId: input.tripId ?? null,
+          actorId: actor.user.id,
+          verb: "media.presigned",
+          entityType: "media",
+          entityId: item.mediaId,
+          metadata: { mimeType: item.mime, size: file.size, batchSize: input.files.length },
+        });
+      }
+    });
+
+    return {
+      items: prepared.map((item, index) => {
+        const upload = uploads[index]!;
+        return {
+          mediaId: item.mediaId,
+          uploadUrl: upload.url,
+          method: upload.method,
+          headers: upload.headers,
+          expiresAt: upload.expiresAt,
+        };
+      }),
+    };
+  }
+
   async complete(
     actor: AuthenticatedActor,
     membership: WorkspaceMembershipAccess,
@@ -177,9 +351,14 @@ export class MediaService {
     }
 
     const uploaded = await this.storage.completeUpload(media.key, this.bucketOf(media));
+    // The store's view wins, so the configured ceiling is enforced on the object
+    // that actually landed, not on the size the client claimed at presign time.
+    const limits = await this.effectiveUploadLimits();
+    assertUploadSizeAllowed({ size: uploaded.size, maxBytes: limits.maxFileBytes });
     const mime = assertSupportedImage(
       uploaded.contentType || media.mimeType,
       uploaded.size || media.size,
+      limits.maxFileBytes,
     );
     if (uploaded.size <= 0) {
       throw new BadRequestException({

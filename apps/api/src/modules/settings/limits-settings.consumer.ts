@@ -1,9 +1,13 @@
 /**
- * Runtime consumer for the two `limits.*` settings.
+ * Runtime consumer for the `limits.*` settings.
  *
  * Until LIMITS_SETTINGS_WIRED these rows were stored but never read: the place
  * search allowance came from `PLACES_RATE_LIMIT_MAX` and the presign allowance
  * from `MEDIA_PRESIGN_RATE_LIMIT_MAX`, both resolved once from the environment.
+ * UPLOAD_LIMITS_WIRED extended the same wiring to the three upload ceilings
+ * (`limits.uploadMaxFilesPerBatch`, `limits.uploadMaxFileBytes`,
+ * `limits.uploadMaxBatchBytes`), which the media presign pipeline now enforces at
+ * request time instead of from the contract's hardcoded 25 MiB.
  *
  * Priority, per key:
  *
@@ -11,7 +15,8 @@
  *    environment.
  * 2. A stored database row → database.
  * 3. The environment variable → environment.
- * 4. Code constant → default (30 search / 20 upload, the legacy runtime values).
+ * 4. Code constant → default (30 search / 20 upload / 20 files / 25 MiB / 150 MiB,
+ *    the legacy runtime values).
  *
  * The reader is `SettingsService.listAdminSettings()` rather than
  * `getGroup("limits")`: `getGroup` merges registry defaults into its result, so
@@ -36,23 +41,57 @@ export const LIMITS_SETTINGS = Symbol("ROAMLOG_LIMITS_SETTINGS");
 export const LIMITS_SETTING_KEYS = [
   "limits.searchPerMinute",
   "limits.uploadPerMinute",
+  "limits.uploadMaxFilesPerBatch",
+  "limits.uploadMaxFileBytes",
+  "limits.uploadMaxBatchBytes",
 ] as const;
 
 export type LimitsSettingKey = (typeof LIMITS_SETTING_KEYS)[number];
 
-/** Registry contract for every `limits.*` key (`z.number().int().min(1).max(600)`). */
+/** Registry contract for every per-minute key (`z.number().int().min(1).max(600)`). */
 export const MIN_PER_MINUTE = 1;
 export const MAX_PER_MINUTE = 600;
+
+/** Registry contract for `limits.uploadMaxFilesPerBatch`. */
+export const MIN_FILES_PER_BATCH = 1;
+export const MAX_FILES_PER_BATCH = 100;
+
+/** Registry contract for `limits.uploadMaxFileBytes` (100 MiB ceiling). */
+export const MIN_UPLOAD_BYTES = 1;
+export const MAX_UPLOAD_FILE_BYTES = 104_857_600;
+
+/** Registry contract for `limits.uploadMaxBatchBytes` (1 GiB ceiling). */
+export const MAX_UPLOAD_BATCH_BYTES = 1_073_741_824;
 
 /** Legacy place-search allowance; also the registry default. */
 export const DEFAULT_SEARCH_PER_MINUTE = 30;
 /** Legacy presign allowance (`MEDIA_PRESIGN_RATE_LIMIT_MAX` default 20). */
 export const DEFAULT_UPLOAD_PER_MINUTE = 20;
+/** Legacy batch shape enforced by the web uploader before the keys existed. */
+export const DEFAULT_UPLOAD_MAX_FILES_PER_BATCH = 20;
+/** 25 MiB — the old hardcoded `MediaPresignRequestSchema` ceiling. */
+export const DEFAULT_UPLOAD_MAX_FILE_BYTES = 26_214_400;
+/** 150 MiB — the old client-side batch total. */
+export const DEFAULT_UPLOAD_MAX_BATCH_BYTES = 157_286_400;
 
 /** Environment fallbacks that existed before the keys were wired. */
 export const LIMITS_ENV_VARS: Readonly<Record<LimitsSettingKey, string>> = Object.freeze({
   "limits.searchPerMinute": "PLACES_RATE_LIMIT_MAX",
   "limits.uploadPerMinute": "MEDIA_PRESIGN_RATE_LIMIT_MAX",
+  "limits.uploadMaxFilesPerBatch": "MEDIA_UPLOAD_MAX_FILES_PER_BATCH",
+  "limits.uploadMaxFileBytes": "MEDIA_UPLOAD_MAX_FILE_BYTES",
+  "limits.uploadMaxBatchBytes": "MEDIA_UPLOAD_MAX_BATCH_BYTES",
+});
+
+/** Bounds a stored row must satisfy; outside them the row is ignored, not clamped. */
+const STORED_BOUNDS: Readonly<
+  Record<LimitsSettingKey, { readonly min: number; readonly max: number }>
+> = Object.freeze({
+  "limits.searchPerMinute": { min: MIN_PER_MINUTE, max: MAX_PER_MINUTE },
+  "limits.uploadPerMinute": { min: MIN_PER_MINUTE, max: MAX_PER_MINUTE },
+  "limits.uploadMaxFilesPerBatch": { min: MIN_FILES_PER_BATCH, max: MAX_FILES_PER_BATCH },
+  "limits.uploadMaxFileBytes": { min: MIN_UPLOAD_BYTES, max: MAX_UPLOAD_FILE_BYTES },
+  "limits.uploadMaxBatchBytes": { min: MIN_UPLOAD_BYTES, max: MAX_UPLOAD_BATCH_BYTES },
 });
 
 /** The environment keeps its own broader bounds so existing configs stay valid. */
@@ -60,17 +99,26 @@ const ENV_BOUNDS: Readonly<Record<LimitsSettingKey, { readonly min: number; read
   Object.freeze({
     "limits.searchPerMinute": { min: 1, max: 100_000 },
     "limits.uploadPerMinute": { min: 1, max: 100_000 },
+    "limits.uploadMaxFilesPerBatch": { min: 1, max: 10_000 },
+    "limits.uploadMaxFileBytes": { min: 1, max: 1_073_741_824 },
+    "limits.uploadMaxBatchBytes": { min: 1, max: 10_737_418_240 },
   });
 
 /** Never log the same fallback more than once per window. */
 const WARN_THROTTLE_MS = 10_000;
 
-/** Effective per-minute allowances for one request. */
+/** Effective allowances for one request. */
 export interface LimitsRuntime {
   /** Per-account place-search allowance (`limits.searchPerMinute`), 1..600. */
   readonly searchPerMinute: number;
   /** Per-account presign allowance (`limits.uploadPerMinute`), 1..600. */
   readonly uploadPerMinute: number;
+  /** Files per presign batch (`limits.uploadMaxFilesPerBatch`), 1..100. */
+  readonly uploadMaxFilesPerBatch: number;
+  /** Per-file byte ceiling (`limits.uploadMaxFileBytes`), 1..100 MiB. */
+  readonly uploadMaxFileBytes: number;
+  /** Per-batch byte ceiling (`limits.uploadMaxBatchBytes`), 1..1 GiB. */
+  readonly uploadMaxBatchBytes: number;
 }
 
 /** Narrow port so the limiter can be built without Nest in tests. */
@@ -112,16 +160,26 @@ export interface LimitsSettingsResolution {
 }
 
 function defaultFor(key: LimitsSettingKey): number {
-  return key === "limits.searchPerMinute"
-    ? DEFAULT_SEARCH_PER_MINUTE
-    : DEFAULT_UPLOAD_PER_MINUTE;
+  switch (key) {
+    case "limits.searchPerMinute":
+      return DEFAULT_SEARCH_PER_MINUTE;
+    case "limits.uploadPerMinute":
+      return DEFAULT_UPLOAD_PER_MINUTE;
+    case "limits.uploadMaxFilesPerBatch":
+      return DEFAULT_UPLOAD_MAX_FILES_PER_BATCH;
+    case "limits.uploadMaxFileBytes":
+      return DEFAULT_UPLOAD_MAX_FILE_BYTES;
+    case "limits.uploadMaxBatchBytes":
+      return DEFAULT_UPLOAD_MAX_BATCH_BYTES;
+  }
 }
 
-function parseStoredInteger(value: unknown): number | undefined {
+function parseStoredInteger(value: unknown, key: LimitsSettingKey): number | undefined {
+  const bounds = STORED_BOUNDS[key];
   return typeof value === "number" &&
     Number.isInteger(value) &&
-    value >= MIN_PER_MINUTE &&
-    value <= MAX_PER_MINUTE
+    value >= bounds.min &&
+    value <= bounds.max
     ? value
     : undefined;
 }
@@ -163,7 +221,7 @@ function effectiveValue(
 
   const row = rows.get(key);
   if (row && row.updatedAt !== null) {
-    const parsed = parseStoredInteger(row.value);
+    const parsed = parseStoredInteger(row.value, key);
     if (parsed !== undefined) {
       return { value: parsed, ignored: false };
     }
@@ -204,6 +262,9 @@ export function resolveLimitsSettingsFromStored(
     runtime: {
       searchPerMinute: resolved["limits.searchPerMinute"],
       uploadPerMinute: resolved["limits.uploadPerMinute"],
+      uploadMaxFilesPerBatch: resolved["limits.uploadMaxFilesPerBatch"],
+      uploadMaxFileBytes: resolved["limits.uploadMaxFileBytes"],
+      uploadMaxBatchBytes: resolved["limits.uploadMaxBatchBytes"],
     },
     ignored,
   };

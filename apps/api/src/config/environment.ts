@@ -254,6 +254,27 @@ const EnvironmentSchema = z
     PUBLIC_SHARE_PASSWORD_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(20),
     MEDIA_PRESIGN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(20),
     /**
+     * Deployment-level defaults for the three upload ceilings. The operator
+     * settings `limits.uploadMax*` win over these at request time (DB row, then
+     * this variable, then the code default — see `limits-settings.consumer.ts`);
+     * they exist so an existing deployment can pin the ceiling in its env instead
+     * of the admin console. Defaults mirror the registry (20 files / 25 MiB /
+     * 150 MiB).
+     */
+    MEDIA_UPLOAD_MAX_FILES_PER_BATCH: z.coerce.number().int().min(1).max(10_000).default(20),
+    MEDIA_UPLOAD_MAX_FILE_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1_073_741_824)
+      .default(26_214_400),
+    MEDIA_UPLOAD_MAX_BATCH_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10_737_418_240)
+      .default(157_286_400),
+    /**
      * Lifetime of media read/upload URLs. Replaces the previous shared default
      * (`EXPORT_SIGNED_URL_TTL`); exports keep their own knob.
      */

@@ -55,8 +55,13 @@ export class MediaRepository {
     })) as MediaRecord | null;
   }
 
-  async createMedia(data: MediaCreateData): Promise<MediaRecord> {
-    return (await this.prisma.client.media.create({ data: data as never })) as MediaRecord;
+  /**
+   * `tx` is optional so the single-file presign keeps its historical call shape;
+   * `presignBatch` passes the shared transaction so all N rows commit together.
+   */
+  async createMedia(data: MediaCreateData, tx?: ContentTransaction): Promise<MediaRecord> {
+    const client = tx ?? this.prisma.client;
+    return (await client.media.create({ data: data as never })) as MediaRecord;
   }
 
   async listMedia(args: {

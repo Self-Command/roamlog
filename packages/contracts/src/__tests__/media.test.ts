@@ -3,11 +3,19 @@ import { describe, expect, it } from "vitest";
 import { MediaListQuerySchema } from "../api/media";
 import {
   CompleteMediaMotionRequestSchema,
+  CompleteMediaRequestSchema,
+  MEDIA_ERROR_CODES,
   MEDIA_MOTION_MAX_BYTES,
   MEDIA_MOTION_MAX_DURATION_MS,
+  MEDIA_PRESIGN_BATCH_MAX_FILES,
+  MEDIA_UPLOAD_MAX_WIRE_BYTES,
   MediaMotionPresignRequestSchema,
   MediaMotionPresignResponseSchema,
   MediaPageSchema,
+  MediaPresignBatchRequestSchema,
+  MediaPresignBatchResponseSchema,
+  MediaPresignRequestSchema,
+  MediaUploadLimitsSchema,
 } from "../api/media";
 import { MediaMotionSchema, MediaSchema } from "../entities/media";
 import { PublicMediaSchema } from "../api/share-links";
@@ -200,5 +208,85 @@ describe("motion request contracts", () => {
 
   it("still accepts the trip media query after the media split", () => {
     expect(MediaListQuerySchema.safeParse({ tripId: MEDIA_ID }).success).toBe(true);
+  });
+});
+describe("upload ceilings contract (UPLOAD_LIMITS_WIRED)", () => {
+  const presign = {
+    fileName: "IMG_0001.jpg",
+    mimeType: "image/jpeg",
+    size: 2048,
+  };
+
+  it("moves the size cap off the business value and keeps a loose wire ceiling", () => {
+    // The old hardcoded `25 * 1024 * 1024` must be gone: the real ceiling is the
+    // `limits.uploadMaxFileBytes` setting, answered with 422, not a schema error.
+    expect(MediaPresignRequestSchema.safeParse({ ...presign, size: 25 * 1024 * 1024 + 1 }).success).toBe(
+      true,
+    );
+    expect(MediaPresignRequestSchema.safeParse({ ...presign, size: MEDIA_UPLOAD_MAX_WIRE_BYTES }).success).toBe(
+      true,
+    );
+    expect(
+      MediaPresignRequestSchema.safeParse({ ...presign, size: MEDIA_UPLOAD_MAX_WIRE_BYTES + 1 }).success,
+    ).toBe(false);
+    expect(MediaPresignRequestSchema.safeParse({ ...presign, size: 0 }).success).toBe(false);
+    // Same wire cap on the completion callback.
+    expect(
+      CompleteMediaRequestSchema.safeParse({ size: MEDIA_UPLOAD_MAX_WIRE_BYTES + 1 }).success,
+    ).toBe(false);
+  });
+
+  it("keeps the batch wire cap at the registry maximum", () => {
+    expect(MEDIA_PRESIGN_BATCH_MAX_FILES).toBe(100);
+    const files = Array.from({ length: 3 }, () => presign);
+    expect(MediaPresignBatchRequestSchema.safeParse({ files }).success).toBe(true);
+    expect(MediaPresignBatchRequestSchema.safeParse({ files: [] }).success).toBe(false);
+    expect(
+      MediaPresignBatchRequestSchema.safeParse({
+        files: Array.from({ length: MEDIA_PRESIGN_BATCH_MAX_FILES + 1 }, () => presign),
+      }).success,
+    ).toBe(false);
+    // Per-file legality is still checked by the shared file schema.
+    expect(
+      MediaPresignBatchRequestSchema.safeParse({ files: [{ ...presign, mimeType: "image/gif" }] })
+        .success,
+    ).toBe(false);
+    // Trip belongs to the batch, not to each file.
+    expect(MediaPresignBatchRequestSchema.safeParse({ files }).success).toBe(true);
+    expect(MediaPresignBatchRequestSchema.safeParse({ files, extra: true }).success).toBe(false);
+  });
+
+  it("returns a strict batch response in request order", () => {
+    const item = {
+      mediaId: MEDIA_ID,
+      uploadUrl: "https://upload.example.test/put?sig=1",
+      method: "PUT",
+      headers: { "Content-Type": "image/jpeg" },
+      expiresAt: NOW,
+    };
+    expect(MediaPresignBatchResponseSchema.safeParse({ items: [item, item] }).success).toBe(true);
+    expect(MediaPresignBatchResponseSchema.safeParse({ items: [] }).success).toBe(false);
+    expect(
+      MediaPresignBatchResponseSchema.safeParse({ items: [item], bucket: "leak" }).success,
+    ).toBe(false);
+  });
+
+  it("publishes the limits shape the authenticated endpoint answers", () => {
+    const limits = {
+      maxFilesPerBatch: 20,
+      maxFileBytes: 26_214_400,
+      maxBatchBytes: 157_286_400,
+      presignPerMinute: 20,
+    };
+    expect(MediaUploadLimitsSchema.safeParse(limits).success).toBe(true);
+    expect(MediaUploadLimitsSchema.safeParse({ ...limits, maxFileBytes: 0 }).success).toBe(false);
+    expect(MediaUploadLimitsSchema.safeParse({ ...limits, extra: true }).success).toBe(false);
+    expect(Object.values(MEDIA_ERROR_CODES)).toEqual([
+      "MEDIA_FILE_TOO_LARGE",
+      "MEDIA_BATCH_TOO_MANY_FILES",
+      "MEDIA_BATCH_TOO_LARGE",
+      "MEDIA_BATCH_EMPTY",
+      "RATE_LIMITED",
+    ]);
   });
 });

@@ -64,6 +64,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   "ai.baseUrl": null,
   "ai.model": null,
   "ai.apiKey": null,
+  // Off by default: the gateway's `modalities` metadata cannot prove a model
+  // can read images, so the capability is an explicit operator opt-in.
+  "ai.vision": false,
 
   "places.provider": "geoapify",
   "places.apiKey": null,
@@ -74,6 +77,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
   "limits.searchPerMinute": 30,
   "limits.uploadPerMinute": 10,
+  // Upload ceilings the presign pipeline enforces at runtime (see
+  // `limits-settings.consumer.ts`): 20 files, 25 MiB per file, 150 MiB per batch.
+  "limits.uploadMaxFilesPerBatch": 20,
+  "limits.uploadMaxFileBytes": 26_214_400,
+  "limits.uploadMaxBatchBytes": 157_286_400,
 } satisfies Record<string, SettingDefaultValue>);
 
 export type DefaultSettingKey = keyof typeof DEFAULT_SETTINGS;

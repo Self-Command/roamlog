@@ -1,4 +1,5 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, UnprocessableEntityException } from "@nestjs/common";
+import { MEDIA_ERROR_CODES } from "@roamlog/contracts";
 
 export const ALLOWED_IMAGE_MIME_TYPES = [
   "image/jpeg",
@@ -13,20 +14,23 @@ export type AllowedImageMime = (typeof ALLOWED_IMAGE_MIME_TYPES)[number];
 export type MediaVariantName = "original" | "thumb" | "medium" | "large";
 
 /**
- * Server-side image ceiling. Deliberately **wider** than the limit we advertise.
+ * Fallback server-side image ceiling, used only when no `limits` source is
+ * wired (hand-built instances, tests). The effective ceiling is the operator
+ * setting `limits.uploadMaxFileBytes`, resolved per request by
+ * `media-upload-limits.ts`.
  *
- * `settings.media.maxUploadBytes` — mirrored by the web `COVER_MAX_BYTES` — is
- * 25,000,000 bytes, i.e. `25 MB` decimal. This constant is 25 MiB = 26,214,400
- * bytes, roughly 1.2 MB of slack. The gap is intentional, not a typo: the
- * browser rejects at 25 MB so a user is never surprised by a server-only
- * failure, while the server keeps tolerating uploads sized against a slightly
- * larger ceiling (already-queued work, clients that rounded a size). Tightening
- * this to 25,000,000 would be a behaviour change for in-flight uploads.
+ * At the default configuration the two are the same number: 25 MiB = 26,214,400
+ * bytes, which is deliberately **wider** than the `25,000,000` bytes (25 MB
+ * decimal) the web uploader advertises — roughly 1.2 MB of slack so a user is
+ * never surprised by a server-only failure while already-queued work and clients
+ * that rounded a size still pass. Tightening this to 25,000,000 would be a
+ * behaviour change for in-flight uploads.
  *
- * Because of that slack the user-facing copy must NOT be derived from this
- * constant: `formatMegabytes(MAX_MEDIA_BYTES)` would print `26.2 MB` and
- * contradict the `25 MB` the client advertises. The copy states the advertised
- * limit instead; `media-rules.spec.ts` pins that choice.
+ * Because of that slack the default user-facing copy must NOT be derived from
+ * this constant: `formatMegabytes(MAX_MEDIA_BYTES)` would print `26.2 MB` and
+ * contradict the `25 MB` the client advertises, so `assertSupportedImage` keeps
+ * the pinned `25 MB` string for this value while a *configured* ceiling prints
+ * its own size. `media-rules.spec.ts` pins that choice.
  */
 export const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 
@@ -86,7 +90,11 @@ export function formatMegabytes(bytes: number): string {
   return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`;
 }
 
-export function assertSupportedImage(mimeType: string, size: number): AllowedImageMime {
+export function assertSupportedImage(
+  mimeType: string,
+  size: number,
+  maxBytes: number = MAX_MEDIA_BYTES,
+): AllowedImageMime {
   const mime = normalizeImageMime(mimeType);
   if (!mime) {
     throw new BadRequestException({
@@ -94,13 +102,91 @@ export function assertSupportedImage(mimeType: string, size: number): AllowedIma
       message: "Only JPEG, PNG, WebP, AVIF, HEIC, and HEIF images are accepted.",
     });
   }
-  if (!Number.isInteger(size) || size <= 0 || size > MAX_MEDIA_BYTES) {
+  if (!Number.isInteger(size) || size <= 0 || size > maxBytes) {
     throw new BadRequestException({
       code: "MEDIA_TOO_LARGE",
-      message: "Images must be between 1 byte and 25 MB.",
+      message: `Images must be between 1 byte and ${
+        maxBytes === MAX_MEDIA_BYTES ? "25 MB" : formatMegabytes(maxBytes)
+      }.`,
     });
   }
   return mime;
+}
+
+/**
+ * The business ceiling for one still, from `limits.uploadMaxFileBytes`.
+ *
+ * Distinct from {@link assertSupportedImage}'s `MEDIA_TOO_LARGE` (400, the
+ * malformed-body range check): this is a *policy* answer and therefore a
+ * `422 MEDIA_FILE_TOO_LARGE` with the field and the observed size in `errors[]`,
+ * exactly like `AI_REWRITE_TEXT_TOO_LONG` in `ai-rewrite.service.ts`. The
+ * contract's `size.max(...)` is only the loose wire cap, so an operator who
+ * raises or lowers the setting changes the accepted range without a redeploy.
+ */
+export function assertUploadSizeAllowed(args: {
+  readonly size: number;
+  readonly maxBytes: number;
+}): void {
+  if (args.size <= args.maxBytes) {
+    return;
+  }
+  throw new UnprocessableEntityException({
+    code: MEDIA_ERROR_CODES.fileTooLarge,
+    message: `A single image must be ${formatMegabytes(args.maxBytes)} or smaller.`,
+    errors: [
+      {
+        field: "size",
+        code: "TOO_LARGE",
+        message: `The image is ${formatMegabytes(args.size)}; the limit is ${formatMegabytes(
+          args.maxBytes,
+        )}.`,
+      },
+    ],
+  });
+}
+
+/** `limits.uploadMaxFilesPerBatch` violation: the whole batch is refused (422). */
+export function assertBatchFileCountAllowed(args: {
+  readonly fileCount: number;
+  readonly maxFilesPerBatch: number;
+}): void {
+  if (args.fileCount <= args.maxFilesPerBatch) {
+    return;
+  }
+  throw new UnprocessableEntityException({
+    code: MEDIA_ERROR_CODES.batchTooManyFiles,
+    message: `Upload at most ${args.maxFilesPerBatch} photos at a time.`,
+    errors: [
+      {
+        field: "files",
+        code: "TOO_MANY",
+        message: `The batch has ${args.fileCount} files; the limit is ${args.maxFilesPerBatch}.`,
+      },
+    ],
+  });
+}
+
+/** `limits.uploadMaxBatchBytes` violation: the whole batch is refused (422). */
+export function assertBatchBytesAllowed(args: {
+  readonly totalBytes: number;
+  readonly maxBatchBytes: number;
+}): void {
+  if (args.totalBytes <= args.maxBatchBytes) {
+    return;
+  }
+  throw new UnprocessableEntityException({
+    code: MEDIA_ERROR_CODES.batchTooLarge,
+    message: `A batch must total ${formatMegabytes(args.maxBatchBytes)} or less.`,
+    errors: [
+      {
+        field: "files",
+        code: "TOO_LARGE",
+        message: `The batch totals ${formatMegabytes(
+          args.totalBytes,
+        )}; the limit is ${formatMegabytes(args.maxBatchBytes)}.`,
+      },
+    ],
+  });
 }
 
 /**
