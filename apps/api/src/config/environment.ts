@@ -22,6 +22,19 @@ const booleanFromEnvironment = z.preprocess((value) => {
 }, z.boolean());
 
 /**
+ * Boolean knob that may be omitted or left empty.
+ *
+ * Empty is "not set" (the code default applies), while an unrecognised value is
+ * a hard boot error. That matters for `AI_VISION_SUPPORTED`: a typo such as
+ * `ture` must not silently leave image input off while the operator believes it
+ * is on, and it must not be silently coerced on either.
+ */
+const optionalBooleanFromEnvironment = z.preprocess(
+  emptyStringToUndefined,
+  booleanFromEnvironment.optional(),
+);
+
+/**
  * Deployment flavour. Defaults to `development` on purpose: staging also runs
  * `NODE_ENV=production` for Node runtime reasons and still delivers mail to a
  * local catcher, so production-only mail rules must key off APP_ENV instead of
@@ -306,6 +319,13 @@ const EnvironmentSchema = z
     AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(256).max(32_000).default(6_000),
     /** Per-user daily plan runs; 0 disables the cap. */
     AI_DAILY_QUOTA: z.coerce.number().int().min(0).max(100_000).default(20),
+    /**
+     * Image input capability for chat attachments. Declared here so a typo is a
+     * boot error instead of a silently-off capability; the runtime default is
+     * `false` (see `ai.settings.ts` `DEFAULT_AI_VISION`) and the gateway's
+     * `/v1/models` `modalities` field is never trusted.
+     */
+    AI_VISION_SUPPORTED: optionalBooleanFromEnvironment,
   })
   .superRefine((environment, context) => {
     // The AI gateway is optional, but a configured one must point at plain

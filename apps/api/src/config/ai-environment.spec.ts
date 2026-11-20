@@ -28,6 +28,36 @@ describe("AI gateway environment", () => {
     expect(result.AI_TIMEOUT_MS).toBe(60_000);
     expect(result.AI_MAX_OUTPUT_TOKENS).toBe(6_000);
     expect(result.AI_DAILY_QUOTA).toBe(20);
+    // Unset = the runtime default (`false`); the schema never invents `true`.
+    expect(result.AI_VISION_SUPPORTED).toBeUndefined();
+  });
+
+  it("parses the vision opt-in strictly, treating empty as unset", () => {
+    for (const value of ["true", "TRUE", "1", "yes", "on"]) {
+      expect(
+        validateEnvironment({ ...baseEnvironment, AI_VISION_SUPPORTED: value })
+          .AI_VISION_SUPPORTED,
+      ).toBe(true);
+    }
+    for (const value of ["false", "0", "no", "off"]) {
+      expect(
+        validateEnvironment({ ...baseEnvironment, AI_VISION_SUPPORTED: value })
+          .AI_VISION_SUPPORTED,
+      ).toBe(false);
+    }
+    // An empty value in `.env` means "use the code default", not an error.
+    expect(
+      validateEnvironment({ ...baseEnvironment, AI_VISION_SUPPORTED: "" })
+        .AI_VISION_SUPPORTED,
+    ).toBeUndefined();
+  });
+
+  it("fails the boot on a typo instead of silently leaving vision off", () => {
+    for (const value of ["ture", "maybe", "2"]) {
+      expect(() =>
+        validateEnvironment({ ...baseEnvironment, AI_VISION_SUPPORTED: value }),
+      ).toThrow(/AI_VISION_SUPPORTED/u);
+    }
   });
 
   it("accepts a fully configured gateway and coerces numeric knobs", () => {

@@ -511,6 +511,16 @@ const checkAiSettings = (): void => {
   const apiKey = env.AI_API_KEY?.trim() ?? "";
   const model = env.AI_MODEL?.trim() ?? "";
 
+  // Checked before the "AI is off" early returns: a typo here is exactly the
+  // trap this preflight exists for — the operator believes image input is on
+  // while the runtime (which defaults to false) silently ignores the value.
+  const visionRaw = env.AI_VISION_SUPPORTED?.trim();
+  if (visionRaw && !isBooleanFlag(visionRaw)) {
+    errors.push(
+      "AI_VISION_SUPPORTED must be true or false (true/1/yes/on or false/0/no/off); leave it empty to use the default (false).",
+    );
+  }
+
   const protocol = env.AI_PROTOCOL?.trim().toLowerCase();
   if (protocol && !(VALID_AI_PROTOCOLS as readonly string[]).includes(protocol)) {
     errors.push(`AI_PROTOCOL must be one of ${VALID_AI_PROTOCOLS.join(", ")}.`);

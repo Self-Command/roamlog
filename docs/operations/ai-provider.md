@@ -25,7 +25,7 @@ Related files:
 | `AI_TIMEOUT_MS`        | no                      | `60000`       | Integer `5000`–`120000`                                 |
 | `AI_MAX_OUTPUT_TOKENS` | no                      | `6000`        | Integer `256`–`32000`                                   |
 | `AI_DAILY_QUOTA`       | no                      | `20`          | Integer `0`–`100000`; `0` disables the cap              |
-| `AI_VISION_SUPPORTED`  | no                      | `false`       | `true`/`1`/`yes`/`on` enable image input; anything else is off |
+| `AI_VISION_SUPPORTED`  | no                      | `false`       | `true`/`1`/`yes`/`on` enable; `false`/`0`/`no`/`off` disable; empty = default; anything else fails the boot preflight |
 
 There is **no AI on/off switch**. The runtime definition of “configured” is
 `AI_BASE_URL && AI_MODEL`; that pair is what makes the AI endpoints callable,
@@ -65,6 +65,12 @@ What the switch changes:
   conversation (thumbnails survive a reload), but **no image part reaches the
   model**. The user message gains a short note telling the model it cannot see
   the attached images, and the composer states the limitation before sending.
+
+The value is validated at boot (`AI_VISION_SUPPORTED` in
+`apps/api/src/config/environment.ts`): empty/omitted means the code default,
+`true/1/yes/on` or `false/0/no/off` are accepted, and any other value — a typo
+such as `ture` — fails the API start and `pnpm check:env`. Without that check the
+runtime would silently stay off while the operator believed it was on.
 
 Precedence: stored `ai.vision` (Admin → 服务 → AI) > `AI_VISION_SUPPORTED` > code
 default `false`. Enable it only after verifying the target model really accepts

@@ -300,6 +300,75 @@ describe("vision:false keeps images out of the model, not out of the conversatio
     );
   });
 
+  it("streamChat: the notice counts every attachment, not a hard-coded 1", async () => {
+    const media = {
+      getOne: vi.fn(async (_actor: unknown, _membership: unknown, mediaId: string) => ({
+        id: mediaId,
+        mimeType: "image/png",
+        status: "ready",
+        url: `https://media.test/${mediaId}.png`,
+        thumbUrl: null,
+      })),
+    };
+    const adapter = scriptedAdapter([{ text: "好的", toolCalls: [] }]);
+    const conversations = conversationsStub();
+    const service = buildService(aiSettings({ vision: false }), {
+      adapter,
+      conversations,
+      media: media as never,
+    });
+    const three = ["301", "302", "303"].map((suffix) => ({
+      ...ATTACHMENT,
+      mediaId: `01942f30-1200-7000-8000-000000000${suffix}`,
+    }));
+
+    await drain(
+      service.streamChat(actorStub(), membershipStub(), {
+        message: "这三张照片是哪里的？",
+        attachments: three,
+      }),
+    );
+
+    const content = firstUserContent(adapter);
+    expect(content).toContain("用户附了 3 张图片");
+    expect(content).not.toContain("用户附了 1 张图片");
+    // Every attachment is still persisted for the conversation.
+    const stored = conversations.appendUserMessage.mock.calls[0]?.[0] as {
+      content?: readonly Record<string, unknown>[];
+    };
+    expect((stored.content ?? []).filter((part) => part.type === "image")).toHaveLength(3);
+  });
+
+  it("streamChat: no image part reaches the model while the notice and the stored image both exist", async () => {
+    stubMediaFetch();
+    const adapter = scriptedAdapter([{ text: "好的", toolCalls: [] }]);
+    const conversations = conversationsStub();
+    const service = buildService(aiSettings({ vision: false }), {
+      adapter,
+      conversations,
+      media: mediaStub(),
+    });
+
+    await drain(
+      service.streamChat(actorStub(), membershipStub(), {
+        message: "这张照片是什么颜色？",
+        attachments: [ATTACHMENT],
+      }),
+    );
+
+    // Two facts at once: the model gets no image content ...
+    const modelTurn = adapter.inputs[0]?.messages.at(-1) as
+      | { content?: unknown; images?: unknown }
+      | undefined;
+    expect("images" in (modelTurn ?? {})).toBe(false);
+    // ... but it *is* told about the attachment, and the stored turn keeps it.
+    expect(String(modelTurn?.content)).toContain("当前模型无法查看图片内容");
+    const stored = conversations.appendUserMessage.mock.calls[0]?.[0] as {
+      content?: readonly Record<string, unknown>[];
+    };
+    expect((stored.content ?? []).filter((part) => part.type === "image")).toHaveLength(1);
+  });
+
   it("streamChat: with vision on the same turn does carry an image part", async () => {
     stubMediaFetch();
     const adapter = scriptedAdapter([{ text: "好的", toolCalls: [] }]);
