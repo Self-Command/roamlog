@@ -388,7 +388,7 @@ function ApiEmailCounts() {
         className="rounded-card border border-hairline bg-surface-1 p-4 font-mono text-[10px] text-muted"
       >
         {resource.error
-          ? "未接入：/v1/admin/metrics 不可用，无法给出真实投递计数。"
+          ? "无法读取投递计数。"
           : "读取投递计数…"}
       </section>
     );
@@ -400,7 +400,7 @@ function ApiEmailCounts() {
         aria-label="邮件指标"
         className="rounded-card border border-hairline bg-surface-1 p-4 font-mono text-[10px] text-muted"
       >
-        未接入：/v1/admin/metrics 未返回按状态聚合的邮件计数。
+        没有返回按状态聚合的邮件计数。
       </section>
     );
   }

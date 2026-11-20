@@ -575,7 +575,7 @@ export function SettingsGroupForm({
             <p className="mt-2 text-[12px] leading-6 text-muted">
               {permission
                 ? "后台设置只对超级管理员开放；如果已具备角色，请确认 TOTP 2FA 已完成。"
-                : "无法从后台接口读取设置。请检查 API 状态后重试；不会显示任何本地默认值冒充真实配置。"}
+                : "无法读取设置。请稍后重试。"}
             </p>
             <details className="mt-3 font-mono text-[9px] text-stone">
               <summary className="cursor-pointer select-none">错误详情</summary>

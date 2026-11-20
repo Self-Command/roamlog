@@ -245,7 +245,7 @@ describe("照片 tab（真实 media 签名 URL）", () => {
 
     const { container } = renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: EDITOR });
 
-    expect(await screen.findByText("暂无签名预览地址")).toBeInTheDocument();
+    expect(await screen.findByText("图片还在处理中")).toBeInTheDocument();
     expect(screen.getAllByText("服务器处理中").length).toBeGreaterThan(0);
     expect(container.querySelectorAll("img")).toHaveLength(0);
   });

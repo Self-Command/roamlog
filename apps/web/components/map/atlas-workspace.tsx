@@ -207,7 +207,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
     return (
       <ErrorState
         title="旅行地图暂时不可用"
-        description="工作区、旅行或停靠点没有返回。请检查网络与 API 状态后重试。"
+        description="工作区、旅行或停靠点没有返回。请稍后重试。"
         retryAction={
           <Button
             type="button"
@@ -229,7 +229,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
       <PageHeader
         eyebrow={`ATLAS / ${filteredTrips.length} TRIPS · ${countries.size} COUNTRIES`}
         title="世界足迹"
-        description="只使用停靠点中带经纬度的真实坐标；没有坐标的停靠点不会出现在地图上。"
+        description="没有经纬度的停靠点不会出现在地图上。"
         actions={
           <div className="flex items-center rounded-control border border-hairline-strong bg-surface-1 p-1">
             <Button
@@ -268,7 +268,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
           className="mt-6"
           icon={Globe2}
           title="还没有旅行足迹"
-          description="创建旅行并添加带经纬度的停靠点后，这里会显示真实地图标记。"
+          description="创建旅行并添加带经纬度的停靠点后，这里会显示地图标记。"
         />
       </div>
     );
@@ -381,7 +381,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
                     className="w-full max-w-md px-4 py-10"
                     icon={Globe2}
                     title="还没有可显示的地图坐标"
-                    description="停靠点补齐经纬度后，这里会出现真实标记；地图不会使用国家中心点或占位坐标。"
+                    description="停靠点补齐经纬度后，这里会出现标记。"
                   />
                 </div>
               )}
@@ -616,7 +616,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
         </aside>
       </div>
       <p className="text-[10px] leading-5 text-stone">
-        地图标记、国家与城市统计只来自停靠点记录；缺少坐标的记录不会生成占位标记。
+        缺少坐标的停靠点不会显示在地图上。
       </p>
     </div>
   );

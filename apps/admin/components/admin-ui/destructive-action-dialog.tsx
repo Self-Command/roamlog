@@ -88,7 +88,7 @@ export function DestructiveActionDialog({
           <FormField
             id={confirmationId}
             label={confirmationLabel}
-            hint="该操作会记录模拟审计事件。当前没有连接真实 API。"
+            hint="该操作会记录审计事件。"
           >
             <Input
               autoComplete="off"

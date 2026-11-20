@@ -127,7 +127,7 @@ export function ReportDialog({
         <DialogHeader>
           <DialogTitle>举报这条内容</DialogTitle>
           <DialogDescription>
-            举报会进入工作区管理员与平台审核队列。请只选择真实原因，管理员会看到内容快照。
+            举报会提交给工作区管理员与平台审核。请如实选择原因，管理员会看到内容快照。
           </DialogDescription>
         </DialogHeader>
 
@@ -138,7 +138,7 @@ export function ReportDialog({
               className="flex items-start gap-2 rounded-control border border-accent-green/25 bg-accent-green/5 px-3 py-3 text-[12px] leading-5 text-accent-green"
             >
               <Flag aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              举报已提交。审核队列会看到这条内容和你的原因，处理结果不会公开你的身份。
+              举报已提交。管理员会看到这条内容和你的原因，处理结果不会公开你的身份。
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

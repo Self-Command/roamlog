@@ -586,7 +586,7 @@ export function FlagsView({
           <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
             全局关闭时任何白名单都不生效；开启后，白名单工作区始终命中，其余工作区
             按百分比参与灰度。
-            {"本页的创建、保存与删除都会调用真实后台功能开关变更，并在后端写入审计。"}
+            {"所有变更都会写入审计日志。"}
           </p>
         </div>
       </section>

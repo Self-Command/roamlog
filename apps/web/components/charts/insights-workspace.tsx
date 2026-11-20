@@ -7,7 +7,6 @@ import {
   Globe2,
   MapPin,
   Plane,
-  Route,
   Wallet,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -103,7 +102,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
     anchor.download = "roamlog-expenses.csv";
     anchor.click();
     URL.revokeObjectURL(url);
-    setNotice(`已导出 ${expenses.length} 笔真实支出记录。`);
+    setNotice(`已导出 ${expenses.length} 笔支出记录。`);
   }
 
   if (workspacesQuery.isLoading || tripsQuery.isLoading) {
@@ -114,7 +113,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
     return (
       <ErrorState
         title="洞察暂时不可用"
-        description="工作区或旅行列表没有返回。请检查网络与 API 状态后重试。"
+        description="工作区或旅行列表没有返回。请稍后重试。"
         retryAction={
           <Button
             type="button"
@@ -136,7 +135,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
       <PageHeader
         eyebrow={`INSIGHTS / ${stats.years.length ? `${stats.years[0]}—${stats.years.at(-1)}` : "NO DATA"}`}
         title="旅行洞察"
-        description="年度旅行、支出、分类与记录热力图，全部来自当前工作区的真实数据；无法计算的指标会明确标注。"
+        description="年度旅行、支出、分类与记录热力图；无法计算的指标会明确标注。"
         actions={
           <Button
             type="button"
@@ -169,7 +168,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
           className="mt-6"
           icon={Plane}
           title="还没有足够的旅行数据"
-          description="创建旅行并记录支出与日志后，洞察会基于真实数据生成年度、分类与热力图。"
+          description="创建旅行并记录支出与日志后，这里会生成年度、分类与热力图。"
         />
       </div>
     );
@@ -208,7 +207,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
       <section className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline-strong bg-hairline xl:grid-cols-4">
         {[
           { label: "旅行次数", value: stats.tripCount, hint: "含愿望与计划", icon: Plane },
-          { label: "旅行天数", value: stats.totalDays, hint: "按真实起止日期计算", icon: CalendarRange },
+          { label: "旅行天数", value: stats.totalDays, hint: "按旅行起止日期计算", icon: CalendarRange },
           {
             label: "国家 / 地区",
             value: stats.countries,
@@ -238,7 +237,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
           role="status"
           className="rounded-control border border-accent-yellow/20 bg-accent-yellow/5 px-3 py-2 text-[11px] text-accent-yellow"
         >
-          当前最多加载前 100 趟旅行与 20 页记录，统计范围是已加载的真实数据；完整分页尚未接入。
+          当前最多加载前 100 趟旅行与 20 页记录，更早的数据未计入统计。
         </p>
       ) : null}
 
@@ -270,7 +269,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
             <EmptyState
               className="mt-4 px-4 py-10"
               title="最近 12 个月没有支出记录"
-              description={`记录 ${currency} 支出后，这里会显示真实的月度节奏。`}
+              description={`记录 ${currency} 支出后，这里会按月显示支出节奏。`}
             />
           ) : (
             <ChartReveal>
@@ -299,7 +298,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
             <EmptyState
               className="mt-4 px-4 py-10"
               title="还没有分类支出"
-              description={`记录 ${currency} 支出后，这里会按真实分类汇总。`}
+              description={`记录 ${currency} 支出后，这里会按分类汇总。`}
             />
           ) : (
             <>
@@ -342,7 +341,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
             <EmptyState
               className="mt-4 px-4 py-10"
               title="还没有设置预算"
-              description="为旅行填写预算后，这里会对比同币种的真实支出。"
+              description="为旅行填写预算后，这里会对比同币种的支出。"
             />
           ) : (
             <div className="mt-4 space-y-4">
@@ -405,7 +404,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
             <EmptyState
               className="mt-4 px-4 py-10"
               title="还没有日志或支出记录"
-              description="记录日志或支出后，这里会显示真实的月度活跃热力图。"
+              description="记录日志或支出后，这里会显示月度活跃热力图。"
             />
           ) : (
             /* 热力图保持现有 DOM 网格：图表库版本多 +136KB 且 a11y 更差，这里只补入场动画。 */
@@ -452,7 +451,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
                 icon: CalendarRange,
                 label: "最长旅行",
                 value: records.longestTrip,
-                hint: "按真实起止天数",
+                hint: "按旅行起止天数",
               },
               {
                 icon: Wallet,
@@ -464,13 +463,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
                 icon: MapPin,
                 label: "最常去国家",
                 value: records.mostVisitedCountry,
-                hint: "按真实国家码统计",
-              },
-              {
-                icon: Route,
-                label: "路线距离",
-                value: "—",
-                hint: "尚未接入",
+                hint: "按停靠点所在国家统计",
               },
             ].map((record) => (
               <div
@@ -495,7 +488,7 @@ export function InsightsWorkspace({ workspaceSlug }: { workspaceSlug: string }) 
       </div>
 
       <p className="text-[10px] leading-5 text-stone">
-        多币种统一换算与路线距离聚合尚未接入：支出按币种分别统计，未做汇率折算；距离指标显示 —。
+        支出按币种分别统计，不做汇率折算。
       </p>
     </div>
   );

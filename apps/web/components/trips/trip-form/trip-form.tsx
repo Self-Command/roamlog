@@ -829,7 +829,7 @@ export function TripForm(props: TripFormProps) {
             <section className="space-y-5" data-testid="trip-cover-field">
               <div className="flex items-baseline justify-between gap-4 border-b border-hairline pb-2">
                 <h2 className="type-eyebrow">02 / 封面</h2>
-                <span className="type-meta text-stone">可选 · 真实上传</span>
+                <span className="type-meta text-stone">可选 · 上传封面</span>
               </div>
 
               {coverError ? (

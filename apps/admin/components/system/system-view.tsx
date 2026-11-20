@@ -74,7 +74,7 @@ export function SystemView({
       <AdminPageHeader
         eyebrow="平台 / 系统"
         title="系统健康"
-        description="只展示 /v1/admin/system 实际返回的检查项；无法观测的项目标记为「未接入」。"
+        description="只展示当前可观测的检查项。"
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">

@@ -279,9 +279,6 @@ export function TripWorkspaceHeader({
       >
         <div className="max-w-[16rem]">
           <p className="type-eyebrow">封面 / COVER</p>
-          <p className="mt-1 text-[11px] leading-5 text-muted">
-            由服务端签名 URL 渲染；替换或移除走真实的 presign → PUT → complete → set-cover 链路。
-          </p>
         </div>
         <div className="w-full sm:max-w-sm">
           <CoverUploader

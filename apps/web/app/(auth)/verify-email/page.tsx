@@ -24,7 +24,7 @@ export default function VerifyEmailPage() {
     >
       <EmailLinkForm
         submitLabel="重新发送验证邮件"
-        successMessage="验证邮件占位已提交。真实邮件发送、退信和重试将在 Worker 接入后启用。"
+        successMessage="验证邮件已发送。请检查收件箱并点击邮件中的链接完成验证。"
         intent="verify"
       />
     </AuthPageFrame>

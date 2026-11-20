@@ -82,7 +82,7 @@ export function WorkspaceAppShell({ children }: { children: ReactNode }) {
             description={
               firstError instanceof Error
                 ? firstError.message
-                : "开发环境未返回有效数据，请检查 API 是否可达。"
+                : "数据没有返回，请稍后重试。"
             }
             retryAction={
               <Button
@@ -148,7 +148,7 @@ export function WorkspaceAppShell({ children }: { children: ReactNode }) {
         <EmptyState
           icon={undefined}
           title="旅行数据暂不可用"
-          description="Workspace 已载入，但旅行列表没有返回。请检查网络与 API 状态后重试。"
+          description="Workspace 已载入，但旅行列表没有返回。请稍后重试。"
           action={
             <Button type="button" variant="outline" onClick={() => void tripsQuery.refetch()}>
               重新加载

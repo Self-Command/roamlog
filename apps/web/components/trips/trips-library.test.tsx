@@ -27,7 +27,7 @@ describe("TripsLibrary data truthfulness", () => {
     renderWithQuery(<TripsLibrary workspaceSlug="roamlog-crew" />);
 
     expect(await screen.findByText("旅行库还是空的")).toBeInTheDocument();
-    expect(screen.getByText(/按状态、地点和标签整理 0 趟真实旅行/)).toBeInTheDocument();
+    expect(screen.getByText(/按状态、地点和标签整理 0 趟旅行/)).toBeInTheDocument();
     expect(screen.queryByText(/所有卡片都来自本地 fixtures/)).not.toBeInTheDocument();
     expect(screen.queryByText("URL 状态将在 Wave 1 接入")).not.toBeInTheDocument();
     expect(screen.queryByText(/检查 mock 边界/)).not.toBeInTheDocument();

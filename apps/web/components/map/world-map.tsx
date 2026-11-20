@@ -15,7 +15,7 @@ export function WorldMap({
   selectedId,
   onSelect,
   className,
-  label = "真实停靠点地图",
+  label = "停靠点地图",
 }: WorldMapProps) {
   return (
     <svg

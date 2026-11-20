@@ -30,17 +30,66 @@ import {
 
 const verbLabels: Record<string, string> = {
   commented: "留下评论",
+  "comment.created": "留下评论",
   completed_itinerary: "完成行程",
   expensed: "记录花费",
+  "expense.created": "记录花费",
   created_entry: "写下日志",
+  "journal_entry.created": "写下日志",
+  "journal_entry.updated": "更新日志",
   uploaded_media: "上传照片",
+  "media.presigned": "上传照片",
+  "media.completed": "上传照片",
   updated_packing: "更新打包清单",
+  "packing.updated": "更新打包清单",
   invited_member: "邀请成员",
+  "invitation.created": "邀请成员",
+  "itinerary_item.completed": "完成行程项",
+  "media.uploaded": "上传照片",
+  "packing_item.updated": "更新打包清单",
+  "share_link.created": "创建分享链接",
   updated_trip: "更新旅行",
+  "trip.updated": "更新旅行",
+  "trip.created": "创建旅行",
   favorited_entry: "收藏日志",
   created_itinerary: "新增行程",
   created_trip: "创建旅行",
 };
+
+/** Machine verbs never reach the UI: a known prefix keeps the line readable. */
+const verbPrefixLabels: Record<string, string> = {
+  trip: "更新旅行",
+  expense: "记录花费",
+  journal_entry: "更新日志",
+  comment: "留下评论",
+  media: "上传照片",
+  packing: "更新打包清单",
+  member: "邀请成员",
+  share_link: "更新分享",
+  workspace: "更新工作区",
+};
+
+function verbLabel(verb: string): string {
+  return verbLabels[verb] ?? verbPrefixLabels[verb.split(".")[0] ?? ""] ?? "更新了内容";
+}
+
+const entityLabels: Record<string, string> = {
+  trip: "旅行",
+  expense: "花费",
+  media: "照片",
+  journal_entry: "日志",
+  comment: "评论",
+  packing_item: "打包项",
+  itinerary_item: "行程项",
+  member: "成员",
+  invitation: "邀请",
+  share_link: "分享链接",
+  workspace: "工作区",
+};
+
+function entityLabel(entityType: string): string {
+  return entityLabels[entityType] ?? "记录";
+}
 
 function iconFor(verb: string) {
   if (verb === "commented") return MessageCircle;
@@ -93,7 +142,7 @@ export function ActivityLive({ workspaceSlug }: { workspaceSlug: string }) {
     return (
       <ErrorState
         title="活动流不可用"
-        description="Workspace 活动没有返回。检查 API 连接后重试。"
+        description="Workspace 活动没有返回。请稍后重试。"
         retryAction={
           <Button type="button" variant="primary" onClick={() => void activityQuery.refetch()}>
             重新加载
@@ -108,7 +157,7 @@ export function ActivityLive({ workspaceSlug }: { workspaceSlug: string }) {
       <PageHeader
         eyebrow={`ACTIVITY / ${activityQuery.data?.items.length ?? 0} EVENTS`}
         title="活动流"
-        description="按天查看谁创建、修改、评论或上传了什么。数据来自真实 activity API。"
+        description="按天查看谁创建、修改、评论或上传了什么。"
         actions={
           <Select
             value={scope}
@@ -154,15 +203,20 @@ export function ActivityLive({ workspaceSlug }: { workspaceSlug: string }) {
                         ? activity.metadata.note
                         : typeof activity.metadata.email === "string"
                           ? activity.metadata.email
-                          : activity.entityType;
+                          : null;
                   return (
                     <article key={activity.id} className="flex items-start gap-3 px-4 py-4">
                       <Avatar name={actor?.name ?? "系统"} src={actor?.image ?? undefined} size={34} />
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] leading-5 text-body">
                           <span className="font-medium text-ink">{actor?.name ?? "Roamlog"}</span>{" "}
-                          {verbLabels[activity.verb] ?? activity.verb} ·{" "}
-                          <span className="text-muted">{title}</span>
+                          {verbLabel(activity.verb)}
+                          {title ? (
+                            <>
+                              {" · "}
+                              <span className="text-muted">{title}</span>
+                            </>
+                          ) : null}
                         </p>
                         <div className="mt-1.5 flex flex-wrap items-center gap-2">
                           {trip ? (
@@ -171,7 +225,7 @@ export function ActivityLive({ workspaceSlug }: { workspaceSlug: string }) {
                             <Badge tone="slate">WORKSPACE</Badge>
                           )}
                           <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-                            {activity.entityType.replaceAll("_", " ")}
+                            {entityLabel(activity.entityType)}
                           </span>
                         </div>
                       </div>

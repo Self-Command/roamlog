@@ -88,7 +88,7 @@ export function RegisterForm() {
         <FormField
           label="密码"
           error={errors.password}
-          hint="至少 8 位；真实实现将由身份服务执行强度检查。"
+          hint="至少 8 位。"
         >
           <Input
             type="password"

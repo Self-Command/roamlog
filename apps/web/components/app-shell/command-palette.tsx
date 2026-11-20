@@ -67,7 +67,7 @@ export function CommandPalette({
       <DialogContent className="max-w-xl p-0">
         <DialogHeader className="mb-0 border-b border-hairline px-5 py-4 pr-14">
           <DialogTitle className="font-serif text-2xl">搜索与快捷命令</DialogTitle>
-          <DialogDescription>命令面板同时搜索真实 API 的旅行、日志与评论。</DialogDescription>
+          <DialogDescription>同时搜索旅行、日志与评论，或直接跳转到常用页面。</DialogDescription>
         </DialogHeader>
 
         <div className="border-b border-hairline px-4 py-3">

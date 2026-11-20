@@ -77,7 +77,7 @@ export function NotificationsLive() {
     return (
       <ErrorState
         title="通知不可用"
-        description="通知列表没有返回。检查 API 会话后重试。"
+        description="通知列表没有返回。请稍后重试。"
         retryAction={
           <Button
             type="button"
@@ -104,7 +104,7 @@ export function NotificationsLive() {
       <PageHeader
         eyebrow={`INBOX / ${String(unread).padStart(2, "0")} UNREAD`}
         title="通知中心"
-        description="评论、提及、邀请与旅行提醒都在这里。标记已读会立即写入真实 API。"
+        description="评论、提及、邀请与旅行提醒都在这里。标记已读后立即生效。"
         actions={
           <Button
             type="button"

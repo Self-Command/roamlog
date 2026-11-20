@@ -77,7 +77,7 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
     return (
       <ErrorState
         title="旅行库暂时不可用"
-        description="Workspace 或旅行列表没有返回。请检查网络与 API 状态后重试。"
+        description="Workspace 或旅行列表没有返回。请稍后重试。"
         retryAction={
           <Button type="button" variant="primary" onClick={() => void tripsQuery.refetch()}>
             重新加载
@@ -113,7 +113,7 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
       <PageHeader
         eyebrow={`${workspace.name.toUpperCase()} / TRIP LIBRARY`}
         title="旅行库"
-        description={`按状态、地点和标签整理 ${trips.length} 趟真实旅行。卡片只展示旅行自身已保存的封面、预算与天数。`}
+        description={`按状态、地点和标签整理 ${trips.length} 趟旅行。卡片展示旅行已保存的封面、预算与天数。`}
         actions={
           <Button asChild variant="primary">
             <Link href={`/w/${workspaceSlug}/trips/new`}>

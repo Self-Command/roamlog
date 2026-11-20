@@ -89,7 +89,7 @@ function PhotoCard({
             <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
               {MEDIA_STATUS_LABELS[media.status]}
             </p>
-            <p className="text-[10px] leading-4 text-stone">暂无签名预览地址</p>
+            <p className="text-[10px] leading-4 text-stone">图片还在处理中</p>
           </div>
         )}
       </div>
@@ -250,7 +250,7 @@ export function PhotosTab({ tripId }: { tripId: string }) {
             <EmptyBlock
               icon={Images}
               title="这趟旅行还没有照片"
-              description="照片列表来自真实媒体库。上传入口由媒体组件负责（presign → PUT → complete），本工作台不伪造占位图。"
+              description="上传照片后，这里会按旅行与日期归档。"
             />
           }
         >
@@ -294,7 +294,7 @@ export function PhotosTab({ tripId }: { tripId: string }) {
           <DialogHeader>
             <DialogTitle className="truncate">{detailLabel}</DialogTitle>
             <DialogDescription>
-              拍摄参数来自上传时读取的真实 EXIF；没有元数据的照片只显示图片本身。
+              没有拍摄参数的照片只显示图片本身。
             </DialogDescription>
           </DialogHeader>
           {detailTarget ? (
@@ -306,12 +306,12 @@ export function PhotosTab({ tripId }: { tripId: string }) {
                   className="max-h-[55vh] w-full rounded-control object-contain"
                 />
               ) : (
-                <p className="text-xs text-muted">暂无签名预览地址。</p>
+                <p className="text-xs text-muted">图片还在处理中。</p>
               )}
               {detailTarget.exif ? (
                 <MediaExifDetail exif={detailTarget.exif} date={detailTarget.date} />
               ) : (
-                <p className="text-xs text-muted">这张照片没有可读的 EXIF 拍摄参数。</p>
+                <p className="text-xs text-muted">这张照片没有可读取的拍摄参数。</p>
               )}
               {detailTarget.location ? (
                 <p className="font-mono text-[11px] text-white/75">拍摄地：{detailTarget.location}</p>

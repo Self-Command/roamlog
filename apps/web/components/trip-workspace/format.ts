@@ -123,7 +123,27 @@ const VERB_LABELS: Record<string, string> = {
   "media.presigned": "上传了照片",
 };
 
-/** Falls back to the raw verb so an unknown server verb is never hidden. */
+/** Machine verbs stay out of the UI: unknown ones collapse to a readable line. */
 export function activityVerbLabel(verb: string): string {
-  return VERB_LABELS[verb] ?? verb;
+  return VERB_LABELS[verb] ?? "更新了记录";
+}
+
+const ENTITY_LABELS: Record<string, string> = {
+  trip: "旅行",
+  stop: "行程节点",
+  itinerary_item: "行程项",
+  expense: "花费",
+  packing_item: "行李",
+  journal_entry: "日志",
+  comment: "评论",
+  media: "照片",
+  participant: "参与者",
+  share_link: "分享链接",
+  member: "成员",
+  workspace: "工作区",
+};
+
+/** Machine entity types never render raw in the UI. */
+export function activityEntityLabel(entityType: string): string {
+  return ENTITY_LABELS[entityType] ?? "记录";
 }

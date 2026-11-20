@@ -114,7 +114,7 @@ export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
       <PageHeader
         eyebrow="ACCOUNT / WORKSPACE"
         title="设置"
-        description="个人资料与 Workspace 偏好写入真实 API。角色、认证和计费由服务端校验。"
+        description="个人资料与 Workspace 偏好设置。"
       />
 
       {notice ? (

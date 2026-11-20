@@ -112,7 +112,7 @@ export function DashboardRecent({
             <EmptyState
               className="px-4 py-8"
               title="还没有设置预算"
-              description="为旅行填写预算后，这里会按真实设置值显示分布。"
+              description="为旅行填写预算后，这里会按预算设置显示分布。"
             />
           )}
         </div>

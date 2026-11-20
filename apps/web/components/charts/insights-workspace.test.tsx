@@ -107,8 +107,8 @@ describe("InsightsWorkspace data truthfulness", () => {
     expect(screen.getByText("餐饮")).toBeInTheDocument();
     expect(screen.getByText("交通")).toBeInTheDocument();
     expect(screen.getByText(/5,000/)).toBeInTheDocument();
-    expect(screen.getByText("路线距离")).toBeInTheDocument();
-    expect(screen.getAllByText("尚未接入").length).toBeGreaterThan(0);
+    expect(screen.queryByText("路线距离")).not.toBeInTheDocument();
+    expect(screen.queryByText("尚未接入")).not.toBeInTheDocument();
 
     // Annual, monthly, category and budget panels are all Recharts surfaces now.
     expect(document.querySelectorAll("[data-slot='chart']").length).toBe(4);

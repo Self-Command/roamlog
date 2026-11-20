@@ -97,7 +97,7 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
     return (
       <ErrorState
         title="日志不可用"
-        description="Workspace 或日志列表没有返回。检查 API 会话后重试。"
+        description="Workspace 或日志列表没有返回。请稍后重试。"
         retryAction={
           <Button type="button" variant="primary" onClick={() => void entriesQuery.refetch()}>
             重新加载
@@ -128,7 +128,7 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
       <PageHeader
         eyebrow={`JOURNAL / ${entries.length} ENTRIES`}
         title="全部日志"
-        description="搜索、筛选与评论来自真实 API。Viewer 可以阅读和评论，但不能新建或收藏。"
+        description="搜索并筛选日志。Viewer 可以阅读和评论，但不能新建或收藏。"
         actions={
           canEdit ? (
             <Button

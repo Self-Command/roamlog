@@ -630,7 +630,7 @@ export function JournalEditorSheet({
             {canEdit ? (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4">
                 <p className="max-w-md text-[10px] leading-5 text-muted">
-                  自动保存使用乐观版本检查；评论会进入真实 API。
+                  编辑会自动保存；评论会同步到这篇日志。
                 </p>
                 <Button
                   type="submit"

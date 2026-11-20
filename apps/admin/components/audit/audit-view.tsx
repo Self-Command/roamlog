@@ -208,7 +208,7 @@ targetTypeFilter,
         eyebrow="信任与安全 / 审计"
         title="审计日志"
         description={
-          "只追加的管理后台操作记录，读取真实后台 API。"}
+          "只追加的管理后台操作记录。"}
         readOnly={role === "analyst"}
         actions={
           <div className="flex flex-col items-end gap-1">

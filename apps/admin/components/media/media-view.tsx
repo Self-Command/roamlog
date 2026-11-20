@@ -103,7 +103,7 @@ export function MediaView({
         eyebrow="内容与资产 / 媒体"
         title="媒体库"
         description={
-          "检查存储用量、处理状态与孤儿对象。用量与删除由真实后台 API 提供。"}
+          "检查存储用量、处理状态与孤儿对象。"}
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -117,7 +117,7 @@ export function MediaView({
         <AdminMetricCard
           label="对象总量"
           value={String(records.length)}
-          detail={`${formatBytes(totalBytes)} ${"API 用量"}`}
+          detail={`存储用量 ${formatBytes(totalBytes)}`}
           tone="blue"
           icon={HardDrive}
         />

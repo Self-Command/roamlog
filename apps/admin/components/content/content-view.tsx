@@ -143,7 +143,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
       <AdminPageHeader
         eyebrow="信任与安全 / 内容"
         title="内容审核"
-        description="真实举报队列：用户提交的举报在这里按状态、内容类型与原因筛选，裁决会写审计并重新拉取列表。"
+        description="用户提交的举报在这里按状态、内容类型与原因筛选；裁决会写入审计并刷新列表。"
         readOnly={readOnly}
         actions={
           <Button

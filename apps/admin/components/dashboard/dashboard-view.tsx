@@ -102,7 +102,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         eyebrow="平台 / 总览"
         title="平台总览"
         description={
-          "运营指标、后台队列与邮件健康。数字来自真实后台 API；仅有当前快照时趋势显示单点。"}
+          "运营指标、后台队列与邮件健康。仅有当前快照时趋势显示单点。"}
         readOnly={role === "analyst"}
         actions={
           <div className="text-right">

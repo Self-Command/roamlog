@@ -78,7 +78,7 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
     return (
       <ErrorState
         title="总览暂时不可用"
-        description="Workspace 或旅行数据没有返回。请检查网络与 API 状态后重试。"
+        description="Workspace 或旅行数据没有返回。请稍后重试。"
         retryAction={
           <Button
             type="button"

@@ -598,7 +598,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
       <AdminPageHeader
         eyebrow="信任与安全 / 用户"
         title="用户"
-        description="按服务端搜索、状态与平台角色筛选账户，查看真实体量并执行带审计的受控操作。"
+        description="按状态与平台角色筛选账户，并执行带审计的受控操作。"
         readOnly={readOnly}
         actions={
           <Button
@@ -1309,7 +1309,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  操作会发送真实后台变更，并由后端权限与审计规则约束；成功后列表与详情会自动刷新。
+                  操作会提交到后台并写入审计；成功后列表与详情会自动刷新。
                 </p>
               </div>
             </>
