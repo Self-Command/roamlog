@@ -1,6 +1,5 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import {
-  AuditLogSchema,
   WorkspaceAuditQuerySchema,
   type AuditLog,
   type WorkspaceAuditPage,
@@ -12,6 +11,7 @@ import { PermissionService } from "../../common/services/permission.service.js";
 import { parseRequest } from "../../common/services/request-validation.js";
 import { WorkspaceAccessService } from "../../common/services/workspace-access.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { AuditLogReadSchema } from "./audit-read.js";
 
 export type AuditActorType = "user" | "admin" | "system";
 export type AuditMetadataValue = string | number | boolean | null | string[] | boolean[];
@@ -116,7 +116,9 @@ function presentAuditLog(record: {
   metadata: unknown;
   createdAt: Date;
 }): AuditLog {
-  return AuditLogSchema.parse({
+  // Immutable rows can carry a PostgreSQL uuid that RFC 4122 rejects; the read
+  // shape must not 500 on data the database itself accepted. See `audit-read.ts`.
+  return AuditLogReadSchema.parse({
     id: record.id,
     actorId: record.actorId,
     actorType: record.actorType,

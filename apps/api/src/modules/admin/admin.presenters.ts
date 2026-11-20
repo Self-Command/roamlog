@@ -1,5 +1,4 @@
 import {
-  AuditLogSchema,
   CommentSchema,
   EmailLogSchema,
   FeatureFlagSchema,
@@ -11,6 +10,7 @@ import {
   type Media,
 } from "@roamlog/contracts";
 
+import { AuditLogReadSchema } from "../audit/audit-read.js";
 import { iso, nullableIso, presentDate } from "../trips/content-values.js";
 
 function jsonObject(value: unknown): Record<string, unknown> {
@@ -32,7 +32,10 @@ export function presentAdminAuditLog(record: {
   metadata: unknown;
   createdAt: Date | string;
 }): AuditLog {
-  return AuditLogSchema.parse({
+  // Audit rows are immutable and PostgreSQL stores uuids that RFC 4122 would
+  // reject, so the read shape must accept what the database accepted; otherwise
+  // one historical row 500s the whole page. See `audit-read.ts`.
+  return AuditLogReadSchema.parse({
     ...record,
     metadata: jsonObject(record.metadata),
     createdAt: iso(record.createdAt),

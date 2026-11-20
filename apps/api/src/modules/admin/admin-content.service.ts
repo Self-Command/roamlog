@@ -59,7 +59,12 @@ export class AdminContentService {
       select: tripSelect,
     });
 
-    return toCursorPage(rows, query.limit, presentTrip) as AdminTripPage;
+    // `presentTrip` takes an optional second argument (the resolved cover), so it
+    // must not be handed to `toCursorPage` directly: the page mapper calls it as
+    // `Array.prototype.map`'s callback and every row would receive its numeric
+    // array index as `cover`, failing `TripSchema.parse` ("expected object,
+    // received number") for every non-empty trip list.
+    return toCursorPage(rows, query.limit, (row) => presentTrip(row)) as AdminTripPage;
   }
 
   async listEntries(actor: AuthenticatedActor, rawQuery: unknown): Promise<AdminEntryPage> {

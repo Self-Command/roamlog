@@ -108,4 +108,46 @@ describe("AuditService", () => {
     expect(page.items[0]).toMatchObject({ action: "workspace.updated" });
     expect(page.hasMore).toBe(false);
   });
+
+  it("keeps a non-RFC PostgreSQL uuid readable in the workspace audit page", async () => {
+    const { prisma, access, service } = setup();
+    access.requireMembership.mockResolvedValue({
+      role: "admin",
+      workspaceId: WORKSPACE_A_ID,
+      userId: USER_ADMIN_ID,
+      status: "active",
+      id: "member",
+      joinedAt: NOW,
+      invitedById: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+      workspaceName: "Atlas Studio",
+    });
+    // The AI planner writes its hex `runId` into `AuditLog.targetId` (a
+    // PostgreSQL `uuid` column); PostgreSQL normalises it to this variant-`f`
+    // value, which RFC 4122 rejects. The read path must still return it.
+    const variantTargetId = "726d652a-fcfc-877c-f34f-593a6ec94c59";
+    prisma.client.auditLog.findMany.mockResolvedValue([
+      {
+        id: "01a1f7f7-42b3-75d3-9e74-273039e92fec",
+        actorId: USER_ADMIN_ID,
+        actorType: "user",
+        action: "ai.tool_call",
+        targetType: "ai_tool",
+        targetId: variantTargetId,
+        workspaceId: WORKSPACE_A_ID,
+        ip: null,
+        userAgent: null,
+        metadata: { runId: "run" },
+        createdAt: NOW,
+      },
+    ]);
+
+    const page = await service.listWorkspace(makeActor(USER_ADMIN_ID), WORKSPACE_A_ID, {});
+
+    expect(page.items[0]).toMatchObject({
+      action: "ai.tool_call",
+      targetId: variantTargetId,
+    });
+  });
 });
