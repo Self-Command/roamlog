@@ -23,9 +23,25 @@ const TOOL_LABELS: Readonly<Record<AiToolName, string>> = {
   "trips.update": "修改旅行信息",
   "stops.add": "添加行程节点",
   "stops.list": "查看行程节点",
+  "stops.update": "修改行程节点",
+  "stops.delete": "移除行程节点",
+  "stops.reorder": "调整节点顺序",
   "itinerary.addDay": "添加一天日程",
+  "itinerary.update": "修改日程安排",
+  "itinerary.delete": "移除日程安排",
   "packing.add": "添加装备",
+  "packing.update": "修改装备",
+  "packing.delete": "移除装备",
+  "packing.reorder": "调整装备顺序",
   "budget.setSummary": "设置旅行预算",
+  "expenses.add": "记录一笔开销",
+  "expenses.update": "修改开销",
+  "expenses.delete": "删除开销",
+  "entries.create": "撰写旅行日志",
+  "entries.update": "修改旅行日志",
+  "participants.add": "添加同行人",
+  "participants.remove": "移除同行人",
+  "participants.role": "调整同行人角色",
 };
 
 const PACKING_CATEGORIES: Readonly<Record<string, string>> = {
@@ -33,6 +49,16 @@ const PACKING_CATEGORIES: Readonly<Record<string, string>> = {
   clothing: "衣物",
   gear: "装备",
   health: "健康",
+  other: "其他",
+};
+
+/** Expense categories are the API's enum values; only the display label is local. */
+const EXPENSE_CATEGORIES: Readonly<Record<string, string>> = {
+  transport: "交通",
+  stay: "住宿",
+  food: "餐饮",
+  activity: "活动",
+  shopping: "购物",
   other: "其他",
 };
 
@@ -44,6 +70,42 @@ const TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(TOOL_LABELS));
 
 function knownTool(value: string): AiToolName | undefined {
   return TOOL_NAMES.has(value) ? (value as AiToolName) : undefined;
+}
+
+/**
+ * Tool names arrive from the model, so they are not guaranteed to be one of
+ * the ten planner tools. Known names get their Chinese label; unknown names
+ * keep the raw identifier instead of rendering an English label or `null`
+ * (vercel/chatbot returns `null` for unknown tools at message.tsx L341 — the
+ * migration spec explicitly replaces that with the generic card).
+ */
+export function toolDisplayName(value: string): string {
+  const known = knownTool(value);
+  return known ? TOOL_LABELS[known] : value;
+}
+
+export type ToolStatusKind =
+  | "running"
+  | "complete"
+  | "error"
+  | "cancelled"
+  | "waiting";
+
+/**
+ * Chinese replacement for vercel/chatbot `statusLabels` (tool.tsx L48–L56).
+ * The upstream 7 AI-SDK states collapse to these four visible states plus the
+ * approval "waiting" state used by plan-like tool calls.
+ */
+const TOOL_STATUS_LABELS: Readonly<Record<ToolStatusKind, string>> = {
+  running: "运行中",
+  complete: "完成",
+  error: "失败",
+  cancelled: "已取消",
+  waiting: "等待确认",
+};
+
+export function toolStatusLabel(status: ToolStatusKind): string {
+  return TOOL_STATUS_LABELS[status];
 }
 
 export function isWriteCall(call: AiToolCall): boolean {
@@ -232,6 +294,137 @@ export function describePlannedCall(call: AiToolCall): PlannedCallCopy {
     }
     case "stops.list": {
       return { label, headline: "读取一份已有行程", details, write: isWriteCall(call) };
+    }
+    case "stops.update": {
+      const city = textArg(args, "city");
+      const dates = dateRange(textArg(args, "startDate"), textArg(args, "endDate"));
+      if (dates) details.push(dates);
+      const notes = textArg(args, "notes");
+      if (notes) details.push(clip(notes, 80));
+      return {
+        label,
+        headline: city ?? (dates ? "调整停留日期" : "调整停留地点信息"),
+        details,
+        write: isWriteCall(call),
+      };
+    }
+    case "stops.delete": {
+      return { label, headline: "移除一个停留地点", details, write: isWriteCall(call) };
+    }
+    case "stops.reorder": {
+      const items = stringList(args, "items");
+      if (items.length > 0) details.push(`${items.length} 个停留地点`);
+      return { label, headline: "重排停留顺序", details, write: isWriteCall(call) };
+    }
+    case "itinerary.update": {
+      const title = textArg(args, "title");
+      const date = textArg(args, "date");
+      const startTime = textArg(args, "startTime");
+      if (date) details.push(date);
+      if (startTime) details.push(startTime);
+      return {
+        label,
+        headline: title ?? "调整一项日程",
+        details,
+        write: isWriteCall(call),
+      };
+    }
+    case "itinerary.delete": {
+      return { label, headline: "移除一项日程", details, write: isWriteCall(call) };
+    }
+    case "packing.update": {
+      const name = textArg(args, "name");
+      const category = textArg(args, "category");
+      if (category) details.push(PACKING_CATEGORIES[category] ?? "其他");
+      const quantity = numberArg(args, "quantity");
+      if (quantity !== undefined) details.push(`${quantity} 件`);
+      if (args.packed === true) details.push("标记为已打包");
+      return {
+        label,
+        headline: name ?? "调整一件装备",
+        details,
+        write: isWriteCall(call),
+      };
+    }
+    case "packing.delete": {
+      return { label, headline: "移除一件装备", details, write: isWriteCall(call) };
+    }
+    case "packing.reorder": {
+      const items = stringList(args, "items");
+      if (items.length > 0) details.push(`${items.length} 件装备`);
+      return { label, headline: "调整装备顺序", details, write: isWriteCall(call) };
+    }
+    case "expenses.add": {
+      const amount = numberArg(args, "amountMinor");
+      const currency = textArg(args, "currency");
+      const date = textArg(args, "date");
+      const category = textArg(args, "category");
+      if (date) details.push(date);
+      if (category) details.push(EXPENSE_CATEGORIES[category] ?? category);
+      const note = textArg(args, "note");
+      if (note) details.push(clip(note, 80));
+      return {
+        label,
+        headline:
+          amount === undefined || !currency
+            ? "记录一笔开销"
+            : formatMoney(amount, currency),
+        details,
+        write: isWriteCall(call),
+      };
+    }
+    case "expenses.update": {
+      const amount = numberArg(args, "amountMinor");
+      const currency = textArg(args, "currency");
+      const note = textArg(args, "note");
+      if (note) details.push(clip(note, 80));
+      return {
+        label,
+        headline:
+          amount !== undefined && currency ? formatMoney(amount, currency) : "调整一笔开销",
+        details,
+        write: isWriteCall(call),
+      };
+    }
+    case "expenses.delete": {
+      return { label, headline: "删除一笔开销", details, write: isWriteCall(call) };
+    }
+    case "entries.create": {
+      const title = textArg(args, "title");
+      const date = textArg(args, "date");
+      const location = textArg(args, "location");
+      if (date) details.push(date);
+      if (location) details.push(clip(location, 60));
+      const tags = stringList(args, "tags");
+      if (tags.length > 0) details.push(tags.slice(0, 3).join("、"));
+      return {
+        label,
+        headline: title ?? "写一篇旅行日志",
+        details,
+        write: isWriteCall(call),
+      };
+    }
+    case "entries.update": {
+      const title = textArg(args, "title");
+      const date = textArg(args, "date");
+      if (date) details.push(date);
+      return {
+        label,
+        headline: title ?? "修改一篇旅行日志",
+        details,
+        write: isWriteCall(call),
+      };
+    }
+    case "participants.add": {
+      return { label, headline: "邀请一位同行人", details, write: isWriteCall(call) };
+    }
+    case "participants.remove": {
+      return { label, headline: "移除一位同行人", details, write: isWriteCall(call) };
+    }
+    case "participants.role": {
+      const role = textArg(args, "role");
+      if (role) details.push(role === "editor" ? "提升为可编辑" : "设为仅查看");
+      return { label, headline: "调整同行人角色", details, write: isWriteCall(call) };
     }
     default: {
       return { label, headline: "一个旅行操作", details, write: isWriteCall(call) };

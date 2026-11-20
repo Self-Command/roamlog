@@ -76,8 +76,11 @@ function makePlan(overrides: Partial<AiChatResponse> = {}): AiChatResponse {
 interface PartLike {
   type: string;
   toolName?: string;
-  args?: { plan?: AiChatResponse };
+  args?: Record<string, unknown> & { plan?: AiChatResponse };
   result?: unknown;
+  isError?: boolean;
+  timing?: { startedAt?: number; completedAt?: number };
+  providerMetadata?: { roamlog?: Record<string, unknown> };
 }
 
 async function collect(
@@ -254,6 +257,103 @@ describe("createAiChatModelAdapter", () => {
     expect(first(chunks).content).toHaveLength(1);
     expect(first(chunks).content[0]?.type).toBe("text");
     expect(JSON.stringify(first(chunks).content)).toContain("AI 尚未配置");
+  });
+
+  it("builds a content array in arrival order from tool.start / tool.progress / tool.end", async () => {
+    const startedAt = new Date(Date.now() - 1500).toISOString();
+    const finishedAt = new Date().toISOString();
+
+    streamMock.mockImplementation(async function* () {
+      yield {
+        type: "meta",
+        v: 1,
+        conversationId: CONVERSATION_ID,
+        userMessageId: "u1",
+        assistantMessageId: "a1",
+        provider: { protocol: "openai-chat", model: "auto/test" },
+      };
+      yield { type: "text.delta", delta: "先查一下。" };
+      yield {
+        type: "tool.start",
+        toolCallId: "tool-1",
+        name: "places.search",
+        args: { q: "京都" },
+        startedAt,
+      };
+      yield {
+        type: "tool.progress",
+        toolCallId: "tool-1",
+        label: "正在搜索",
+        percent: 50,
+      };
+      yield {
+        type: "tool.end",
+        toolCallId: "tool-1",
+        status: "ok",
+        result: { items: ["金阁寺"] },
+        finishedAt,
+        durationMs: 1500,
+      };
+      yield { type: "text.delta", delta: "找到了。" };
+      yield { type: "done", messageId: "a1", finishReason: "stop" };
+    });
+
+    const chunks = await collect([USER_MESSAGE]);
+    const last = chunks[chunks.length - 1];
+    if (!last) throw new Error("adapter produced no terminal chunk");
+
+    expect(last.content.map((part) => part.type)).toEqual([
+      "text",
+      "tool-call",
+      "text",
+    ]);
+
+    const tool = last.content.find((part) => part.toolName === "places.search");
+    expect(tool?.args).toEqual({ q: "京都" });
+    expect(tool?.result).toEqual({ items: ["金阁寺"] });
+    expect(tool?.timing?.completedAt).toBe(Date.parse(finishedAt));
+    expect(tool?.providerMetadata?.roamlog).toMatchObject({
+      state: "ok",
+      durationMs: 1500,
+      progressLabel: "正在搜索",
+    });
+  });
+
+  it("turns a cancelled tool.end into the cancelled metadata instead of an error", async () => {
+    streamMock.mockImplementation(async function* () {
+      yield {
+        type: "meta",
+        v: 1,
+        conversationId: CONVERSATION_ID,
+        userMessageId: "u1",
+        assistantMessageId: "a1",
+        provider: { protocol: "openai-chat", model: "auto/test" },
+      };
+      yield {
+        type: "tool.start",
+        toolCallId: "tool-2",
+        name: "places.search",
+        args: {},
+        startedAt: new Date().toISOString(),
+      };
+      yield {
+        type: "tool.end",
+        toolCallId: "tool-2",
+        status: "cancelled",
+        finishedAt: new Date().toISOString(),
+        durationMs: 300,
+      };
+      yield { type: "done", messageId: "a1", finishReason: "stop" };
+    });
+
+    const chunks = await collect([USER_MESSAGE]);
+    const last = chunks[chunks.length - 1];
+    const tool = last?.content.find((part) => part.toolName === "places.search");
+    expect(tool?.providerMetadata?.roamlog).toMatchObject({
+      state: "cancelled",
+      durationMs: 300,
+    });
+    expect(tool?.isError).toBeUndefined();
   });
 });
 

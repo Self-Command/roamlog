@@ -13,6 +13,7 @@ import {
   executeAiRun,
   streamAiPlan,
   toAiRequestError,
+  type AiStreamEventPayload,
 } from "@/lib/api/ai";
 
 import { executionFailureCopy, planFailureCopy } from "./copy";
@@ -37,6 +38,12 @@ import { executionFailureCopy, planFailureCopy } from "./copy";
  *                holding the per-call results.
  *
  * Nothing else in the UI is allowed to call these two endpoints.
+ *
+ * Content ordering (migration §C.3): the stream is accumulated into a
+ * `Content[]` in arrival order instead of a single `text` string. A text delta
+ * extends the trailing text part; a `tool.start` pushes a tool-call part; a
+ * later text delta starts a new text part, so "text → tool → text" renders in
+ * the same order the server produced it.
  */
 
 export const PLAN_TOOL_NAME = "roamlog.plan";
@@ -114,6 +121,7 @@ export function executionOutcomeText(outcome: ExecutionOutcome): string {
 }
 
 type Content = NonNullable<ChatModelRunResult["content"]>;
+type ToolPart = Extract<Content[number], { type: "tool-call" }>;
 
 function textPart(text: string): Content[number] {
   return { type: "text", text };
@@ -128,9 +136,14 @@ function toolPart(
   toolName: string,
   toolCallId: string,
   args: Record<string, unknown>,
-  extra: { result?: unknown; isError?: boolean } = {},
-): Content[number] {
-  return {
+  extra: {
+    result?: unknown;
+    isError?: boolean;
+    timing?: ToolPart["timing"];
+    providerMetadata?: ToolPart["providerMetadata"];
+  } = {},
+): ToolPart {
+  const part: ToolPart = {
     type: "tool-call",
     toolName,
     toolCallId,
@@ -138,7 +151,93 @@ function toolPart(
     argsText: JSON.stringify(args),
     ...(extra.result !== undefined ? { result: extra.result as never } : {}),
     ...(extra.isError ? { isError: true } : {}),
-  } as Content[number];
+    ...(extra.timing ? { timing: extra.timing } : {}),
+    ...(extra.providerMetadata ? { providerMetadata: extra.providerMetadata } : {}),
+  };
+  return part;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pure content-array helpers (unit-tested by chat-model-adapter.test.tsx)    */
+/* -------------------------------------------------------------------------- */
+
+/** Append a text delta to the trailing text part, or start a new text part. */
+export function appendTextDelta(content: Content, delta: string): Content {
+  if (delta.length === 0) return content;
+  const last = content[content.length - 1];
+  if (last?.type === "text") {
+    return [...content.slice(0, -1), { ...last, text: last.text + delta }];
+  }
+  return [...content, textPart(delta)];
+}
+
+/** Insert or update a tool part by `toolCallId`, preserving arrival order. */
+export function upsertToolPart(content: Content, next: ToolPart): Content {
+  const index = content.findIndex(
+    (part) => part.type === "tool-call" && part.toolCallId === next.toolCallId,
+  );
+  if (index === -1) return [...content, next];
+
+  const existing = content[index];
+  if (!existing || existing.type !== "tool-call") return content;
+
+  const merged: ToolPart = {
+    ...existing,
+    ...next,
+    // `tool.start` carries the args; progress/end updates must not erase them.
+    args: Object.keys(next.args as object).length > 0 ? next.args : existing.args,
+    argsText: next.argsText.length > 0 ? next.argsText : existing.argsText,
+    timing: next.timing ?? existing.timing,
+    providerMetadata: next.providerMetadata ?? existing.providerMetadata,
+  };
+  return [...content.slice(0, index), merged, ...content.slice(index + 1)];
+}
+
+/** Update one tool part through a callback; unknown ids are a no-op. */
+export function updateToolPart(
+  content: Content,
+  toolCallId: string,
+  update: (part: ToolPart) => ToolPart,
+): Content {
+  const index = content.findIndex(
+    (part) => part.type === "tool-call" && part.toolCallId === toolCallId,
+  );
+  if (index === -1) return content;
+  const existing = content[index];
+  if (!existing || existing.type !== "tool-call") return content;
+  return [...content.slice(0, index), update(existing), ...content.slice(index + 1)];
+}
+
+function roamlogMetadata(part: ToolPart): Record<string, unknown> {
+  const raw = part.providerMetadata?.roamlog;
+  return raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
+}
+
+function withRoamlogMetadata(
+  part: ToolPart,
+  patch: Record<string, unknown>,
+): ToolPart["providerMetadata"] {
+  return {
+    ...(part.providerMetadata ?? {}),
+    roamlog: { ...roamlogMetadata(part), ...patch } as never,
+  };
+}
+
+function toMillis(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function appendFailureCopy(
+  content: Content,
+  title: string,
+  description: string,
+): Content {
+  const copy = `${title}\n\n${description}`;
+  const hasText = content.some(
+    (part) => part.type === "text" && part.text.trim().length > 0,
+  );
+  return appendTextDelta(content, hasText ? `\n\n${copy}` : copy);
 }
 
 interface PlanPartLike {
@@ -283,7 +382,7 @@ export function createAiChatModelAdapter({
       const prompt = request ? userText(request) : "";
       const toolCallId = `plan-${createAiIdempotencyKey()}`;
 
-      let text = "";
+      let content: Content = [];
       let planEvent: PlanEvent | undefined;
       let errorEvent: Extract<AiStreamEvent, { type: "error" }> | undefined;
       let doneEvent: Extract<AiStreamEvent, { type: "done" }> | undefined;
@@ -306,7 +405,7 @@ export function createAiChatModelAdapter({
           abortSignal,
         );
 
-        for await (const event of stream) {
+        for await (const event of stream as AsyncGenerator<AiStreamEventPayload>) {
           switch (event.type) {
             case "progress":
               // Status only: never append the label to the answer. A preamble
@@ -315,20 +414,81 @@ export function createAiChatModelAdapter({
               // it is cleared only on a terminal frame below.
               progressShown = true;
               yield {
-                content: text ? [textPart(text)] : [],
+                content: [...content],
                 status: { type: "running" },
                 metadata: { custom: { progress: event } },
               };
               break;
             case "text.delta":
-              text += event.delta;
-              // Each delta yields the full text so far; assistant-ui replaces
-              // the previous snapshot, so words are never duplicated. The
-              // existing progress metadata is intentionally left untouched:
+              content = appendTextDelta(content, event.delta);
+              // Each delta yields the full content so far; assistant-ui
+              // replaces the previous snapshot, so words are never duplicated.
+              // The existing progress metadata is intentionally left untouched:
               // removing it here would blank the status line for the rest of a
               // long tool round.
               yield {
-                content: [textPart(text)],
+                content: [...content],
+                status: { type: "running" },
+              };
+              break;
+            case "tool.start":
+              content = upsertToolPart(
+                content,
+                toolPart(event.name, event.toolCallId, event.args, {
+                  timing: { startedAt: toMillis(event.startedAt) },
+                  providerMetadata: {
+                    roamlog: {
+                      name: event.name,
+                      ...(event.stepId ? { stepId: event.stepId } : {}),
+                      ...(event.parentToolCallId
+                        ? { parentToolCallId: event.parentToolCallId }
+                        : {}),
+                    },
+                  },
+                }),
+              );
+              yield {
+                content: [...content],
+                status: { type: "running" },
+              };
+              break;
+            case "tool.progress":
+              content = updateToolPart(content, event.toolCallId, (part) => ({
+                ...part,
+                providerMetadata: withRoamlogMetadata(part, {
+                  ...(event.label ? { progressLabel: event.label } : {}),
+                  ...(event.percent !== undefined ? { percent: event.percent } : {}),
+                }),
+              }));
+              yield {
+                content: [...content],
+                status: { type: "running" },
+              };
+              break;
+            case "tool.end":
+              content = updateToolPart(content, event.toolCallId, (part) => {
+                const completedAt = toMillis(event.finishedAt);
+                return {
+                  ...part,
+                  ...(event.result !== undefined
+                    ? { result: event.result as never }
+                    : {}),
+                  ...(event.status === "error" ? { isError: true } : {}),
+                  timing: {
+                    startedAt: part.timing?.startedAt ?? completedAt - event.durationMs,
+                    completedAt,
+                  },
+                  providerMetadata: withRoamlogMetadata(part, {
+                    state: event.status,
+                    durationMs: event.durationMs,
+                    ...(event.error
+                      ? { errorMessage: `${event.error.code}: ${event.error.message}` }
+                      : {}),
+                  }),
+                };
+              });
+              yield {
+                content: [...content],
                 status: { type: "running" },
               };
               break;
@@ -374,14 +534,8 @@ export function createAiChatModelAdapter({
         // If text already streamed, keep it and mark the message incomplete;
         // a pre-flight failure has no text and keeps the old single bubble.
         yield {
-          content: [
-            textPart(
-              text
-                ? `${text}\n\n${copy.title}\n\n${copy.description}`
-                : `${copy.title}\n\n${copy.description}`,
-            ),
-          ],
-          status: text
+          content: appendFailureCopy(content, copy.title, copy.description),
+          status: content.length > 0
             ? { type: "incomplete", reason: "error" }
             : { type: "complete", reason: "stop" },
           ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
@@ -394,10 +548,10 @@ export function createAiChatModelAdapter({
       const finishReason = doneEvent?.finishReason ?? (errorEvent ? "error" : "stop");
 
       if (finishReason === "aborted" || errorEvent?.code === "AI_ABORTED") {
-        // The message is `incomplete/cancelled`; `thread.tsx` renders the
+        // The message is `incomplete/cancelled`; `message.tsx` renders the
         // single 「已停止」 label, so no duplicate text part is added here.
         yield {
-          content: text ? [textPart(text)] : [],
+          content: [...content],
           status: { type: "incomplete", reason: "cancelled" },
           ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
@@ -408,7 +562,7 @@ export function createAiChatModelAdapter({
         const kind = errorEvent ? aiFailureKind(200, errorEvent.code) : "invalid_response";
         const copy = planFailureCopy(kind);
         yield {
-          content: [textPart(`${copy.title}\n\n${copy.description}`)],
+          content: appendFailureCopy(content, copy.title, copy.description),
           status: { type: "incomplete", reason: "error" },
           ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
@@ -416,11 +570,12 @@ export function createAiChatModelAdapter({
       }
 
       if (planEvent) {
+        if (!content.some((part) => part.type === "text" && part.text.trim().length > 0)) {
+          content = appendTextDelta(content, planEvent.message);
+        }
+        content = [...content, toolPart(PLAN_TOOL_NAME, toolCallId, { plan: planEvent })];
         yield {
-          content: [
-            textPart(text || planEvent.message),
-            toolPart(PLAN_TOOL_NAME, toolCallId, { plan: planEvent }),
-          ],
+          content: [...content],
           status: { type: "requires-action", reason: "tool-calls" },
           ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
@@ -429,19 +584,19 @@ export function createAiChatModelAdapter({
 
       if (finishReason === "length") {
         yield {
-          content: text ? [textPart(text)] : [],
+          content: [...content],
           status: { type: "incomplete", reason: "length" },
           ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
         return;
       }
 
-      // Text-only reply: the last running snapshot is enough for the text, but
-      // an explicit terminal snapshot is required to clear a visible progress
-      // line now that `done` is the only event that ends a status line.
+      // Text-only reply: the last running snapshot is enough for the text; an
+      // explicit terminal snapshot is only required when a progress line was
+      // shown, because `done` is otherwise what ends the status line.
       if (progressShown) {
         yield {
-          content: text ? [textPart(text)] : [],
+          content: [...content],
           status: { type: "complete", reason: "stop" },
           metadata: { custom: { progress: undefined } },
         };

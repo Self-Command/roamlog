@@ -244,6 +244,130 @@ export interface AiStreamPlanInput extends AiPlanInput {
 
 export type AiStreamPlanOptions = AbortSignal | { signal?: AbortSignal };
 
+/* -------------------------------------------------------------------------- */
+/* Appended tool lifecycle events (contract §C.3)                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `tool.start` / `tool.progress` / `tool.end` are appended to the v1 SSE stream
+ * by the API agent. The published `@roamlog/contracts` package may lag one
+ * deploy behind, so the transport validates the three shapes locally and
+ * yields them alongside the contract-validated `AiStreamEvent` union. Once the
+ * contract package ships the same schemas this type becomes structurally
+ * redundant, not incompatible.
+ */
+export interface AiToolStartEvent {
+  type: "tool.start";
+  toolCallId: string;
+  name: string;
+  stepId?: string;
+  parentToolCallId?: string;
+  args: Record<string, unknown>;
+  startedAt: string;
+}
+
+export interface AiToolProgressEvent {
+  type: "tool.progress";
+  toolCallId: string;
+  percent?: number;
+  label?: string;
+  at?: string;
+}
+
+export interface AiToolEndEvent {
+  type: "tool.end";
+  toolCallId: string;
+  status: "ok" | "error" | "cancelled";
+  result?: unknown;
+  error?: { code: string; message: string };
+  finishedAt: string;
+  durationMs: number;
+}
+
+export type AiToolStreamEvent =
+  | AiToolStartEvent
+  | AiToolProgressEvent
+  | AiToolEndEvent;
+
+export type AiStreamEventPayload = AiStreamEvent | AiToolStreamEvent;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Validates one of the appended tool events. Returns `null` for anything that
+ * is not exactly one of these shapes, so `eventFromFrame` can keep throwing
+ * `INVALID_RESPONSE` for genuinely malformed frames.
+ */
+export function parseToolStreamEvent(payload: unknown): AiToolStreamEvent | null {
+  if (!isRecord(payload)) return null;
+
+  switch (payload.type) {
+    case "tool.start": {
+      if (
+        typeof payload.toolCallId !== "string" ||
+        typeof payload.name !== "string" ||
+        !isRecord(payload.args) ||
+        typeof payload.startedAt !== "string"
+      ) {
+        return null;
+      }
+      return {
+        type: "tool.start",
+        toolCallId: payload.toolCallId,
+        name: payload.name,
+        args: payload.args,
+        startedAt: payload.startedAt,
+        ...(typeof payload.stepId === "string" ? { stepId: payload.stepId } : {}),
+        ...(typeof payload.parentToolCallId === "string"
+          ? { parentToolCallId: payload.parentToolCallId }
+          : {}),
+      };
+    }
+    case "tool.progress": {
+      if (typeof payload.toolCallId !== "string") return null;
+      return {
+        type: "tool.progress",
+        toolCallId: payload.toolCallId,
+        ...(typeof payload.percent === "number" && Number.isFinite(payload.percent)
+          ? { percent: payload.percent }
+          : {}),
+        ...(typeof payload.label === "string" ? { label: payload.label } : {}),
+        ...(typeof payload.at === "string" ? { at: payload.at } : {}),
+      };
+    }
+    case "tool.end": {
+      if (
+        typeof payload.toolCallId !== "string" ||
+        (payload.status !== "ok" &&
+          payload.status !== "error" &&
+          payload.status !== "cancelled") ||
+        typeof payload.finishedAt !== "string" ||
+        typeof payload.durationMs !== "number" ||
+        !Number.isFinite(payload.durationMs)
+      ) {
+        return null;
+      }
+      return {
+        type: "tool.end",
+        toolCallId: payload.toolCallId,
+        status: payload.status,
+        finishedAt: payload.finishedAt,
+        durationMs: payload.durationMs,
+        ...(payload.result !== undefined ? { result: payload.result } : {}),
+        ...(isRecord(payload.error) &&
+        typeof payload.error.code === "string" &&
+        typeof payload.error.message === "string"
+          ? { error: { code: payload.error.code, message: payload.error.message } }
+          : {}),
+      };
+    }
+    default:
+      return null;
+  }
+}
+
 function resolveAbortSignal(options: AiStreamPlanOptions | undefined): AbortSignal | undefined {
   if (!options) return undefined;
   if (typeof options === "object" && "signal" in options) {
@@ -317,7 +441,7 @@ function takeFrame(buffer: string): { frame: string; rest: string } | null {
 }
 
 /** Validates one frame against the frozen contract; never drops a bad frame. */
-function eventFromFrame(frame: ParsedSseFrame, frameIndex: number): AiStreamEvent {
+function eventFromFrame(frame: ParsedSseFrame, frameIndex: number): AiStreamEventPayload {
   let payload: unknown;
   try {
     payload = JSON.parse(frame.data);
@@ -326,22 +450,39 @@ function eventFromFrame(frame: ParsedSseFrame, frameIndex: number): AiStreamEven
   }
 
   const parsed = AiStreamEventSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw streamProtocolError(
-      `The AI stream frame ${frameIndex} did not match the contract: ${
-        parsed.error.issues[0]?.message ?? "unknown schema error"
-      }`,
-    );
+  if (parsed.success) {
+    if (frame.event && frame.event !== parsed.data.type) {
+      throw streamProtocolError(
+        `The AI stream frame ${frameIndex} declared event "${frame.event}" but carried "${parsed.data.type}".`,
+      );
+    }
+    return parsed.data;
   }
-  if (frame.event && frame.event !== parsed.data.type) {
-    throw streamProtocolError(
-      `The AI stream frame ${frameIndex} declared event "${frame.event}" but carried "${parsed.data.type}".`,
-    );
+
+  // Appended tool events are validated here until the contracts package ships
+  // their schemas. A truly unknown/malformed event still throws INVALID_RESPONSE.
+  const toolEvent = parseToolStreamEvent(payload);
+  if (toolEvent) {
+    if (frame.event && frame.event !== toolEvent.type) {
+      throw streamProtocolError(
+        `The AI stream frame ${frameIndex} declared event "${frame.event}" but carried "${toolEvent.type}".`,
+      );
+    }
+    return toolEvent;
   }
-  return parsed.data;
+
+  throw streamProtocolError(
+    `The AI stream frame ${frameIndex} did not match the contract: ${
+      parsed.error.issues[0]?.message ?? "unknown schema error"
+    }`,
+  );
 }
 
-function markDone(event: AiStreamEvent, frameIndex: number, doneSeen: boolean): boolean {
+function markDone(
+  event: AiStreamEventPayload,
+  frameIndex: number,
+  doneSeen: boolean,
+): boolean {
   if (doneSeen) {
     throw streamProtocolError(`The AI stream frame ${frameIndex} arrived after done.`);
   }
@@ -365,7 +506,7 @@ export async function* streamAiPlan(
   workspaceId: string,
   input: AiStreamPlanInput,
   options?: AiStreamPlanOptions,
-): AsyncGenerator<AiStreamEvent, void, void> {
+): AsyncGenerator<AiStreamEventPayload, void, void> {
   const signal = resolveAbortSignal(options);
   if (signal?.aborted) return;
 

@@ -1,30 +1,29 @@
 "use client";
 
-import type { TextMessagePartProps } from "@assistant-ui/react";
 import {
-  ActionBarPrimitive,
   ComposerPrimitive,
-  MessagePrimitive,
   ThreadPrimitive,
   useAui,
   useAuiState,
 } from "@assistant-ui/react";
 import { Button } from "@roamlog/ui";
-import { ArrowUp, PanelLeft, RotateCcw, Square } from "lucide-react";
+import { ArrowDown, ArrowUp, PanelLeft, Square } from "lucide-react";
 import { useEffect } from "react";
 
-import { Markdown } from "./markdown";
-import { AI_TOOL_COMPONENTS } from "./plan-card";
+import { AssistantMessage, UserMessage } from "./message";
+import { useMessages, type ChatStatus } from "./use-messages";
 
 /**
- * The conversation surface: message stream + fixed composer.
+ * The conversation surface: message list + fixed composer.
  *
- * Structure ported from the assistant-ui "Thread" composition —
- * `ThreadPrimitive.Root/Viewport/Messages/Empty`, `MessagePrimitive.Root/Parts`,
- * `ActionBarPrimitive.Root/Reload`, `ComposerPrimitive.Root/Input/Send` and
- * `ThreadPrimitive.Suggestion`. Stop uses `aui.thread.cancelRun()`; reload is
- * `ActionBarPrimitive.Reload` (which calls `aui.message.reload()`).
- * Styling follows the Roamlog Resend-derived tokens.
+ * The outer structure is ported from vercel/chatbot `components/chat/messages.tsx`
+ * @ a8989b522fa3672a2ae52f053105e40993b36ca1 (Apache-2.0), L27–L131:
+ * scroll container → message rows → bottom anchor → floating scroll-to-bottom
+ * button. assistant-ui's `ThreadPrimitive.Viewport/Messages/Empty` replace the
+ * upstream `useChatHelpers` plumbing; `use-messages.ts` is the ported scroll
+ * hook and drives the same auto-follow behaviour.
+ *
+ * Composer, mobile header and suggestions keep the existing Roamlog styling.
  */
 
 const SUGGESTIONS = [
@@ -32,98 +31,6 @@ const SUGGESTIONS = [
   "带爸妈去成都四天，节奏慢一点，少走路",
   "周末去杭州，预算 2000，想住湖边",
 ] as const;
-
-function AssistantText({ text }: TextMessagePartProps) {
-  return <Markdown text={text} />;
-}
-
-function UserText({ text }: TextMessagePartProps) {
-  return <p className="whitespace-pre-wrap break-words text-sm leading-6 text-ink">{text}</p>;
-}
-
-function UserMessage() {
-  return (
-    <MessagePrimitive.Root className="flex justify-end">
-      <div className="max-w-[85%] rounded-card border border-hairline-strong bg-surface-2 px-4 py-3">
-        <MessagePrimitive.Parts components={{ Text: UserText }} />
-      </div>
-    </MessagePrimitive.Root>
-  );
-}
-
-/**
- * Live status for the 10–20 s a tool round spends between model turns.
- *
- * It is a fixed-height line rendered *below* the message body, so a streamed
- * preamble stays visible while the tool round is still running. It is shown
- * only while the message is running; `done` / `plan` / `error` clear it, and an
- * aborted run is hidden because its status is no longer `running`.
- */
-function AssistantProgress() {
-  const status = useAuiState((state) => state.message.status);
-  const label = useAuiState((state) => {
-    const progress = state.message.metadata?.custom?.progress as
-      | { label?: unknown }
-      | null
-      | undefined;
-    return typeof progress?.label === "string" && progress.label.length > 0
-      ? progress.label
-      : null;
-  });
-  if (status?.type !== "running") return null;
-  return (
-    <p aria-live="polite" className="min-h-5 text-xs leading-5 text-muted">
-      {label ? `${label}${label.endsWith("…") ? "" : "…"}` : null}
-    </p>
-  );
-}
-
-/** `cancelRun()` leaves the message `incomplete/cancelled`; label it plainly. */
-function AssistantRunStatus() {
-  const status = useAuiState((state) => state.message.status);
-  const hasText = useAuiState((state) =>
-    state.message.content.some(
-      (part) => part.type === "text" && part.text.trim().length > 0,
-    ),
-  );
-  if (status?.type !== "incomplete" || status.reason !== "cancelled") return null;
-  // A cancelled run that produced nothing says 已取消; a partial answer is
-  // kept and marked 已停止 instead of leaving an endlessly spinning bubble.
-  return (
-    <p role="status" className="text-xs leading-5 text-muted">
-      {hasText ? "已停止" : "已取消"}
-    </p>
-  );
-}
-
-function AssistantMessage() {
-  return (
-    <MessagePrimitive.Root className="flex justify-start">
-      <div className="min-w-0 max-w-full flex-1 space-y-3">
-        <MessagePrimitive.Parts
-          components={{
-            Text: AssistantText,
-            tools: { by_name: AI_TOOL_COMPONENTS },
-          }}
-        />
-        <AssistantProgress />
-        <MessagePrimitive.Error>
-          <p role="alert" className="text-xs leading-5 text-accent-red">
-            这条回复中断了。工作区没有被写入任何内容，请重新发送。
-          </p>
-        </MessagePrimitive.Error>
-        <AssistantRunStatus />
-        <ActionBarPrimitive.Root className="flex items-center gap-1" hideWhenRunning>
-          <ActionBarPrimitive.Reload asChild>
-            <Button type="button" variant="ghost" size="sm" aria-label="重新生成">
-              <RotateCcw aria-hidden="true" className="size-3.5" />
-            </Button>
-          </ActionBarPrimitive.Reload>
-        </ActionBarPrimitive.Root>
-      </div>
-    </MessagePrimitive.Root>
-  );
-}
 
 function EmptyState() {
   return (
@@ -198,6 +105,12 @@ export interface ChatThreadProps {
 
 export function ChatThread({ onOpenSidebar }: ChatThreadProps) {
   const aui = useAui();
+  const status: ChatStatus = useAuiState((state) =>
+    state.thread.isRunning ? "streaming" : "ready",
+  );
+  const { containerRef, endRef, isAtBottom, scrollToBottom } = useMessages({
+    status,
+  });
 
   // Leaving the thread (route change / unmount) must abort the in-flight run,
   // otherwise the server keeps generating into a socket nobody watches and the
@@ -228,16 +141,36 @@ export function ChatThread({ onOpenSidebar }: ChatThreadProps) {
         <p className="type-meta truncate">AI 旅行助手</p>
       </div>
 
-      <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
-        <div className="mx-auto w-full max-w-3xl space-y-6">
-          <ThreadPrimitive.Empty>
-            <EmptyState />
-          </ThreadPrimitive.Empty>
-          <ThreadPrimitive.Messages
-            components={{ UserMessage, AssistantMessage }}
-          />
-        </div>
-      </ThreadPrimitive.Viewport>
+      <div className="relative min-h-0 flex-1">
+        <ThreadPrimitive.Viewport
+          ref={containerRef}
+          autoScroll={false}
+          className="h-full min-h-0 overflow-y-auto px-3 py-6 sm:px-4"
+        >
+          <div className="mx-auto flex min-h-full w-full min-w-0 max-w-3xl flex-col gap-6">
+            <ThreadPrimitive.Empty>
+              <EmptyState />
+            </ThreadPrimitive.Empty>
+            <ThreadPrimitive.Messages
+              components={{ UserMessage, AssistantMessage }}
+            />
+            <div ref={endRef} className="min-h-6 min-w-6 shrink-0" />
+          </div>
+        </ThreadPrimitive.Viewport>
+
+        <button
+          type="button"
+          aria-label="滚动到底部"
+          className={`absolute bottom-4 left-1/2 z-10 flex h-7 -translate-x-1/2 items-center rounded-pill border border-hairline-strong bg-surface-2/90 px-3 text-[10px] text-muted backdrop-blur transition-all duration-200 motion-reduce:transition-none ${
+            isAtBottom
+              ? "pointer-events-none scale-90 opacity-0"
+              : "pointer-events-auto scale-100 opacity-100"
+          }`}
+          onClick={() => scrollToBottom("smooth")}
+        >
+          <ArrowDown aria-hidden="true" className="size-3" />
+        </button>
+      </div>
 
       <div className="border-t border-hairline px-4 py-3">
         <Composer />
