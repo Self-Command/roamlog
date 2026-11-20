@@ -151,7 +151,7 @@ export const SETTINGS_CONSUMPTION: Record<SystemSettingGroup, SettingsConsumptio
   places: { status: "backend", label: "后端已消费（地点模块运行期读取）" },
   limits: {
     status: "unwired",
-    label: "部分接入（搜索限流已生效；上传限流未接入，仍读环境变量）",
+    label: "部分接入（搜索限流已生效；上传限流在部署配置中固定，在此修改不生效）",
   },
 };
 

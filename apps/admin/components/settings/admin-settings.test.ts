@@ -70,7 +70,10 @@ describe("admin settings helpers", () => {
     // label must name which half works instead of claiming the whole group.
     expect(SETTINGS_CONSUMPTION.limits.status).toBe("unwired");
     expect(SETTINGS_CONSUMPTION.limits.label).toContain("搜索限流已生效");
-    expect(SETTINGS_CONSUMPTION.limits.label).toContain("上传限流未接入");
+    expect(SETTINGS_CONSUMPTION.limits.label).toContain("上传限流");
+    expect(SETTINGS_CONSUMPTION.limits.label).toContain("不生效");
+    // The deployment-config implementation detail must not leak into copy.
+    expect(SETTINGS_CONSUMPTION.limits.label).not.toContain("环境变量");
     expect(SETTINGS_CONSUMPTION.limits.label).toContain("部分接入");
     expect(SETTINGS_CONSUMPTION.limits.label).not.toMatch(/^未接入/u);
 
@@ -177,7 +180,7 @@ describe("admin settings helpers", () => {
     });
     expect(settingFieldConsumption("limits.uploadPerMinute")).toEqual({
       status: "unwired",
-      label: "未接入（presign 限流仍读环境变量）",
+      label: "未接入（上传签名限流在部署配置中固定，在此修改不生效）",
     });
     // Guard against a future "make the group green" shortcut: the group badge
     // may only turn green when both keys are consumed.

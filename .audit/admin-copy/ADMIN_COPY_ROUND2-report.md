@@ -1,10 +1,10 @@
 # ADMIN_COPY_ROUND2 — admin 运维文案第二轮清理
 
-状态: **DONE**（附 3 条已知风险，其中 2 条为他人/后端范围）
+状态: **DONE**（v2：授权后追加 `apps/admin/lib/**` 与 `/admin/settings` 用例）
 任务 ID: ADMIN_COPY_ROUND2
-日期: 2026-11-20 17:13–17:42 (+08:00)
-Playwright: `e2e/admin/ops-copy.spec.ts` — 15/15 通过
-单测: `@roamlog/admin` 173/173 通过；`tsc --noEmit` 0 错误
+日期: 2026-11-20 17:13–18:05 (+08:00)｜v1 已提交 `7036d58`，v2 为增量
+Playwright: `e2e/admin/ops-copy.spec.ts` — **16/16** 通过
+单测: `@roamlog/admin` **173/173** 通过；`tsc --noEmit` 0 错误
 
 ---
 
@@ -227,18 +227,15 @@ admin-permissions.controller : Get /, Patch /
 
 ---
 
-## 6. 已知风险 / 未覆盖
+## 6. 已知风险 / 未覆盖（v2 更正）
 
-1. **`apps/admin/lib/**` 3 处 UI 可见文案不在可写范围，未改**（`admin-data-source.ts:694` 的 `formatThroughput` 回退 `"未接入"`、`admin-settings.ts:148` `未接入（不生效）`、`admin-settings.ts:154` `上传限流未接入，仍读环境变量`）。其中 `:694` 的影响我已**在上层调用点兜住**（`queues-view.tsx` 不再渲染它返回的兜底词），`:148` 属 S3 保留类；但 `:154` 的「仍读环境变量」是实现细节泄漏，**建议授权后改 lib**。
-2. **`/admin/settings` 的 `值（JSON）` 标签仍在**（`setting-field.tsx:173`、以及 JSON 键/值 aria-label）。那是真正的 JSON 值编辑器，删标签会让运维不知道要填什么格式。若验收要求全站禁「JSON」字样，需要把该编辑器换成结构化字段表单——**属功能改动，超出本轮文案范围**。该页不在验收页面清单内。
-3. **发现两个后端 500（不在本任务范围，未修）**：
-   - `GET /v1/admin/audit`、`/v1/admin/audit/export` → **500**（`apps/admin/audit` 页面因此处于「加载失败」态）
-   - `GET /v1/admin/trips?workspaceId=…` → **500**（工作区详情「最近旅行」因此显示「暂时读不到」）
-   - 其他 admin 端点均 200（users/emails/metrics/system）。建议另派后端任务。
-4. **`/admin/system` 的存储检查显示「不可用」**（S3 readiness probe 红）。父 agent 刚把 S3 endpoint 改成 127.0.0.1，建议复核 presign 链路。
-5. **本地 DB 副作用**：重启后 `roamlog_local` 里**没有任何 super_admin**（只有 seed 的 user 角色），任务指定的 `b1b-admin@roamlog.local` 并不存在。我用仓库自带 `e2e/support/provision-smoke-accounts.ts`（该脚本只允许 `@roamlog.test` 域名）先建 `b1b-seed@roamlog.test`（super_admin，密码同任务给定），再用 Prisma 把 email 改为 `b1b-admin@roamlog.local`，**账号凭据与任务要求完全一致**。这是本地数据副作用，需要知会/按需删除。
-6. **未覆盖**：`/admin/settings`、`/admin/services/*`、`/admin/permissions` 未纳入 Playwright 遍历（不在任务页面清单内；`/admin/permissions` 的空态文案已改但未截图）。
-7. 未改 `apps/web/**`，未碰 `apps/api/src/modules/ai/**`、`apps/web/components/ai/**`、`journal/**`（`git status` 中这些文件是其他 agent 的改动）。
+1. **两个后端 500（已另派 `ADMIN_API_500S`，本任务不碰）**：`GET /v1/admin/audit`、`/v1/admin/audit/export` 与 `GET /v1/admin/trips?workspaceId=…` 返回 500。因此 `/admin/audit` 截图是**加载失败态**（该页文案本身已清干净），工作区详情「最近旅行」显示「暂时读不到」。
+2. **~~`lib/**` 3 处未改~~ → v2 已授权并修改**：`admin-data-source.ts:694` 的 `formatThroughput` 回退改为 `暂不可用`；`admin-settings.ts:154` 改为「上传限流在部署配置中固定，在此修改不生效」；`settings-consumption.ts:77` 同步改。`admin-settings.ts:148` 属 S3（保留类），**故意不改**。
+3. **~~`/admin/settings` 会显示 `值（JSON）`~~ → 该判断错误，已更正**：`设置值（JSON）` 只在 `item.type === "json"` 时渲染（`setting-field.tsx:173`），而当前部署只有四组（通用 / SEO / 主题 / 限制），**没有任何 json 型字段，所以页面根本不显示它**。spec 里仍保留一条显式豁免（`allowJsonValueEditor`），以免将来出现 json 型字段时把合法格式标签误判为泄漏。
+4. **~~storage 检查「不可用」~~ → 现已正常**：live `/v1/admin/system` 返回 `storage: up (5–8ms)`，页面显示 `3 / 3 正常`。见 §12 的 probe 说明。
+5. **本地 DB 副作用（生产禁用）**：为避免验收无法登录，我在本地库创建了 `b1b-admin@roamlog.local`（`platformRole=super_admin`，密码为任务指定值）。**该账号是本地 dev 数据：未绑定 TOTP、未写入仓库、只因为 dev 下 `ADMIN_2FA_ENFORCED=false` 才能访问后台；绝对不能带到生产/staging。** 生产必须走 `super_admin` bootstrap + TOTP 注册流程。
+6. **未覆盖**：`/admin/services/*` 未纳入 Playwright 遍历；`/admin/permissions` 的空态文案已改但未截图（`/admin/settings` 已补，见 §12）。
+7. 未改 `apps/web/**`，未碰 `apps/api/**`（含 `ai/**`）、`apps/web/components/ai/**`、`journal/**`。`git status` 里这些文件是其他 agent 的改动。
 
 ---
 
@@ -267,7 +264,7 @@ apps/admin/components/workspaces/workspaces-view.tsx      | 38 +++++-----
 产物: .audit/admin-copy/*.png (14 张)
 ```
 
-合计 **+113 / −100**，无无关重构、无格式化噪音（`git diff --stat` 已核）。
+合计 **+113 / −100**（v1，已随 `7036d58` 提交）；**v2 增量 5 文件 +12 / −14**（见 §12）。全程无无关重构、无格式化噪音（`git diff --stat` 已核）。
 
 ---
 
@@ -276,24 +273,25 @@ apps/admin/components/workspaces/workspaces-view.tsx      | 38 +++++-----
 命令：`node node_modules/@playwright/test/cli.js test e2e/admin/ops-copy.spec.ts --reporter=list`
 
 ```
-Running 15 tests using 1 worker
+Running 16 tests using 1 worker
 [ops-copy] /admin: 759 chars visible, 0 violation(s)
-[ops-copy] /admin/users: 922 chars visible, 0 violation(s)
+[ops-copy] /admin/users: 923 chars visible, 0 violation(s)
 [ops-copy] /admin/workspaces: 768 chars visible, 0 violation(s)
-[ops-copy] /admin/emails: 2310 chars visible, 0 violation(s)
-[ops-copy] /admin/media: 4483 chars visible, 0 violation(s)
+[ops-copy] /admin/emails: 2256 chars visible, 0 violation(s)
+[ops-copy] /admin/media: 5318 chars visible, 0 violation(s)
 [ops-copy] /admin/system: 946 chars visible, 0 violation(s)
 [ops-copy] /admin/audit: 352 chars visible, 0 violation(s)
 [ops-copy] /admin/flags: 1398 chars visible, 0 violation(s)
 [ops-copy] /admin/content: 519 chars visible, 0 violation(s)
 [ops-copy] /admin/queues: 696 chars visible, 0 violation(s)
-[ops-copy] /admin/users → 用户详情: 2431 chars visible, 0 violation(s)
+[ops-copy] /admin/users → 用户详情: 2187 chars visible, 0 violation(s)
 [ops-copy] /admin/workspaces → 工作区详情: 1143 chars visible, 0 violation(s)
 [ops-copy] /admin/emails → 测试邮件卡片: 2256 chars visible, 0 violation(s)
 [ops-copy] /admin/system → 版本与迁移: 946 chars visible, 0 violation(s)
+[ops-copy] /admin/settings: 2085 chars visible, 0 violation(s) (json value editor allowed)
 [ops-copy] /admin/users @390: 642 chars visible, 0 violation(s)
 [ops-copy] /admin/system @390: 677 chars visible, 0 violation(s)
-  15 passed (25.5s)
+  16 passed (34.0s)
 ```
 
 断言规则（`FORBIDDEN_COPY`）：`/v1/admin`、任意 `/v1/`、`NEXT_PUBLIC_`、`ROAMLOG_*`、`演示预填`、`JSON`、字段名+值形状（`emailDelivery:` / `twoFactorEnabled:` / `mediaBytes:` / `workspaceId:` / `ipAddress:` / `expiresAt:` / `joinedAt:` / `memberCount:` …）、`count:`、数组记法 `xxx[]`、错误码常量 `ADMIN_*`。
@@ -322,6 +320,7 @@ Running 15 tests using 1 worker
 | ![12-workspace-detail](12-workspace-detail.png) | 工作区详情（成员/邀请/328KB 存储） |
 | ![13-users-390](13-users-390.png) | 用户页 390 |
 | ![14-system-390](14-system-390.png) | 系统页 390 |
+| ![15-settings](15-settings.png) | /admin/settings（四组消费状态：注册开关/站点地图/上传限流均「不生效」） |
 
 ---
 
@@ -346,3 +345,53 @@ Running 15 tests using 1 worker
 
 1. **`localhost` → `::1` 优先**：Node 在本机把 `localhost` 解析成 `[{::1},{127.0.0.1}]`，而 API 只监听 IPv4，导致 `.env.local` 的 `API_URL=http://localhost:4000` 时 `:3001/v1/**` 全部 503。父 agent 已把 `.env.local` 改成 `127.0.0.1` 并重启 admin dev server，问题消失。**以后所有 agent 连本地服务不要用 `localhost`。**
 2. **Playwright trace 在 Windows 上偶发 `browserContext.close: ENOENT …traces/*.network`**：本 spec 显式 `trace: "off"`，证据用「可见文本长度 + 逐页截图」承担。
+
+---
+
+## 12. v2：授权后追加（`apps/admin/lib/**` + `/admin/settings` 用例）
+
+### 12.1 改了什么
+
+| 文件:行 | 原文 | 处理 | 理由 |
+| --- | --- | --- | --- |
+| `lib/admin-data-source.ts:693-697` | `formatThroughput` 回退 `return … : "未接入";` | `暂不可用` | 吞吐窗口读不到＝**读不到**，不是「队列子系统没接」。改后 `queues-view` 的两处调用点兜底逻辑**撤回**（不再重复判断），单一真相回到 lib。 |
+| `lib/admin-settings.ts:154` | `"部分接入（搜索限流已生效；上传限流未接入，仍读环境变量）"` | `"部分接入（搜索限流已生效；上传限流在部署配置中固定，在此修改不生效）"` | **去掉 env 实现细节，保留「在此修改不生效」这个关键结论**（运维最需要的那半句没丢）。 |
+| `components/settings/settings-consumption.ts:75-78` | `"未接入（presign 限流仍读环境变量）"` | `"未接入（上传签名限流在部署配置中固定，在此修改不生效）"` | 与上一条同一能力的字段级标签，必须同口径；顺带去掉 `presign` 协议术语。 |
+| `components/queues/queues-view.tsx` | 调用点 `Number.isFinite(...) ? formatThroughput(...) : "暂不可用"` | 撤回为 `formatThroughput(...)` | lib 修好后不再需要上层兜底，避免一个判断分散在两个文件 |
+| `components/settings/admin-settings.test.ts` | 断言 `toContain("上传限流未接入")`、`label: "未接入（presign 限流仍读环境变量）"` | 改为断言含「上传限流」+「不生效」+ **不含「环境变量」**；字段级期望值同步 | 把「不能泄漏 env 细节」写成回归测试，而不只是改字符串 |
+
+**保留未改**：`lib/admin-settings.ts:148`（`前端已消费 4/6 个键…保留原图与实况照片未接入（不生效）`）——S3 类，删/改会让运维以为「保留原图」开关生效。
+**另有两处「环境变量」字样故意保留**：`lib/admin-settings.ts:140`（mail 组「任务进程仍读环境变量」）与 `setting-field.tsx:108`（「由环境变量锁定，界面不可改」）。它们不是「改了不生效」的结论，而是**告诉运维为什么改不动、要去哪改**（部署 env），属可执行信息；`setting-field` 那条还是界面锁定原因的说明。
+
+### 12.2 `/admin/settings` 用例（新增第 15 个测试）
+
+断言：
+- `未接入（不生效）` 仍必须可见（S3 结论没被改掉）
+- `上传限流在部署配置中固定，在此修改不生效` 必须可见（新文案到位）
+- `ROAMLOG_` / `NEXT_PUBLIC_` / `/v1/` 一律不出现
+- 整页过 `FORBIDDEN_COPY`，**唯一豁免是 `值（JSON）`**
+
+**关于 JSON 豁免的更正**：我上一版报告说「settings 页仍显示 `值（JSON）`」——**这个判断是错的**。`值（JSON）` 只在 `item.type === "json"` 时渲染（`setting-field.tsx:173`），而当前部署只有四组（通用 / SEO / 主题 / 限制），没有任何 json 型字段，页面实际不显示它。豁免仍留在 spec 里作防御（将来真出现 json 型设置时，合法的格式标签不该被判成泄漏），并显式打日志 `(json value editor allowed)`，避免静默放宽。
+
+### 12.3 `/admin/system` storage readiness——**已正常，stub 不需要改**
+
+- **probe 用的检查**：`StorageService.checkHealth()`（`apps/api/src/modules/storage/storage.service.ts:322-329`）→ `HeadBucketCommand({ Bucket: bundle.bucket })`，即 **`HEAD /<bucket>`**（`S3_FORCE_PATH_STYLE=true` → `HEAD http://127.0.0.1:9000/roamlog-local`），**2.5s 超时**，走 `bundle.internal`（`S3_ENDPOINT`），失败即 `storage: down`。
+- **不是我需要你补 stub，是时序问题**：我 17:41 那张红图拍的时候 API 还没吃到新 env / stub 还没起。现在实测：
+  - `curl -I http://127.0.0.1:9000/roamlog-local` → **200**
+  - live `GET /v1/admin/system` → `"storage": {"status":"up","latencyMs":8}`
+  - 重跑截图 → 依赖健康检查 **3 / 3 正常**，storage **5 ms 正常**
+- 所以 **stub 什么都不缺**。若以后又变红，按这个顺序查即可：① `HEAD /<bucket>` 是否 200（不是 `/minio/health/live`，也不是 ListBuckets）；② 是否在 2.5s 内返回；③ API 的 `S3_ENDPOINT` 是否还是 `localhost`（`localhost` 会先解析 `::1`，stub 只听 IPv4 就会红）。
+
+### 12.4 v2 验证
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm --filter @roamlog/admin typecheck` | **0 错误** |
+| `pnpm --filter @roamlog/admin test` | **173/173** |
+| `node node_modules/@playwright/test/cli.js test e2e/admin/ops-copy.spec.ts --reporter=list` | **16/16** |
+| `grep -rn "仍读环境变量\|上传限流未接入" apps/admin` | 0 命中 |
+| `grep -rn "未接入" apps/admin/{components,app,lib}`（非测试） | 18 行：15 处 S3 可见文案 + 2 条注释 + 1 处 `admin-settings:148`（S3） |
+
+### 12.5 生产禁用声明
+
+**`b1b-admin@roamlog.local` 是本地 dev 数据，不得进入生产或 staging。** 该账号：无 TOTP 绑定、未写入仓库种子、仅因 dev 环境 `ADMIN_2FA_ENFORCED=false` 才可访问后台。生产必须通过 `super_admin` bootstrap 流程创建并强制完成 TOTP 注册。

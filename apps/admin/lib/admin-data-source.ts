@@ -691,7 +691,9 @@ export function mapAdminQueues(
 }
 
 export function formatThroughput(value: number): string {
-  return Number.isFinite(value) ? `${value.toFixed(1)} 任务/分钟` : "未接入";
+  // A missing completion window is a value this console cannot read, not a
+  // subsystem that failed to connect — "未接入" would misread as a broken queue.
+  return Number.isFinite(value) ? `${value.toFixed(1)} 任务/分钟` : "暂不可用";
 }
 
 /**

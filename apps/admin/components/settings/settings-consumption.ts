@@ -74,7 +74,7 @@ export const SETTING_FIELD_CONSUMPTION: Readonly<Record<string, SettingFieldCons
     },
     "limits.uploadPerMinute": {
       status: "unwired",
-      label: "未接入（presign 限流仍读环境变量）",
+      label: "未接入（上传签名限流在部署配置中固定，在此修改不生效）",
     },
     "ai.defaultProvider": { status: "backend", label: "后端已消费" },
     "ai.timeoutMs": { status: "backend", label: "后端已消费" },

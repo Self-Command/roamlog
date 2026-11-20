@@ -76,11 +76,7 @@ export function QueuesView({
   const throughput = throughputKnown
     ? queueRecords.reduce((total, queue) => total + queue.throughputPerMinute, 0)
     : UNKNOWN_THROUGHPUT;
-  // `formatThroughput` still falls back to the older wording for unknown windows,
-// so the label is settled here where the console owns the copy.
-  const throughputLabel = Number.isFinite(throughput)
-    ? formatThroughput(throughput)
-    : "暂不可用";
+  const throughputLabel = formatThroughput(throughput);
 
   const queueByJob = useMemo(
     () => new Map(queueRecords.map((queue) => [queue.name, queue])),
@@ -326,10 +322,7 @@ export function QueuesView({
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
               <span className="font-mono text-[9px] text-muted">
-                {Number.isFinite(queue.throughputPerMinute)
-                  ? formatThroughput(queue.throughputPerMinute)
-                  : "暂不可用"}{" "}
-                · 5 分钟窗口
+                {formatThroughput(queue.throughputPerMinute)} · 5 分钟窗口
               </span>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button
