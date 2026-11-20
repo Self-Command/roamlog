@@ -149,7 +149,7 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
       </section>
 
       {nextTrip ? (
-        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
+        <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
           <section className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1">
             <div
               className={`relative aspect-[16/7] overflow-hidden border-b border-hairline ${
