@@ -72,7 +72,7 @@ export default defineConfig({
       ? [
           {
             command: "pnpm --filter @roamlog/api dev",
-            url: `${apiBaseURL}/v1/health`,
+            url: `${apiBaseURL}/v1/ready`,
             reuseExistingServer,
             timeout: 120_000,
           },

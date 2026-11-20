@@ -207,9 +207,10 @@ export async function loginOnWeb(page: Page, account: SmokeAccount): Promise<voi
     await page.reload({ waitUntil: "domcontentloaded" });
   }
 
-  // The sidebar renders the signed-in account even when a dashboard query is
-  // temporarily failing, so this is a stable "login really landed" marker.
-  await expect(page.getByText(account.name, { exact: true }).first()).toBeVisible({
+  // The sidebar renders the signed-in email even when a dashboard query is
+  // temporarily failing. The display name is user-editable, so use the unique
+  // account email as the stable "login really landed" marker.
+  await expect(page.getByText(account.email, { exact: true }).first()).toBeVisible({
     timeout: 30_000,
   });
 }

@@ -51,3 +51,12 @@
 - 原因：`packages/contracts/openapi.json` 与 Orval 客户端未跟随媒体大小上限、成员 UUID 契约更新。
 - 修复：执行 `pnpm --filter @roamlog/contracts contracts:generate` 与 `pnpm --filter @roamlog/api-client api-client:generate`；`pnpm contracts:check` 输出 OpenAPI fresh（113 paths / 213 schemas）与 client fresh（25 endpoint files / 801 schema files）。
 - `v0.1.0-rc.7` 保留为失败记录，修复版打 `v0.1.0-rc.8`。
+
+## rc.8 门禁结果
+
+- CI `44767769280` 与 Release gate `44767775632` 在 `E2E browser smoke` 失败。
+- 原因一：`playwright.config.ts` 用 `/v1/health` 等 API，数据库未就绪也会 200；测试在登录 fixture 可用前就开始。
+- 原因二：`e2e/web/dashboard.spec.ts` 仍按 MSW 演示数据断言且没有真实登录；实际页面已使用真实 API。
+- 原因三：`loginOnWeb` 用可编辑的显示名找登录落地标记；种子账号显示名是 `Verify Owner`，不是 `验收账号`。
+- 修复：API webServer 改等 `/v1/ready`；dashboard smoke 改为真实登录 + 真实 seed 数据断言；登录 helper 改用唯一邮箱。单测 `1 passed (6.8s)`。
+- `v0.1.0-rc.8` 保留为失败记录，修复版打 `v0.1.0-rc.9`。

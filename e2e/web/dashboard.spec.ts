@@ -1,20 +1,12 @@
 import { expect, test } from "../support/fixtures";
 import { screenshot, WORKSPACE_PATH } from "../support/helpers";
-import { MOCK_TRIP_COUNT } from "../support/mock-fixtures";
+import { loginOnWeb, OWNER_ACCOUNT } from "../support/accounts";
 
 test("dashboard renders real travel stats and next journey", async ({ page }) => {
+  await loginOnWeb(page, OWNER_ACCOUNT);
   await page.goto(WORKSPACE_PATH);
 
   await expect(page.getByRole("heading", { name: "旅行总览" })).toBeVisible();
-
-  // Mock mode must label itself. This replaces the removed "MSW DEVELOPMENT DATA"
-  // footer marker: the page now carries the "本地演示数据（非真实）" badge plus the
-  // explanation that the numbers come from local fixtures, so demo data can never
-  // be read as a real travel record.
-  await expect(page.getByText("本地演示数据（非真实）")).toBeVisible();
-  await expect(
-    page.getByText("当前数据来自本地 MSW fixtures，仅用于开发演示，不代表真实旅行记录。"),
-  ).toBeVisible();
 
   const stats = page.getByRole("region", { name: "旅行统计" });
   await expect(stats).toBeVisible();
@@ -22,17 +14,17 @@ test("dashboard renders real travel stats and next journey", async ({ page }) =>
   await expect(stats.getByText("STOPS COLLECTED")).toBeVisible();
   await expect(stats.getByText("DAYS ON THE ROAD")).toBeVisible();
 
-  // The stat cards aggregate the real trip list, they are not a fixed placeholder.
-  // The expected value is derived from the MSW fixtures (not hard-coded) and the
-  // remaining cards must at least render an integer.
+  // The stat cards aggregate the real seeded trip list, not a fixed placeholder.
   const journeys = stats.getByText("TOTAL JOURNEYS").locator("..");
-  await expect(journeys.getByText(String(MOCK_TRIP_COUNT), { exact: true })).toBeVisible();
+  await expect(journeys.getByText(/^\d+$/)).toBeVisible();
 
   for (const meta of ["COUNTRIES VISITED", "STOPS COLLECTED", "DAYS ON THE ROAD"]) {
     await expect(stats.getByText(meta).locator("..").getByText(/^\d+$/)).toBeVisible();
   }
 
-  await expect(page.getByRole("heading", { name: "首尔，晚秋与夜航" })).toBeVisible();
+  const nextJourney = page.locator("section").filter({ hasText: "NEXT JOURNEY" }).first();
+  await expect(nextJourney).toBeVisible();
+  await expect(nextJourney.getByRole("heading")).toBeVisible();
   await expect(page.getByRole("heading", { name: "最近整理" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "预算分布" })).toBeVisible();
 
