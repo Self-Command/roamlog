@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-
-import { SettingsLive } from "@/components/settings/settings-live";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = { title: "设置" };
 
-export default async function SettingsPage({
+/**
+ * `/w/<slug>/settings` is an index, not a page: it always lands on the first
+ * section so the nav has an unambiguous active item.
+ */
+export default async function SettingsIndexPage({
   params,
 }: {
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
-
-  return <SettingsLive workspaceSlug={workspaceSlug} />;
+  redirect(`/w/${workspaceSlug}/settings/profile`);
 }

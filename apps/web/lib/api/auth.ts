@@ -153,6 +153,63 @@ export async function resetPassword(token: string, newPassword: string): Promise
   await authRequest("/v1/auth/reset-password", jsonInit("POST", { token, newPassword }));
 }
 
+/**
+ * Confirms the signed-in user's current password without touching the account.
+ *
+ * `POST /change-email` accepts `{ newEmail }` only, so a "current password" field
+ * on the email form would be decorative unless it is checked against something.
+ * Better Auth 1.7.25 exposes `/verify-password` (a `sensitiveSession`-guarded
+ * endpoint) exactly for this; the API gateway forwards every `/v1/auth/*` route
+ * to Better Auth, so no backend work is involved.
+ */
+export async function verifyCurrentPassword(password: string): Promise<void> {
+  await authRequest("/v1/auth/verify-password", jsonInit("POST", { password }));
+}
+
+/**
+ * `POST /v1/auth/change-password` — `currentPassword` is re-verified by the auth
+ * service; `revokeOtherSessions` stays `false` so the user is not signed out of
+ * the device they are typing on.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  options: { revokeOtherSessions?: boolean } = {},
+): Promise<void> {
+  await authRequest(
+    "/v1/auth/change-password",
+    jsonInit("POST", {
+      currentPassword,
+      newPassword,
+      revokeOtherSessions: options.revokeOtherSessions ?? false,
+    }),
+  );
+}
+
+/**
+ * `POST /v1/auth/change-email` — Better Auth only accepts `newEmail` and
+ * `callbackURL` here. When the account's email is already verified the service
+ * sends a verification link and the address keeps its old value until that link
+ * is opened, which is why the form's copy says "验证后生效".
+ */
+export async function changeEmail(newEmail: string, callbackURL?: string): Promise<void> {
+  await authRequest(
+    "/v1/auth/change-email",
+    jsonInit("POST", {
+      newEmail,
+      ...(callbackURL ? { callbackURL } : {}),
+    }),
+  );
+}
+
+/**
+ * `POST /v1/auth/revoke-sessions` — signs every *other* device out and keeps the
+ * current one. Used by "退出所有其他设备".
+ */
+export async function revokeOtherSessions(): Promise<void> {
+  await authRequest("/v1/auth/revoke-sessions", jsonInit("POST", {}));
+}
+
 export async function verifyEmail(token: string): Promise<void> {
   await authRequest(`/v1/auth/verify-email?token=${encodeURIComponent(token)}`, {
     method: "GET",
@@ -329,3 +386,54 @@ export const twoFactorAuthTransport: TwoFactorAuthTransport = {
   disableTwoFactor,
   generateBackupCodes,
 };
+
+export type AccountSecurityAction = "password" | "email" | "password-verify";
+
+/**
+ * Copy for the account-security forms.
+ *
+ * Better Auth answers these routes with machine codes rather than prose, and a
+ * disabled or unconfigured deployment must never read like a successful change.
+ */
+export function accountSecurityErrorMessage(
+  error: unknown,
+  action: AccountSecurityAction,
+): string {
+  if (!(error instanceof ApiError)) {
+    return error instanceof Error ? error.message : "请求没有完成，请稍后重试。";
+  }
+
+  const code = error.code.toUpperCase();
+  if (code === "INVALID_PASSWORD") {
+    return action === "password-verify"
+      ? "当前密码不正确。"
+      : "当前密码不正确，密码没有修改。";
+  }
+  if (code === "CHANGE_EMAIL_DISABLED") {
+    return "当前部署没有开启邮箱修改。请联系管理员在认证配置中启用后重试。";
+  }
+  if (code.includes("INVALID_EMAIL")) {
+    return "邮箱格式不正确。";
+  }
+  if (code.includes("EMAIL_ALREADY_EXISTS") || code.includes("USER_ALREADY_EXISTS")) {
+    return "该邮箱已被其他账号使用。";
+  }
+  if (code.includes("EMAIL_IS_THE_SAME")) {
+    return "新邮箱与当前邮箱相同。";
+  }
+  if (code.includes("PASSWORD_TOO_SHORT")) {
+    return "新密码过短。请使用至少 8 个字符。";
+  }
+  if (code.includes("PASSWORD_TOO_LONG")) {
+    return "新密码过长。请控制在 128 个字符以内。";
+  }
+  if (code === "SESSION_NOT_FRESH" || code.includes("SESSION_EXPIRED")) {
+    return "这次会话已超过安全时效。请重新登录后再修改。";
+  }
+  if (code === "MAIL_NOT_CONFIGURED") return MAIL_NOT_CONFIGURED_MESSAGE;
+  if (error.status === 401) return "当前会话已失效，请重新登录后再试。";
+  if (error.status === 403) return "当前账号没有权限完成此操作。";
+  if (error.status === 429) return "尝试次数过多，请稍后再试。";
+  if (error.status >= 500) return "认证服务暂时不可用，请稍后再试。";
+  return error.message;
+}
