@@ -327,6 +327,7 @@ export const AiStreamEventTypeSchema = z.enum([
   "usage",
   "error",
   "done",
+  "progress",
 ]);
 export type AiStreamEventType = z.infer<typeof AiStreamEventTypeSchema>;
 
@@ -415,6 +416,25 @@ export const AiStreamDoneEventSchema = z
   .strict();
 export type AiStreamDoneEvent = z.infer<typeof AiStreamDoneEventSchema>;
 
+/**
+ * Lightweight, transient status line for long tool rounds. Appended to the v1
+ * protocol without changing any existing event: `label` is user-facing Chinese
+ * and capped at 40 characters. Clients must render it as status text, never as
+ * answer content, and may drop it once `text.delta` has arrived.
+ */
+export const AiStreamProgressStageSchema = z.enum(["thinking", "searching", "reading"]);
+export type AiStreamProgressStage = z.infer<typeof AiStreamProgressStageSchema>;
+
+export const AiStreamProgressEventSchema = z
+  .object({
+    type: z.literal("progress"),
+    stage: AiStreamProgressStageSchema,
+    label: z.string().min(1).max(40),
+    at: IsoTimestampSchema.optional(),
+  })
+  .strict();
+export type AiStreamProgressEvent = z.infer<typeof AiStreamProgressEventSchema>;
+
 export const AiStreamEventSchema = z.discriminatedUnion("type", [
   AiStreamMetaEventSchema,
   AiStreamTextDeltaEventSchema,
@@ -422,6 +442,7 @@ export const AiStreamEventSchema = z.discriminatedUnion("type", [
   AiStreamUsageEventSchema,
   AiStreamErrorEventSchema,
   AiStreamDoneEventSchema,
+  AiStreamProgressEventSchema,
 ]);
 export type AiStreamEvent = z.infer<typeof AiStreamEventSchema>;
 

@@ -427,15 +427,23 @@ integration("AI chat SSE stream on real PostgreSQL", () => {
     const frames = parseFrames(raw);
     const events = eventsOf(frames);
 
+    // `progress` is the appended seventh event type; the six frozen events keep
+    // their exact shapes and order relative to each other.
     expect(events.map((event) => event.type)).toEqual([
       "meta",
+      "progress",
       "text.delta",
       "text.delta",
       "text.delta",
       "usage",
       "done",
     ]);
-    expect(frames.map((frame) => Number(frame.id))).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(events[1]).toMatchObject({
+      type: "progress",
+      stage: "thinking",
+      label: "正在思考…",
+    });
+    expect(frames.map((frame) => Number(frame.id))).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(new Set(frames.map((frame) => frame.id)).size).toBe(frames.length);
 
     const meta = events[0];
@@ -657,6 +665,63 @@ integration("AI chat SSE stream on real PostgreSQL", () => {
         where: { conversationId: conversation.id, clientId: "client-preexisting-user" },
       }),
     ).toBe(1);
+  }, 60_000);
+
+  it("emits Chinese progress during a read-only tool round and keeps done last and unique", async () => {
+    const adapter = new FakeAdapter([
+      {
+        deltas: ["我先查一下。"],
+        toolCalls: [
+          { id: "call_place_1", name: "places.search", input: { q: "京都" } },
+          { id: "call_place_2", name: "places.search", input: { q: "清水寺" } },
+          { id: "call_trips", name: "trips.list", input: {} },
+        ],
+        usage: { inputTokens: 12, outputTokens: 4 },
+      },
+      { deltas: ["找到了。"], usage: { inputTokens: 3, outputTokens: 2 } },
+    ]);
+    const { url } = await createApp({ adapter, heartbeatMs: 1_000 });
+
+    const response = await postStream(url, { message: "查一下京都" });
+    expect(response.status).toBe(200);
+    const events = eventsOf(parseFrames(await response.text()));
+    const progress = events.filter((event) => event.type === "progress") as Array<{
+      type: "progress";
+      stage: string;
+      label: string;
+    }>;
+
+    expect(progress.length).toBeGreaterThan(0);
+    // Every status line is Chinese and short enough for the bubble.
+    for (const event of progress) {
+      expect(event.label).toMatch(/[\u4e00-\u9fff]/u);
+      expect(event.label.length).toBeLessThanOrEqual(40);
+    }
+    expect(
+      progress.some(
+        (event) => event.stage === "thinking" && event.label === "正在思考…",
+      ),
+    ).toBe(true);
+    expect(
+      progress.some(
+        (event) => event.stage === "searching" && event.label === "正在查询地点（1/2）",
+      ),
+    ).toBe(true);
+    expect(
+      progress.some(
+        (event) => event.stage === "searching" && event.label === "正在查询地点（2/2）",
+      ),
+    ).toBe(true);
+    expect(
+      progress.some(
+        (event) => event.stage === "reading" && event.label === "正在读取行程…",
+      ),
+    ).toBe(true);
+
+    // The append-only event must never disturb the terminal-frame contract.
+    expect(events.filter((event) => event.type === "done")).toHaveLength(1);
+    expect(events.at(-1)?.type).toBe("done");
+    expect(events.at(-1)).toMatchObject({ type: "done", finishReason: "stop" });
   }, 60_000);
 
   it("emits plan exactly once before usage/done for a tool-call round", async () => {

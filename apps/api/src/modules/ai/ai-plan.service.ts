@@ -11,6 +11,7 @@ import {
   type AiPlanWarning,
   type AiStreamEvent,
   type AiStreamPlanEvent,
+  type AiStreamProgressEvent,
   type AiStreamTextDeltaEvent,
   type AiToolCall,
   type AiUsage,
@@ -48,6 +49,16 @@ import { AiToolbox, type AiPlaceCandidate } from "./ai-tools.js";
 export const MAX_PLAN_ROUNDS = 8;
 /** Hard cap on tool calls executed in one run (protects the quota and the UI). */
 export const MAX_TOOL_CALLS_PER_RUN = 40;
+/** Hard cap on `progress` frames per stream (protects SSE and the event log). */
+export const MAX_STREAM_PROGRESS_EVENTS = 60;
+/** Minimum gap between two identical `progress` labels on one stream. */
+export const STREAM_PROGRESS_THROTTLE_MS = 2_000;
+
+/** Stable Chinese status lines for the append-only `progress` event. */
+const STREAM_PROGRESS_LABELS = {
+  thinking: "正在思考…",
+  reading: "正在读取行程…",
+} as const;
 
 /** Options for {@link AiPlanService.streamChat}; the controller owns the abort signal. */
 export interface AiStreamChatOptions {
@@ -359,11 +370,15 @@ export class AiPlanService {
           outcome = next.value;
           break;
         }
-        if (firstDeltaAt === null) {
-          firstDeltaAt = Date.now() - startedAt;
+        if (next.value.type === "text.delta") {
+          if (firstDeltaAt === null) {
+            firstDeltaAt = Date.now() - startedAt;
+          }
+          deltaCount += 1;
+          text += next.value.delta;
         }
-        deltaCount += 1;
-        text += next.value.delta;
+        // `progress` is a transient frame: yield it as-is, never count it as
+        // answer text, and keep `done` as the only terminal frame.
         yield next.value;
       }
 
@@ -610,16 +625,36 @@ export class AiPlanService {
   /**
    * The single planning loop used by both transports.
    *
-   * It yields `text.delta` events only when `input.streaming` is true; the
-   * blocking `chat()` path drains those values and reads the generator's return
-   * value (`PlanLoopOutcome`). Write tools are never executed here.
+   * It yields `text.delta` and `progress` events only when `input.streaming` is
+   * true; the blocking `chat()` path drains those values and reads the
+   * generator's return value (`PlanLoopOutcome`). Write tools are never
+   * executed here.
    */
   private async *runPlanLoop(
     input: PlanLoopInput,
-  ): AsyncGenerator<AiStreamTextDeltaEvent, PlanLoopOutcome, void> {
+  ): AsyncGenerator<AiStreamEvent, PlanLoopOutcome, void> {
     const now = this.clock();
     const today = formatDateOnly(now);
     const timeZone = resolveAiTimeZone();
+
+    // Progress is a streaming-only courtesy: `chat()` has no SSE channel, so it
+    // must never pay for (or accidentally surface) these frames.
+    let progressSent = 0;
+    const lastProgressAt = new Map<string, number>();
+    const progressEvent = (
+      stage: AiStreamProgressEvent["stage"],
+      label: string,
+    ): AiStreamProgressEvent | null => {
+      if (!input.streaming || progressSent >= MAX_STREAM_PROGRESS_EVENTS) return null;
+      const sentAt = Date.now();
+      const previous = lastProgressAt.get(label);
+      if (previous !== undefined && sentAt - previous < STREAM_PROGRESS_THROTTLE_MS) {
+        return null;
+      }
+      lastProgressAt.set(label, sentAt);
+      progressSent += 1;
+      return { type: "progress", stage, label };
+    };
 
     const runId = newRunId();
     if (input.state) {
@@ -654,6 +689,12 @@ export class AiPlanService {
         throw new AiAbortedError();
       }
       rounds += 1;
+      // Every round starts with a model call that may take many seconds with no
+      // output; tell the user that before waiting on it.
+      const thinking = progressEvent("thinking", STREAM_PROGRESS_LABELS.thinking);
+      if (thinking) {
+        yield thinking;
+      }
       const startedAt = Date.now();
       let turn: AiStepResult;
       try {
@@ -729,6 +770,12 @@ export class AiPlanService {
       const results: Array<{ id: string; name: string; content: string }> = [];
       let queuedThisRound = 0;
       pastDateIgnoredThisTurn = false;
+      // `i/n` counts only `places.search` calls in this round so the label reads
+      // as "place 3 of 8" even when the same round also reads trips/stops.
+      const placeSearchTotal = turn.toolCalls.filter(
+        (requested) => requested.name === "places.search",
+      ).length;
+      let placeSearchIndex = 0;
 
       for (const requested of turn.toolCalls) {
         if (input.signal?.aborted) {
@@ -756,6 +803,21 @@ export class AiPlanService {
         };
 
         if (this.toolbox.isReadOnly(call.tool)) {
+          if (call.tool === "places.search") {
+            placeSearchIndex += 1;
+            const notice = progressEvent(
+              "searching",
+              `正在查询地点（${placeSearchIndex}/${placeSearchTotal}）`,
+            );
+            if (notice) {
+              yield notice;
+            }
+          } else {
+            const notice = progressEvent("reading", STREAM_PROGRESS_LABELS.reading);
+            if (notice) {
+              yield notice;
+            }
+          }
           if (readOnlyTrace.length < MAX_TOOL_CALLS_PER_RUN) {
             readOnlyTrace.push(call);
           }

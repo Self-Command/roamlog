@@ -246,6 +246,46 @@ describe("chat model adapter streaming", () => {
     expect(textOf(chunks[chunks.length - 1])).toBe("创建京都行程");
   });
 
+  it("keeps progress visible after a text.delta and clears it on done", async () => {
+    const body = [
+      sseFrame(metaEvent(), 1),
+      sseFrame({ type: "text.delta", delta: "京都的" }, 2),
+      sseFrame({ type: "progress", stage: "searching", label: "正在查询地点（1/2）" }, 3),
+      sseFrame({ type: "text.delta", delta: "古寺" }, 4),
+      sseFrame({ type: "progress", stage: "reading", label: "正在读取行程…" }, 5),
+      sseFrame({ type: "done", messageId: "a1", finishReason: "stop" }, 6),
+    ].join("");
+    fetchMock.mockResolvedValue(responseFrom(body));
+
+    const chunks = await collectAdapter([USER_MESSAGE]);
+
+    // The preamble is not replaced: the progress snapshot still carries it.
+    expect(textOf(chunks[0])).toBe("京都的");
+    expect(chunks[0]?.metadata?.custom?.progress).toBeUndefined();
+    expect(chunks[1]?.metadata?.custom?.progress).toEqual({
+      type: "progress",
+      stage: "searching",
+      label: "正在查询地点（1/2）",
+    });
+    expect(textOf(chunks[1])).toBe("京都的");
+
+    // More text arrives while the tool round continues; progress survives.
+    expect(textOf(chunks[2])).toBe("京都的古寺");
+    expect(chunks[3]?.metadata?.custom?.progress).toEqual({
+      type: "progress",
+      stage: "reading",
+      label: "正在读取行程…",
+    });
+    expect(textOf(chunks[3])).toBe("京都的古寺");
+
+    // `done` clears the status line and keeps the answer text intact.
+    expect(chunks).toHaveLength(5);
+    expect(chunks[4]?.status).toEqual({ type: "complete", reason: "stop" });
+    expect(chunks[4]?.metadata?.custom?.progress).toBeUndefined();
+    expect(textOf(chunks[4])).toBe("京都的古寺");
+    expect(textOf(chunks[4])).not.toContain("正在");
+  });
+
   it("shows a readable error and never a success state when error is followed by done(error)", async () => {
     const body = [
       sseFrame(metaEvent(), 1),
@@ -274,6 +314,7 @@ describe("chat model adapter streaming", () => {
   it("turns a plan frame into the plan-card tool part with its plannedCalls", async () => {
     const body = [
       sseFrame(metaEvent(), 1),
+      sseFrame({ type: "progress", stage: "thinking", label: "正在思考…" }, 2),
       sseFrame(
         {
           type: "plan",
@@ -283,9 +324,9 @@ describe("chat model adapter streaming", () => {
           readOnlyTrace: [],
           expiresAt: new Date(Date.now() + 600_000).toISOString(),
         },
-        2,
+        3,
       ),
-      sseFrame({ type: "done", messageId: "a1", finishReason: "tool-calls" }, 3),
+      sseFrame({ type: "done", messageId: "a1", finishReason: "tool-calls" }, 4),
     ].join("");
     fetchMock.mockResolvedValue(responseFrom(body));
 
@@ -293,6 +334,9 @@ describe("chat model adapter streaming", () => {
     const final = chunks[chunks.length - 1];
 
     expect(final?.status).toEqual({ type: "requires-action", reason: "tool-calls" });
+    // `plan` is terminal for the status line: it must not keep showing
+    // "正在思考…" once the plan card is on screen.
+    expect(final?.metadata?.custom?.progress).toBeUndefined();
     const tool = (final?.content ?? []).find(
       (part) => part.type === "tool-call",
     ) as PartLike | undefined;

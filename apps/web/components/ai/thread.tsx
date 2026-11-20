@@ -11,6 +11,7 @@ import {
 } from "@assistant-ui/react";
 import { Button } from "@roamlog/ui";
 import { ArrowUp, PanelLeft, RotateCcw, Square } from "lucide-react";
+import { useEffect } from "react";
 
 import { Markdown } from "./markdown";
 import { AI_TOOL_COMPONENTS } from "./plan-card";
@@ -50,13 +51,47 @@ function UserMessage() {
   );
 }
 
+/**
+ * Live status for the 10–20 s a tool round spends between model turns.
+ *
+ * It is a fixed-height line rendered *below* the message body, so a streamed
+ * preamble stays visible while the tool round is still running. It is shown
+ * only while the message is running; `done` / `plan` / `error` clear it, and an
+ * aborted run is hidden because its status is no longer `running`.
+ */
+function AssistantProgress() {
+  const status = useAuiState((state) => state.message.status);
+  const label = useAuiState((state) => {
+    const progress = state.message.metadata?.custom?.progress as
+      | { label?: unknown }
+      | null
+      | undefined;
+    return typeof progress?.label === "string" && progress.label.length > 0
+      ? progress.label
+      : null;
+  });
+  if (status?.type !== "running") return null;
+  return (
+    <p aria-live="polite" className="min-h-5 text-xs leading-5 text-muted">
+      {label ? `${label}${label.endsWith("…") ? "" : "…"}` : null}
+    </p>
+  );
+}
+
 /** `cancelRun()` leaves the message `incomplete/cancelled`; label it plainly. */
 function AssistantRunStatus() {
   const status = useAuiState((state) => state.message.status);
+  const hasText = useAuiState((state) =>
+    state.message.content.some(
+      (part) => part.type === "text" && part.text.trim().length > 0,
+    ),
+  );
   if (status?.type !== "incomplete" || status.reason !== "cancelled") return null;
+  // A cancelled run that produced nothing says 已取消; a partial answer is
+  // kept and marked 已停止 instead of leaving an endlessly spinning bubble.
   return (
     <p role="status" className="text-xs leading-5 text-muted">
-      已停止
+      {hasText ? "已停止" : "已取消"}
     </p>
   );
 }
@@ -71,6 +106,7 @@ function AssistantMessage() {
             tools: { by_name: AI_TOOL_COMPONENTS },
           }}
         />
+        <AssistantProgress />
         <MessagePrimitive.Error>
           <p role="alert" className="text-xs leading-5 text-accent-red">
             这条回复中断了。工作区没有被写入任何内容，请重新发送。
@@ -161,6 +197,22 @@ export interface ChatThreadProps {
 }
 
 export function ChatThread({ onOpenSidebar }: ChatThreadProps) {
+  const aui = useAui();
+
+  // Leaving the thread (route change / unmount) must abort the in-flight run,
+  // otherwise the server keeps generating into a socket nobody watches and the
+  // message stays "running" until a manual stop.
+  useEffect(
+    () => () => {
+      try {
+        aui.thread.cancelRun();
+      } catch {
+        // The runtime can already be torn down during navigation.
+      }
+    },
+    [aui],
+  );
+
   return (
     <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b border-hairline px-3 py-2 lg:hidden">

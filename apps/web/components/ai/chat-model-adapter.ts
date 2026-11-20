@@ -287,6 +287,8 @@ export function createAiChatModelAdapter({
       let planEvent: PlanEvent | undefined;
       let errorEvent: Extract<AiStreamEvent, { type: "error" }> | undefined;
       let doneEvent: Extract<AiStreamEvent, { type: "done" }> | undefined;
+      /** True after a progress frame was surfaced to the UI. */
+      let progressShown = false;
 
       try {
         const stream = streamAiPlan(
@@ -306,10 +308,25 @@ export function createAiChatModelAdapter({
 
         for await (const event of stream) {
           switch (event.type) {
+            case "progress":
+              // Status only: never append the label to the answer. A preamble
+              // sentence followed by a 20 s tool round is the common real case,
+              // so progress must keep updating the status line after text too;
+              // it is cleared only on a terminal frame below.
+              progressShown = true;
+              yield {
+                content: text ? [textPart(text)] : [],
+                status: { type: "running" },
+                metadata: { custom: { progress: event } },
+              };
+              break;
             case "text.delta":
               text += event.delta;
               // Each delta yields the full text so far; assistant-ui replaces
-              // the previous snapshot, so words are never duplicated.
+              // the previous snapshot, so words are never duplicated. The
+              // existing progress metadata is intentionally left untouched:
+              // removing it here would blank the status line for the rest of a
+              // long tool round.
               yield {
                 content: [textPart(text)],
                 status: { type: "running" },
@@ -340,12 +357,14 @@ export function createAiChatModelAdapter({
             yield {
               content: [textPart(plan.message), toolPart(PLAN_TOOL_NAME, toolCallId, { plan })],
               status: { type: "requires-action", reason: "tool-calls" },
+              ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
             };
           } catch (fallbackError) {
             const copy = planFailureCopy(toAiRequestError(fallbackError).kind);
             yield {
               content: [textPart(`${copy.title}\n\n${copy.description}`)],
               status: { type: "complete", reason: "stop" },
+              ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
             };
           }
           return;
@@ -365,6 +384,7 @@ export function createAiChatModelAdapter({
           status: text
             ? { type: "incomplete", reason: "error" }
             : { type: "complete", reason: "stop" },
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
         return;
       }
@@ -379,6 +399,7 @@ export function createAiChatModelAdapter({
         yield {
           content: text ? [textPart(text)] : [],
           status: { type: "incomplete", reason: "cancelled" },
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
         return;
       }
@@ -389,6 +410,7 @@ export function createAiChatModelAdapter({
         yield {
           content: [textPart(`${copy.title}\n\n${copy.description}`)],
           status: { type: "incomplete", reason: "error" },
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
         return;
       }
@@ -400,6 +422,7 @@ export function createAiChatModelAdapter({
             toolPart(PLAN_TOOL_NAME, toolCallId, { plan: planEvent }),
           ],
           status: { type: "requires-action", reason: "tool-calls" },
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
         return;
       }
@@ -408,12 +431,21 @@ export function createAiChatModelAdapter({
         yield {
           content: text ? [textPart(text)] : [],
           status: { type: "incomplete", reason: "length" },
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
         return;
       }
 
-      // Text-only reply: the last running snapshot is enough; the local
-      // runtime closes the message when this generator ends.
+      // Text-only reply: the last running snapshot is enough for the text, but
+      // an explicit terminal snapshot is required to clear a visible progress
+      // line now that `done` is the only event that ends a status line.
+      if (progressShown) {
+        yield {
+          content: text ? [textPart(text)] : [],
+          status: { type: "complete", reason: "stop" },
+          metadata: { custom: { progress: undefined } },
+        };
+      }
       return;
     },
   };

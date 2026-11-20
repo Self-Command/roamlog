@@ -379,6 +379,28 @@ describe("AI stream event protocol v1", () => {
     ).toBe(false);
   });
 
+  it("parses the appended progress event and rejects extra fields (strict)", () => {
+    const progress = {
+      type: "progress" as const,
+      stage: "searching" as const,
+      label: "正在查询地点（3/8）",
+    };
+
+    expect(AiStreamEventSchema.safeParse(progress).success).toBe(true);
+    expect(
+      AiStreamEventSchema.safeParse({
+        ...progress,
+        at: "2026-11-19T14:00:00+08:00",
+      }).success,
+    ).toBe(true);
+    expect(AiStreamEventSchema.safeParse({ ...progress, extra: true }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...progress, stage: "writing" }).success).toBe(false);
+    // The label is for humans and capped at 40 characters.
+    expect(AiStreamEventSchema.safeParse({ ...progress, label: "长".repeat(41) }).success).toBe(
+      false,
+    );
+  });
+
   it("requires meta.v to be exactly 1", () => {
     expect(AiStreamEventSchema.safeParse({ ...meta, v: 2 }).success).toBe(false);
     expect(AiStreamEventSchema.safeParse({ ...meta, v: "1" }).success).toBe(false);
