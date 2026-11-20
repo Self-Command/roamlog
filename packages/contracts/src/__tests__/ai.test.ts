@@ -33,7 +33,7 @@ const USER_ID = "01942f30-1200-7000-8000-000000000401";
 const SELECTION_HASH = "a".repeat(64);
 
 describe("AI planning contracts", () => {
-  it("locks the tool set to additive/read-only capabilities", () => {
+  it("locks the tool set to the product surface", () => {
     expect(AI_TOOL_NAMES).toEqual([
       "places.search",
       "trips.create",
@@ -42,22 +42,36 @@ describe("AI planning contracts", () => {
       "trips.update",
       "stops.add",
       "stops.list",
+      "stops.update",
+      "stops.delete",
+      "stops.reorder",
       "itinerary.addDay",
+      "itinerary.update",
+      "itinerary.delete",
       "packing.add",
+      "packing.update",
+      "packing.delete",
+      "packing.reorder",
       "budget.setSummary",
+      "expenses.add",
+      "expenses.update",
+      "expenses.delete",
+      "entries.create",
+      "entries.update",
+      "participants.add",
+      "participants.remove",
+      "participants.role",
     ]);
-    // `trips.update` is the one non-additive write and it is field-whitelisted
-    // (title/summary/startDate/endDate). Destructive, identity-ish and
-    // audience-ish capabilities must still never appear as tool names.
+    // The expanded surface includes edit/delete tools, but audience-ish and
+    // privacy-ish capabilities must never appear as tool names: a model cannot
+    // grant access, change visibility or flip the exact-photo privacy switch.
     for (const forbidden of [
-      "delete",
       "permission",
       "settings",
       "visibility",
       "share",
       "grant",
-      "member",
-      "role",
+      "public",
     ]) {
       expect(AI_TOOL_NAMES.some((name) => name.includes(forbidden))).toBe(false);
     }
@@ -65,8 +79,28 @@ describe("AI planning contracts", () => {
     expect(isReadOnlyAiTool("trips.create")).toBe(false);
     // Discovery must run while planning, before any write is proposed.
     expect(isReadOnlyAiTool("trips.list")).toBe(true);
-    // Updating an existing trip is a write: it never runs while planning.
-    expect(isReadOnlyAiTool("trips.update")).toBe(false);
+    // Every edit/delete tool is a write: it never runs while planning.
+    for (const write of [
+      "trips.update",
+      "stops.update",
+      "stops.delete",
+      "stops.reorder",
+      "itinerary.update",
+      "itinerary.delete",
+      "packing.update",
+      "packing.delete",
+      "packing.reorder",
+      "expenses.add",
+      "expenses.update",
+      "expenses.delete",
+      "entries.create",
+      "entries.update",
+      "participants.add",
+      "participants.remove",
+      "participants.role",
+    ]) {
+      expect(isReadOnlyAiTool(write)).toBe(false);
+    }
   });
 
   it("rejects unknown tools and non-object arguments", () => {

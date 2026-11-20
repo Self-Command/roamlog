@@ -32,9 +32,18 @@ export type AiProtocol = z.infer<typeof AiProtocolSchema>;
  *
  * `trips.update` exists because "make my 5-day trip 6 days" is a real user
  * request that otherwise forces the model to `trips.create` a duplicate. The
- * tool only accepts descriptive fields (`title`/`summary`/`startDate`/
- * `endDate`), so it still cannot delete a trip, change its audience
- * (`visibility`), its sharing/privacy switches or any setting.
+ * tool accepts descriptive fields plus the lifecycle/location fields the trip
+ * page itself exposes (`title`/`summary`/`status`/`startDate`/`endDate`/
+ * `favorite`/`origin`/`originLat`/`originLng`/`timeZone`). It still cannot
+ * delete a trip, change its audience (`visibility`), its sharing/privacy
+ * switches or any setting.
+ *
+ * The edit tools (`stops.update`, `itinerary.update`, `packing.update`,
+ * `expenses.update`, `entries.update`) and the destructive tools
+ * (`*.delete`) exist because the product UI already supports those actions.
+ * Each one delegates to the owning Nest service, so Workspace role checks,
+ * trip visibility and optimistic versions are the same rules the HTTP routes
+ * enforce.
  */
 export const AI_TOOL_NAMES = [
   "places.search",
@@ -44,9 +53,25 @@ export const AI_TOOL_NAMES = [
   "trips.update",
   "stops.add",
   "stops.list",
+  "stops.update",
+  "stops.delete",
+  "stops.reorder",
   "itinerary.addDay",
+  "itinerary.update",
+  "itinerary.delete",
   "packing.add",
+  "packing.update",
+  "packing.delete",
+  "packing.reorder",
   "budget.setSummary",
+  "expenses.add",
+  "expenses.update",
+  "expenses.delete",
+  "entries.create",
+  "entries.update",
+  "participants.add",
+  "participants.remove",
+  "participants.role",
 ] as const;
 export const AiToolNameSchema = z.enum(AI_TOOL_NAMES);
 export type AiToolName = z.infer<typeof AiToolNameSchema>;

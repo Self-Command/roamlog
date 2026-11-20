@@ -57,10 +57,15 @@ describe("AI planner golden prompts (offline)", () => {
     }
   });
 
-  it("keeps tool schemas free of coordinates, timezone and public visibility grants", () => {
+  it("keeps tool schemas free of model-authored coordinates, timezone and public grants", () => {
     for (const tool of AI_TOOL_SPECS) {
       const properties = JSON.stringify(tool.parameters);
-      expect(properties).not.toMatch(/"(lat|lng|timeZone)"/u);
+      // `trips.update` is the one deliberate exception: the product requirement
+      // lets the model edit the trip origin/time zone, but no other tool may
+      // invent coordinates or a timezone for a place or stop.
+      if (tool.name !== "trips.update") {
+        expect(properties).not.toMatch(/"(lat|lng|timeZone)"/u);
+      }
       // The only visibility a model may request is a non-public one.
       expect(properties).not.toContain("public_link");
       expect(tool.description).toMatch(/Read-only, no side effects|WRITES DATA/u);

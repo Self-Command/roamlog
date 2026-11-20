@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import {
   CreateItineraryItemRequestSchema,
   CreatePackingItemRequestSchema,
@@ -14,6 +14,8 @@ import { z } from "zod";
 
 import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
+import { EntriesService } from "../entries/entries.service.js";
+import { ExpensesService } from "../expenses/expenses.service.js";
 import { ItineraryService } from "../itinerary/itinerary.service.js";
 import { PackingService } from "../packing/packing.service.js";
 import { PlacesService } from "../places/places.service.js";
@@ -79,9 +81,40 @@ const nonEmpty = (max: number) => z.string().trim().min(1).max(max);
 const tripRef = z.string().trim().max(200).optional();
 
 /**
- * Argument whitelists. Deliberately **not** `.strict()`: unknown keys (including
- * an attempted `workspaceId`/`userId`) are stripped, never treated as input.
+ * Argument whitelists.
+ *
+ * The additive tools keep their historical "strip unknown keys" mode so a model
+ * can never smuggle extra fields into a service. Every tool added by
+ * AI_TOOL_SURFACE_EXPAND_2 is `.strict()`: an attempted `workspaceId`, caller
+ * `userId`, `createdById` or `version` is rejected as INVALID_ARGUMENTS instead
+ * of being silently dropped. `trips.update` stays in the historical mode for
+ * compatibility, but its whitelist remains explicit.
  */
+const packingCategory = z.enum(["documents", "clothing", "gear", "health", "other"]);
+const itineraryType = z.enum(["transit", "food", "activity", "stay", "note"]);
+const tripStatus = z.enum(["wishlist", "planning", "upcoming", "active", "completed"]);
+const mood = z.enum(["calm", "happy", "awe", "tired", "reflective", "excited"]);
+const weather = z.enum(["sunny", "cloudy", "rain", "snow", "wind", "fog"]);
+const expenseCategory = z.enum(["transport", "stay", "food", "activity", "shopping", "other"]);
+const splitMode = z.enum(["equal", "custom"]);
+const countryCode = z.string().regex(/^[A-Z]{2}$/u);
+const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u);
+const ianaTimeZone = z
+  .string()
+  .trim()
+  .max(64)
+  .regex(/^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/u);
+const reorderItems = z
+  .array(z.object({ id: uuid, order: z.number().int().nonnegative() }).strict())
+  .min(1)
+  .max(500);
+const expenseParticipant = z
+  .object({
+    memberId: uuid,
+    shareAmountMinor: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
 const ArgsSchemas: Record<AiToolName, z.ZodType> = {
   "places.search": z.object({
     q: nonEmpty(200),
@@ -114,12 +147,13 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
     limit: z.number().int().min(1).max(20).optional(),
   }),
   /**
-   * Descriptive fields only. `visibility`, `showExactPhotoLocation`, `status`,
-   * `favorite`, covers, grants and settings are absent on purpose: the model may
-   * fix a mistyped title or extend a trip's dates, never change who can read it
-   * or switch off a privacy control. `version` is also absent — the tool reads
-   * the current row through the visibility-checked path and passes its version
-   * as the optimistic-lock token.
+   * Descriptive and lifecycle fields only. `visibility`, `showExactPhotoLocation`,
+   * covers, grants and settings are absent on purpose: the model may fix a
+   * mistyped title, extend a trip's dates, change its own lifecycle status,
+   * favourite it, or set the trip origin — never change who can read it or
+   * switch off a privacy control. `version` is also absent — the tool reads the
+   * current row through the visibility-checked path and passes its version as
+   * the optimistic-lock token.
    */
   "trips.update": z
     .object({
@@ -128,13 +162,32 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
       summary: z.string().max(1000).optional(),
       startDate: dateOnly.optional(),
       endDate: dateOnly.optional(),
+      status: tripStatus.optional(),
+      favorite: z.boolean().optional(),
+      origin: nonEmpty(120).optional(),
+      originLat: z.number().min(-90).max(90).nullable().optional(),
+      originLng: z.number().min(-180).max(180).nullable().optional(),
+      timeZone: ianaTimeZone.nullable().optional(),
     })
     .refine(
       (value) =>
-        [value.title, value.summary, value.startDate, value.endDate].some(
-          (field) => field !== undefined,
-        ),
-      { message: "at least one of title/summary/startDate/endDate must change", path: ["title"] },
+        [
+          value.title,
+          value.summary,
+          value.startDate,
+          value.endDate,
+          value.status,
+          value.favorite,
+          value.origin,
+          value.originLat,
+          value.originLng,
+          value.timeZone,
+        ].some((field) => field !== undefined),
+      { message: "at least one trip field must change", path: ["title"] },
+    )
+    .refine(
+      (value) => (value.originLat === undefined) === (value.originLng === undefined),
+      { message: "originLat and originLng must be provided together", path: ["originLng"] },
     ),
   "stops.add": z.object({
     tripId: tripRef,
@@ -144,6 +197,34 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
     notes: z.string().max(4000).optional(),
   }),
   "stops.list": z.object({ tripId: uuid }),
+  "stops.update": z
+    .object({
+      tripId: uuid,
+      stopId: uuid,
+      city: nonEmpty(120).optional(),
+      country: nonEmpty(120).optional(),
+      countryCode: countryCode.optional(),
+      startDate: dateOnly.optional(),
+      endDate: dateOnly.optional(),
+      notes: z.string().max(4000).optional(),
+      address: z.string().max(400).nullable().optional(),
+    })
+    .strict()
+    .refine(
+      (value) =>
+        [
+          value.city,
+          value.country,
+          value.countryCode,
+          value.startDate,
+          value.endDate,
+          value.notes,
+          value.address,
+        ].some((field) => field !== undefined),
+      { message: "at least one stop field must change", path: ["city"] },
+    ),
+  "stops.delete": z.object({ stopId: uuid }).strict(),
+  "stops.reorder": z.object({ tripId: uuid, items: reorderItems }).strict(),
   "itinerary.addDay": z.object({
     tripId: tripRef,
     date: dateOnly,
@@ -164,17 +245,205 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
       .min(1)
       .max(8),
   }),
+  "itinerary.update": z
+    .object({
+      tripId: uuid,
+      itemId: uuid,
+      date: dateOnly.optional(),
+      startTime: timeOfDay.nullable().optional(),
+      endTime: timeOfDay.nullable().optional(),
+      title: nonEmpty(180).optional(),
+      type: itineraryType.optional(),
+      location: nonEmpty(200).optional(),
+      notes: z.string().max(4000).optional(),
+      done: z.boolean().optional(),
+    })
+    .strict()
+    .refine(
+      (value) =>
+        [
+          value.date,
+          value.startTime,
+          value.endTime,
+          value.title,
+          value.type,
+          value.location,
+          value.notes,
+          value.done,
+        ].some((field) => field !== undefined),
+      { message: "at least one itinerary field must change", path: ["title"] },
+    ),
+  "itinerary.delete": z.object({ itemId: uuid }).strict(),
   "packing.add": z.object({
     tripId: tripRef,
     name: nonEmpty(160),
-    category: z.enum(["documents", "clothing", "gear", "health", "other"]).optional(),
+    category: packingCategory.optional(),
     quantity: z.number().int().min(1).max(999).optional(),
   }),
+  "packing.update": z
+    .object({
+      tripId: uuid,
+      itemId: uuid,
+      name: nonEmpty(160).optional(),
+      category: packingCategory.optional(),
+      quantity: z.number().int().min(1).max(999).optional(),
+      packed: z.boolean().optional(),
+    })
+    .strict()
+    .refine(
+      (value) =>
+        [value.name, value.category, value.quantity, value.packed].some(
+          (field) => field !== undefined,
+        ),
+      { message: "at least one packing field must change", path: ["name"] },
+    ),
+  "packing.delete": z.object({ itemId: uuid }).strict(),
+  "packing.reorder": z.object({ tripId: uuid, items: reorderItems }).strict(),
   "budget.setSummary": z.object({
     tripId: tripRef,
     amountMinor: z.number().int().nonnegative(),
     currency: z.string().regex(/^[A-Z]{3}$/u),
   }),
+  "expenses.add": z
+    .object({
+      tripId: tripRef,
+      date: dateOnly,
+      category: expenseCategory,
+      note: z.string().max(1000).optional(),
+      amountMinor: z.number().int().nonnegative(),
+      currency: z.string().regex(/^[A-Z]{3}$/u),
+      paidByMemberId: uuid,
+      splitMode,
+      receiptMediaId: uuid.nullable().optional(),
+      participants: z.array(expenseParticipant).min(1).max(50),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+      const ids = value.participants.map((participant) => participant.memberId);
+      if (!ids.includes(value.paidByMemberId)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "paidByMemberId must appear in participants.",
+          path: ["paidByMemberId"],
+        });
+      }
+      if (new Set(ids).size !== ids.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: "participants cannot contain the same member twice.",
+          path: ["participants"],
+        });
+      }
+    }),
+  "expenses.update": z
+    .object({
+      tripId: uuid,
+      expenseId: uuid,
+      date: dateOnly.optional(),
+      category: expenseCategory.optional(),
+      note: z.string().max(1000).optional(),
+      amountMinor: z.number().int().nonnegative().optional(),
+      currency: z.string().regex(/^[A-Z]{3}$/u).optional(),
+      paidByMemberId: uuid.optional(),
+      splitMode: splitMode.optional(),
+      receiptMediaId: uuid.nullable().optional(),
+      participants: z.array(expenseParticipant).min(1).max(50).optional(),
+    })
+    .strict()
+    .refine(
+      (value) =>
+        [
+          value.date,
+          value.category,
+          value.note,
+          value.amountMinor,
+          value.currency,
+          value.paidByMemberId,
+          value.splitMode,
+          value.receiptMediaId,
+          value.participants,
+        ].some((field) => field !== undefined),
+      { message: "at least one expense field must change", path: ["note"] },
+    )
+    .superRefine((value, ctx) => {
+      if (value.participants === undefined) {
+        return;
+      }
+      if (
+        value.amountMinor === undefined ||
+        value.paidByMemberId === undefined ||
+        value.splitMode === undefined
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "Changing participants requires amountMinor, paidByMemberId and splitMode together.",
+          path: ["participants"],
+        });
+        return;
+      }
+      const ids = value.participants.map((participant) => participant.memberId);
+      if (!ids.includes(value.paidByMemberId)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "paidByMemberId must appear in participants.",
+          path: ["paidByMemberId"],
+        });
+      }
+      if (new Set(ids).size !== ids.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: "participants cannot contain the same member twice.",
+          path: ["participants"],
+        });
+      }
+    }),
+  "expenses.delete": z.object({ expenseId: uuid }).strict(),
+  "entries.create": z
+    .object({
+      tripId: tripRef,
+      title: nonEmpty(180),
+      date: dateOnly.optional(),
+      location: nonEmpty(160).optional(),
+      content: nonEmpty(20_000),
+      mood: mood.nullable().optional(),
+      weather: weather.nullable().optional(),
+      tags: z.array(nonEmpty(40)).max(20).optional(),
+      favorite: z.boolean().optional(),
+    })
+    .strict(),
+  "entries.update": z
+    .object({
+      entryId: uuid,
+      title: nonEmpty(180).optional(),
+      date: dateOnly.optional(),
+      location: nonEmpty(160).optional(),
+      content: nonEmpty(20_000).optional(),
+      mood: mood.nullable().optional(),
+      weather: weather.nullable().optional(),
+      tags: z.array(nonEmpty(40)).max(20).optional(),
+      favorite: z.boolean().optional(),
+    })
+    .strict()
+    .refine(
+      (value) =>
+        [
+          value.title,
+          value.date,
+          value.location,
+          value.content,
+          value.mood,
+          value.weather,
+          value.tags,
+          value.favorite,
+        ].some((field) => field !== undefined),
+      { message: "at least one entry field must change", path: ["title"] },
+    ),
+  "participants.add": z.object({ tripId: tripRef, memberId: uuid }).strict(),
+  "participants.remove": z.object({ tripId: uuid, memberId: uuid }).strict(),
+  "participants.role": z
+    .object({ tripId: uuid, memberId: uuid, role: z.enum(["viewer", "editor"]) })
+    .strict(),
 };
 
 export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
@@ -252,7 +521,7 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
   {
     name: "trips.update",
     description:
-      "Change an EXISTING trip's title, summary, startDate or endDate (for example \"make it 6 days\" means a new endDate). WRITES DATA. Use this instead of creating a new trip when the user wants to extend, shorten, rename or re-summarise a trip. When the user names the trip instead of giving a tripId, call trips.list first to resolve its id. It cannot delete a trip, change who can see it, or touch settings.",
+      "Change an EXISTING trip's title, summary, startDate, endDate, status, favorite, origin or timeZone (for example \"make it 6 days\" means a new endDate; \"mark it completed\" means status=completed). WRITES DATA. Use this instead of creating a new trip when the user wants to extend, shorten, rename, re-summarise, favourite or change the lifecycle of a trip. When the user names the trip instead of giving a tripId, call trips.list first to resolve its id. It cannot delete a trip, change who can see it (visibility), change the exact-photo-location privacy switch, or touch settings.",
     parameters: {
       type: "object",
       properties: {
@@ -265,6 +534,15 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
         summary: { type: "string", maxLength: 1000 },
         startDate: { type: "string", description: "YYYY-MM-DD" },
         endDate: { type: "string", description: "YYYY-MM-DD" },
+        status: {
+          type: "string",
+          enum: ["wishlist", "planning", "upcoming", "active", "completed"],
+        },
+        favorite: { type: "boolean" },
+        origin: { type: "string", maxLength: 120 },
+        originLat: { type: "number", minimum: -90, maximum: 90 },
+        originLng: { type: "number", minimum: -180, maximum: 180 },
+        timeZone: { type: "string", description: "IANA time zone, for example Asia/Tokyo" },
       },
       additionalProperties: false,
     },
@@ -297,6 +575,65 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
       type: "object",
       properties: { tripId: { type: "string" } },
       required: ["tripId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "stops.update",
+    description:
+      "Edit an existing city stop's city, country, dates, notes or address. WRITES DATA. Use this when the user wants to correct or extend a stop instead of deleting and re-adding it. Call stops.list first to get the stopId and its tripId. It cannot change the trip itself or provider metadata.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID that owns the stop." },
+        stopId: { type: "string", description: "Stop UUID from stops.list." },
+        city: { type: "string", maxLength: 120 },
+        country: { type: "string", maxLength: 120 },
+        countryCode: { type: "string", description: "ISO 3166-1 alpha-2, for example JP" },
+        startDate: { type: "string", description: "YYYY-MM-DD" },
+        endDate: { type: "string", description: "YYYY-MM-DD" },
+        notes: { type: "string", maxLength: 4000 },
+        address: { type: "string", maxLength: 400 },
+      },
+      required: ["tripId", "stopId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "stops.delete",
+    description:
+      "Delete one city stop from a trip. WRITES DATA. Destructive: call only when the user explicitly asks to remove that stop. Call stops.list first to resolve the stopId; deletion cannot be undone.",
+    parameters: {
+      type: "object",
+      properties: { stopId: { type: "string", description: "Stop UUID from stops.list." } },
+      required: ["stopId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "stops.reorder",
+    description:
+      "Reorder the city stops of a trip. WRITES DATA. Send every stop from stops.list in the desired order, each with its zero-based order value. Use this when the user says the stops are in the wrong order.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID." },
+        items: {
+          type: "array",
+          minItems: 1,
+          maxItems: 500,
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string", description: "Stop UUID" },
+              order: { type: "integer", minimum: 0 },
+            },
+            required: ["id", "order"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["tripId", "items"],
       additionalProperties: false,
     },
   },
@@ -340,6 +677,42 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
     },
   },
   {
+    name: "itinerary.update",
+    description:
+      "Edit one existing itinerary item's date, times, title, type, location, notes or done state. WRITES DATA. Use this to move an activity, fix its time or mark it done. The itemId and tripId must come from an earlier tool result or from the user; never invent them.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID that owns the item." },
+        itemId: { type: "string", description: "Itinerary item UUID." },
+        date: { type: "string", description: "YYYY-MM-DD, within the trip dates" },
+        startTime: { type: "string", description: "HH:MM 24h, or null to clear" },
+        endTime: { type: "string", description: "HH:MM 24h, or null to clear" },
+        title: { type: "string", maxLength: 180 },
+        type: {
+          type: "string",
+          enum: ["transit", "food", "activity", "stay", "note"],
+        },
+        location: { type: "string", maxLength: 200 },
+        notes: { type: "string", maxLength: 4000 },
+        done: { type: "boolean" },
+      },
+      required: ["tripId", "itemId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "itinerary.delete",
+    description:
+      "Delete one itinerary item. WRITES DATA. Destructive: call only when the user explicitly asks to remove that item. The itemId must come from an earlier tool result or from the user.",
+    parameters: {
+      type: "object",
+      properties: { itemId: { type: "string", description: "Itinerary item UUID." } },
+      required: ["itemId"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "packing.add",
     description:
       "Add one packing item to a trip. WRITES DATA. Use the existing categories; do not invent new ones. Omit tripId when this same plan creates the trip.",
@@ -363,6 +736,65 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
     },
   },
   {
+    name: "packing.update",
+    description:
+      "Edit one packing item's name, category, quantity or packed state. WRITES DATA. Use this to correct an item or tick it off; use packing.reorder to change its position. The itemId and tripId must come from an earlier tool result or from the user.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID that owns the item." },
+        itemId: { type: "string", description: "Packing item UUID." },
+        name: { type: "string", maxLength: 160 },
+        category: {
+          type: "string",
+          enum: ["documents", "clothing", "gear", "health", "other"],
+        },
+        quantity: { type: "integer", minimum: 1, maximum: 999 },
+        packed: { type: "boolean" },
+      },
+      required: ["tripId", "itemId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "packing.delete",
+    description:
+      "Delete one packing item. WRITES DATA. Destructive: call only when the user explicitly asks to remove that item. The itemId must come from an earlier tool result or from the user.",
+    parameters: {
+      type: "object",
+      properties: { itemId: { type: "string", description: "Packing item UUID." } },
+      required: ["itemId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "packing.reorder",
+    description:
+      "Reorder the packing list of a trip. WRITES DATA. Send every packing item you were given in the desired order, each with its zero-based order value.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID." },
+        items: {
+          type: "array",
+          minItems: 1,
+          maxItems: 500,
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string", description: "Packing item UUID" },
+              order: { type: "integer", minimum: 0 },
+            },
+            required: ["id", "order"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["tripId", "items"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "budget.setSummary",
     description:
       "Set the trip budget total. WRITES DATA. Amounts are integer minor units of the currency. Omit tripId when this same plan creates the trip.",
@@ -378,6 +810,193 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
         currency: { type: "string", description: "ISO 4217 uppercase" },
       },
       required: ["amountMinor", "currency"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "expenses.add",
+    description:
+      "Record an expense on a trip and split it among workspace members. WRITES DATA. Amounts are integer minor units. paidByMemberId and every participant memberId must be active Workspace members. Use the same currency the user names; for an equal split send splitMode=equal and only memberId values. Omit tripId when this same plan creates the trip.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID, or omit when trips.create precedes this call." },
+        date: { type: "string", description: "YYYY-MM-DD, within the trip dates" },
+        category: {
+          type: "string",
+          enum: ["transport", "stay", "food", "activity", "shopping", "other"],
+        },
+        note: { type: "string", maxLength: 1000, description: "What the expense was for." },
+        amountMinor: { type: "integer", minimum: 0 },
+        currency: { type: "string", description: "ISO 4217 uppercase, for example CNY" },
+        paidByMemberId: { type: "string", description: "Workspace member id of the payer." },
+        splitMode: { type: "string", enum: ["equal", "custom"] },
+        receiptMediaId: { type: "string", description: "Optional receipt media UUID." },
+        participants: {
+          type: "array",
+          minItems: 1,
+          maxItems: 50,
+          items: {
+            type: "object",
+            properties: {
+              memberId: { type: "string", description: "Workspace member id." },
+              shareAmountMinor: { type: "integer", minimum: 0 },
+            },
+            required: ["memberId"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: [
+        "date",
+        "category",
+        "amountMinor",
+        "currency",
+        "paidByMemberId",
+        "splitMode",
+        "participants",
+      ],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "expenses.update",
+    description:
+      "Edit an existing expense's date, category, note, amount, currency, payer or split. WRITES DATA. When participants change, amountMinor, paidByMemberId and splitMode must also be sent together. The expenseId and tripId must come from an earlier tool result or from the user.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID that owns the expense." },
+        expenseId: { type: "string", description: "Expense UUID." },
+        date: { type: "string", description: "YYYY-MM-DD" },
+        category: {
+          type: "string",
+          enum: ["transport", "stay", "food", "activity", "shopping", "other"],
+        },
+        note: { type: "string", maxLength: 1000 },
+        amountMinor: { type: "integer", minimum: 0 },
+        currency: { type: "string", description: "ISO 4217 uppercase" },
+        paidByMemberId: { type: "string", description: "Workspace member id of the payer." },
+        splitMode: { type: "string", enum: ["equal", "custom"] },
+        receiptMediaId: { type: "string", description: "Optional receipt media UUID, or null" },
+        participants: {
+          type: "array",
+          minItems: 1,
+          maxItems: 50,
+          items: {
+            type: "object",
+            properties: {
+              memberId: { type: "string", description: "Workspace member id." },
+              shareAmountMinor: { type: "integer", minimum: 0 },
+            },
+            required: ["memberId"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["tripId", "expenseId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "expenses.delete",
+    description:
+      "Delete one expense. WRITES DATA. Destructive: call only when the user explicitly asks to remove that expense. The expenseId must come from an earlier tool result or from the user.",
+    parameters: {
+      type: "object",
+      properties: { expenseId: { type: "string", description: "Expense UUID." } },
+      required: ["expenseId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "entries.create",
+    description:
+      "Write a new journal entry on a trip. WRITES DATA. content is plain text; the server converts it to the editor's document format. Use this when the user dictates a memory, daily recap or note to save. Omit tripId when this same plan creates the trip.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID, or omit when trips.create precedes this call." },
+        title: { type: "string", maxLength: 180 },
+        date: { type: "string", description: "YYYY-MM-DD; defaults to today" },
+        location: { type: "string", maxLength: 160, description: "Where the entry happened." },
+        content: { type: "string", maxLength: 20000, description: "Plain-text journal body." },
+        mood: {
+          type: "string",
+          enum: ["calm", "happy", "awe", "tired", "reflective", "excited"],
+        },
+        weather: { type: "string", enum: ["sunny", "cloudy", "rain", "snow", "wind", "fog"] },
+        tags: { type: "array", items: { type: "string" }, maxItems: 20 },
+        favorite: { type: "boolean" },
+      },
+      required: ["title", "content"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "entries.update",
+    description:
+      "Edit an existing journal entry's title, date, location, text, mood, weather, tags or favorite state. WRITES DATA. Use this to fix or extend what the user already wrote. The entryId must come from an earlier entries.create result or from the user.",
+    parameters: {
+      type: "object",
+      properties: {
+        entryId: { type: "string", description: "Journal entry UUID." },
+        title: { type: "string", maxLength: 180 },
+        date: { type: "string", description: "YYYY-MM-DD" },
+        location: { type: "string", maxLength: 160 },
+        content: { type: "string", maxLength: 20000, description: "Replacement plain-text body." },
+        mood: {
+          type: "string",
+          enum: ["calm", "happy", "awe", "tired", "reflective", "excited"],
+        },
+        weather: { type: "string", enum: ["sunny", "cloudy", "rain", "snow", "wind", "fog"] },
+        tags: { type: "array", items: { type: "string" }, maxItems: 20 },
+        favorite: { type: "boolean" },
+      },
+      required: ["entryId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "participants.add",
+    description:
+      "Add an existing Workspace member to a trip as a participant. WRITES DATA. memberId is the Workspace member's user id. Only the trip creator or a Workspace owner/admin may do this. Omit tripId when this same plan creates the trip.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID, or omit when trips.create precedes this call." },
+        memberId: { type: "string", description: "Workspace member user id to add." },
+      },
+      required: ["memberId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "participants.remove",
+    description:
+      "Remove a participant from a trip. WRITES DATA. Destructive: call only when the user explicitly asks to remove that person. memberId is the participant's user id; the trip owner may not remove themselves through this tool.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID." },
+        memberId: { type: "string", description: "Participant user id to remove." },
+      },
+      required: ["tripId", "memberId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "participants.role",
+    description:
+      "Change a trip participant's role between viewer and editor. WRITES DATA. Only the trip creator or a Workspace owner/admin may do this. Use participants.add first if the person is not yet a participant.",
+    parameters: {
+      type: "object",
+      properties: {
+        tripId: { type: "string", description: "Trip UUID." },
+        memberId: { type: "string", description: "Participant user id." },
+        role: { type: "string", enum: ["viewer", "editor"] },
+      },
+      required: ["tripId", "memberId", "role"],
       additionalProperties: false,
     },
   },
@@ -400,6 +1019,9 @@ const TRIP_SCOPED_WRITE_TOOLS: ReadonlySet<AiToolName> = new Set<AiToolName>([
   "itinerary.addDay",
   "packing.add",
   "budget.setSummary",
+  "expenses.add",
+  "entries.create",
+  "participants.add",
 ]);
 
 /**
@@ -481,6 +1103,10 @@ export class AiToolbox {
     @Inject(StopsService) private readonly stops: StopsService,
     @Inject(ItineraryService) private readonly itinerary: ItineraryService,
     @Inject(PackingService) private readonly packing: PackingService,
+    // Optional so the existing hand-built specs keep compiling. `AiModule`
+    // imports both modules in production, so DI always supplies them there.
+    @Optional() @Inject(ExpensesService) private readonly expenses?: ExpensesService,
+    @Optional() @Inject(EntriesService) private readonly entries?: EntriesService,
   ) {}
 
   definitions(): AiToolSpec[] {
@@ -559,12 +1185,44 @@ export class AiToolbox {
         return this.updateTrip(parsed.data as Record<string, unknown>, context);
       case "stops.add":
         return this.addStop(parsed.data as Record<string, unknown>, context);
+      case "stops.update":
+        return this.updateStop(parsed.data as Record<string, unknown>, context);
+      case "stops.delete":
+        return this.deleteStop((parsed.data as { stopId: string }).stopId, context);
+      case "stops.reorder":
+        return this.reorderStops(parsed.data as Record<string, unknown>, context);
       case "itinerary.addDay":
         return this.addDay(parsed.data as Record<string, unknown>, context);
+      case "itinerary.update":
+        return this.updateItinerary(parsed.data as Record<string, unknown>, context);
+      case "itinerary.delete":
+        return this.deleteItinerary((parsed.data as { itemId: string }).itemId, context);
       case "packing.add":
         return this.addPacking(parsed.data as Record<string, unknown>, context);
+      case "packing.update":
+        return this.updatePacking(parsed.data as Record<string, unknown>, context);
+      case "packing.delete":
+        return this.deletePacking((parsed.data as { itemId: string }).itemId, context);
+      case "packing.reorder":
+        return this.reorderPacking(parsed.data as Record<string, unknown>, context);
       case "budget.setSummary":
         return this.setBudget(parsed.data as Record<string, unknown>, context);
+      case "expenses.add":
+        return this.addExpense(parsed.data as Record<string, unknown>, context);
+      case "expenses.update":
+        return this.updateExpense(parsed.data as Record<string, unknown>, context);
+      case "expenses.delete":
+        return this.deleteExpense((parsed.data as { expenseId: string }).expenseId, context);
+      case "entries.create":
+        return this.createEntry(parsed.data as Record<string, unknown>, context);
+      case "entries.update":
+        return this.updateEntry(parsed.data as Record<string, unknown>, context);
+      case "participants.add":
+        return this.addParticipant(parsed.data as Record<string, unknown>, context);
+      case "participants.remove":
+        return this.removeParticipant(parsed.data as Record<string, unknown>, context);
+      case "participants.role":
+        return this.updateParticipantRole(parsed.data as Record<string, unknown>, context);
     }
   }
 
@@ -706,9 +1364,9 @@ export class AiToolbox {
   /**
    * Edits an existing trip through the product's own update path.
    *
-   * Only the four descriptive fields survive the whitelist; `version` is read
-   * here (never authored by the model) so `TripsService.update` still performs
-   * its optimistic-lock check, its `trip:update` role check and its
+   * Only the whitelisted descriptive/lifecycle fields survive; `version` is
+   * read here (never authored by the model) so `TripsService.update` still
+   * performs its optimistic-lock check, its `trip:update` role check and its
    * visibility check. A refusal therefore comes back as the same error code the
    * HTTP route returns, not as a 500.
    */
@@ -724,6 +1382,12 @@ export class AiToolbox {
       ...(args.summary === undefined ? {} : { summary: args.summary }),
       ...(args.startDate === undefined ? {} : { startDate: args.startDate }),
       ...(args.endDate === undefined ? {} : { endDate: args.endDate }),
+      ...(args.status === undefined ? {} : { status: args.status }),
+      ...(args.favorite === undefined ? {} : { favorite: args.favorite }),
+      ...(args.origin === undefined ? {} : { origin: args.origin }),
+      ...(args.originLat === undefined ? {} : { originLat: args.originLat }),
+      ...(args.originLng === undefined ? {} : { originLng: args.originLng }),
+      ...(args.timeZone === undefined ? {} : { timeZone: args.timeZone }),
     };
     const trip = await this.trips.update(context.actor, context.membership, tripId, patch);
     return {
@@ -790,6 +1454,72 @@ export class AiToolbox {
     };
   }
 
+  /**
+   * Edits a stop through `StopsService.update`. The model never sends a version:
+   * the current row is read through `stops.list` (the same visibility-checked
+   * read the UI uses) and its version becomes the optimistic-lock token.
+   */
+  private async updateStop(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const stopId = args.stopId as string;
+    const stops = await this.stops.list(context.actor, context.membership, tripId);
+    const current = stops.find((stop) => stop.id === stopId);
+    if (!current) {
+      return tripTargetError(
+        "STOP_NOT_FOUND",
+        "The requested stop was not found in that trip.",
+      );
+    }
+    const patch = {
+      version: current.version,
+      ...(args.city === undefined ? {} : { city: args.city }),
+      ...(args.country === undefined ? {} : { country: args.country }),
+      ...(args.countryCode === undefined ? {} : { countryCode: args.countryCode }),
+      ...(args.startDate === undefined ? {} : { startDate: args.startDate }),
+      ...(args.endDate === undefined ? {} : { endDate: args.endDate }),
+      ...(args.notes === undefined ? {} : { notes: args.notes }),
+      ...(args.address === undefined ? {} : { address: args.address }),
+    };
+    const stop = await this.stops.update(context.actor, context.membership, stopId, patch);
+    return {
+      ok: true,
+      entityId: stop.id,
+      payload: {
+        stopId: stop.id,
+        city: stop.city,
+        country: stop.country,
+        startDate: stop.startDate,
+        endDate: stop.endDate,
+        version: stop.version,
+      },
+    };
+  }
+
+  private async deleteStop(stopId: string, context: AiToolContext): Promise<AiToolOutcome> {
+    const result = await this.stops.remove(context.actor, context.membership, stopId);
+    return { ok: true, entityId: stopId, payload: { stopId, message: result.message } };
+  }
+
+  private async reorderStops(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const stops = await this.stops.reorder(context.actor, context.membership, tripId, {
+      items: args.items,
+    });
+    return {
+      ok: true,
+      payload: {
+        reorderedCount: stops.length,
+        stops: stops.map((stop) => ({ stopId: stop.id, order: stop.order })),
+      },
+    };
+  }
+
   private async addDay(
     args: Record<string, unknown>,
     context: AiToolContext,
@@ -827,6 +1557,50 @@ export class AiToolbox {
     };
   }
 
+  private async updateItinerary(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const itemId = args.itemId as string;
+    const items = await this.itinerary.list(context.actor, context.membership, tripId);
+    const current = items.find((item) => item.id === itemId);
+    if (!current) {
+      return tripTargetError(
+        "ITINERARY_ITEM_NOT_FOUND",
+        "The requested itinerary item was not found in that trip.",
+      );
+    }
+    const patch = {
+      version: current.version,
+      ...(args.date === undefined ? {} : { date: args.date }),
+      ...(args.startTime === undefined ? {} : { startTime: args.startTime }),
+      ...(args.endTime === undefined ? {} : { endTime: args.endTime }),
+      ...(args.title === undefined ? {} : { title: args.title }),
+      ...(args.type === undefined ? {} : { type: args.type }),
+      ...(args.location === undefined ? {} : { location: args.location }),
+      ...(args.notes === undefined ? {} : { notes: args.notes }),
+      ...(args.done === undefined ? {} : { done: args.done }),
+    };
+    const item = await this.itinerary.update(context.actor, context.membership, itemId, patch);
+    return {
+      ok: true,
+      entityId: item.id,
+      payload: {
+        itemId: item.id,
+        date: item.date,
+        title: item.title,
+        done: item.done,
+        version: item.version,
+      },
+    };
+  }
+
+  private async deleteItinerary(itemId: string, context: AiToolContext): Promise<AiToolOutcome> {
+    const result = await this.itinerary.remove(context.actor, context.membership, itemId);
+    return { ok: true, entityId: itemId, payload: { itemId, message: result.message } };
+  }
+
   private async addPacking(
     args: Record<string, unknown>,
     context: AiToolContext,
@@ -849,6 +1623,70 @@ export class AiToolbox {
     return { ok: true, entityId: item.id, payload: { packingItemId: item.id, name: item.name } };
   }
 
+  private async updatePacking(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const itemId = args.itemId as string;
+    const current = await findPageItem(
+      (cursor) =>
+        this.packing.list(context.actor, context.membership, tripId, {
+          limit: 100,
+          sort: "order:asc",
+          ...(cursor === undefined ? {} : { cursor }),
+        }),
+      itemId,
+    );
+    if (!current) {
+      return tripTargetError(
+        "PACKING_ITEM_NOT_FOUND",
+        "The requested packing item was not found in that trip.",
+      );
+    }
+    const patch = {
+      version: current.version,
+      ...(args.name === undefined ? {} : { name: args.name }),
+      ...(args.category === undefined ? {} : { category: args.category }),
+      ...(args.quantity === undefined ? {} : { quantity: args.quantity }),
+      ...(args.packed === undefined ? {} : { packed: args.packed }),
+    };
+    const item = await this.packing.update(context.actor, context.membership, itemId, patch);
+    return {
+      ok: true,
+      entityId: item.id,
+      payload: {
+        packingItemId: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        packed: item.packed,
+        version: item.version,
+      },
+    };
+  }
+
+  private async deletePacking(itemId: string, context: AiToolContext): Promise<AiToolOutcome> {
+    const result = await this.packing.remove(context.actor, context.membership, itemId);
+    return { ok: true, entityId: itemId, payload: { packingItemId: itemId, message: result.message } };
+  }
+
+  private async reorderPacking(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const items = await this.packing.reorder(context.actor, context.membership, tripId, {
+      items: args.items,
+    });
+    return {
+      ok: true,
+      payload: {
+        reorderedCount: items.length,
+        items: items.map((item) => ({ packingItemId: item.id, order: item.order })),
+      },
+    };
+  }
+
   private async setBudget(
     args: Record<string, unknown>,
     context: AiToolContext,
@@ -867,6 +1705,269 @@ export class AiToolbox {
         tripId: trip.id,
         budgetAmountMinor: trip.budgetAmountMinor,
         budgetCurrency: trip.budgetCurrency,
+      },
+    };
+  }
+
+  private requireExpenses(): ExpensesService {
+    if (!this.expenses) {
+      throw new Error("ExpensesService is not configured on the AI toolbox.");
+    }
+    return this.expenses;
+  }
+
+  private requireEntries(): EntriesService {
+    if (!this.entries) {
+      throw new Error("EntriesService is not configured on the AI toolbox.");
+    }
+    return this.entries;
+  }
+
+  private async addExpense(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const participants = (
+      args.participants as Array<{ memberId: string; shareAmountMinor?: number }>
+    ).map((participant) => ({
+      userId: participant.memberId,
+      ...(participant.shareAmountMinor === undefined
+        ? {}
+        : { shareAmountMinor: participant.shareAmountMinor }),
+    }));
+    const request = {
+      date: args.date,
+      category: args.category,
+      note: (args.note as string | undefined) ?? "",
+      amountMinor: args.amountMinor,
+      currency: args.currency,
+      paidById: args.paidByMemberId,
+      splitMode: args.splitMode,
+      participants,
+      ...(args.receiptMediaId === undefined ? {} : { receiptMediaId: args.receiptMediaId }),
+    };
+    const expense = await this.requireExpenses().create(
+      context.actor,
+      context.membership,
+      args.tripId as string,
+      request,
+    );
+    return {
+      ok: true,
+      entityId: expense.id,
+      payload: {
+        expenseId: expense.id,
+        amountMinor: expense.amountMinor,
+        currency: expense.currency,
+        splitMode: expense.splitMode,
+      },
+    };
+  }
+
+  private async updateExpense(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const tripId = args.tripId as string;
+    const expenseId = args.expenseId as string;
+    const current = await findPageItem(
+      (cursor) =>
+        this.requireExpenses().list(context.actor, context.membership, tripId, {
+          limit: 100,
+          sort: "date:desc",
+          ...(cursor === undefined ? {} : { cursor }),
+        }),
+      expenseId,
+    );
+    if (!current) {
+      return tripTargetError(
+        "EXPENSE_NOT_FOUND",
+        "The requested expense was not found in that trip.",
+      );
+    }
+    const patch = {
+      version: current.version,
+      ...(args.date === undefined ? {} : { date: args.date }),
+      ...(args.category === undefined ? {} : { category: args.category }),
+      ...(args.note === undefined ? {} : { note: args.note }),
+      ...(args.amountMinor === undefined ? {} : { amountMinor: args.amountMinor }),
+      ...(args.currency === undefined ? {} : { currency: args.currency }),
+      ...(args.paidByMemberId === undefined ? {} : { paidById: args.paidByMemberId }),
+      ...(args.splitMode === undefined ? {} : { splitMode: args.splitMode }),
+      ...(args.receiptMediaId === undefined ? {} : { receiptMediaId: args.receiptMediaId }),
+      ...(args.participants === undefined
+        ? {}
+        : {
+            participants: (
+              args.participants as Array<{ memberId: string; shareAmountMinor?: number }>
+            ).map((participant) => ({
+              userId: participant.memberId,
+              ...(participant.shareAmountMinor === undefined
+                ? {}
+                : { shareAmountMinor: participant.shareAmountMinor }),
+            })),
+          }),
+    };
+    const expense = await this.requireExpenses().update(
+      context.actor,
+      context.membership,
+      expenseId,
+      patch,
+    );
+    return {
+      ok: true,
+      entityId: expense.id,
+      payload: {
+        expenseId: expense.id,
+        amountMinor: expense.amountMinor,
+        currency: expense.currency,
+        version: expense.version,
+      },
+    };
+  }
+
+  private async deleteExpense(
+    expenseId: string,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const result = await this.requireExpenses().remove(
+      context.actor,
+      context.membership,
+      expenseId,
+    );
+    return { ok: true, entityId: expenseId, payload: { expenseId, message: result.message } };
+  }
+
+  private async createEntry(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const date = (args.date as string | undefined) ?? context.today ??
+      new Date().toISOString().slice(0, 10);
+    const document = entryDocument(args.content as string);
+    const request = {
+      title: args.title,
+      date,
+      location: (args.location as string | undefined) ?? "未填写",
+      contentJson: document.contentJson,
+      contentHtml: document.contentHtml,
+      ...(args.mood === undefined ? {} : { mood: args.mood }),
+      ...(args.weather === undefined ? {} : { weather: args.weather }),
+      ...(args.tags === undefined ? {} : { tags: args.tags }),
+      ...(args.favorite === undefined ? {} : { favorite: args.favorite }),
+    };
+    const entry = await this.requireEntries().create(
+      context.actor,
+      context.membership,
+      args.tripId as string,
+      request,
+    );
+    return {
+      ok: true,
+      entityId: entry.id,
+      payload: { entryId: entry.id, title: entry.title, date: entry.date },
+    };
+  }
+
+  private async updateEntry(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const entryId = args.entryId as string;
+    const current = await this.requireEntries().get(
+      context.actor,
+      context.membership,
+      entryId,
+    );
+    const document =
+      args.content === undefined ? undefined : entryDocument(args.content as string);
+    const patch = {
+      version: current.version,
+      ...(args.title === undefined ? {} : { title: args.title }),
+      ...(args.date === undefined ? {} : { date: args.date }),
+      ...(args.location === undefined ? {} : { location: args.location }),
+      ...(args.mood === undefined ? {} : { mood: args.mood }),
+      ...(args.weather === undefined ? {} : { weather: args.weather }),
+      ...(args.tags === undefined ? {} : { tags: args.tags }),
+      ...(args.favorite === undefined ? {} : { favorite: args.favorite }),
+      ...(document === undefined
+        ? {}
+        : {
+            contentJson: document.contentJson,
+            contentHtml: document.contentHtml,
+            excerpt: entryExcerpt(args.content as string),
+          }),
+    };
+    const entry = await this.requireEntries().update(
+      context.actor,
+      context.membership,
+      entryId,
+      patch,
+    );
+    return {
+      ok: true,
+      entityId: entry.id,
+      payload: { entryId: entry.id, title: entry.title, date: entry.date, version: entry.version },
+    };
+  }
+
+  private async addParticipant(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const participant = await this.trips.addParticipant(
+      context.actor,
+      context.membership,
+      args.tripId as string,
+      { userId: args.memberId },
+    );
+    return {
+      ok: true,
+      entityId: participant.id,
+      payload: {
+        participantId: participant.id,
+        memberId: participant.userId,
+        role: participant.role,
+        status: participant.status,
+      },
+    };
+  }
+
+  private async removeParticipant(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const result = await this.trips.removeParticipant(
+      context.actor,
+      context.membership,
+      args.tripId as string,
+      args.memberId as string,
+    );
+    return {
+      ok: true,
+      payload: { tripId: args.tripId, memberId: args.memberId, message: result.message },
+    };
+  }
+
+  private async updateParticipantRole(
+    args: Record<string, unknown>,
+    context: AiToolContext,
+  ): Promise<AiToolOutcome> {
+    const participant = await this.trips.updateParticipant(
+      context.actor,
+      context.membership,
+      args.tripId as string,
+      args.memberId as string,
+      { role: args.role },
+    );
+    return {
+      ok: true,
+      entityId: participant.id,
+      payload: {
+        participantId: participant.id,
+        memberId: participant.userId,
+        role: participant.role,
+        status: participant.status,
       },
     };
   }
@@ -901,4 +2002,75 @@ function toCandidate(place: Place): AiPlaceCandidate[] {
  */
 function storableStopAddress(address: string | null): string | null {
   return address !== null && address.length <= MAX_STOP_ADDRESS_LENGTH ? address : null;
+}
+
+interface CursorPageLike<T> {
+  readonly items: readonly T[];
+  readonly nextCursor: string | null;
+  readonly hasMore: boolean;
+}
+
+/**
+ * Finds one item in a cursor-paginated product list without ever bypassing its
+ * service. Update tools only receive an entity id, so the current `version`
+ * (never supplied by the model) has to be read through the same visibility and
+ * role checks the UI uses.
+ */
+async function findPageItem<T extends { id: string }>(
+  load: (cursor: string | undefined) => Promise<CursorPageLike<T>>,
+  id: string,
+): Promise<T | undefined> {
+  let cursor: string | undefined;
+  for (let page = 0; page < 20; page += 1) {
+    const result = await load(cursor);
+    const found = result.items.find((item) => item.id === id);
+    if (found) {
+      return found;
+    }
+    if (!result.hasMore || result.nextCursor === null) {
+      return undefined;
+    }
+    cursor = result.nextCursor;
+  }
+  return undefined;
+}
+
+/**
+ * Converts the plain text the model writes into the editor's document shape
+ * (`{ type: "doc", content: [...] }`) plus a sanitized-HTML body. This is an
+ * adaptation layer: the HTTP contract only accepts `contentJson`/`contentHtml`,
+ * while the model should not have to emit ProseMirror JSON.
+ */
+function entryDocument(text: string): {
+  contentJson: Record<string, unknown>;
+  contentHtml: string;
+} {
+  const paragraphs = text
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const body = paragraphs.length > 0 ? paragraphs : [text.trim()];
+  return {
+    contentJson: {
+      type: "doc",
+      content: body.map((paragraph) => ({
+        type: "paragraph",
+        content: [{ type: "text", text: paragraph }],
+      })),
+    },
+    contentHtml: body.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join(""),
+  };
+}
+
+function entryExcerpt(text: string): string {
+  return text.replace(/\s+/gu, " ").trim().slice(0, 600);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&#39;");
 }

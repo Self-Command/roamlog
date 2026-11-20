@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 
 import { AccessControlModule } from "../../common/guards/access-control.module.js";
 import { AuditModule } from "../audit/audit.module.js";
+import { EntriesModule } from "../entries/entries.module.js";
+import { ExpensesModule } from "../expenses/expenses.module.js";
 import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { ItineraryModule } from "../itinerary/itinerary.module.js";
 import { PackingModule } from "../packing/packing.module.js";
@@ -24,6 +26,8 @@ import { AiToolbox } from "./ai-tools.js";
   imports: [
     AccessControlModule,
     AuditModule,
+    EntriesModule,
+    ExpensesModule,
     IdempotencyModule,
     TripsModule,
     ItineraryModule,

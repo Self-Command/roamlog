@@ -146,7 +146,43 @@ describe("AiToolbox trips.update", () => {
     });
   });
 
-  it("strips visibility, privacy, status and version fields the model tries to add", async () => {
+  it("applies the newly whitelisted status, favorite, origin and timeZone fields", async () => {
+    const { toolbox, repository, current } = build();
+
+    const outcome = await toolbox.execute(
+      {
+        tool: "trips.update",
+        args: {
+          tripId: TRIP_ID,
+          status: "completed",
+          favorite: true,
+          origin: "Osaka",
+          originLat: 34.6937,
+          originLng: 135.5023,
+          timeZone: "Asia/Tokyo",
+        },
+      },
+      context(),
+    );
+
+    expect(outcome.ok).toBe(true);
+    const call = updateCall(repository);
+    expect(call.version).toBe(1);
+    expect(call.data).toMatchObject({
+      status: "completed",
+      favorite: true,
+      origin: "Osaka",
+      originLat: 34.6937,
+      originLng: 135.5023,
+      timeZone: "Asia/Tokyo",
+    });
+    expect(current().status).toBe("completed");
+    expect(current().favorite).toBe(true);
+    expect(current().origin).toBe("Osaka");
+    expect(current().timeZone).toBe("Asia/Tokyo");
+  });
+
+  it("strips visibility, privacy and identity fields the model tries to add", async () => {
     const { toolbox, repository, current } = build();
 
     const outcome = await toolbox.execute(
@@ -159,8 +195,6 @@ describe("AiToolbox trips.update", () => {
           version: 42,
           visibility: "public_link",
           showExactPhotoLocation: false,
-          status: "completed",
-          favorite: true,
           workspaceId: "01942f30-1200-7000-8000-00000000dead",
           createdById: OTHER_USER_ID,
         },
@@ -174,8 +208,6 @@ describe("AiToolbox trips.update", () => {
     for (const forbidden of [
       "visibility",
       "showExactPhotoLocation",
-      "status",
-      "favorite",
       "workspaceId",
       "createdById",
     ]) {
