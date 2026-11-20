@@ -87,6 +87,14 @@ export const AiPlanHintSchema = z
   .strict();
 export type AiPlanHint = z.infer<typeof AiPlanHintSchema>;
 
+/** BCP-47 language tag used as a prompt fallback, never as a hard override. */
+export const AiChatLocaleSchema = z
+  .string()
+  .max(35)
+  .regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/)
+  .describe("BCP-47 language tag (max 35 characters).");
+export type AiChatLocale = z.infer<typeof AiChatLocaleSchema>;
+
 export const AiChatRequestSchema = z
   .object({
     message: z.string().min(1).max(2000),
@@ -107,6 +115,12 @@ export const AiChatRequestSchema = z
      * history can align the persisted assistant message with the local one. 1..64.
      */
     assistantMessageId: z.string().min(1).max(64).optional(),
+    /**
+     * UI locale (BCP-47, max 35). Only a fallback for the system prompt when the
+     * user's latest message is too short or ambiguous to infer a language; it
+     * never overrides a detectable message language.
+     */
+    locale: AiChatLocaleSchema.optional(),
   })
   .strict();
 export type AiChatRequest = z.infer<typeof AiChatRequestSchema>;
@@ -319,6 +333,14 @@ export const AiErrorCodeSchema = z.enum(
  * Frame protocol: `id: <n>`, `event: <type>`, `data: <single-line JSON>`, then a
  * blank line. `meta` is always first, `done` is exactly once and always last,
  * and `error` is always followed by `done` with `finishReason: "error"`.
+ *
+ * Ordering constraints for the appended tool lifecycle events:
+ * - `meta` is the first event of every stream.
+ * - Every `tool.start` precedes its matching `tool.end` (same `toolCallId`).
+ * - Every `tool.end` precedes `plan` / `done`.
+ * - `done` is the last event and appears exactly once.
+ * - A `toolCallId` receives exactly one `tool.start`; reconnecting clients must
+ *   upsert by `toolCallId` instead of appending a duplicate card.
  */
 export const AiStreamEventTypeSchema = z.enum([
   "meta",
@@ -328,6 +350,9 @@ export const AiStreamEventTypeSchema = z.enum([
   "error",
   "done",
   "progress",
+  "tool.start",
+  "tool.progress",
+  "tool.end",
 ]);
 export type AiStreamEventType = z.infer<typeof AiStreamEventTypeSchema>;
 
@@ -435,6 +460,51 @@ export const AiStreamProgressEventSchema = z
   .strict();
 export type AiStreamProgressEvent = z.infer<typeof AiStreamProgressEventSchema>;
 
+/**
+ * A tool call just started. Event semantics are ported from vercel/chatbot
+ * `components/ai-elements/tool.tsx` L25–L172 (the seven-state tool card model),
+ * without its React implementation: the UI inserts a running card immediately.
+ * `stepId` groups parallel calls from the same planning round.
+ */
+export const AiStreamToolStartEventSchema = z
+  .object({
+    type: z.literal("tool.start"),
+    toolCallId: z.string().min(1).max(128),
+    name: z.string().min(1).max(100),
+    stepId: z.string().min(1).max(128).optional(),
+    parentToolCallId: z.string().min(1).max(128).optional(),
+    args: JsonObjectSchema,
+    startedAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AiStreamToolStartEvent = z.infer<typeof AiStreamToolStartEventSchema>;
+
+/** Optional progress for one running tool; `percent` is 0–100. */
+export const AiStreamToolProgressEventSchema = z
+  .object({
+    type: z.literal("tool.progress"),
+    toolCallId: z.string().min(1).max(128),
+    percent: z.number().int().min(0).max(100).optional(),
+    label: z.string().min(1).max(200).optional(),
+    at: IsoTimestampSchema.optional(),
+  })
+  .strict();
+export type AiStreamToolProgressEvent = z.infer<typeof AiStreamToolProgressEventSchema>;
+
+/** Terminal state of one tool call; always follows the matching `tool.start`. */
+export const AiStreamToolEndEventSchema = z
+  .object({
+    type: z.literal("tool.end"),
+    toolCallId: z.string().min(1).max(128),
+    status: z.enum(["ok", "error", "cancelled"]),
+    result: z.unknown().optional(),
+    error: AiToolErrorSchema.optional(),
+    finishedAt: IsoTimestampSchema,
+    durationMs: z.number().int().nonnegative(),
+  })
+  .strict();
+export type AiStreamToolEndEvent = z.infer<typeof AiStreamToolEndEventSchema>;
+
 export const AiStreamEventSchema = z.discriminatedUnion("type", [
   AiStreamMetaEventSchema,
   AiStreamTextDeltaEventSchema,
@@ -443,6 +513,9 @@ export const AiStreamEventSchema = z.discriminatedUnion("type", [
   AiStreamErrorEventSchema,
   AiStreamDoneEventSchema,
   AiStreamProgressEventSchema,
+  AiStreamToolStartEventSchema,
+  AiStreamToolProgressEventSchema,
+  AiStreamToolEndEventSchema,
 ]);
 export type AiStreamEvent = z.infer<typeof AiStreamEventSchema>;
 

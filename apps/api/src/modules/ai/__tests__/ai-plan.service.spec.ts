@@ -1,5 +1,5 @@
 import { HttpException } from "@nestjs/common";
-import { AiChatResponseSchema, type AiChatResponse } from "@roamlog/contracts";
+import { AiChatResponseSchema, type AiChatResponse, type AiStreamEvent } from "@roamlog/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import { AiPlanService, systemPrompt } from "../ai-plan.service.js";
@@ -362,7 +362,7 @@ describe("AiPlanService plan phase", () => {
     expect(response.provider.protocol).toBe("anthropic-messages");
   });
 
-  it("injects today and the no-past-date rule into the system prompt", async () => {
+  it("injects today, the no-past-date rule and the language rules into the system prompt", async () => {
     const { service, adapter } = harness([{ text: "ok", toolCalls: [] }]);
     const today = formatDateOnly(new Date(FIXED_NOW_ISO));
 
@@ -373,11 +373,103 @@ describe("AiPlanService plan phase", () => {
     expect(system).toContain(`on or after ${today}`);
     expect(system).toContain("never propose a past date");
     expect(system).toContain("nearest future dates");
+    // Open WebUI `config.py` L1081 and Hermes `prompt_builder.py` L166.
+    expect(system).toContain("Respond in the same language as the user's latest message.");
+    expect(system).toContain("Do not narrate your tool use.");
 
     // Deterministic render, so the rule is asserted on exact strings too.
     const rendered = systemPrompt("2030-01-02", "Asia/Shanghai");
     expect(rendered).toContain("Today is 2030-01-02 (Asia/Shanghai)");
     expect(rendered).toContain("must be on or after 2030-01-02");
+  });
+
+  it("passes the request locale through as the system prompt language fallback", async () => {
+    const { service, adapter } = harness([{ text: "ok", toolCalls: [] }]);
+
+    await service.chat(actorStub(), membershipStub(), { message: "??", locale: "zh-CN" });
+
+    const system = adapter.inputs[0]?.system ?? "";
+    expect(system).toContain("use the app locale (zh-CN) as the default");
+    expect(system).not.toContain("use the app's default language");
+    // The fallback must never turn into a hard language override.
+    expect(system).toContain("Respond in the same language as the user's latest message.");
+  });
+
+  it("streams tool.start → tool.progress → tool.end before plan/usage/done", async () => {
+    const settings = aiSettings();
+    const tools = toolServiceMocks();
+    const toolbox = new AiToolbox(
+      tools.places as never,
+      tools.trips as never,
+      tools.stops as never,
+      tools.itinerary as never,
+      tools.packing as never,
+    );
+    const adapter = scriptedAdapter([
+      {
+        text: null,
+        toolCalls: [
+          { id: "call-1", name: "places.search", input: { q: "Kyoto" } },
+          {
+            id: "call-2",
+            name: "trips.create",
+            input: { title: "Kyoto", startDate: "2030-01-01", endDate: "2030-01-03" },
+          },
+        ],
+        usage: { inputTokens: 10, outputTokens: 5 },
+      },
+      { text: "完成", toolCalls: [], usage: { inputTokens: 2, outputTokens: 1 } },
+    ]);
+    const conversations = {
+      getOrCreate: vi.fn().mockResolvedValue({ id: "conversation-1", title: null }),
+      loadContext: vi.fn().mockResolvedValue({ messages: [], facts: {} }),
+      appendUserMessage: vi
+        .fn()
+        .mockResolvedValue({ messageId: "message-user-1", clientId: "client-1", created: true }),
+      startStream: vi.fn().mockResolvedValue({ streamId: "stream-1" }),
+      finishAssistantMessage: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = new AiPlanService(
+      staticAiSettingsSource(settings),
+      () => adapter,
+      toolbox,
+      quotaStub() as never,
+      runStoreStub() as never,
+      loggerStub() as never,
+      fixedClock(),
+      conversations as never,
+    );
+
+    const events: AiStreamEvent[] = [];
+    for await (const event of service.streamChat(actorStub(), membershipStub(), {
+      message: "帮我做京都三天行程",
+      locale: "zh-CN",
+    })) {
+      events.push(event);
+    }
+
+    expect(adapter.inputs[0]?.system).toContain("use the app locale (zh-CN) as the default");
+
+    const types = events.map((event) => event.type);
+    expect(types[0]).toBe("meta");
+    expect(types.filter((type) => type === "done")).toHaveLength(1);
+    expect(types.at(-1)).toBe("done");
+    expect(types.indexOf("tool.start")).toBeGreaterThan(types.indexOf("meta"));
+    expect(types.indexOf("tool.progress")).toBeGreaterThan(types.indexOf("tool.start"));
+    expect(types.indexOf("tool.end")).toBeGreaterThan(types.indexOf("tool.progress"));
+    expect(types.indexOf("plan")).toBeGreaterThan(types.indexOf("tool.end"));
+    expect(types.indexOf("usage")).toBeGreaterThan(types.indexOf("plan"));
+    expect(types.indexOf("done")).toBeGreaterThan(types.indexOf("usage"));
+
+    const start = events.find((event) => event.type === "tool.start");
+    const end = events.find((event) => event.type === "tool.end");
+    expect(start).toMatchObject({ type: "tool.start", name: "places.search", stepId: "round-1" });
+    expect(end).toMatchObject({ type: "tool.end", status: "ok" });
+    if (!start || !end) {
+      throw new Error("tool lifecycle events were not emitted");
+    }
+    expect(end.toolCallId).toBe(start.toolCallId);
+    expect(end.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("rejects a write call dated in the past and reports a PAST_DATE warning", async () => {

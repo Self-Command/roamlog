@@ -26,4 +26,10 @@ export type StreamAiChatBody = {
    * @maxLength 64
    */
   assistantMessageId?: string;
+  /**
+   * BCP-47 language tag (max 35 characters).
+   * @maxLength 35
+   * @pattern ^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$
+   */
+  locale?: string;
 };

@@ -770,4 +770,75 @@ integration("AI chat SSE stream on real PostgreSQL", () => {
     expect(assistant?.status).toMatchObject({ type: "complete", reason: "tool-calls" });
     expect(assistant?.metadata).toMatchObject({ finishReason: "tool-calls" });
   }, 60_000);
+
+  it("emits tool.start → tool.end before plan/usage/done for a read-only tool round", async () => {
+    const adapter = new FakeAdapter([
+      {
+        deltas: ["我先查一下。"],
+        toolCalls: [
+          { id: "call_place_1", name: "places.search", input: { q: "京都" } },
+          { id: "call_place_2", name: "places.search", input: { q: "清水寺" } },
+          {
+            id: "call_plan_1",
+            name: "trips.create",
+            input: { title: "京都行程", startDate: "2027-04-01", endDate: "2027-04-03" },
+          },
+        ],
+        usage: { inputTokens: 12, outputTokens: 4 },
+      },
+      { deltas: ["完成"], usage: { inputTokens: 3, outputTokens: 2 } },
+    ]);
+    const { url } = await createApp({ adapter, heartbeatMs: 1_000 });
+
+    const response = await postStream(url, { message: "帮我做京都三天行程" });
+    expect(response.status).toBe(200);
+    const events = eventsOf(parseFrames(await response.text()));
+    const types = events.map((event) => event.type);
+
+    const starts = events.filter((event) => event.type === "tool.start") as Array<{
+      type: "tool.start";
+      toolCallId: string;
+      name: string;
+      stepId?: string;
+    }>;
+    const ends = events.filter((event) => event.type === "tool.end") as Array<{
+      type: "tool.end";
+      toolCallId: string;
+      status: string;
+      durationMs: number;
+    }>;
+    const toolProgress = events.filter((event) => event.type === "tool.progress") as Array<{
+      type: "tool.progress";
+      toolCallId: string;
+      label?: string;
+    }>;
+
+    // Two parallel places.search calls → exactly two starts, two ends, and each
+    // toolCallId starts once (reconnects upsert by id, they never append).
+    expect(starts).toHaveLength(2);
+    expect(ends).toHaveLength(2);
+    expect(toolProgress).toHaveLength(2);
+    const startIds = starts.map((event) => event.toolCallId);
+    expect(new Set(startIds).size).toBe(startIds.length);
+    for (const id of startIds) {
+      expect(starts.filter((event) => event.toolCallId === id)).toHaveLength(1);
+      expect(ends.filter((event) => event.toolCallId === id)).toHaveLength(1);
+      expect(toolProgress.filter((event) => event.toolCallId === id)).toHaveLength(1);
+    }
+
+    // Ordering: tool.start → tool.end → plan → usage → done.
+    expect(types.indexOf("tool.start")).toBeGreaterThan(-1);
+    expect(types.indexOf("tool.end")).toBeGreaterThan(types.indexOf("tool.start"));
+    expect(types.indexOf("plan")).toBeGreaterThan(types.indexOf("tool.end"));
+    expect(types.indexOf("usage")).toBeGreaterThan(types.indexOf("plan"));
+    expect(types.indexOf("done")).toBeGreaterThan(types.indexOf("usage"));
+    expect(types.filter((type) => type === "done")).toHaveLength(1);
+    expect(types.at(-1)).toBe("done");
+
+    for (const end of ends) {
+      expect(end.status).toBe("ok");
+      expect(Number.isInteger(end.durationMs)).toBe(true);
+      expect(end.durationMs).toBeGreaterThanOrEqual(0);
+    }
+  }, 60_000);
 });

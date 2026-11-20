@@ -16,6 +16,7 @@ import {
   AiRunExecuteRequestSchema,
   AiRunExecuteResponseSchema,
   AiStreamEventSchema,
+  AiStreamEventTypeSchema,
   AiThreadMessageSchema,
   AiToolCallSchema,
   AiToolResultSchema,
@@ -284,6 +285,20 @@ describe("AI chat request compatibility", () => {
     expect(parsed.assistantMessageId).toBe("msg_def456");
   });
 
+  it("accepts an optional BCP-47 locale capped at 35 characters", () => {
+    expect(AiChatRequestSchema.safeParse({ message: "hi", locale: "zh-CN" }).success).toBe(true);
+    expect(AiChatRequestSchema.safeParse({ message: "hi", locale: "zh-Hant-TW" }).success).toBe(
+      true,
+    );
+    expect(AiChatRequestSchema.safeParse({ message: "hi", locale: "en" }).success).toBe(true);
+    expect(AiChatRequestSchema.safeParse({ message: "hi", locale: "english" }).success).toBe(false);
+    expect(AiChatRequestSchema.safeParse({ message: "hi", locale: "zh_CN" }).success).toBe(false);
+    expect(AiChatRequestSchema.safeParse({ message: "hi", locale: 42 }).success).toBe(false);
+    expect(
+      AiChatRequestSchema.safeParse({ message: "hi", locale: `zh-${"x".repeat(33)}` }).success,
+    ).toBe(false);
+  });
+
   it("rejects a wrong type for each new optional field", () => {
     expect(
       AiChatRequestSchema.safeParse({ message: "hi", conversationId: "not-a-uuid" }).success,
@@ -399,6 +414,69 @@ describe("AI stream event protocol v1", () => {
     expect(AiStreamEventSchema.safeParse({ ...progress, label: "长".repeat(41) }).success).toBe(
       false,
     );
+  });
+
+  it("parses the appended tool lifecycle events and rejects extra fields (strict)", () => {
+    const start = {
+      type: "tool.start" as const,
+      toolCallId: "round-1-call-0",
+      name: "places.search",
+      stepId: "round-1",
+      args: { q: "京都" },
+      startedAt: "2026-11-19T14:00:00+08:00",
+    };
+    const toolProgress = {
+      type: "tool.progress" as const,
+      toolCallId: "round-1-call-0",
+      percent: 40,
+      label: "正在查询地点（1/2）",
+      at: "2026-11-19T14:00:01+08:00",
+    };
+    const end = {
+      type: "tool.end" as const,
+      toolCallId: "round-1-call-0",
+      status: "ok" as const,
+      result: { candidates: [] },
+      finishedAt: "2026-11-19T14:00:02+08:00",
+      durationMs: 1_000,
+    };
+
+    for (const event of [start, toolProgress, end]) {
+      expect(AiStreamEventSchema.safeParse(event).success).toBe(true);
+    }
+    // Every tool event is a closed envelope: unknown keys are rejected.
+    for (const event of [start, toolProgress, end]) {
+      expect(AiStreamEventSchema.safeParse({ ...event, extra: true }).success).toBe(false);
+    }
+    expect(AiStreamEventSchema.safeParse({ ...start, args: [] }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...start, startedAt: "not-a-date" }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...toolProgress, percent: 101 }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...toolProgress, percent: 1.5 }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...end, status: "timeout" }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...end, durationMs: -1 }).success).toBe(false);
+    expect(
+      AiStreamEventSchema.safeParse({
+        ...end,
+        status: "cancelled",
+        error: { code: "AI_TOOL_FAILED", message: "boom" },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("keeps the discriminated union append-only at ten event types", () => {
+    expect(AiStreamEventTypeSchema.options).toEqual([
+      "meta",
+      "text.delta",
+      "plan",
+      "usage",
+      "error",
+      "done",
+      "progress",
+      "tool.start",
+      "tool.progress",
+      "tool.end",
+    ]);
+    expect(AiStreamEventSchema.options).toHaveLength(10);
   });
 
   it("requires meta.v to be exactly 1", () => {
