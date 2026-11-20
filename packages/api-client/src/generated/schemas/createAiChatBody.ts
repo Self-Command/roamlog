@@ -5,7 +5,9 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateAiChatBodyAttachmentsItem } from "./createAiChatBodyAttachmentsItem";
 import type { CreateAiChatBodyHints } from "./createAiChatBodyHints";
+import type { CreateAiChatBodyReasoningEffort } from "./createAiChatBodyReasoningEffort";
 
 export type CreateAiChatBody = {
   /**
@@ -32,4 +34,15 @@ export type CreateAiChatBody = {
    * @pattern ^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$
    */
   locale?: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  model?: string;
+  reasoningEffort?: CreateAiChatBodyReasoningEffort;
+  /**
+   * @minItems 1
+   * @maxItems 5
+   */
+  attachments?: CreateAiChatBodyAttachmentsItem[];
 };

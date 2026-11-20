@@ -120,6 +120,115 @@ export const AiChatLocaleSchema = z
   .describe("BCP-47 language tag (max 35 characters).");
 export type AiChatLocale = z.infer<typeof AiChatLocaleSchema>;
 
+/* -------------------------------------------------------------------------- */
+/* Attachments (Stage 2)                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Upload limits and the accepted MIME whitelist for one chat attachment.
+ *
+ * Source: vercel/chatbot `lib/types.ts` L59–L63 (`Attachment = { name, url,
+ * contentType }`, produced by `components/chat/multimodal-input.tsx` L270–L298
+ * `uploadFile` → `POST /api/files/upload`) and its composer cap of one upload
+ * queue per turn. Roamlog reuses its own media pipeline instead of Vercel Blob,
+ * so the numeric limits are the media contract's (`MediaPresignRequestSchema`,
+ * `packages/contracts/src/api/media.ts` L25–L35) and the MIME list is exactly
+ * `apps/api/src/modules/media/media-rules.ts` `ALLOWED_IMAGE_MIME_TYPES`.
+ * The task's own cap is ≤5 attachments / ≤20 MB each, which is stricter than
+ * the 25 MB media ceiling and is therefore the binding limit here.
+ */
+export const AI_ATTACHMENT_MAX_COUNT = 5;
+export const AI_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const AI_ATTACHMENT_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+  "image/heic",
+  "image/heif",
+] as const;
+export const AiAttachmentMimeTypeSchema = z.enum(AI_ATTACHMENT_MIME_TYPES);
+export type AiAttachmentMimeType = z.infer<typeof AiAttachmentMimeTypeSchema>;
+
+/**
+ * One attachment reference for the current turn.
+ *
+ * The bytes never travel in this body: the client uploads through the existing
+ * media presign→PUT→complete pipeline first and sends the resulting `mediaId`.
+ * `kind` mirrors the user-facing distinction between an inline image and a file
+ * chip; the media pipeline stores images only today, so `kind: "file"` is
+ * accepted by the contract but cannot be produced until media accepts documents
+ * (see the delivery report's "未做/阻塞").
+ */
+export const AiAttachmentSchema = z
+  .object({
+    mediaId: UuidV7Schema,
+    kind: z.enum(["image", "file"]),
+    name: z.string().min(1).max(200),
+    mimeType: AiAttachmentMimeTypeSchema,
+    sizeBytes: z.number().int().positive().max(AI_ATTACHMENT_MAX_BYTES),
+  })
+  .strict();
+export type AiAttachment = z.infer<typeof AiAttachmentSchema>;
+
+export const AiChatAttachmentsSchema = z
+  .array(AiAttachmentSchema)
+  .min(1)
+  .max(AI_ATTACHMENT_MAX_COUNT);
+export type AiChatAttachments = z.infer<typeof AiChatAttachmentsSchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Model + reasoning effort (Stage 3)                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Reasoning-depth values.
+ *
+ * Taken verbatim from vercel/chatbot `lib/ai/models.ts` L23:
+ * `reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high"`, passed to
+ * the gateway as `openai: { reasoningEffort }` at
+ * `app/(chat)/api/chat/route.ts` L301–L302. Nothing is invented here.
+ */
+export const AI_REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high"] as const;
+export const AiReasoningEffortSchema = z.enum(AI_REASONING_EFFORTS);
+export type AiReasoningEffort = z.infer<typeof AiReasoningEffortSchema>;
+
+/** A gateway model id, for example `openai/gpt-4o-mini`. 1..200 chars. */
+export const AiChatModelIdSchema = z.string().min(1).max(200);
+export type AiChatModelId = z.infer<typeof AiChatModelIdSchema>;
+
+/**
+ * One selectable model. Port of vercel/chatbot `lib/ai/models.ts` L17–L24
+ * (`ChatModel`) plus the capability record of `app/(chat)/api/models/route.ts`
+ * L8–L19, reduced to the fields Roamlog can actually know: the admin-configured
+ * gateway model and the operator allow-list. `reasoning`/`vision`/`tools` are
+ * declared by the operator, never guessed.
+ */
+export const AiChatModelSchema = z
+  .object({
+    id: AiChatModelIdSchema,
+    name: z.string().min(1).max(80),
+    description: z.string().max(200).optional(),
+    provider: z.string().min(1).max(40),
+    /** `true` when the operator allows `reasoningEffort` for this model. */
+    reasoning: z.boolean(),
+    /** `true` when image attachments may be sent to this model. */
+    vision: z.boolean(),
+  })
+  .strict();
+export type AiChatModel = z.infer<typeof AiChatModelSchema>;
+
+/** `GET .../ai/models`: the same shape the upstream model selector consumes. */
+export const AiChatModelsResponseSchema = z
+  .object({
+    models: z.array(AiChatModelSchema).max(20),
+    defaultModel: AiChatModelIdSchema,
+    /** `true` when `reasoningEffort` is forwarded to the gateway. */
+    reasoningSupported: z.boolean(),
+  })
+  .strict();
+export type AiChatModelsResponse = z.infer<typeof AiChatModelsResponseSchema>;
+
 export const AiChatRequestSchema = z
   .object({
     message: z.string().min(1).max(2000),
@@ -146,6 +255,21 @@ export const AiChatRequestSchema = z
      * never overrides a detectable message language.
      */
     locale: AiChatLocaleSchema.optional(),
+    /**
+     * Per-turn model override. **Whitelisted server-side**: the API rejects any
+     * id that is not the admin-configured model or on the operator allow-list
+     * (`AI_ALLOWED_MODELS`). Absent means the configured default.
+     */
+    model: AiChatModelIdSchema.optional(),
+    /**
+     * Per-turn reasoning depth. Forwarded verbatim to protocols that define the
+     * parameter (`reasoning_effort` for OpenAI Chat Completions, `reasoning.effort`
+     * for the Responses API); ignored for Anthropic Messages, which has no
+     * equivalent field.
+     */
+    reasoningEffort: AiReasoningEffortSchema.optional(),
+    /** Media already uploaded through the media presign→PUT→complete pipeline. */
+    attachments: AiChatAttachmentsSchema.optional(),
   })
   .strict();
 export type AiChatRequest = z.infer<typeof AiChatRequestSchema>;
@@ -187,6 +311,34 @@ export const AiPlanWarningSchema = z
   .strict();
 export type AiPlanWarning = z.infer<typeof AiPlanWarningSchema>;
 
+/**
+ * One human-readable name for an entity id referenced by `plannedCalls`.
+ *
+ * Additive and optional: a `stops.delete` call only carries `stopId`, so
+ * without this map the plan preview can only show an opaque id. The server
+ * fills it best-effort from reads it already performed (place search,
+ * `stops.list`, `trips.get`/`trips.list`) and from permission-checked lookups;
+ * an id it cannot resolve is simply absent and the UI falls back to its generic
+ * copy. Only a label ever crosses the wire — never an entity object.
+ */
+export const AiPlanSubjectSchema = z
+  .object({
+    label: z.string().min(1).max(160),
+  })
+  .strict();
+export type AiPlanSubject = z.infer<typeof AiPlanSubjectSchema>;
+
+/**
+ * `id → subject`, keyed by the exact id a tool argument carries (a UUID, or a
+ * provider place id for `stops.add`). The server caps the number of entries
+ * before sending; the schema only guarantees a bounded key/label size.
+ */
+export const AiPlanSubjectsSchema = z.record(
+  z.string().min(1).max(300),
+  AiPlanSubjectSchema,
+);
+export type AiPlanSubjects = z.infer<typeof AiPlanSubjectsSchema>;
+
 export const AiChatResponseSchema = z
   .object({
     runId: AiRunIdSchema,
@@ -201,6 +353,8 @@ export const AiChatResponseSchema = z
      * rejected, so clients that only read `plannedCalls` keep working.
      */
     warnings: z.array(AiPlanWarningSchema).max(20).optional(),
+    /** Human labels for ids referenced by `plannedCalls`; absent when none resolved. */
+    subjects: AiPlanSubjectsSchema.optional(),
     usage: AiUsageSchema,
     provider: AiProviderSchema,
     expiresAt: IsoTimestampSchema,
@@ -251,25 +405,35 @@ export type AiRunExecuteResponse = z.infer<typeof AiRunExecuteResponseSchema>;
 
 /**
  * Rewriting a user's *selection* is the one AI surface that writes prose
- * directly into a journal entry, so the request is intentionally narrow:
+ * directly into a journal entry, so the request is intentionally narrow.
  *
- * - the operation is a closed enum — there is no free-text `prompt`/`command`
- *   field to forward to the model, so a caller cannot smuggle instructions in;
- * - `text` is the selection the client will replace, and `selectionHash` is its
- *   SHA-256. The server re-hashes `text` and refuses a mismatch, and the client
- *   re-hashes the selection again before it writes anything back, which is what
- *   turns "the paragraph changed under the preview" into a visible error instead
- *   of a silent overwrite;
+ * The instruction set is no longer purely a closed set of verbs: it is Novel's
+ * own option list, ported verbatim from its `/api/generate` route
+ * (`apps/web/app/api/generate/route.ts:39-116` @
+ * `fa95098e66476c466faebb8211baa5869c101a9c`), which includes `zap` — a
+ * free-form instruction. That is why `command` exists:
+ *
+ * - `text` is the string whose SHA-256 travels in `selectionHash`. The server
+ *   re-hashes `text` and refuses a mismatch, and the client re-hashes again
+ *   before it writes anything back, which is what turns "the paragraph changed
+ *   under the preview" into a visible error instead of a silent overwrite;
+ * - `contextBefore` is Novel's `getPrevText`: the Markdown of the document
+ *   *before* the selection. Only `continue` writes from it (Novel sends no
+ *   selection for `continue`, see `ai-selector-commands.tsx:55-68`). The server
+ *   truncates it — upstream never does;
+ * - `command` is the single-line free-form instruction Novel's `zap` takes from
+ *   its input box (`ai-selector.tsx:76-94`). It is refused for every other
+ *   instruction, and it is always treated as untrusted data, never as rules;
  * - the response echoes `selectionHash`, so a stale preview can never be applied
  *   to a different selection even if two requests are in flight.
  */
 export const AI_REWRITE_INSTRUCTIONS = [
-  "shorten",
-  "expand",
-  "polish",
-  "tone_formal",
-  "tone_casual",
-  "fix_grammar",
+  "continue",
+  "improve",
+  "shorter",
+  "longer",
+  "fix",
+  "zap",
 ] as const;
 export const AiRewriteInstructionSchema = z.enum(AI_REWRITE_INSTRUCTIONS);
 export type AiRewriteInstruction = z.infer<typeof AiRewriteInstructionSchema>;
@@ -282,6 +446,15 @@ export type AiRewriteInstruction = z.infer<typeof AiRewriteInstructionSchema>;
 export const AI_REWRITE_MAX_INPUT_CHARS = 6_000;
 /** Absolute wire cap for `text` and for the returned `replacement`. */
 export const AI_REWRITE_MAX_TEXT_CHARS = 20_000;
+/**
+ * How much preceding text `continue` may actually feed the model. Novel's
+ * `getPrevText` serializes the whole head of the document with no cap
+ * (`packages/headless/src/utils/index.ts:25-36`); the server keeps only this
+ * many trailing characters so a long entry cannot blow the context window.
+ */
+export const AI_REWRITE_MAX_CONTEXT_CHARS = 6_000;
+/** Ceiling for the `zap` free-form instruction (Novel caps nothing upstream). */
+export const AI_REWRITE_MAX_COMMAND_CHARS = 500;
 
 /** Lowercase hex SHA-256 of the exact selection string. */
 export const AiSelectionHashSchema = z
@@ -301,8 +474,41 @@ export const AiRewriteRequestSchema = z
     instruction: AiRewriteInstructionSchema,
     selectionHash: AiSelectionHashSchema,
     locale: AiRewriteLocaleSchema.optional(),
+    /**
+     * Novel `getPrevText`: the document text *before* the selection, as
+     * Markdown. `continue` writes from this instead of from a selection. The
+     * wire cap is the same as `text`; the server truncates to
+     * `AI_REWRITE_MAX_CONTEXT_CHARS` before it reaches the model.
+     */
+    contextBefore: z.string().max(AI_REWRITE_MAX_TEXT_CHARS).optional(),
+    /**
+     * The `zap` free-form instruction (Novel's input box). Only valid together
+     * with `instruction: "zap"`; always delimited as untrusted data server-side.
+     */
+    command: z.string().max(AI_REWRITE_MAX_COMMAND_CHARS).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    // `continue` has no selection: its source is the preceding text. The field
+    // is optional in the schema only so the other five instructions stay
+    // byte-identical to the previous wire shape.
+    if (value.instruction === "continue" && !value.contextBefore?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["contextBefore"],
+        message: "`continue` requires the preceding text in `contextBefore`.",
+      });
+    }
+    // Novel only reads `command` inside its `zap` branch; accepting it for any
+    // other instruction would let free text ride along with a closed verb.
+    if (value.instruction !== "zap" && value.command !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["command"],
+        message: "`command` is only accepted with instruction `zap`.",
+      });
+    }
+  });
 export type AiRewriteRequest = z.infer<typeof AiRewriteRequestSchema>;
 
 export const AiRewriteResponseSchema = z
@@ -338,6 +544,10 @@ export const AI_ERROR_CODES = {
   internal: "AI_INTERNAL",
   /** Another stream is active for the same conversation (HTTP 409 before flush). */
   conversationBusy: "AI_CONVERSATION_BUSY",
+  /** The requested per-turn model is not on this deployment's allow-list. */
+  modelNotAllowed: "AI_MODEL_NOT_ALLOWED",
+  /** An attachment reference is unknown, not ready, too large or unreadable. */
+  attachmentInvalid: "AI_ATTACHMENT_INVALID",
 } as const;
 
 export type AiErrorCode = (typeof AI_ERROR_CODES)[keyof typeof AI_ERROR_CODES];
@@ -425,6 +635,8 @@ export const AiStreamPlanEventSchema = z
     plannedCalls: z.array(AiToolCallSchema).max(20),
     readOnlyTrace: z.array(AiToolCallSchema).max(40),
     warnings: z.array(AiPlanWarningSchema).max(20).optional(),
+    /** Human labels for ids referenced by `plannedCalls`; absent when none resolved. */
+    subjects: AiPlanSubjectsSchema.optional(),
     expiresAt: IsoTimestampSchema,
   })
   .strict();

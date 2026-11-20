@@ -10,10 +10,10 @@ export type RewriteAiSelectionBodyInstruction =
   (typeof RewriteAiSelectionBodyInstruction)[keyof typeof RewriteAiSelectionBodyInstruction];
 
 export const RewriteAiSelectionBodyInstruction = {
-  shorten: "shorten",
-  expand: "expand",
-  polish: "polish",
-  tone_formal: "tone_formal",
-  tone_casual: "tone_casual",
-  fix_grammar: "fix_grammar",
+  continue: "continue",
+  improve: "improve",
+  shorter: "shorter",
+  longer: "longer",
+  fix: "fix",
+  zap: "zap",
 } as const;

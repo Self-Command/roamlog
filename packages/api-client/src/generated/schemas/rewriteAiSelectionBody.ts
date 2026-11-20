@@ -23,4 +23,8 @@ export type RewriteAiSelectionBody = {
    */
   selectionHash: string;
   locale?: RewriteAiSelectionBodyLocale;
+  /** @maxLength 20000 */
+  contextBefore?: string;
+  /** @maxLength 500 */
+  command?: string;
 };
