@@ -82,11 +82,16 @@ export function rewriteBlockMessage(reason: RewriteBlockReason | null): string |
   }
 }
 
+/**
+ * Chinese labels for Novel's six options (`ai-selector-commands.tsx:5-26` and
+ * `ai-selector.tsx:73`). Labels only — the interaction order and grouping stay
+ * upstream's (改善表达 / 修正语法 / 更简短 / 更详细, then 接着往下写).
+ */
 export const REWRITE_INSTRUCTION_LABELS: Readonly<Record<AiRewriteInstruction, string>> = {
-  shorten: "更简短",
-  expand: "更详细",
-  polish: "润色",
-  tone_formal: "更正式",
-  tone_casual: "更口语",
-  fix_grammar: "修正语法",
+  improve: "改善表达",
+  fix: "修正语法",
+  shorter: "更简短",
+  longer: "更详细",
+  continue: "接着往下写",
+  zap: "自由指令",
 };

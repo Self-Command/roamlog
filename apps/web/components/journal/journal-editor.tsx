@@ -5,6 +5,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
+import { Markdown } from "@tiptap/markdown";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
@@ -24,6 +25,7 @@ import {
   Quote,
   Redo2,
   Rows3,
+  Sparkles,
   Table as TableIcon,
   Table2,
   Trash2,
@@ -31,16 +33,31 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { JsonObject } from "@roamlog/contracts";
+import type { AiRewriteLocale, JsonObject } from "@roamlog/contracts";
 import { Button, Input } from "@roamlog/ui";
 
 import { COVER_ACCEPT_ATTRIBUTE, type CoverMediaClient } from "@/lib/api/media";
+import { rewriteBlockMessage, rewriteBlockReason } from "@/lib/ai/selection";
+import {
+  AIHighlight,
+  stripAIHighlight,
+  stripAIHighlightHtml,
+} from "@/lib/editor/ai-highlight";
 
-import { JournalAiRewrite, type JournalAiRewriteProps } from "./journal-ai-rewrite";
+import GenerativeMenuSwitch from "./ai/generative-menu-switch";
 import {
   journalImageUploadErrorMessage,
   uploadJournalImage,
 } from "./journal-image-upload";
+
+/** Props of the AI entries; `workspaceId` scopes every request. */
+export interface JournalAiEntry {
+  workspaceId: string | null;
+  tripId?: string | null;
+  locale?: AiRewriteLocale;
+  /** Called after a rewrite was written into the document. */
+  onApplied?: () => void;
+}
 
 export interface JournalEditorValue {
   contentJson: JsonObject;
@@ -56,11 +73,12 @@ interface JournalEditorProps {
   ariaLabel?: string;
   className?: string;
   /**
-   * The AI rewrite entry, rendered at the end of the formatting toolbar. The
-   * editor owns the instance, so the control receives it here instead of the
-   * sheet having to thread a ref.
+   * The AI entries: Novel's bubble menu (the primary entry, shown on a non-empty
+   * selection) plus a persistent toolbar button that is an adaptation for mobile
+   * and keyboard users. The editor owns the instance, so the controls receive it
+   * here instead of the sheet threading a ref.
    */
-  aiRewrite?: Omit<JournalAiRewriteProps, "editor">;
+  aiRewrite?: JournalAiEntry;
   /** Workspace that owns the uploaded media (presign is workspace-scoped). */
   workspaceId?: string | null;
   /** Optional trip association for the uploaded media row. */
@@ -71,6 +89,8 @@ interface JournalEditorProps {
 
 interface ToolbarButtonProps {
   label: string;
+  /** Native tooltip override; the disabled reason travels here. */
+  hint?: string;
   pressed?: boolean;
   disabled?: boolean;
   onClick: () => void;
@@ -79,6 +99,7 @@ interface ToolbarButtonProps {
 
 function ToolbarButton({
   label,
+  hint,
   pressed = false,
   disabled = false,
   onClick,
@@ -89,7 +110,7 @@ function ToolbarButton({
       type="button"
       aria-label={label}
       aria-pressed={pressed}
-      title={label}
+      title={hint ?? label}
       disabled={disabled}
       onClick={onClick}
       className={`flex size-9 items-center justify-center rounded-[5px] border text-muted transition-colors outline-none hover:border-hairline-strong hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ink disabled:pointer-events-none disabled:opacity-35 ${
@@ -115,6 +136,10 @@ export function JournalEditor({
 }: JournalEditorProps) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const [aiOpen, setAiOpen] = useState(false);
+  // Signature of the last content handed to the sheet, so a highlight-only
+  // transaction is not reported as a document change.
+  const lastEmittedRef = useRef<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -126,6 +151,7 @@ export function JournalEditor({
       imageUploadAbortRef.current = null;
     };
   }, []);
+
   const editor = useEditor({
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
@@ -152,6 +178,14 @@ export function JournalEditor({
       // Ported from https://tiptap.dev/docs/editor/extensions/nodes/task-list and /task-item.
       TaskList,
       TaskItem.configure({ nested: true }),
+      // AI selection highlight mark (ported from Novel `ai-highlight.ts`). Also the
+      // `Mod-Shift-h` shortcut and the `==…==` input rule come with it.
+      AIHighlight,
+      // Needed by the AI panel: `getPrevText`/`selectionMarkdown` serialize the
+      // document through `editor.storage.markdown.manager` (TipTap v3, D5).
+      // The extension only adds `getMarkdown` + the manager and leaves JSON content
+      // parsing untouched (`contentType` stays `"json"`).
+      Markdown,
     ],
     editorProps: {
       attributes: {
@@ -161,13 +195,31 @@ export function JournalEditor({
       },
     },
     onUpdate: ({ editor: current }) => {
+      // Adaptation layer: the AI panel highlights the selection with the
+      // `ai-highlight` mark (Novel behaviour). Novel never persists its document,
+      // but this editor autosaves after 5 s — a highlight-only transaction would
+      // then mark the entry dirty, persist the mark into `contentJson`/
+      // `contentHtml`, and reset the editor (collapsing the selection and closing
+      // the panel mid-stream). Strip the mark before it reaches persistence and
+      // skip the emission when nothing else changed.
+      const json = stripAIHighlight(current.getJSON() as { type?: string }) as JsonObject;
+      const signature = JSON.stringify(json);
+      if (signature === lastEmittedRef.current) return;
+      lastEmittedRef.current = signature;
       onChange({
-        contentJson: current.getJSON() as JsonObject,
-        contentHtml: current.getHTML(),
+        contentJson: json,
+        contentHtml: stripAIHighlightHtml(current.getHTML()),
         text: current.getText(),
       });
     },
   });
+
+  // Baseline for "did the document really change": the editor's own JSON, not the
+  // `contentJson` prop, because parsing the prop fills in default attributes.
+  useEffect(() => {
+    if (!editor) return;
+    lastEmittedRef.current = JSON.stringify(stripAIHighlight(editor.getJSON() as { type?: string }));
+  }, [editor]);
 
   function applyLink() {
     if (!editor) return;
@@ -235,6 +287,24 @@ export function JournalEditor({
       </div>
     );
   }
+
+  const selectedText =
+    editor.state.selection.empty || readOnly
+      ? ""
+      : editor.state.doc.textBetween(
+          editor.state.selection.from,
+          editor.state.selection.to,
+          "\n",
+        );
+  const aiBlockReason = aiRewrite
+    ? rewriteBlockReason({
+        text: selectedText,
+        readOnly,
+        workspaceId: aiRewrite.workspaceId,
+      })
+    : "read_only";
+  const aiBlockMessage = rewriteBlockMessage(aiBlockReason);
+
 
   return (
     <div className={className}>
@@ -423,7 +493,21 @@ export function JournalEditor({
           {aiRewrite ? (
             <>
               <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
-              <JournalAiRewrite editor={editor} {...aiRewrite} />
+              {/*
+                Adaptation layer (not Novel): Novel only offers AI from the bubble
+                menu, which needs a pointer selection. A persistent toolbar entry
+                keeps the feature reachable on touch screens and from the keyboard.
+                It stays disabled with the reason in `title` instead of disappearing,
+                so an empty-selection user still learns the feature exists.
+              */}
+              <ToolbarButton
+                label="让 AI 改写"
+                hint={aiBlockMessage ?? undefined}
+                disabled={aiBlockReason !== null}
+                onClick={() => setAiOpen(true)}
+              >
+                <Sparkles aria-hidden="true" className="size-4" />
+              </ToolbarButton>
             </>
           ) : null}
         </div>
@@ -467,6 +551,18 @@ export function JournalEditor({
             取消
           </Button>
         </div>
+      ) : null}
+
+      {aiRewrite?.workspaceId && !readOnly ? (
+        <GenerativeMenuSwitch
+          editor={editor}
+          open={aiOpen}
+          onOpenChange={setAiOpen}
+          workspaceId={aiRewrite.workspaceId}
+          tripId={aiRewrite.tripId ?? undefined}
+          locale={aiRewrite.locale}
+          onApplied={aiRewrite.onApplied}
+        />
       ) : null}
 
       <EditorContent

@@ -8,16 +8,15 @@ import {
   selectionStillMatches,
   rewriteFailureMessage,
   rewriteSelection,
+  streamRewrite,
   type RewriteSelectionInput,
 } from "./rewrite";
-import { describeSegments, isUnchanged, previewSegments, toDiffSegments } from "./rewrite-preview";
 import {
   hashSelection,
   rewriteBlockMessage,
   rewriteBlockReason,
   REWRITE_INSTRUCTION_LABELS,
 } from "./selection";
-import { DIFF_DELETE, DIFF_EQUAL, DIFF_INSERT, diff } from "./diff";
 
 const subtle = webcrypto.subtle;
 const SELECTION = "早上从京都站坐车去岚山。";
@@ -26,7 +25,7 @@ const REWRITE = "清早自京都站出发前往岚山。";
 function input(overrides: Partial<RewriteSelectionInput> = {}): RewriteSelectionInput {
   return {
     text: SELECTION,
-    instruction: "polish",
+    instruction: "improve",
     selectionHash: "a".repeat(64),
     ...overrides,
   };
@@ -100,94 +99,21 @@ describe("rewriteBlockReason", () => {
     expect(rewriteBlockMessage("no_workspace")).toBeTruthy();
   });
 
-  it("labels all six instructions", () => {
+  it("labels Novel's six options in Chinese", () => {
     expect(Object.keys(REWRITE_INSTRUCTION_LABELS)).toEqual([
-      "shorten",
-      "expand",
-      "polish",
-      "tone_formal",
-      "tone_casual",
-      "fix_grammar",
+      "improve",
+      "fix",
+      "shorter",
+      "longer",
+      "continue",
+      "zap",
     ]);
+    expect(REWRITE_INSTRUCTION_LABELS.improve).toBe("改善表达");
+    expect(REWRITE_INSTRUCTION_LABELS.fix).toBe("修正语法");
+    expect(REWRITE_INSTRUCTION_LABELS.shorter).toBe("更简短");
+    expect(REWRITE_INSTRUCTION_LABELS.longer).toBe("更详细");
+    expect(REWRITE_INSTRUCTION_LABELS.continue).toBe("接着往下写");
     expect(new Set(Object.values(REWRITE_INSTRUCTION_LABELS)).size).toBe(6);
-  });
-});
-
-describe("previewSegments", () => {
-  it("marks only the characters that actually changed", () => {
-    const segments = previewSegments("The cat sat.", "The dog sat.");
-
-    expect(segments.find((segment) => segment.kind === "delete")?.text).toBe("cat");
-    expect(segments.find((segment) => segment.kind === "insert")?.text).toBe("dog");
-    expect(segments[0]).toEqual({ kind: "equal", text: "The " });
-    expect(segments[segments.length - 1]).toEqual({ kind: "equal", text: " sat." });
-  });
-
-  it("returns a single equal segment for an unchanged rewrite", () => {
-    expect(previewSegments(SELECTION, SELECTION)).toEqual([{ kind: "equal", text: SELECTION }]);
-    expect(isUnchanged(SELECTION, SELECTION)).toBe(true);
-    expect(isUnchanged(SELECTION, REWRITE)).toBe(false);
-  });
-
-  it("keeps CJK and emoji whole across edit boundaries", () => {
-    const original = "去岚山看竹🎋林，然后回酒店。";
-    const replacement = "去岚山看竹🎋林，然后回旅馆。";
-    const segments = previewSegments(original, replacement);
-
-    // Reconstructing both sides must be lossless, including the surrogate pair.
-    const deleted = segments.filter((s) => s.kind !== "insert").map((s) => s.text).join("");
-    const inserted = segments.filter((s) => s.kind !== "delete").map((s) => s.text).join("");
-    expect(deleted).toBe(original);
-    expect(inserted).toBe(replacement);
-    for (const segment of segments) {
-      expect(segment.text).not.toContain("\uFFFD");
-    }
-  });
-
-  it("merges adjacent same-kind segments and skips empty text", () => {
-    expect(
-      toDiffSegments([
-        [DIFF_EQUAL, "a"],
-        [DIFF_EQUAL, "b"],
-        [DIFF_DELETE, ""],
-        [DIFF_DELETE, "c"],
-        [DIFF_INSERT, "d"],
-      ]),
-    ).toEqual([
-      { kind: "equal", text: "ab" },
-      { kind: "delete", text: "c" },
-      { kind: "insert", text: "d" },
-    ]);
-  });
-
-  it("stays within a linear pass for a full-paragraph rewrite", () => {
-    const original = "地".repeat(2_000);
-    const replacement = "山".repeat(2_000);
-    const started = Date.now();
-    const segments = previewSegments(original, replacement);
-    expect(Date.now() - started).toBeLessThan(500);
-    expect(segments).toEqual([
-      { kind: "delete", text: original },
-      { kind: "insert", text: replacement },
-    ]);
-  });
-
-  it("describes the change in words for screen readers", () => {
-    const text = describeSegments([
-      { kind: "equal", text: "The " },
-      { kind: "delete", text: "cat" },
-      { kind: "insert", text: "dog" },
-      { kind: "equal", text: " sat." },
-    ]);
-    expect(text).toBe("删除「cat」；新增「dog」");
-    expect(describeSegments([{ kind: "equal", text: "same" }])).toBe("");
-  });
-});
-
-describe("diff", () => {
-  it("returns no tuples for two empty strings and one equality for identical text", () => {
-    expect(diff("", "")).toEqual([]);
-    expect(diff("abc", "abc")).toEqual([[DIFF_EQUAL, "abc"]]);
   });
 });
 
@@ -211,7 +137,7 @@ describe("rewriteSelection", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual({
       text: SELECTION,
-      instruction: "polish",
+      instruction: "improve",
       selectionHash: hash,
     });
   });
@@ -264,5 +190,151 @@ describe("rewriteSelection", () => {
     const error = await rewriteSelection("ws-1", input()).catch((cause) => cause);
     expect((error as AiRequestError).kind).toBe("network");
     expect(rewriteFailureMessage(error)).toBe("网络不可用，请检查连接后重试");
+  });
+});
+
+describe("streamRewrite", () => {
+  // A syntactically valid UUIDv7: the frozen `meta` frame still carries one.
+  const CONVERSATION = "0193b1b0-7c3a-7d2e-8c4a-1b2c3d4e5f60";
+
+  const meta = {
+    type: "meta",
+    v: 1,
+    conversationId: CONVERSATION,
+    userMessageId: "rewrite-0123456789abcdef",
+    assistantMessageId: "rewrite-msg-1",
+    provider: { protocol: "openai-chat", model: "auto/deepseek-v4.1-flash" },
+  };
+
+  /** Builds a Response whose body emits the frames one byte at a time. */
+  function sseResponse(frames: unknown[]): Response {
+    const encoder = new TextEncoder();
+    const wire = frames
+      .map((frame) => `event: ${(frame as { type: string }).type}\ndata: ${JSON.stringify(frame)}\n\n`)
+      .join("");
+    const bytes = encoder.encode(wire);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // One byte per chunk also exercises split multi-byte UTF-8 handling.
+        for (let index = 0; index < bytes.length; index += 1) {
+          controller.enqueue(bytes.slice(index, index + 1));
+        }
+        controller.close();
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  }
+
+  async function collect(generator: AsyncGenerator<unknown>) {
+    const events: Array<{ type: string; delta?: string }> = [];
+    for await (const event of generator) {
+      events.push(event as { type: string; delta?: string });
+    }
+    return events;
+  }
+
+  it("streams the deltas of the frozen v1 protocol and stops at done", async () => {
+    const fetchMock = vi.fn(async () => sseResponse([
+      meta,
+      { type: "text.delta", delta: "清早自" },
+      { type: "text.delta", delta: "京都站出发前往岚山。" },
+      { type: "usage", usage: { inputTokens: 41, outputTokens: 22 } },
+      { type: "done", messageId: "rewrite-msg-1", finishReason: "stop" },
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const events = await collect(streamRewrite("ws-1", input()));
+
+    expect(events.map((event) => event.type)).toEqual([
+      "meta",
+      "text.delta",
+      "text.delta",
+      "usage",
+      "done",
+    ]);
+    expect(events.filter((event) => event.type === "text.delta").map((event) => event.delta).join(""))
+      .toBe(REWRITE);
+
+    const [path, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe("/v1/workspaces/ws-1/ai/rewrite/stream");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({
+      text: SELECTION,
+      instruction: "improve",
+      selectionHash: "a".repeat(64),
+    });
+  });
+
+  it("forwards `continue` context and `zap` commands on the wire", async () => {
+    const fetchMock = vi.fn(async () => sseResponse([
+      meta,
+      { type: "done", messageId: "rewrite-msg-1", finishReason: "stop" },
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await collect(streamRewrite("ws-1", {
+      ...input(),
+      instruction: "continue",
+      contextBefore: "前一晚住在祇园。",
+    }));
+    await collect(streamRewrite("ws-1", {
+      ...input(),
+      instruction: "zap",
+      command: "改成第二人称",
+    }));
+
+    const [, first] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const [, second] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(first.body))).toMatchObject({
+      instruction: "continue",
+      contextBefore: "前一晚住在祇园。",
+    });
+    expect(JSON.parse(String(second.body))).toMatchObject({
+      instruction: "zap",
+      command: "改成第二人称",
+    });
+  });
+
+  it("maps a pre-flight quota failure to JSON instead of starting the stream", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(429, {
+      type: "about:blank",
+      title: "Too Many Requests",
+      status: 429,
+      code: "AI_QUOTA",
+      instance: "/v1/workspaces/ws-1/ai/rewrite/stream",
+    })));
+
+    const error = await collect(streamRewrite("ws-1", input())).catch((cause) => cause);
+    expect((error as AiRequestError).code).toBe("AI_QUOTA");
+    expect(rewriteFailureMessage(error)).toBe("今天的 AI 额度已用完，请稍后再试");
+  });
+
+  it("refuses a frame that does not match the contract", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sseResponse([
+      meta,
+      { type: "text.delta", delta: 42 },
+    ])));
+
+    const error = await collect(streamRewrite("ws-1", input())).catch((cause) => cause);
+    expect((error as AiRequestError).code).toBe("INVALID_RESPONSE");
+  });
+
+  it("refuses a stream that ends without done", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sseResponse([meta, { type: "text.delta", delta: "半句" }])));
+
+    const error = await collect(streamRewrite("ws-1", input())).catch((cause) => cause);
+    expect((error as AiRequestError).code).toBe("INVALID_RESPONSE");
+  });
+
+  it("ends normally when the caller aborts, writing nothing", async () => {
+    const controller = new AbortController();
+    vi.stubGlobal("fetch", vi.fn(async () => sseResponse([meta, { type: "text.delta", delta: "半句" }])));
+    controller.abort();
+
+    const events = await collect(streamRewrite("ws-1", input(), { signal: controller.signal }));
+    expect(events).toEqual([]);
   });
 });

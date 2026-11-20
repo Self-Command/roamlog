@@ -607,7 +607,6 @@ export function JournalEditorSheet({
                 aiRewrite={{
                   workspaceId: aiWorkspaceId,
                   tripId: activeTripId || undefined,
-                  readOnly: isReadOnly,
                 }}
               />
             </div>
