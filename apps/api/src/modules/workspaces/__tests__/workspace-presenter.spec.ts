@@ -1,6 +1,8 @@
+import { WorkspaceMemberWithUserSchema } from "@roamlog/contracts";
 import { ZodError } from "zod";
 import { describe, expect, it } from "vitest";
 
+import * as presenterModule from "../workspace-presenter.js";
 import { presentMember } from "../workspace-presenter.js";
 
 const NOW = new Date("2026-11-17T08:00:00.000Z");
@@ -36,6 +38,25 @@ function row(overrides: Record<string, unknown> = {}) {
 }
 
 describe("presentMember", () => {
+  /**
+   * MEMBER_UUID_CONTRACT: `workspace-presenter.ts` used to declare a local
+   * `StoredUuidSchema` plus `WorkspaceMemberWithUserReadSchema` — a second copy
+   * of a rule the contract must own (the `AuditLogReadSchema` / `AuditLogSchema`
+   * split that `apps/api/src/modules/audit/audit-read.ts` had already collapsed).
+   * The local schemas are gone; this guard fails if a read-side variant comes
+   * back, and the round-trip below proves the presentation is produced by the
+   * one exported contract schema.
+   */
+  it("has no second membership read schema", () => {
+    expect(Object.keys(presenterModule)).not.toContain("WorkspaceMemberWithUserReadSchema");
+    expect(Object.keys(presenterModule)).not.toContain("StoredUuidSchema");
+  });
+
+  it("presents exactly what the contract schema parses", () => {
+    const presented = presentMember(row());
+    expect(WorkspaceMemberWithUserSchema.parse(presented)).toEqual(presented);
+  });
+
   it("keeps the contract shape for a UUIDv7 row", () => {
     const member = presentMember(row());
     expect(member.id).toBe("01942f30-1200-7000-8000-000000000201");

@@ -10,39 +10,22 @@ import {
   type WorkspaceRole,
   type WorkspaceWithRole,
 } from "@roamlog/contracts";
-import { z } from "zod";
 
 import { presentUser, type UserRecordInput } from "../../common/services/user-presenter.js";
 
-/**
- * Read-side UUID rule for Workspace membership rows.
+/*
+ * Membership rows are presented through the contract schema directly.
  *
- * `WorkspaceMemberSchema` pins every id to `UuidV7Schema`, because that is what
- * `@default(uuid(7))` mints. A PostgreSQL `uuid` column is wider than that: it
- * stores any 128-bit value and returns the canonical 8-4-4-4-12 form without
- * rewriting the version nibble. Rows created outside Prisma — fixture/seed
- * scripts, raw SQL, imports — can therefore carry a v4 id, and the strict read
- * schema then threw a `ZodError` for the whole page:
- *
- *   GET /v1/workspaces/:id/members -> 500 INTERNAL_SERVER_ERROR
- *
- * The failing rows were two members added to the seeded `roamlog-crew`
- * workspace by an e2e fixture script. Every other field, and every *request*
- * schema (`MemberParamsSchema`, `WorkspaceMemberQuerySchema`), still enforces
- * UUIDv7: only reading an existing row is tolerant, mirroring
- * `AuditRecordUuidSchema` in `packages/contracts/src/entities/audit-log.ts`.
+ * Up to MEMBER_UUID_CONTRACT this file carried a local `StoredUuidSchema` plus
+ * a `WorkspaceMemberWithUserReadSchema` that re-declared four uuid fields as
+ * PostgreSQL-shaped. That was a second copy of a rule the contract must own,
+ * so it is gone: `WorkspaceMemberSchema` now encodes the PostgreSQL `uuid`
+ * rule itself (`MembershipRecordUuidSchema` in
+ * `packages/contracts/src/entities/workspace.ts`), and the presenter parses
+ * with the one exported contract schema. Adding a read-side variant here again
+ * would reintroduce the divergence guarded against in
+ * `__tests__/workspace-presenter.spec.ts`.
  */
-const StoredUuidSchema = z
-  .string()
-  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Invalid UUID")
-  .describe("PostgreSQL uuid: 8-4-4-4-12 hex, any version/variant (non-Prisma rows included).");
-
-export const WorkspaceMemberWithUserReadSchema = WorkspaceMemberWithUserSchema.extend({
-  id: StoredUuidSchema,
-  workspaceId: StoredUuidSchema,
-  userId: StoredUuidSchema,
-  invitedById: StoredUuidSchema.nullable(),
-});
 
 export interface WorkspaceRecordInput {
   id: string;
@@ -128,7 +111,7 @@ export function presentWorkspaceWithRole(
 }
 
 export function presentMember(record: MembershipWithUserRecordInput): WorkspaceMemberWithUser {
-  return WorkspaceMemberWithUserReadSchema.parse({
+  return WorkspaceMemberWithUserSchema.parse({
     id: record.id,
     workspaceId: record.workspaceId,
     userId: record.userId,

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { UuidV7Schema } from "../common/ids";
+import { MembershipRecordUuidSchema } from "../entities/workspace";
 
 export const MessageResponseSchema = z.object({ message: z.string().min(1) }).strict();
 export type MessageResponse = z.infer<typeof MessageResponseSchema>;
@@ -25,7 +26,26 @@ export const ExpenseParamsSchema = z.object({ expenseId: UuidV7Schema });
 export const PackingItemParamsSchema = z.object({ itemId: UuidV7Schema });
 export const ShareLinkParamsSchema = z.object({ shareLinkId: UuidV7Schema });
 export const ExportParamsSchema = z.object({ exportId: UuidV7Schema });
-export const MemberParamsSchema = z.object({ workspaceId: UuidV7Schema, memberId: UuidV7Schema });
+/**
+ * Route params for `PATCH`/`DELETE /v1/workspaces/{workspaceId}/members/{memberId}`.
+ *
+ * `memberId` identifies a row read back from PostgreSQL, so it follows the
+ * entity's widened rule (`MembershipRecordUuidSchema` in
+ * `../entities/workspace.ts`) rather than `UuidV7Schema`: a legacy v4
+ * membership row must be addressable for role changes and removal, not only for
+ * reads. `workspaceId` stays UUIDv7 because Workspace rows are always minted by
+ * the API and `WorkspaceAccessService.requireMembership` re-validates it before
+ * any tenant lookup.
+ *
+ * This widens *format* validation only. It grants no permission: the route
+ * guards (`TenantGuard`, `RolesGuard`, `@RequirePermission`), the membership
+ * lookup, `assertCan`, and `assertMayManage` are unchanged and still decide who
+ * may touch which row.
+ */
+export const MemberParamsSchema = z.object({
+  workspaceId: UuidV7Schema,
+  memberId: MembershipRecordUuidSchema,
+});
 export const InvitationParamsSchema = z.object({
   workspaceId: UuidV7Schema,
   invitationId: UuidV7Schema,
