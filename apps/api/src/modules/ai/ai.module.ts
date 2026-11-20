@@ -9,6 +9,8 @@ import { PlacesModule } from "../places/places.module.js";
 import { SettingsModule } from "../settings/settings.module.js";
 import { TripsModule } from "../trips/trips.module.js";
 import { AI_ADAPTER_FACTORY, createAiAdapter } from "./adapters/index.js";
+import { AiConversationController } from "./ai-conversation.controller.js";
+import { AiConversationService } from "./ai-conversation.service.js";
 import { AiController } from "./ai.controller.js";
 import { AiExecuteService } from "./ai-execute.service.js";
 import { AiPlanService } from "./ai-plan.service.js";
@@ -29,9 +31,10 @@ import { AiToolbox } from "./ai-tools.js";
     PlacesModule,
     SettingsModule,
   ],
-  controllers: [AiController],
+  controllers: [AiController, AiConversationController],
   providers: [
     AiSettingsResolver,
+    AiConversationService,
     // A token, not a snapshot: every request resolves `ai.*` from the settings
     // service (DB > env > default) before the adapter and the quota are used.
     { provide: AI_SETTINGS_SOURCE, useExisting: AiSettingsResolver },
@@ -44,5 +47,6 @@ import { AiToolbox } from "./ai-tools.js";
     AiExecuteService,
     AiRewriteService,
   ],
+  exports: [AiConversationService],
 })
 export class AiModule {}
