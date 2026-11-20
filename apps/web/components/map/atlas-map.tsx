@@ -97,17 +97,22 @@ export function AtlasMap({
         </div>
       }
     >
-      <MapCanvas
-        points={mapPoints}
-        selectedId={selectedPointId}
-        onSelect={selectPoint}
-        onError={() => setMapFailed(true)}
-        placesProvider={null}
-        photos={photos}
-        showPhotos={showPhotos}
-        focusPhotosToken={focusPhotosToken}
-        onSelectPhotoGroup={onSelectPhotoGroup}
-      />
+      {/* Match the globe's explicit frame: MapCanvas and MapLibre size their
+          children with height:100%, which resolves to 0 when the parent only
+          has an auto height (the atlas card has no height of its own). */}
+      <div className="relative h-[320px] w-full sm:h-[440px]">
+        <MapCanvas
+          points={mapPoints}
+          selectedId={selectedPointId}
+          onSelect={selectPoint}
+          onError={() => setMapFailed(true)}
+          placesProvider={null}
+          photos={photos}
+          showPhotos={showPhotos}
+          focusPhotosToken={focusPhotosToken}
+          onSelectPhotoGroup={onSelectPhotoGroup}
+        />
+      </div>
     </Suspense>
   );
 }
