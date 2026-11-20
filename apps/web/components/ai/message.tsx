@@ -30,6 +30,7 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { createCoverMediaClient } from "../../lib/api/media";
+import { AttachmentPreview } from "./attachment-preview";
 import { readImageMetadata } from "./media-attachment-adapter";
 import { Markdown } from "./markdown";
 import { MessageActions } from "./message-actions";
@@ -230,6 +231,25 @@ export function UserMessage() {
     <MessagePrimitive.Root className="group/message flex w-full justify-end">
       <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-1">
         <div className="flex max-w-full flex-col items-end rounded-card border border-hairline-strong bg-surface-2 px-4 py-3">
+          {/*
+            Live attachments live in `message.attachments` (assistant-ui does not
+            merge them into `content`), so they need their own primitive — same
+            split as upstream, where `message.tsx` L126–L138 renders
+            `attachmentsFromMessage` next to the text. Reloaded turns carry the
+            parts in `content` instead, which `Parts` renders via `UserImage`.
+            `thread-list-adapter` flattens attachments into `content` on save, so
+            the two never double up.
+          */}
+          <div
+            className="mb-2 flex flex-wrap justify-end gap-2 empty:hidden"
+            data-testid="message-attachments-row"
+          >
+            <MessagePrimitive.Attachments>
+              {({ attachment }) => (
+                <AttachmentPreview attachment={attachment} variant="message" />
+              )}
+            </MessagePrimitive.Attachments>
+          </div>
           <MessagePrimitive.Parts components={{ Text: UserText, Image: UserImage }} />
         </div>
         <MessageActions role="user" />

@@ -18,7 +18,7 @@ import {
 
 import { executionFailureCopy, planFailureCopy } from "./copy";
 import { aiChatSelectionStore } from "./chat-selection";
-import { attachmentsFromContent } from "./media-attachment-adapter";
+import { attachmentsFromMessage } from "./media-attachment-adapter";
 
 /**
  * The single seam between the Roamlog plan/execute API and assistant-ui.
@@ -389,8 +389,13 @@ export function createAiChatModelAdapter({
       // Image parts persisted on the user message carry their media id; that is
       // the only attachment source that survives a reload.
       const attachments = request
-        ? attachmentsFromContent(
-            request.content as unknown as { type: string; providerMetadata?: unknown }[],
+        ? attachmentsFromMessage(
+            request as unknown as {
+              content?: readonly { type: string; providerMetadata?: unknown }[];
+              attachments?: readonly {
+                content?: readonly { type: string; providerMetadata?: unknown }[];
+              }[];
+            },
           )
         : [];
 

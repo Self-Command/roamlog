@@ -1,0 +1,45 @@
+{
+  "capturedAt": "2026-11-20T10:56:55.963Z",
+  "retry": 0,
+  "interceptedRequestBody": {
+    "message": "这张照片里是哪里？",
+    "conversationId": "01a1f899-f799-7581-82e8-72be4856cc9a",
+    "clientMessageId": "odbopfc",
+    "assistantMessageId": "U5HTHWP",
+    "attachments": [
+      {
+        "mediaId": "01a1f899-f08b-77f5-a2e6-9bc7be1d15a5",
+        "kind": "image",
+        "name": "kyoto-sample.png",
+        "mimeType": "image/png",
+        "sizeBytes": 327
+      }
+    ]
+  },
+  "mediaRow": {
+    "httpStatus": 200,
+    "id": "01a1f899-f08b-77f5-a2e6-9bc7be1d15a5",
+    "status": "ready",
+    "mimeType": "image/png",
+    "size": 327,
+    "hasSignedUrl": true,
+    "keyPrefix": ""
+  },
+  "persistedImagePart": {
+    "type": "image",
+    "id": "01a1f899-f08b-77f5-a2e6-9bc7be1d15a5",
+    "filename": "kyoto-sample.png",
+    "hasImageUrl": true,
+    "providerMetadata": {
+      "roamlog": {
+        "kind": "image",
+        "name": "kyoto-sample.png",
+        "mediaId": "01a1f899-f08b-77f5-a2e6-9bc7be1d15a5",
+        "mimeType": "image/png",
+        "sizeBytes": 327
+      }
+    }
+  },
+  "conversationId": "01a1f899-f799-7581-82e8-72be4856cc9a",
+  "conversationTitle": "这张照片里是哪里？"
+}

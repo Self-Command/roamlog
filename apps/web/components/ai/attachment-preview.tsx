@@ -65,11 +65,16 @@ export function AttachmentPreview({
   attachment,
   isUploading = false,
   onRemove,
+  variant = "composer",
 }: {
   attachment: AttachmentLike;
   isUploading?: boolean;
   onRemove?: (() => void) | undefined;
+  /** `composer` = the draft tile, `message` = a sent message tile (own test id). */
+  variant?: "composer" | "message";
 }) {
+  const thumbTestId =
+    variant === "message" ? "message-attachment-thumb" : "input-attachment-thumb";
   const metadata = readImageMetadata(
     attachment.content?.[0]?.providerMetadata,
   );
@@ -92,7 +97,7 @@ export function AttachmentPreview({
         <img
           alt={attachment.name || "附件"}
           className="size-full object-cover"
-          data-testid="input-attachment-thumb"
+          data-testid={thumbTestId}
           height={96}
           src={url}
           width={96}

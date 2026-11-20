@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-11-20T09:35:38.895Z",
+  "capturedAt": "2026-11-20T10:56:14.741Z",
   "retry": 0,
   "animation": {
     "name": "roamlog-ai-shimmer",
@@ -7,6 +7,6 @@
   },
   "backgroundPositionSamples": [
     "90.0004% 50%, 90.0004% 50%",
-    "58.329% 50%, 58.329% 50%"
+    "56.666% 50%, 56.666% 50%"
   ]
 }

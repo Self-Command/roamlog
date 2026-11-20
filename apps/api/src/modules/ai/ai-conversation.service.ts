@@ -49,6 +49,12 @@ export interface AiConversationServiceContract {
     userId: string;
     clientId?: string;
     text: string;
+    /**
+     * Full assistant-ui content parts for the turn (text + image parts). When
+     * present it is stored verbatim so a reloaded conversation still has its
+     * attachments; `text` remains the model-facing prompt and the title source.
+     */
+    content?: readonly unknown[];
   }): Promise<{ messageId: string; clientId: string; created: boolean }>;
 
   startStream(input: {
@@ -211,6 +217,7 @@ export class AiConversationService implements AiConversationServiceContract {
     userId: string;
     clientId?: string;
     text: string;
+    content?: readonly unknown[];
   }): Promise<{ messageId: string; clientId: string; created: boolean }> {
     await this.requireConversation(input.workspaceId, input.conversationId, input.userId);
     if (!input.text.trim()) {
@@ -242,7 +249,7 @@ export class AiConversationService implements AiConversationServiceContract {
             conversationId: input.conversationId,
             parentId: parent?.id ?? null,
             role: "user",
-            content: input.text,
+            content: json(input.content ?? input.text),
             clientId,
           },
           select: { id: true },
@@ -645,6 +652,11 @@ export class AiConversationService implements AiConversationServiceContract {
             },
             select: MESSAGE_SELECT,
           });
+      // A client-side upsert is the only write a stubbed/failed turn gets, so the
+      // conversation itself must acknowledge it: without this the row exists but
+      // the thread stays `lastMessageAt: null`, sorts to the bottom of the
+      // sidebar and is never re-openable after a reload.
+      await this.touchConversation(conversationId, workspaceId, firstTextOf(input.content));
       return presentMessage(row as MessageRow);
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -658,6 +670,28 @@ export class AiConversationService implements AiConversationServiceContract {
       }
       throw error;
     }
+  }
+
+  /** Marks a conversation as active and seeds a placeholder title on first write. */
+  private async touchConversation(
+    conversationId: string,
+    workspaceId: string,
+    text: string | undefined,
+  ): Promise<void> {
+    const conversation = await this.prisma.client.aiConversation.findFirst({
+      where: { id: conversationId, workspaceId, deletedAt: null },
+      select: { title: true, titleSource: true },
+    });
+    if (!conversation) return;
+    await this.prisma.client.aiConversation.update({
+      where: { id: conversationId, workspaceId },
+      data: {
+        lastMessageAt: this.clock(),
+        ...(conversation.title === null && text
+          ? { title: truncateTitle(text), titleSource: "placeholder" }
+          : {}),
+      },
+    });
   }
 
   async deleteMessages(
@@ -911,6 +945,27 @@ function clampInteger(
     return fallback;
   }
   return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+/** First `text` part of a persisted content value (or the string itself). */
+function firstTextOf(content: unknown): string | undefined {
+  if (typeof content === "string") {
+    const trimmed = content.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (!Array.isArray(content)) return undefined;
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    const candidate = part as { type?: unknown; text?: unknown };
+    if (
+      candidate.type === "text" &&
+      typeof candidate.text === "string" &&
+      candidate.text.trim().length > 0
+    ) {
+      return candidate.text;
+    }
+  }
+  return undefined;
 }
 
 function truncateTitle(text: string): string {

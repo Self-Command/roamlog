@@ -25,6 +25,12 @@ export interface AiImagePart {
   readonly mimeType: string;
   /** `data:<mimeType>;base64,<…>`; resolved from the media pipeline by the planner. */
   readonly dataUrl: string;
+  /** Media row id, so the persisted content part can be re-signed by the client. */
+  readonly mediaId?: string;
+  /** Signed display URL at turn time (expires; `mediaId` is the durable handle). */
+  readonly url?: string;
+  readonly name?: string;
+  readonly sizeBytes?: number;
 }
 
 /**

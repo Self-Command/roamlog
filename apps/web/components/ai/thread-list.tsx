@@ -20,6 +20,7 @@ function ThreadListItem() {
 
   return (
     <ThreadListItemPrimitive.Root
+      data-testid="thread-list-item"
       data-active={isActive ? "true" : undefined}
       className="group flex items-center gap-1 rounded-control px-1 data-[active]:bg-white/[0.06]"
     >

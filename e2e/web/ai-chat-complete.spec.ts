@@ -189,17 +189,19 @@ async function latestConversation(
     );
     if (response.status() === 200) {
       const body = (await response.json()) as {
-        items: Array<{ id?: string; title?: string | null }>;
+        items: Array<{ id?: string; title?: string | null; lastMessageAt?: string | null }>;
       };
+      // The list is ordered `lastMessageAt` desc, so index 0 *is* this turn's
+      // conversation. A title is not required: title generation is an AI call and
+      // may legitimately fail (`AI_UPSTREAM`) without affecting the message.
       const item = body.items[0];
-      const title = item?.title?.trim();
-      if (item?.id && title) {
-        return { id: item.id, title, workspaceId: workspace!.id };
+      if (item?.id) {
+        return { id: item.id, title: item.title?.trim() ?? "", workspaceId: workspace!.id };
       }
     }
     await page.waitForTimeout(2_000);
   }
-  throw new Error("the latest AI conversation never received a title");
+  throw new Error("no AI conversation was found after sending");
 }
 
 test.describe("AI chat complete (real stack)", () => {
@@ -362,8 +364,9 @@ test.describe("AI chat complete (real stack)", () => {
     page.on("pageerror", (error) => consoleLog.push(`pageerror: ${error.message}`));
     // Which URL produced the 500 — the console alone does not name it.
     page.on("response", (response) => {
-      if (response.status() >= 500) {
-        consoleLog.push(`http ${response.status()} ${response.request().method()} ${response.url()}`);
+      const url = response.url();
+      if (response.status() >= 400 && url.includes("/v1/")) {
+        consoleLog.push(`http ${response.status()} ${response.request().method()} ${url}`);
       }
     });
     page.on("requestfailed", (request) => {
@@ -377,15 +380,11 @@ test.describe("AI chat complete (real stack)", () => {
       } catch {
         lastBody = {};
       }
-      await route.fulfill({
-        status: 200,
-        headers: { "content-type": "text/event-stream; charset=utf-8" },
-        body: sse([
-          ["meta", META],
-          ["text.delta", { type: "text.delta", delta: "收到图片了。" }],
-          ["done", { type: "done", messageId: "stub-assistant-message", finishReason: "stop" }],
-        ]),
-      });
+      // Record the body, then let the REAL API answer: the server is what
+      // persists the user turn (including its image parts), and a stubbed stream
+      // would leave no row to reload. The model gateway is the only thing this
+      // journey does not control.
+      await route.continue();
     });
 
     await login(page, OWNER_ACCOUNT);
@@ -403,7 +402,7 @@ test.describe("AI chat complete (real stack)", () => {
       timeout: 120_000,
     });
     const uploadState = await preview.getAttribute("data-attachment-status");
-    if (uploadState !== "requires-action") {
+    if (uploadState !== "complete") {
       writeEvidence("debug-upload", {
         status: uploadState,
         reason: await preview.getAttribute("data-attachment-reason"),
@@ -411,11 +410,11 @@ test.describe("AI chat complete (real stack)", () => {
         consoleLog,
       });
     }
-    // …and the adapter reached "ready to send": `running` would mean the PUT is
-    // still in flight, `incomplete` means presign→PUT→complete failed (the tile
-    // itself always shows a local `blob:` preview until the message is sent, so the
-    // state attribute is the only honest signal here).
-    await expect(preview).toHaveAttribute("data-attachment-status", "requires-action", {
+    // …and the adapter reached "complete": `running` would mean the PUT is still in
+    // flight, `incomplete` means presign→PUT→complete failed. The tile itself shows
+    // a local `blob:` preview while pending, so `data-attachment-status` is the
+    // only honest signal that the bytes really reached object storage.
+    await expect(preview).toHaveAttribute("data-attachment-status", "complete", {
       timeout: 60_000,
     });
     await shot(page, "05-attachment-preview-1440");
@@ -468,6 +467,7 @@ test.describe("AI chat complete (real stack)", () => {
 
     // --- evidence: a real media row + the persisted content part -------------
     const { id: conversationId, title, workspaceId } = await latestConversation(page);
+    writeEvidence("00-conversation", { conversationId, title, workspaceId });
     const mediaId = String(attachment?.mediaId);
     const mediaResponse = await page.request.get(`${WEB_URL}/v1/media/${mediaId}`);
     const mediaJson = (await mediaResponse.json()) as Record<string, unknown>;
@@ -517,9 +517,30 @@ test.describe("AI chat complete (real stack)", () => {
     await shot(page, "06-attachment-message-1440");
 
     // --- reload: the thumbnail must still be there --------------------------
+    // Re-open the newest row instead of matching a generated title: title
+    // generation is an AI call and can legitimately 400 (`AI_UPSTREAM`) without
+    // affecting the message, which would make a title-based lookup flaky.
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: title, exact: true }).first().click();
-    await expect(page.getByText("这张照片里是哪里？").first()).toBeVisible({ timeout: 30_000 });
+    const items = page.getByTestId("thread-list-item");
+    await expect(items.first()).toBeVisible({ timeout: 30_000 });
+    const target = page.getByText("这张照片里是哪里？");
+    // The sidebar is cached per workspace and can hold conversations created by
+    // other journeys, so open rows until the one with this turn is on screen —
+    // no dependency on the (AI-generated, sometimes failing) title.
+    let opened = false;
+    const candidates = Math.min(await items.count(), 6);
+    for (let index = 0; index < candidates; index += 1) {
+      await items.nth(index).getByRole("button").first().click();
+      opened = await target
+        .first()
+        .waitFor({ state: "visible", timeout: 4_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (opened) break;
+    }
+    expect(opened, "the conversation with the attachment must be reachable after reload").toBe(
+      true,
+    );
     const reloadedThumb = page.getByTestId("message-attachment-thumb").first();
     await expect(reloadedThumb).toBeVisible({ timeout: 30_000 });
     await expect

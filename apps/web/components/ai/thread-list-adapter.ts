@@ -1,4 +1,6 @@
 import type { ThreadMessageLike } from "@assistant-ui/react";
+
+import { contentWithAttachmentParts } from "./media-attachment-adapter";
 import {
   ExportedMessageRepository,
   useAuiState,
@@ -386,8 +388,14 @@ class ConversationGateway {
     const clientId = item.message.id;
     if (!clientId) return;
 
+    // assistant-ui keeps attachment parts in `message.attachments`; the API
+    // stores `content` only, so flatten them in or a reloaded conversation loses
+    // its thumbnails (`contentWithAttachmentParts`).
     const body: UpsertAiConversationMessageBody = {
-      content: item.message.content,
+      content: contentWithAttachmentParts(
+        item.message.content,
+        item.message.attachments,
+      ) as UpsertAiConversationMessageBody["content"],
       parentId: item.parentId,
     };
     if (item.message.status !== undefined) body.status = item.message.status;
@@ -434,7 +442,10 @@ class ConversationGateway {
   async flushWrites(): Promise<void> {
     for (const [clientId, entry] of [...this.pendingUpserts]) {
       const body: UpsertAiConversationMessageBody = {
-        content: entry.item.message.content,
+        content: contentWithAttachmentParts(
+          entry.item.message.content,
+          entry.item.message.attachments,
+        ) as UpsertAiConversationMessageBody["content"],
         parentId: entry.item.parentId,
       };
       if (entry.item.message.status !== undefined) body.status = entry.item.message.status;

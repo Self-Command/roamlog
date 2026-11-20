@@ -36,6 +36,7 @@ import type {
 } from "@assistant-ui/react";
 import {
   AI_ATTACHMENT_MAX_BYTES,
+  AI_ATTACHMENT_MAX_COUNT,
   AI_ATTACHMENT_MIME_TYPES,
   type AiAttachment,
   type MediaRead,
@@ -249,12 +250,17 @@ export function createMediaAttachmentAdapter({
       //    see `drainAttachmentAdd` in
       //    `@assistant-ui/core/dist/runtime/base/base-composer-runtime-core.js` L535.
       try {
-        await running;
+        // The upload finished, so the attachment is genuinely complete: yield the
+        // completed object (status `complete` + its image part). assistant-ui's
+        // `add` generator is documented as yielding pending states only, but the
+        // runtime keys off `status.type` — a `complete` yield makes the composer
+        // treat the attachment as ready (`send()` then skips `adapter.send`, whose
+        // result the runtime drops for attachments it considers removed). Yielding
+        // `requires-action` here produced a text-only message: the image part never
+        // reached `message.content`, so it was neither rendered nor sent to the API.
+        const completed = await running;
         console.info(`[attach-debug] add upload done id=${id}`);
-        yield {
-          ...pending,
-          status: { type: "requires-action", reason: "composer-send" },
-        };
+        yield completed as unknown as PendingAttachment;
       } catch (error) {
         lastError =
           error instanceof AiAttachmentError
@@ -319,4 +325,74 @@ export function attachmentsFromContent(
       },
     ];
   });
+}
+/**
+ * Every attachment reference on one user message, from **both** places
+ * assistant-ui can put them:
+ *
+ * - `message.attachments` while the turn is live (the composer keeps the
+ *   complete attachment there, and `MessagePrimitive.Attachments` renders it);
+ * - `message.content` after a reload (persisted content carries the image part,
+ *   because `thread-list-adapter.upsertMessage` flattens attachments into it).
+ *
+ * Without the first branch the image never reached the API — the message body
+ * looked text-only — and without the second a reloaded turn would forget it.
+ */
+export function attachmentsFromMessage(message: {
+  content?: readonly { type: string; providerMetadata?: unknown }[];
+  attachments?: readonly {
+    content?: readonly { type: string; providerMetadata?: unknown }[];
+  }[];
+}): AiAttachment[] {
+  const seen = new Set<string>();
+  const result: AiAttachment[] = [];
+  const push = (metadata: RoamlogImageMetadata | undefined): void => {
+    if (!metadata || seen.has(metadata.mediaId) || result.length >= AI_ATTACHMENT_MAX_COUNT) {
+      return;
+    }
+    seen.add(metadata.mediaId);
+    result.push({
+      mediaId: metadata.mediaId,
+      kind: metadata.kind,
+      name: metadata.name.slice(0, 200),
+      mimeType: metadata.mimeType as AiAttachment["mimeType"],
+      sizeBytes: metadata.sizeBytes,
+    });
+  };
+
+  for (const part of message.content ?? []) {
+    if (part.type === "image") push(readImageMetadata(part.providerMetadata));
+  }
+  for (const attachment of message.attachments ?? []) {
+    for (const part of attachment.content ?? []) {
+      if (part.type === "image") push(readImageMetadata(part.providerMetadata));
+    }
+  }
+  return result;
+}
+
+/**
+ * Flattens a message's attachment parts into its `content` before persistence.
+ *
+ * `thread-list-adapter` stores `content` only, so without this step a reloaded
+ * conversation loses its thumbnails (the image part lived in `attachments`).
+ */
+export function contentWithAttachmentParts(
+  content: unknown,
+  attachments: readonly { content?: readonly unknown[] }[] | undefined,
+): unknown {
+  const extra = (attachments ?? []).flatMap((attachment) =>
+    (attachment.content ?? []).filter(
+      (part) => (part as { type?: unknown }).type !== "text",
+    ),
+  );
+  // No attachment parts: return the value untouched. `ThreadMessageLike.content`
+  // may be a plain string, and spreading it would split it into characters.
+  if (extra.length === 0) return content;
+  const base = Array.isArray(content)
+    ? content
+    : typeof content === "string" && content.length > 0
+      ? [{ type: "text", text: content }]
+      : [];
+  return [...base, ...extra];
 }

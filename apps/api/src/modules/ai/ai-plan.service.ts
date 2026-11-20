@@ -357,6 +357,11 @@ export class AiPlanService {
       userId: actor.user.id,
       ...(body.clientMessageId ? { clientId: body.clientMessageId } : {}),
       text: body.message,
+      // The stored turn keeps its attachments: the client renders these image
+      // parts after a reload and re-signs them from `mediaId` when the URL has
+      // expired. Without this the persisted row is text-only and the thumbnail
+      // disappears on refresh.
+      ...(images.length > 0 ? { content: userTurnParts(body.message, images) } : {}),
     });
 
     // `ThreadHistoryAdapter.append()` may have created the user row first, and
@@ -846,6 +851,10 @@ export class AiPlanService {
       images.push({
         mimeType: read.mimeType,
         dataUrl: `data:${read.mimeType};base64,${bytes.toString("base64")}`,
+        mediaId: read.id,
+        url,
+        name: attachment.name,
+        sizeBytes: attachment.sizeBytes,
       });
     }
     return images;
@@ -1569,6 +1578,37 @@ async function fetchAttachmentBytes(url: string): Promise<Buffer> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * assistant-ui-shaped content parts for a persisted user turn.
+ *
+ * Shape matches `ImageMessagePart` (`{type:"image", image, filename,
+ * providerMetadata}`) so `thread-list-adapter.toThreadMessageLike` can hand the
+ * stored JSON straight back to the renderer after a reload.
+ */
+function userTurnParts(
+  text: string,
+  images: readonly AiImagePart[],
+): readonly unknown[] {
+  return [
+    { type: "text", text },
+    ...images.map((image) => ({
+      type: "image",
+      id: image.mediaId,
+      image: image.url ?? "",
+      filename: image.name ?? "attachment",
+      providerMetadata: {
+        roamlog: {
+          mediaId: image.mediaId,
+          mimeType: image.mimeType,
+          sizeBytes: image.sizeBytes ?? 0,
+          name: image.name ?? "",
+          kind: "image",
+        },
+      },
+    })),
+  ];
 }
 
 /** How long the gateway model catalog is reused for display names. */
