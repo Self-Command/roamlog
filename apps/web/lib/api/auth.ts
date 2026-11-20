@@ -1,6 +1,41 @@
+import { RequestPasswordResetResponseSchema, type EmailDeliveryMarker } from "@roamlog/contracts";
+
 import { ApiError, errorFromResponse } from "./errors";
 
 export type TwoFactorMethod = "totp" | "backup-code";
+
+/**
+ * The request reached the API but no reset link exists, because the deployment
+ * has no usable mail transport. Thrown instead of resolving so the form can show
+ * a failure alert: Better Auth's own body is a deliberately generic 200, so this
+ * marker is the only signal that nothing was delivered.
+ */
+export class EmailNotConfiguredError extends Error {
+  readonly code = "MAIL_NOT_CONFIGURED" as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "EmailNotConfiguredError";
+  }
+}
+
+/** A send was attempted and failed: the link never left the building. */
+export class EmailDeliveryFailedError extends Error {
+  readonly code = "MAIL_DELIVERY_FAILED" as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "EmailDeliveryFailedError";
+  }
+}
+
+/** Copy used wherever a mail-dependent action cannot deliver. */
+export const MAIL_NOT_CONFIGURED_MESSAGE =
+  "邮件服务未配置，暂时无法发送重置链接。请联系管理员配置邮件发送后重试。";
+
+/** Copy for a send that was attempted and failed (transport down or rejected). */
+export const MAIL_DELIVERY_FAILED_MESSAGE =
+  "邮件未能发出，重置链接没有送达。请稍后重试；若持续失败，请联系管理员检查邮件服务。";
 
 export interface SignInResult {
   twoFactorRedirect: boolean;
@@ -88,14 +123,30 @@ export async function sendVerificationEmail(email: string): Promise<void> {
   );
 }
 
+/**
+ * Better Auth mounts the reset request at `/request-password-reset`
+ * (`createAuthEndpoint("/request-password-reset")`); `/forget-password` is not a
+ * route and answers 404. The API gateway answers the same path so it can append
+ * the delivery marker defined by `RequestPasswordResetResponseSchema`.
+ */
 export async function requestPasswordReset(email: string): Promise<void> {
-  await authRequest(
-    "/v1/auth/forget-password",
+  const body = await authRequest(
+    "/v1/auth/request-password-reset",
     jsonInit("POST", {
       email,
       redirectTo: `${window.location.origin}/reset-password`,
     }),
   );
+  const parsed = RequestPasswordResetResponseSchema.safeParse(body);
+  const delivery: EmailDeliveryMarker | undefined = parsed.success
+    ? parsed.data.emailDelivery
+    : undefined;
+  if (delivery === "not_configured") {
+    throw new EmailNotConfiguredError(MAIL_NOT_CONFIGURED_MESSAGE);
+  }
+  if (delivery === "failed") {
+    throw new EmailDeliveryFailedError(MAIL_DELIVERY_FAILED_MESSAGE);
+  }
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
@@ -212,6 +263,9 @@ function parseBackupCodes(value: unknown): string[] {
 
 export function authErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    // The API answers a doomed mail route with a readable code; its English
+    // operator message ("set the mail provider in Admin settings") is not copy.
+    if (error.code === "MAIL_NOT_CONFIGURED") return MAIL_NOT_CONFIGURED_MESSAGE;
     if (error.status === 401) return "邮箱或密码不正确，或账号尚未完成邮箱验证。";
     if (error.status === 403) return "当前账号没有权限完成此操作，请重新登录。";
     if (error.status === 429) return "尝试次数过多，请稍后再试。";

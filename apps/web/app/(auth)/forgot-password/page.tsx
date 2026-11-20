@@ -12,7 +12,7 @@ export default function ForgotPasswordPage() {
     <AuthPageFrame
       eyebrow="ACCOUNT RECOVERY"
       title="找回账号访问"
-      description="输入注册邮箱。真实环境会发送一次性重置链接，当前仅执行邮箱格式校验。"
+      description="输入注册邮箱，我们会发送一封带一次性重置链接的邮件。链接 30 分钟内有效，且只能使用一次。"
       footer={
         <p className="text-center text-xs text-muted">
           想起密码了？{" "}
@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
     >
       <EmailLinkForm
         submitLabel="发送重置链接"
-        successMessage="如果该邮箱存在，重置链接会发送到收件箱。当前为占位状态，不会发送邮件。"
+        successMessage="如果该邮箱存在，重置链接已发送到收件箱。若几分钟内没有收到，请检查垃圾邮件或稍后重试。"
         intent="reset"
       />
     </AuthPageFrame>

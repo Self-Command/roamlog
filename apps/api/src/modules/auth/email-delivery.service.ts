@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { Inject, Injectable, Optional } from "@nestjs/common";
 
 import { AppConfigService } from "../../config/app-config.service.js";
@@ -5,6 +7,50 @@ import { MailService } from "../email/mail.service.js";
 import { MailSettingsConsumer } from "../settings/mail-settings.consumer.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+
+/**
+ * What one gateway request's mail sends actually did.
+ *
+ * Better Auth swallows a failing `sendResetPassword` callback:
+ * `runInBackgroundOrAwait` logs the error and still answers
+ * `{ status: true, message: "If this email exists…" }`
+ * (better-auth 1.7.25 `dist/context/create-context.mjs:215-224`, used by
+ * `dist/api/routes/password.mjs:83`). A 200 therefore cannot prove a link was
+ * sent, so the gateway records the outcome itself and reports it to the client.
+ */
+export type EmailDeliveryOutcome = "sent" | "failed";
+
+interface DeliveryTally {
+  sent: number;
+  failed: number;
+}
+
+const deliveryTally = new AsyncLocalStorage<DeliveryTally>();
+
+/**
+ * Runs `run` with a fresh delivery tally and reports the net outcome:
+ * `failed` wins over `sent`, and `undefined` means no send was attempted
+ * (for example an unknown address, where better-auth short-circuits).
+ */
+export async function trackEmailDelivery<T>(
+  run: () => Promise<T>,
+): Promise<{ value: T; outcome: EmailDeliveryOutcome | undefined }> {
+  const tally: DeliveryTally = { sent: 0, failed: 0 };
+  const value = await deliveryTally.run(tally, run);
+  const outcome: EmailDeliveryOutcome | undefined =
+    tally.failed > 0 ? "failed" : tally.sent > 0 ? "sent" : undefined;
+  return { value, outcome };
+}
+
+function recordDelivery(outcome: EmailDeliveryOutcome): void {
+  const tally = deliveryTally.getStore();
+  if (!tally) return;
+  if (outcome === "failed") {
+    tally.failed += 1;
+  } else {
+    tally.sent += 1;
+  }
+}
 
 interface MailUser {
   id?: string;
@@ -165,6 +211,7 @@ export class EmailDeliveryService {
           providerId: result.providerId?.slice(0, 200) ?? null,
         },
       });
+      recordDelivery("sent");
     } catch (error) {
       const code =
         typeof error === "object" && error !== null && "code" in error
@@ -187,6 +234,7 @@ export class EmailDeliveryService {
         },
         "email.delivery_failed",
       );
+      recordDelivery("failed");
       throw error;
     }
   }

@@ -6,10 +6,15 @@ import { redactUrlPathForLogging } from "../../common/services/log-redaction.js"
 import { AppConfigService } from "../../config/app-config.service.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { AuthService } from "./auth.service.js";
-import { EmailDeliveryService } from "./email-delivery.service.js";
+import { EmailDeliveryService, trackEmailDelivery } from "./email-delivery.service.js";
 
 const SIGN_UP_PATH = "/v1/auth/sign-up/email";
-const FORGET_PASSWORD_PATH = "/v1/auth/forget-password";
+/**
+ * Better Auth 1.7 mounts the reset request at `/request-password-reset`
+ * (`createAuthEndpoint("/request-password-reset")`); `/forget-password` does not
+ * exist and answered 404. The gateway mirrors better-auth's route.
+ */
+const REQUEST_PASSWORD_RESET_PATH = "/v1/auth/request-password-reset";
 const SEND_VERIFICATION_PATH = "/v1/auth/send-verification-email";
 const MAIL_NOT_CONFIGURED_CODE = "MAIL_NOT_CONFIGURED";
 
@@ -111,23 +116,29 @@ export class AuthController {
       return;
     }
 
-    if (!mailConfigured && target.pathname === FORGET_PASSWORD_PATH) {
+    if (!mailConfigured && target.pathname === REQUEST_PASSWORD_RESET_PATH) {
       this.logger.warn(
-        { event: "mail.not_configured", route: "forget-password" },
+        { event: "mail.not_configured", route: "request-password-reset" },
         "mail.not_configured",
       );
       // Same generic body better-auth returns, plus the honest delivery marker.
+      // `status: true` keeps account enumeration impossible; `emailDelivery`
+      // tells the client that the link was never sent.
       response.status(200).json({ status: true, emailDelivery: "not_configured" });
       return;
     }
 
     const body = requestBody(request);
-    const webResponse = await this.auth.handleWebRequest(
-      new Request(target, {
-        method: request.method,
-        headers: webHeaders(request),
-        ...(body === undefined ? {} : { body }),
-      }),
+    // Better Auth answers 200 even when the callback throws, so the send outcome
+    // has to come from our own transport call rather than from the response.
+    const { value: webResponse, outcome } = await trackEmailDelivery(() =>
+      this.auth.handleWebRequest(
+        new Request(target, {
+          method: request.method,
+          headers: webHeaders(request),
+          ...(body === undefined ? {} : { body }),
+        }),
+      ),
     );
 
     response.status(webResponse.status);
@@ -147,13 +158,24 @@ export class AuthController {
       this.logger.warn({ event: "mail.not_configured", route: "sign-up" }, "mail.not_configured");
       bodyBuffer = withEmailDeliveryMarker(bodyBuffer, "not_configured");
     }
+    if (
+      webResponse.ok &&
+      target.pathname === REQUEST_PASSWORD_RESET_PATH &&
+      outcome === "failed"
+    ) {
+      this.logger.warn(
+        { event: "email.delivery_failed", route: "request-password-reset" },
+        "email.delivery_failed",
+      );
+      bodyBuffer = withEmailDeliveryMarker(bodyBuffer, "failed");
+    }
     response.end(bodyBuffer);
   }
 
   private needsMailCheck(pathname: string): boolean {
     return (
       pathname === SIGN_UP_PATH ||
-      pathname === FORGET_PASSWORD_PATH ||
+      pathname === REQUEST_PASSWORD_RESET_PATH ||
       pathname === SEND_VERIFICATION_PATH
     );
   }

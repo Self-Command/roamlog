@@ -5,7 +5,7 @@ import type { PinoLoggerService } from "../../observability/pino-logger.service.
 import type { PrismaService } from "../../prisma/prisma.service.js";
 import type { MailService } from "../../email/mail.service.js";
 import { MailDeliveryError } from "../../email/mail.service.js";
-import { EmailDeliveryService } from "../email-delivery.service.js";
+import { EmailDeliveryService, trackEmailDelivery } from "../email-delivery.service.js";
 
 function logger(): PinoLoggerService {
   return { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as unknown as PinoLoggerService;
@@ -71,5 +71,50 @@ describe("EmailDeliveryService delivery outcome", () => {
     expect(mailer.send).toHaveBeenCalledWith(
       expect.objectContaining({ to: "new@roamlog.test", idempotencyKey: "log-1" }),
     );
+  });
+});
+
+describe("trackEmailDelivery", () => {
+  it("reports failed when the transport rejects inside the tracked run", async () => {
+    const delivery = service(
+      { send: vi.fn().mockRejectedValue(new MailDeliveryError("CONNECTION_FAILED", "down")) },
+      prisma(),
+    );
+
+    const { outcome } = await trackEmailDelivery(async () => {
+      // better-auth swallows exactly this rejection, so the gateway must see it.
+      await delivery
+        .sendPasswordResetEmail({ email: "verify@roamlog.test", name: "Verify" }, "http://x/reset")
+        .catch(() => undefined);
+      return "handled";
+    });
+
+    expect(outcome).toBe("failed");
+  });
+
+  it("reports sent when the transport accepted the message", async () => {
+    const delivery = service(
+      {
+        send: vi.fn().mockResolvedValue({ provider: "smtp", providerId: "<m@roamlog.test>", latencyMs: 3 }),
+      },
+      prisma(),
+    );
+
+    const { outcome, value } = await trackEmailDelivery(async () => {
+      await delivery.sendPasswordResetEmail(
+        { email: "verify@roamlog.test", name: "Verify" },
+        "http://x/reset",
+      );
+      return "handled";
+    });
+
+    expect(value).toBe("handled");
+    expect(outcome).toBe("sent");
+  });
+
+  it("reports no outcome when nothing was sent, so an unknown address cannot be probed", async () => {
+    const { outcome } = await trackEmailDelivery(() => Promise.resolve("short-circuited"));
+
+    expect(outcome).toBeUndefined();
   });
 });

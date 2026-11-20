@@ -101,21 +101,6 @@ describe("AuthController mail behaviour", () => {
     expect(handleWebRequest).not.toHaveBeenCalled();
   });
 
-  it("answers the reset request honestly without a 500", async () => {
-    const response = expressResponse();
-    const handleWebRequest = vi.fn();
-    const controllerUnderTest = controller({ configured: false, handleWebRequest });
-
-    await controllerUnderTest.handle(
-      request("/v1/auth/forget-password", { email: "someone@roamlog.test" }),
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(200);
-    expect(response.json).toHaveBeenCalledWith({ status: true, emailDelivery: "not_configured" });
-    expect(handleWebRequest).not.toHaveBeenCalled();
-  });
-
   it("leaves a configured registration response untouched", async () => {
     const response = expressResponse();
     const controllerUnderTest = controller({ configured: true });

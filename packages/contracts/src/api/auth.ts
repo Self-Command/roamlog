@@ -98,3 +98,29 @@ export const AuthHandlerResponseSchema = z.record(z.string(), z.unknown());
 export const AuthHandlerParamsSchema = z.object({ path: z.string().min(1).max(200) });
 
 export const AccountEmailSchema = EmailSchema;
+
+/**
+ * Delivery truth appended by the API gateway to Better Auth's mail routes.
+ * Better Auth itself always answers `/request-password-reset` with a generic
+ * `{ status: true, message }` body so the endpoint cannot be used to enumerate
+ * accounts; without this marker a client cannot tell "a link is on its way"
+ * from "no transport exists, nothing was sent". The field is absent whenever a
+ * real send was attempted and succeeded.
+ *
+ * `not_configured`: the deployment has no usable mail transport, so nothing was
+ * attempted. `failed`: a send was attempted and the transport rejected or could
+ * not reach it (better-auth still answers 200 in that case — see
+ * `create-context.mjs:215`), so the link never left.
+ */
+export const EmailDeliveryMarkerSchema = z.enum(["not_configured", "failed"]);
+export type EmailDeliveryMarker = z.infer<typeof EmailDeliveryMarkerSchema>;
+
+export const RequestPasswordResetResponseSchema = z
+  .object({
+    status: z.boolean().optional(),
+    message: z.string().optional(),
+    /** Present only when nothing was delivered; absent on a real send. */
+    emailDelivery: EmailDeliveryMarkerSchema.optional(),
+  })
+  .passthrough();
+export type RequestPasswordResetResponse = z.infer<typeof RequestPasswordResetResponseSchema>;
