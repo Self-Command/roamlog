@@ -22,7 +22,7 @@ export async function uploadSeedAssets(
   if (!endpoint || !accessKeyId || !secretAccessKey || !bucket) {
     if (verbose) {
       console.warn(
-        "Seed asset upload skipped: S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, or S3_BUCKET is missing. Local fallback variants remain available.",
+        "Seed asset upload skipped: S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, or S3_BUCKET is missing. Media rows still reference their original object keys.",
       );
     }
     return false;
@@ -36,7 +36,7 @@ export async function uploadSeedAssets(
   } catch {
     if (verbose) {
       console.warn(
-        "Seed asset upload skipped: S3-compatible storage is not reachable. Local fallback variants remain available.",
+        "Seed asset upload skipped: S3-compatible storage is not reachable. Media rows still reference their original object keys.",
       );
     }
     return false;
@@ -57,7 +57,7 @@ export async function uploadSeedAssets(
       if (!existsSync(assetPath)) {
         if (verbose) {
           console.warn(
-            `Seed asset upload skipped for ${item.assetFileName}: local fallback file is missing.`,
+            `Seed asset upload skipped for ${item.assetFileName}: seed asset file is missing.`,
           );
         }
         return false;
@@ -75,7 +75,7 @@ export async function uploadSeedAssets(
   } catch {
     if (verbose) {
       console.warn(
-        `Seed asset upload stopped after ${uploaded}/${data.media.length} objects. The seed data is intact and local fallback variants remain available.`,
+        `Seed asset upload stopped after ${uploaded}/${data.media.length} objects. The seed data is intact and media rows still reference their original object keys.`,
       );
     }
     return false;

@@ -417,19 +417,10 @@ export const media: SeedMedia[] = Array.from(
       height: 800,
       blurhash: "L9B|v}00~q~qM{ofRjRj00ofRjRj",
       variants: {
-        thumb: {
-          key: `variants/${assetBase}-${index + 1}-thumb.webp`,
-          width: 480,
-          height: 320,
-        },
-        display: {
-          key: `variants/${assetBase}-${index + 1}-display.webp`,
+        original: {
+          key,
           width: 1200,
           height: 800,
-        },
-        localFallback: {
-          assetFileName: asset.fileName,
-          relativePath: `seed-assets/${asset.fileName}`,
         },
       },
       status: "ready",
