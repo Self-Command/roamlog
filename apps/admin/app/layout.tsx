@@ -1,44 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Instrument_Serif, Noto_Sans_SC, Noto_Serif_SC } from "next/font/google";
 
+import "@fontsource-variable/geist/wght.css";
+import "@fontsource-variable/geist-mono/wght.css";
+import "@fontsource/instrument-serif/latin-400.css";
+import "@fontsource-variable/noto-sans-sc/wght.css";
+import "@fontsource-variable/noto-serif-sc/wght.css";
 import "./globals.css";
 
 import { AdminProviders } from "../components/providers";
-
-const geist = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist",
-  display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-geist-mono",
-  display: "swap",
-});
-
-const instrument = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  variable: "--font-instrument",
-  display: "swap",
-});
-
-const notoSerif = Noto_Serif_SC({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-noto-serif",
-  display: "swap",
-  preload: false,
-});
-
-const notoSans = Noto_Sans_SC({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-noto-sans",
-  display: "swap",
-  preload: false,
-});
 
 export const metadata: Metadata = {
   title: {
@@ -55,9 +24,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <body
-        className={`${geist.variable} ${geistMono.variable} ${instrument.variable} ${notoSerif.variable} ${notoSans.variable} min-h-dvh bg-canvas text-body antialiased`}
-      >
+      <body className="min-h-dvh bg-canvas text-body antialiased">
         <AdminProviders>{children}</AdminProviders>
       </body>
     </html>

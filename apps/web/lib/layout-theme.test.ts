@@ -1,7 +1,6 @@
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/fonts", () => ({ fontClassNames: "font-test" }));
 vi.mock("@/components/providers", () => ({
   Providers: ({ children }: { children: unknown }) => children,
 }));

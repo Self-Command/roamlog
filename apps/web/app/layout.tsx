@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { CSSProperties, ReactNode } from "react";
 
-import { fontClassNames } from "@/lib/fonts";
 import {
   DEFAULT_LANGUAGE,
   buildSiteMetadata,
@@ -12,6 +11,11 @@ import {
 
 import { Providers } from "../components/providers";
 
+import "@fontsource-variable/geist/wght.css";
+import "@fontsource-variable/geist-mono/wght.css";
+import "@fontsource/instrument-serif/latin-400.css";
+import "@fontsource-variable/noto-sans-sc/wght.css";
+import "@fontsource-variable/noto-serif-sc/wght.css";
 import "./globals.css";
 
 /**
@@ -47,7 +51,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html
       lang={readPublicString(settings, "general.defaultLanguage") ?? DEFAULT_LANGUAGE}
-      className={fontClassNames}
       data-theme={theme.dataTheme}
       data-accent={theme.accent}
       style={themeStyle}

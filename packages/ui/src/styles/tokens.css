@@ -35,6 +35,12 @@
   --roamlog-radius-control: 8px;
   --roamlog-radius-pill: 9999px;
 
+  --font-geist: "Geist Variable";
+  --font-geist-mono: "Geist Mono Variable";
+  --font-instrument: "Instrument Serif";
+  --font-noto-sans: "Noto Sans SC Variable";
+  --font-noto-serif: "Noto Serif SC Variable";
+
   --roamlog-font-serif:
     var(--font-instrument), var(--font-noto-serif), "Songti SC", "SimSun", serif;
   --roamlog-font-sans:

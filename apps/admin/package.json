@@ -13,6 +13,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
+    "@fontsource-variable/noto-sans-sc": "5.3.1",
+    "@fontsource-variable/noto-serif-sc": "5.3.1",
+    "@fontsource/instrument-serif": "5.3.0",
     "@roamlog/api-client": "workspace:*",
     "@roamlog/contracts": "workspace:*",
     "@roamlog/ui": "workspace:*",
