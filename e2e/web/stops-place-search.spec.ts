@@ -197,7 +197,19 @@ test.describe("stops place search in the real UI", () => {
     let tripPath = "";
     let stopId = "";
     let searchMode: "ok" | "error" = "ok";
+    let blockInitialStops = true;
+    let releaseStops: (() => void) | undefined;
+    const stopsGate = new Promise<void>((resolve) => {
+      releaseStops = resolve;
+    });
     const observed: Array<{ path: string; status: number; query?: string }> = [];
+
+    await page.route("**/v1/trips/*/stops", async (route) => {
+      if (route.request().method() === "GET" && blockInitialStops) {
+        await stopsGate;
+      }
+      await route.continue();
+    });
 
     await page.route("**/v1/places/search**", async (route) => {
       const query = new URL(route.request().url()).searchParams.get("q") ?? "";
@@ -229,9 +241,18 @@ test.describe("stops place search in the real UI", () => {
       const slug = await workspaceSlug(page);
 
       await test.step("Owner creates a trip through the UI and opens 添加节点", async () => {
-        const trip = await createTripThroughUi(page, slug, tripTitle);
-        tripId = trip.tripId;
-        tripPath = trip.tripPath;
+        try {
+          const trip = await createTripThroughUi(page, slug, tripTitle);
+          tripId = trip.tripId;
+          tripPath = trip.tripPath;
+          await expect(page.getByText("读取中", { exact: true })).toBeVisible({
+            timeout: 5_000,
+          });
+        } finally {
+          blockInitialStops = false;
+          releaseStops?.();
+        }
+        await page.unroute("**/v1/trips/*/stops");
         await expect(page.getByText("还没有行程节点", { exact: true })).toBeVisible({
           timeout: 30_000,
         });
@@ -337,23 +358,7 @@ test.describe("stops place search in the real UI", () => {
         const row = page.getByRole("listitem").filter({ hasText: "金泽" }).first();
         await expect(row).toBeVisible({ timeout: 30_000 });
 
-        let delayStopsOnce = true;
-        await page.route(`**/v1/trips/${tripId}/stops`, async (route) => {
-          if (route.request().method() !== "GET" || !delayStopsOnce) {
-            await route.continue();
-            return;
-          }
-          delayStopsOnce = false;
-          await new Promise((resolve) => setTimeout(resolve, 1_500));
-          await route.continue();
-        });
-        const stopsPanel = page
-          .locator("section")
-          .filter({ has: page.getByRole("heading", { name: "行程节点", exact: true }) });
         await page.reload();
-        await expect(stopsPanel.getByText("读取中", { exact: true })).toBeVisible({
-          timeout: 5_000,
-        });
         await expect(row).toBeVisible({ timeout: 30_000 });
         await expect(row).toContainText("金泽市, 石川县, 日本");
         await expect(row).toContainText("36.5613, 136.6562");
