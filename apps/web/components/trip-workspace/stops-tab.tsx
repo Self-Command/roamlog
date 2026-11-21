@@ -1,7 +1,7 @@
 "use client";
 
 import { useCreateStop, useDeleteStop, useUpdateStop } from "@roamlog/api-client";
-import type { CreateStopRequest, Stop } from "@roamlog/contracts";
+import type { CreateStopRequest, Place, Stop } from "@roamlog/contracts";
 import {
   Badge,
   Button,
@@ -16,8 +16,15 @@ import {
   Textarea,
 } from "@roamlog/ui";
 import { MapPin, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useCallback, useRef, useState, type FormEvent } from "react";
 
+import {
+  SearchableCombobox,
+  type ComboboxOption,
+  type ComboboxSearch,
+} from "@/components/forms/searchable-combobox";
+import { usePlacesSearchAttribution } from "@/components/map/places-attribution";
+import { searchPlacesForTripForm } from "@/lib/api/trip-form";
 import { deniedReason } from "./capabilities";
 import { ConfirmDialog } from "./dialogs";
 import { formatDateRange } from "@/lib/trip-presentation";
@@ -35,6 +42,11 @@ interface StopDraft {
   lat: string;
   lng: string;
   notes: string;
+  provider: Stop["provider"];
+  providerPlaceId: string | null;
+  timeZone: string | null;
+  address: string | null;
+  bbox: Stop["bbox"];
 }
 
 const EMPTY_DRAFT: StopDraft = {
@@ -46,7 +58,47 @@ const EMPTY_DRAFT: StopDraft = {
   lat: "",
   lng: "",
   notes: "",
+  provider: null,
+  providerPlaceId: null,
+  timeZone: null,
+  address: null,
+  bbox: null,
 };
+
+function placeOptionId(place: Place): string {
+  return `${place.provider}:${String(place.providerPlaceId)}`;
+}
+
+function draftWithPlace(draft: StopDraft, place: Place): StopDraft {
+  return {
+    ...draft,
+    city: place.name,
+    country: place.country,
+    countryCode: place.countryCode,
+    lat: String(place.lat),
+    lng: String(place.lng),
+    provider: place.provider,
+    providerPlaceId: place.providerPlaceId,
+    timeZone: place.timeZone,
+    address: place.address,
+    bbox: place.bbox,
+  };
+}
+
+function clearPlaceMetadata(
+  draft: StopDraft,
+  options: { clearCoordinates: boolean },
+): StopDraft {
+  return {
+    ...draft,
+    provider: null,
+    providerPlaceId: null,
+    timeZone: null,
+    address: null,
+    bbox: null,
+    ...(options.clearCoordinates ? { lat: "", lng: "" } : {}),
+  };
+}
 
 function buildCreateStop(draft: StopDraft, order: number): CreateStopRequest {
   const lat = draft.lat.trim();
@@ -59,6 +111,11 @@ function buildCreateStop(draft: StopDraft, order: number): CreateStopRequest {
     startDate: draft.startDate,
     endDate: draft.endDate,
     order,
+    provider: draft.provider,
+    providerPlaceId: draft.providerPlaceId,
+    timeZone: draft.timeZone,
+    address: draft.address,
+    bbox: draft.bbox,
     ...(notes ? { notes } : {}),
     ...(lat ? { lat: Number(lat) } : {}),
     ...(lng ? { lng: Number(lng) } : {}),
@@ -75,6 +132,11 @@ function draftFromStop(stop: Stop): StopDraft {
     lat: stop.lat === null ? "" : String(stop.lat),
     lng: stop.lng === null ? "" : String(stop.lng),
     notes: stop.notes,
+    provider: stop.provider,
+    providerPlaceId: stop.providerPlaceId,
+    timeZone: stop.timeZone,
+    address: stop.address,
+    bbox: stop.bbox,
   };
 }
 
@@ -184,13 +246,116 @@ export function StopsTab({ tripId }: { tripId: string }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Stop | null>(null);
   const [draft, setDraft] = useState<StopDraft>(EMPTY_DRAFT);
+  const [placeQuery, setPlaceQuery] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Stop | null>(null);
+  const placeIndex = useRef(new Map<string, Place>());
+
+  const search: ComboboxSearch = useCallback(async (query, { signal }) => {
+    const result = await searchPlacesForTripForm(query, signal);
+    const items: ComboboxOption[] = result.items.map((place) => {
+      const id = placeOptionId(place);
+      placeIndex.current.set(id, place);
+      return {
+        id,
+        label: place.name,
+        description: place.address ?? place.country,
+        meta: place.countryCode || undefined,
+      };
+    });
+    return { items, degraded: result.degraded, provider: result.provider };
+  }, []);
+  const placesSearch = usePlacesSearchAttribution(search);
 
   const ordered = stops.state === "ready" ? [...stops.data].sort((a, b) => a.order - b.order) : [];
   const addTitle = capabilities.createStop ? undefined : deniedReason(role, "添加行程节点");
   const editTitle = capabilities.updateStop ? undefined : deniedReason(role, "编辑行程节点");
   const deleteTitle = capabilities.deleteStop ? undefined : deniedReason(role, "删除行程节点");
+
+  function resetPlaceSearch() {
+    placesSearch.reset();
+    setPlaceQuery("");
+  }
+
+  function openCreateForm() {
+    setFormError(null);
+    setEditTarget(null);
+    setDraft(EMPTY_DRAFT);
+    resetPlaceSearch();
+    setFormOpen(true);
+  }
+
+  function openEditForm(stop: Stop) {
+    setFormError(null);
+    setEditTarget(stop);
+    setDraft(draftFromStop(stop));
+    resetPlaceSearch();
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setEditTarget(null);
+    setFormOpen(false);
+    resetPlaceSearch();
+  }
+
+  function handlePlaceQueryChange(next: string) {
+    // A new query invalidates the results (and the credit) currently on screen.
+    placesSearch.reset();
+    setPlaceQuery(next);
+  }
+
+  function handlePlaceSelect(option: ComboboxOption) {
+    const place = placeIndex.current.get(option.id);
+    if (!place) {
+      // A stale option id (search replaced by a newer query): fall back to the
+      // label as manual text instead of silently dropping the typed intent.
+      setDraft((current) =>
+        clearPlaceMetadata(
+          { ...current, city: option.label },
+          { clearCoordinates: current.provider !== null },
+        ),
+      );
+      setPlaceQuery(option.label);
+      return;
+    }
+    setDraft((current) => draftWithPlace(current, place));
+    setPlaceQuery(place.name);
+  }
+
+  function handlePlaceManual(query: string) {
+    const city = query.trim();
+    if (!city) return;
+    setDraft((current) =>
+      clearPlaceMetadata({ ...current, city }, { clearCoordinates: current.provider !== null }),
+    );
+    setPlaceQuery(city);
+  }
+
+  function handleLocationTextChange(field: "city" | "country", value: string) {
+    // Editing the location text invalidates the picked place. Keep manually
+    // entered coordinates, but never save a new city/country with the old
+    // selected place's coordinates, address, time zone or provider.
+    resetPlaceSearch();
+    setDraft((current) =>
+      clearPlaceMetadata(
+        {
+          ...current,
+          [field]: value,
+          ...(field === "country" ? { countryCode: "" } : {}),
+        },
+        { clearCoordinates: current.provider !== null },
+      ),
+    );
+  }
+
+  function handleCoordinateChange(field: "lat" | "lng", value: string) {
+    // Manual coordinates no longer describe the picked place; clear its source
+    // metadata while keeping the other manually entered coordinate.
+    setDraft((current) =>
+      clearPlaceMetadata({ ...current, [field]: value }, { clearCoordinates: false }),
+    );
+  }
 
   async function submitDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -231,8 +396,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
       });
       if (saved) {
         setDraft(EMPTY_DRAFT);
-        setEditTarget(null);
-        setFormOpen(false);
+        closeForm();
       }
       return;
     }
@@ -250,7 +414,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
     });
     if (created) {
       setDraft(EMPTY_DRAFT);
-      setFormOpen(false);
+      closeForm();
     }
   }
 
@@ -284,12 +448,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => {
-              setFormError(null);
-              setEditTarget(null);
-              setDraft(EMPTY_DRAFT);
-              setFormOpen(true);
-            }}
+            onClick={openCreateForm}
             disabled={!capabilities.createStop}
             title={addTitle}
           >
@@ -310,7 +469,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setFormOpen(true)}
+                onClick={openCreateForm}
                 disabled={!capabilities.createStop}
                 title={addTitle}
               >
@@ -334,12 +493,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
                   canDelete={capabilities.deleteStop}
                   editTitle={editTitle ?? ""}
                   deleteTitle={deleteTitle ?? ""}
-                  onEdit={() => {
-                    setFormError(null);
-                    setEditTarget(stop);
-                    setDraft(draftFromStop(stop));
-                    setFormOpen(true);
-                  }}
+                  onEdit={() => openEditForm(stop)}
                   onDelete={() => setDeleteTarget(stop)}
                 />
               ))}
@@ -347,7 +501,13 @@ export function StopsTab({ tripId }: { tripId: string }) {
         )}
       </QueryPanel>
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) resetPlaceSearch();
+        }}
+      >
         <DialogContent>
           <form onSubmit={(event) => void submitDraft(event)} className="space-y-4" noValidate>
             <DialogHeader>
@@ -359,13 +519,39 @@ export function StopsTab({ tripId }: { tripId: string }) {
               </DialogDescription>
             </DialogHeader>
 
+            <FormField
+              label="搜索地点"
+              hint="搜索城市或地点会自动填充城市、国家、国家码与坐标；也可以直接手动填写下面的字段。"
+              id="stop-place-search"
+            >
+              <SearchableCombobox
+                id="stop-place-search"
+                label="搜索地点"
+                value={placeQuery}
+                onValueChange={handlePlaceQueryChange}
+                onSelect={handlePlaceSelect}
+                onManual={handlePlaceManual}
+                search={placesSearch.search}
+                listFooter={placesSearch.footer}
+                placeholder="搜索城市或地点，例如「金泽」"
+                allowManual
+                manualLabel={(value) => `使用「${value}」作为城市`}
+                errorLabel="地点搜索暂时不可用，你可以直接手动填写城市和国家。"
+                errorMessages={{
+                  timeout: "地点搜索超时，你可以直接手动填写城市和国家。",
+                  offline: "网络连接中断，请检查网络后重试，或直接手动填写城市和国家。",
+                  invalidResponse: "地点搜索返回异常，你可以直接手动填写城市和国家。",
+                }}
+              />
+            </FormField>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="城市" id="stop-city">
                 <Input
                   id="stop-city"
                   value={draft.city}
                   maxLength={120}
-                  onChange={(event) => setDraft({ ...draft, city: event.target.value })}
+                  onChange={(event) => handleLocationTextChange("city", event.target.value)}
                 />
               </FormField>
               <FormField label="国家" id="stop-country">
@@ -373,7 +559,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
                   id="stop-country"
                   value={draft.country}
                   maxLength={120}
-                  onChange={(event) => setDraft({ ...draft, country: event.target.value })}
+                  onChange={(event) => handleLocationTextChange("country", event.target.value)}
                 />
               </FormField>
               <FormField label="国家码" hint="ISO 3166-1 两位字母" id="stop-country-code">
@@ -389,7 +575,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
                   id="stop-lat"
                   value={draft.lat}
                   inputMode="decimal"
-                  onChange={(event) => setDraft({ ...draft, lat: event.target.value })}
+                  onChange={(event) => handleCoordinateChange("lat", event.target.value)}
                 />
               </FormField>
               <FormField label="开始日期" id="stop-start">
@@ -413,7 +599,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
                   id="stop-lng"
                   value={draft.lng}
                   inputMode="decimal"
-                  onChange={(event) => setDraft({ ...draft, lng: event.target.value })}
+                  onChange={(event) => handleCoordinateChange("lng", event.target.value)}
                 />
               </FormField>
             </div>
@@ -432,10 +618,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setEditTarget(null);
-                  setFormOpen(false);
-                }}
+                onClick={closeForm}
               >
                 取消
               </Button>
