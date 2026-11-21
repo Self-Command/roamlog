@@ -392,6 +392,8 @@ export const revisions: SeedRevision[] = definitions.map((definition) => ({
   createdAt: timestamp(definition.date, "12:35:00"),
 }));
 
+export const seedMediaDefaultBucket = "roamlog-local";
+
 const mediaCount = 24;
 
 export const media: SeedMedia[] = Array.from(
@@ -409,7 +411,7 @@ export const media: SeedMedia[] = Array.from(
       workspaceId,
       tripId: trip.id,
       uploaderId: trip.createdById,
-      bucket: "roamlog-local",
+      bucket: seedMediaDefaultBucket,
       key,
       mimeType: "image/jpeg",
       size: 180_000 + index * 2_400,

@@ -181,7 +181,12 @@ jobs:
         run: pnpm db:migrate
 
       - name: Seed demo data
+        env:
+          ROAMLOG_SEED_S3_UPLOAD: "true"
         run: pnpm db:seed
+
+      - name: Verify seed media objects
+        run: pnpm --filter @roamlog/db exec tsx ../../tooling/services/verify-seed-media.ts
 
       - name: Test
         run: pnpm test

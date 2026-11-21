@@ -7,6 +7,7 @@ import {
   DEMO_SHARE_TOKEN,
 } from "./src/seed/util.js";
 import { applySeedData } from "./src/seed/apply.js";
+import { seedMediaDefaultBucket } from "./src/seed/entries.js";
 import { uploadSeedAssets } from "./src/seed/upload-assets.js";
 import {
   buildSeedDataset,
@@ -101,6 +102,10 @@ export async function seedDemoData(
 ): Promise<SeedSummary> {
   assertSeedAllowed();
   const data = buildSeedDataset();
+  const mediaBucket = process.env.S3_BUCKET ?? seedMediaDefaultBucket;
+  for (const item of data.media) {
+    item.bucket = mediaBucket;
+  }
 
   const shouldUpload =
     options.uploadAssets ?? process.env.ROAMLOG_SEED_S3_UPLOAD === "true";
