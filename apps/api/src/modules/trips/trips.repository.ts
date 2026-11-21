@@ -165,6 +165,12 @@ export class TripsRepository {
           where: { deletedAt: null },
           orderBy: [{ order: "asc" }, { id: "asc" }],
         },
+        // `assertTripVisible` decides from the caller's participant row and the
+        // trip's grants. Load both with the trip so every read path that hands
+        // this row to the rule sees the same access context (custom grants
+        // included) without a second query.
+        participants: { select: { userId: true, status: true } },
+        accessGrants: { select: { workspaceId: true, userId: true } },
       },
     })) as TripRecord | null;
   }

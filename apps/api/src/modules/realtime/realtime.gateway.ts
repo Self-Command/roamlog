@@ -267,6 +267,8 @@ export class RealtimeGateway implements OnApplicationBootstrap, OnModuleDestroy 
           workspaceId: true,
           visibility: true,
           createdById: true,
+          participants: { select: { userId: true, status: true } },
+          accessGrants: { select: { workspaceId: true, userId: true } },
         },
       });
       if (!trip) {

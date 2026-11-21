@@ -35,7 +35,14 @@ import type { AuthenticatedActor } from "../../../common/guards/actor-context.js
 import { PermissionService } from "../../../common/services/permission.service.js";
 import type { WorkspaceMembershipAccess } from "../../../common/services/workspace-access.service.js";
 import type { ActivitiesService } from "../../activities/activities.service.js";
+import { CommentsRepository } from "../../comments/comments.repository.js";
+import { ExportsRepository } from "../../exports/exports.repository.js";
+import { ItineraryRepository } from "../../itinerary/itinerary.repository.js";
+import { ItineraryService } from "../../itinerary/itinerary.service.js";
 import type { PrismaService } from "../../prisma/prisma.service.js";
+import { StopsRepository } from "../stops.repository.js";
+import { StopsService } from "../stops.service.js";
+import { assertTripVisible } from "../content-values.js";
 import { resolveTripAccess } from "../trip-access.js";
 import { TripsRepository } from "../trips.repository.js";
 import { TripsService } from "../trips.service.js";
@@ -79,6 +86,14 @@ const TRIP = {
   editorCreated: fixtureId(103),
 } as const;
 
+const ITINERARY = {
+  custom: fixtureId(301),
+} as const;
+
+const STOP = {
+  custom: fixtureId(401),
+} as const;
+
 const USER = {
   owner: fixtureId(201),
   admin: fixtureId(202),
@@ -111,6 +126,10 @@ const MEMBERSHIPS: ReadonlyArray<{
 let adminClient: ReturnType<typeof createPrismaClient> | undefined;
 let prisma: ReturnType<typeof createPrismaClient> | undefined;
 let service: TripsService;
+let itineraryService: ItineraryService;
+let stopsService: StopsService;
+let commentsRepository: CommentsRepository;
+let exportsRepository: ExportsRepository;
 
 function requiredClient(): ReturnType<typeof createPrismaClient> {
   if (!prisma) {
@@ -263,6 +282,38 @@ async function seedFixtures(client: ReturnType<typeof createPrismaClient>): Prom
       },
     ],
   });
+
+  // Child rows the read-path tests below assert on. They belong to the custom
+  // trip, so reaching them proves the trip loader carried the grant context.
+  await client.itineraryItem.create({
+    data: {
+      id: ITINERARY.custom,
+      tripId: TRIP.custom,
+      workspaceId: WORKSPACE.home,
+      date: new Date("2026-04-02T00:00:00.000Z"),
+      title: "Grant-visible breakfast",
+      type: "food",
+      location: "Shanghai",
+      notes: "",
+      createdById: USER.owner,
+      updatedById: USER.owner,
+    },
+  });
+  await client.stop.create({
+    data: {
+      id: STOP.custom,
+      tripId: TRIP.custom,
+      workspaceId: WORKSPACE.home,
+      city: "Shanghai",
+      country: "China",
+      countryCode: "CN",
+      startDate: new Date("2026-04-02T00:00:00.000Z"),
+      endDate: new Date("2026-04-03T00:00:00.000Z"),
+      notes: "",
+      createdById: USER.owner,
+      updatedById: USER.owner,
+    },
+  });
 }
 
 async function storedGrants(tripId: string) {
@@ -355,6 +406,19 @@ integration("trip access grants on real PostgreSQL", () => {
       undefined,
       prismaService,
     );
+    itineraryService = new ItineraryService(
+      new ItineraryRepository(prismaService),
+      repository,
+      new PermissionService(),
+      activities,
+    );
+    stopsService = new StopsService(
+      new StopsRepository(prismaService),
+      new PermissionService(),
+      activities,
+    );
+    commentsRepository = new CommentsRepository(prismaService);
+    exportsRepository = new ExportsRepository(prismaService);
   }, 180_000);
 
   afterAll(async () => {
@@ -701,6 +765,91 @@ integration("trip access grants on real PostgreSQL", () => {
         {},
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  // -------------------------------------------------------------------------
+  // Read-path loaders: every trip loader must hand `assertTripVisible` the
+  // same participant + grant context, otherwise a custom grant works on the
+  // detail page but 404s on the sub-resources.
+  // -------------------------------------------------------------------------
+
+  it("serves the itinerary list to a Viewer holding a matching user grant", async () => {
+    await service.setAccessGrants(actorFor(USER.owner), membershipFor(USER.owner), TRIP.custom, {
+      workspaces: [],
+      users: [USER.grantee],
+    });
+
+    const items = await itineraryService.list(
+      actorFor(USER.grantee),
+      membershipFor(USER.grantee, WORKSPACE.home, "viewer"),
+      TRIP.custom,
+    );
+
+    expect(items.map((item) => item.title)).toEqual(["Grant-visible breakfast"]);
+  });
+
+  it("still 404s the itinerary list for an ungranted Workspace Viewer", async () => {
+    await expect(
+      itineraryService.list(
+        actorFor(USER.ungranted),
+        membershipFor(USER.ungranted, WORKSPACE.home, "viewer"),
+        TRIP.custom,
+      ),
+    ).rejects.toMatchObject({ status: 404, response: { code: "TRIP_NOT_FOUND" } });
+  });
+
+  it("serves the stops list to a Viewer holding a matching user grant", async () => {
+    await service.setAccessGrants(actorFor(USER.owner), membershipFor(USER.owner), TRIP.custom, {
+      workspaces: [],
+      users: [USER.grantee],
+    });
+
+    const stops = await stopsService.list(
+      actorFor(USER.grantee),
+      membershipFor(USER.grantee, WORKSPACE.home, "viewer"),
+      TRIP.custom,
+    );
+
+    expect(stops.map((stop) => stop.city)).toEqual(["Shanghai"]);
+  });
+
+  it("still 404s the stops list for an ungranted Workspace Viewer", async () => {
+    await expect(
+      stopsService.list(
+        actorFor(USER.ungranted),
+        membershipFor(USER.ungranted, WORKSPACE.home, "viewer"),
+        TRIP.custom,
+      ),
+    ).rejects.toMatchObject({ status: 404, response: { code: "TRIP_NOT_FOUND" } });
+  });
+
+  it("select-based trip loaders return the participants and grants the rule reads", async () => {
+    await service.setAccessGrants(actorFor(USER.owner), membershipFor(USER.owner), TRIP.custom, {
+      workspaces: [],
+      users: [USER.grantee],
+    });
+
+    const [commentTrip, exportTrip] = await Promise.all([
+      commentsRepository.findTrip(WORKSPACE.home, TRIP.custom),
+      exportsRepository.findTrip(TRIP.custom),
+    ]);
+
+    expect(commentTrip?.accessGrants).toEqual([
+      { workspaceId: null, userId: USER.grantee },
+    ]);
+    expect(commentTrip?.participants).toEqual(
+      expect.arrayContaining([{ userId: USER.viewer, status: "joined" }]),
+    );
+    expect(exportTrip?.accessGrants).toEqual([
+      { workspaceId: null, userId: USER.grantee },
+    ]);
+    expect(exportTrip?.participants).toEqual(
+      expect.arrayContaining([{ userId: USER.viewer, status: "joined" }]),
+    );
+
+    const membership = membershipFor(USER.grantee, WORKSPACE.home, "viewer");
+    expect(() => assertTripVisible(membership, commentTrip!)).not.toThrow();
+    expect(() => assertTripVisible(membership, exportTrip!)).not.toThrow();
   });
 
   // Keep the named exception imports honest: the assertions above use their

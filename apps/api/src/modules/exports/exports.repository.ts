@@ -46,10 +46,19 @@ export class ExportsRepository {
     workspaceId: string;
     visibility: string;
     createdById: string;
+    participants?: Array<{ userId: string; status: string }>;
+    accessGrants?: Array<{ workspaceId: string | null; userId: string | null }>;
   } | null> {
     return this.prisma.client.trip.findFirst({
       where: { id: tripId, deletedAt: null },
-      select: { id: true, workspaceId: true, visibility: true, createdById: true },
+      select: {
+        id: true,
+        workspaceId: true,
+        visibility: true,
+        createdById: true,
+        participants: { select: { userId: true, status: true } },
+        accessGrants: { select: { workspaceId: true, userId: true } },
+      },
     });
   }
 

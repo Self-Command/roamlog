@@ -78,6 +78,10 @@ export class StopsRepository {
   ): Promise<TripRecord | null> {
     return (await (tx ?? this.prisma.client).trip.findFirst({
       where: { id: tripId, workspaceId, deletedAt: null },
+      include: {
+        participants: { select: { userId: true, status: true } },
+        accessGrants: { select: { workspaceId: true, userId: true } },
+      },
     })) as TripRecord | null;
   }
 
