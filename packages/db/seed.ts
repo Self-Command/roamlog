@@ -102,6 +102,12 @@ export async function seedDemoData(
   assertSeedAllowed();
   const data = buildSeedDataset();
 
+  const shouldUpload =
+    options.uploadAssets ?? process.env.ROAMLOG_SEED_S3_UPLOAD === "true";
+  if (shouldUpload) {
+    await uploadSeedAssets(data, !options.quiet);
+  }
+
   await prisma.$transaction(
     async (transaction) => applySeedData(transaction, data),
     {
@@ -109,12 +115,6 @@ export async function seedDemoData(
       timeout: 120_000,
     },
   );
-
-  const shouldUpload =
-    options.uploadAssets ?? process.env.ROAMLOG_SEED_S3_UPLOAD === "true";
-  if (shouldUpload) {
-    await uploadSeedAssets(data, !options.quiet);
-  }
 
   const summary = summarize(data);
   if (!options.quiet) {
