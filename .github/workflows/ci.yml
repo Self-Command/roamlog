@@ -225,6 +225,12 @@ jobs:
           E2E_START_API: "1"
         run: pnpm exec playwright test e2e/web/trip-visibility.spec.ts --project=web
 
+      - name: E2E stops place search
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm exec playwright test e2e/web/stops-place-search.spec.ts --project=web
+
       - name: E2E admin 2FA settings
         env:
           E2E_SKIP_WEB_SERVER: "1"
