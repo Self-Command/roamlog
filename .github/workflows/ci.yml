@@ -195,6 +195,19 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Verify smoke account provisioning contract
+        run: pnpm exec vitest run e2e/support/provision-smoke-accounts.test.ts
+
+      - name: Provision smoke member account
+        run: |
+          pnpm --filter @roamlog/api exec tsx ../../e2e/support/provision-smoke-accounts.ts \
+            --action=create-member \
+            --email='verify@roamlog.test' \
+            --password='Roamlog-Verify-Aa1!' \
+            --name='验收账号' \
+            --workspace-slug='roamlog-crew' \
+            --role=admin
+
       - name: E2E browser smoke
         env:
           E2E_SKIP_ADMIN_SERVER: "1"
