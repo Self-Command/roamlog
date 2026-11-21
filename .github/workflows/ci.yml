@@ -225,6 +225,12 @@ jobs:
           E2E_START_API: "1"
         run: pnpm exec playwright test e2e/web/trip-visibility.spec.ts --project=web
 
+      - name: E2E admin 2FA settings
+        env:
+          E2E_SKIP_WEB_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm exec playwright test e2e/admin/smoke/admin-settings.spec.ts --project=admin
+
       - name: E2E API smoke
         env:
           E2E_SKIP_WEB_SERVER: "1"

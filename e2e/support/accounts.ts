@@ -22,6 +22,8 @@ import {
 } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 
+import { currentTotp } from "../live-support/fixture";
+
 export const WEB_URL = process.env.E2E_WEB_URL ?? "http://localhost:3000";
 export const ADMIN_URL = process.env.E2E_ADMIN_URL ?? "http://localhost:3001";
 export const API_URL = process.env.E2E_API_URL ?? "http://localhost:4000";
@@ -189,6 +191,66 @@ export async function signInViaApi(
 }
 
 /**
+ * Enrolls a freshly provisioned super_admin in Better Auth TOTP.
+ *
+ * This mirrors the real enrollment sequence used by the repository's live
+ * fixture: sign in, enable the TOTP method, extract the secret from the
+ * returned otpauth URI, then verify the current code so the factor is active.
+ * The Playwright request context keeps the Better Auth cookies between calls.
+ */
+export async function enableSuperAdminTotp(account: SmokeAccount): Promise<string> {
+  const context = await playwrightRequest.newContext({ baseURL: API_URL });
+  try {
+    await signInViaApi(context, account);
+
+    const enable = await context.post("/v1/auth/two-factor/enable", {
+      headers: { origin: WEB_URL },
+      data: { password: account.password, method: "totp" },
+    });
+    const enableText = await enable.text();
+    let enableBody: Record<string, unknown>;
+    try {
+      enableBody = enableText ? (JSON.parse(enableText) as Record<string, unknown>) : {};
+    } catch {
+      throw new Error(
+        `TOTP enrollment for ${account.email} returned non-JSON HTTP ${enable.status()}: ${enableText}`,
+      );
+    }
+    if (enable.status() !== 200 || typeof enableBody.totpURI !== "string") {
+      throw new Error(
+        `TOTP enrollment for ${account.email} failed with HTTP ${enable.status()}: ${enableText}`,
+      );
+    }
+
+    const secret = new URL(enableBody.totpURI).searchParams.get("secret");
+    if (!secret) {
+      throw new Error(`Better Auth TOTP URI for ${account.email} did not include a secret.`);
+    }
+
+    let verify = await context.post("/v1/auth/two-factor/verify-totp", {
+      headers: { origin: WEB_URL },
+      data: { code: currentTotp(secret) },
+    });
+    if (verify.status() === 401) {
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      verify = await context.post("/v1/auth/two-factor/verify-totp", {
+        headers: { origin: WEB_URL },
+        data: { code: currentTotp(secret) },
+      });
+    }
+    if (verify.status() !== 200) {
+      throw new Error(
+        `TOTP verification for ${account.email} failed with HTTP ${verify.status()}: ${await verify.text()}`,
+      );
+    }
+
+    return secret;
+  } finally {
+    await context.dispose();
+  }
+}
+
+/**
  * Waits for the API behind the web/app proxy to answer before a journey starts.
  * The shared local stack is restarted by other agents while they work; without
  * this the suite would report their restart window as a product failure.
@@ -247,11 +309,15 @@ export async function loginOnWeb(page: Page, account: SmokeAccount): Promise<voi
 /**
  * Logs in through the real admin login page.
  *
- * Returns `false` when the environment enforces 2FA (the TOTP challenge is
- * visible); the caller turns that into a clearly labelled skip instead of a
- * failure, because the status is environmental, not a product defect.
+ * When Better Auth asks for the second factor, the caller must supply the
+ * enrolled TOTP secret. A challenge without a secret is an explicit failure:
+ * silently returning would turn a real authentication regression into a skip.
  */
-export async function loginOnAdmin(page: Page, account: SmokeAccount): Promise<boolean> {
+export async function loginOnAdmin(
+  page: Page,
+  account: SmokeAccount,
+  totpSecret?: string,
+): Promise<void> {
   await page.goto(`${ADMIN_URL}/login`);
   await page.getByLabel("管理员邮箱").fill(account.email);
   await page.getByLabel("密码").fill(account.password);
@@ -273,11 +339,16 @@ export async function loginOnAdmin(page: Page, account: SmokeAccount): Promise<b
     .not.toBe("pending");
 
   if (await twoFactor.isVisible().catch(() => false)) {
-    return false;
+    if (!totpSecret) {
+      throw new Error(
+        `Admin login for ${account.email} requires a TOTP challenge, but no totpSecret was provided.`,
+      );
+    }
+    await page.getByLabel("6 位验证码").fill(currentTotp(totpSecret));
+    await page.getByRole("button", { name: "进入控制台" }).click();
   }
 
   await page.waitForURL("**/admin**", { timeout: 30_000 });
-  return true;
 }
 
 /** Workspace lookup shared by the web journeys (id is not hardcoded). */

@@ -16,6 +16,7 @@ import {
   API_URL,
   createSuperAdminAccount,
   deleteSuperAdmin,
+  enableSuperAdminTotp,
   loginOnAdmin,
   provisionSuperAdmin,
   WEB_URL,
@@ -26,6 +27,7 @@ registerFailureEvidence(test);
 
 const runId = uniqueRunId();
 const superAdmin = createSuperAdminAccount(runId);
+let superAdminTotpSecret = "";
 
 const ADMIN_SETTINGS_PATH = "/admin/settings";
 const ADMIN_SETTINGS_URL = `${ADMIN_URL}${ADMIN_SETTINGS_PATH}`;
@@ -63,19 +65,16 @@ async function loginAsSuperAdmin(page: Page): Promise<void> {
     await route.fulfill({ response });
   });
 
-  const signedIn = await loginOnAdmin(page, superAdmin);
-  test.skip(
-    !signedIn,
-    "ADMIN_2FA_ENFORCED: the provisioned super_admin has no TOTP secret; enable a seeded TOTP account to run this journey.",
-  );
+  await loginOnAdmin(page, superAdmin, superAdminTotpSecret);
   await expect(page.getByRole("navigation", { name: "管理后台主导航" })).toBeVisible({
     timeout: 30_000,
   });
 }
 
 test.describe("admin settings information architecture", () => {
-  test.beforeAll(() => {
+  test.beforeAll(async () => {
     provisionSuperAdmin(superAdmin);
+    superAdminTotpSecret = await enableSuperAdminTotp(superAdmin);
   });
 
   test.afterAll(() => {
