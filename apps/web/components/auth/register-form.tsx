@@ -56,7 +56,7 @@ export function RegisterForm() {
         创建旅行档案
       </h1>
       <p className="mt-4 text-sm leading-6 text-muted">
-        注册后会发送验证邮件。完成邮箱验证后即可创建 Workspace 或接受邀请。
+        注册后会发送验证邮件。完成邮箱验证后即可创建工作区或接受邀请。
       </p>
 
       <form noValidate onSubmit={handleSubmit} className="mt-8 space-y-5">

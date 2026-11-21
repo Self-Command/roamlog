@@ -15,7 +15,7 @@ interface InviteAcceptProps {
 }
 
 const roleDescriptions = {
-  admin: "可以管理成员、邀请和 Workspace 设置。",
+  admin: "可以管理工作区成员、邀请和设置。",
   editor: "可以创建与编辑旅行、日志、照片和行程。",
   viewer: "可以阅读全部共享内容，并参与评论。",
 } as const;
@@ -28,7 +28,7 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
 
   async function handleAccept() {
     if (!token) {
-      setError("邀请链接缺少 token。请向 Workspace 管理员索取新的邀请。");
+      setError("邀请链接不完整，缺少邀请凭证。请向工作区管理员索取新的邀请链接。");
       return;
     }
 
@@ -36,7 +36,7 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
     setError(null);
     try {
       await adapter.acceptInvitation(token);
-      setNotice("邀请已接受，正在进入 Workspace…");
+      setNotice("邀请已接受，正在进入工作区…");
       window.setTimeout(() => window.location.assign("/"), 800);
     } catch (cause) {
       setError(authErrorMessage(cause));
@@ -46,7 +46,7 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
 
   return (
     <div>
-      <Badge tone="blue">WORKSPACE INVITATION</Badge>
+      <Badge tone="blue">TRAVEL ARCHIVE INVITATION</Badge>
       <h1 className="mt-4 font-serif text-[clamp(2rem,1.5rem+1vw,2.75rem)] leading-none tracking-[-0.035em] text-ink">
         加入「{workspaceName}」
       </h1>
@@ -70,12 +70,12 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
         <Separator className="my-4" />
         <ul className="space-y-2 text-xs leading-5 text-body">
           <li className="flex items-start gap-2">
-            <Check aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-green" />9
-            趟旅行、共享日志和照片会出现在同一个 Workspace。
+            <Check aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-green" />
+            旅行、共享日志和照片会出现在同一个工作区。
           </li>
           <li className="flex items-start gap-2">
             <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-blue" />
-            访问权限由 Workspace 角色控制，Viewer 只读但可以评论。
+            访问权限由工作区角色控制，Viewer 只读但可以评论。
           </li>
         </ul>
       </div>
@@ -116,7 +116,7 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
           size="lg"
           className="flex-1"
           onClick={() =>
-            setNotice("已记录谢绝选择；关闭页面即可，服务端不会加入该 Workspace。")
+            setNotice("已记录谢绝选择；关闭页面即可，你不会加入这个工作区。")
           }
         >
           <X aria-hidden="true" />
@@ -125,7 +125,7 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
       </div>
 
       <p className="mt-6 text-center text-xs text-muted">
-        接受前请确认这是你预期的 Workspace。{" "}
+        接受前请确认这是你预期的工作区。{" "}
         <a href="/login" className="text-ink underline-offset-4 hover:underline">
           先登录
         </a>

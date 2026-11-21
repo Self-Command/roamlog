@@ -15,7 +15,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
       <InviteAccept
         key={token}
         token={token}
-        workspaceName="Roamlog Workspace"
+        workspaceName="共享旅行档案"
         inviterName="你的同行者"
         role="editor"
       />

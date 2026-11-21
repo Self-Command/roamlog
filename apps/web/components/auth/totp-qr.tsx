@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import { createQrMatrix, qrMatrixToSvgPath } from "./qr-code";
 
-export function TotpQr({ uri, label = "TOTP 二维码" }: { uri: string; label?: string }) {
+export function TotpQr({ uri, label = "验证器二维码" }: { uri: string; label?: string }) {
   const matrix = useMemo(() => createQrMatrix(uri), [uri]);
   const path = useMemo(() => qrMatrixToSvgPath(matrix), [matrix]);
   const size = (matrix.length + 8) * 5;

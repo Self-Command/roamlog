@@ -107,7 +107,7 @@ export default async function TripMapRoutePage({
       },
       unavailable: {
         title: "地图数据读取失败",
-        description: "服务端暂时没有返回这趟旅行的停靠点，请稍后重新加载。",
+        description: "暂时无法加载这趟旅行的停靠点，请稍后重新加载。",
       },
     }[outcome.reason];
 

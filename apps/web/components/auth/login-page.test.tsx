@@ -12,7 +12,10 @@ import { getPublicSettings } from "@/lib/settings";
 const mockedSettings = vi.mocked(getPublicSettings);
 
 const FALLBACK_TAGLINE =
-  "登录后会进入 Workspace 总览。会话由 Better Auth 的 httpOnly cookie 维护。";
+  "登录后会进入你的旅行总览。登录状态会安全保留在当前浏览器中。";
+
+const IMPLEMENTATION_DETAILS =
+  /Better Auth|httpOnly|cookie|localStorage|HTTP|\bAPI\b|后端|服务端|数据库|TOTP|\b2FA\b|认证服务|客户端会话|前端存储/i;
 
 beforeEach(() => {
   mockedSettings.mockReset();
@@ -53,5 +56,15 @@ describe("LoginPage runtime copy", () => {
 
     expect(container.textContent).not.toMatch(/加载失败|配置错误|服务不可用/);
     expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
+  });
+
+  it("does not expose authentication implementation details in the login copy", async () => {
+    mockedSettings.mockResolvedValue({});
+
+    const { container } = render(await LoginPage());
+
+    expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
+    expect(screen.getByText(FALLBACK_TAGLINE)).toBeInTheDocument();
+    expect(screen.getByText("安全登录")).toBeInTheDocument();
   });
 });

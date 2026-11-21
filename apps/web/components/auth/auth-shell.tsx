@@ -28,15 +28,14 @@ export function AuthShell({ children }: AuthShellProps) {
           </a>
 
           <div className="max-w-xl">
-            <Badge tone="orange">A WORKSPACE FOR SHARED JOURNEYS</Badge>
+            <Badge tone="orange">A HOME FOR SHARED JOURNEYS</Badge>
             <h1 className="mt-6 max-w-lg font-serif text-[clamp(2.6rem,2rem+2vw,3.5rem)] leading-[1.02] tracking-[-0.04em] text-ink">
               把旅行写成
               <br />
               可以回去的地方。
             </h1>
             <p className="mt-5 max-w-md text-sm leading-7 text-muted">
-              行程、日志、照片、花费和打包清单留在同一个
-              Workspace。不是社交动态，是一份可以共同维护的旅行档案。
+              行程、日志、照片、花费和打包清单留在同一个工作区。不是社交动态，是一份可以共同维护的旅行档案。
             </p>
 
             <div className="mt-8 rounded-card border border-hairline-strong bg-surface-1/70 p-5 backdrop-blur-sm">

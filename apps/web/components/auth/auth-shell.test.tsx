@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { AuthShell } from "./auth-shell";
 
+const IMPLEMENTATION_DETAILS = /Workspace|token|服务端|9\s*趟旅行/i;
+
 describe("AuthShell", () => {
   it("keeps the brand column and renders the form slot", () => {
     render(
@@ -32,5 +34,16 @@ describe("AuthShell", () => {
     expect(text).not.toMatch(/分钟前|小时前|天前|昨天|刚刚/);
     expect(text).not.toMatch(/\d{1,2}:\d{2}/);
     expect(container.querySelectorAll("time")).toHaveLength(0);
+  });
+
+  it("keeps visitor-facing copy free of implementation details", () => {
+    const { container } = render(
+      <AuthShell>
+        <p>auth form slot</p>
+      </AuthShell>,
+    );
+
+    expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
+    expect(screen.getByText("A HOME FOR SHARED JOURNEYS")).toBeInTheDocument();
   });
 });

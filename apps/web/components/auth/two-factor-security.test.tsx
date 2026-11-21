@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { TwoFactorAuthTransport } from "@/lib/api/auth";
 import { TwoFactorSecurityView } from "./two-factor-security";
 
+const IMPLEMENTATION_DETAILS =
+  /Workspace|Better Auth|httpOnly|cookie|localStorage|HTTP|\bAPI\b|后端|服务端|数据库|TOTP|\b2FA\b|认证服务|客户端会话|前端存储/i;
+
 function transport(overrides: Partial<TwoFactorAuthTransport> = {}): TwoFactorAuthTransport {
   return {
     signIn: vi.fn(),
@@ -34,7 +37,7 @@ describe("TwoFactorSecurityView", () => {
       enableTwoFactor: vi.fn().mockResolvedValue(enrollment),
     });
 
-    render(
+    const { container } = render(
       <TwoFactorSecurityView
         auth={auth}
         initialSession={{
@@ -45,19 +48,23 @@ describe("TwoFactorSecurityView", () => {
       />,
     );
 
+    expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
+    expect(screen.getByText("两步验证未开启")).toBeInTheDocument();
+
     await user.click(screen.getByRole("switch", { name: "启用两步验证" }));
     await user.type(screen.getByLabelText(/当前密码/), "correct-password");
-    await user.click(screen.getByRole("button", { name: "生成 TOTP 密钥" }));
+    await user.click(screen.getByRole("button", { name: "生成验证器密钥" }));
 
     expect(auth.enableTwoFactor).toHaveBeenCalledWith("correct-password");
-    expect(screen.getByRole("img", { name: "TOTP 二维码" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "验证器二维码" })).toBeInTheDocument();
     expect(screen.getByText("JBSWY3DPEHPK3PXP")).toBeInTheDocument();
     expect(screen.getByText("8F3K-2M9Q")).toBeInTheDocument();
     expect(screen.getByText("A7D1-6X4P")).toBeInTheDocument();
-    expect(screen.getByText(/当前剩余 2 个/)).toBeInTheDocument();
+    expect(screen.getByText(/本组共 2 个/)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
 
     await user.type(screen.getByLabelText(/验证器验证码/), "123456");
-    await user.click(screen.getByRole("button", { name: "验证并启用 2FA" }));
+    await user.click(screen.getByRole("button", { name: "验证并启用两步验证" }));
 
     expect(auth.verifyTotp).toHaveBeenCalledWith("123456");
     expect(screen.getByText("两步验证已启用。请确认备用码已离线保存。")).toBeInTheDocument();
@@ -80,9 +87,10 @@ describe("TwoFactorSecurityView", () => {
     );
 
     await user.click(screen.getByRole("switch", { name: "关闭两步验证" }));
+    expect(screen.getByText("两步验证已开启")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/当前密码/), "correct-password");
     await user.type(screen.getByLabelText(/验证器 6 位验证码/), "654321");
-    await user.click(screen.getByRole("button", { name: "确认关闭 2FA" }));
+    await user.click(screen.getByRole("button", { name: "确认关闭两步验证" }));
 
     expect(auth.verifyTotp).toHaveBeenCalledWith("654321");
     expect(auth.disableTwoFactor).toHaveBeenCalledWith("correct-password");
@@ -131,5 +139,23 @@ describe("TwoFactorSecurityView", () => {
     expect(screen.queryByText("NO REAL ENROLLMENT")).not.toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: /演示模式不可切换两步验证/ })).toBeNull();
     expect(auth.getSecuritySession).not.toHaveBeenCalled();
+  });
+
+  it("keeps security guidance free of implementation details", () => {
+    const auth = transport();
+    const { container } = render(
+      <TwoFactorSecurityView
+        auth={auth}
+        initialSession={{
+          authenticated: true,
+          email: "lin.mo@roamlog.local",
+          twoFactorEnabled: false,
+        }}
+      />,
+    );
+
+    expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
+    expect(screen.getByText(/尝试过于频繁/)).toBeInTheDocument();
+    expect(screen.getByText("两步验证当前未启用")).toBeInTheDocument();
   });
 });

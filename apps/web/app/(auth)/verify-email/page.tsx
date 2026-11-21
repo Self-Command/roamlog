@@ -12,7 +12,7 @@ export default function VerifyEmailPage() {
     <AuthPageFrame
       eyebrow="EMAIL VERIFICATION"
       title="验证你的邮箱"
-      description="邮箱密码账号需要先完成验证，才能创建 Workspace 或接受邀请。OAuth 已验证邮箱视为通过。"
+      description="使用邮箱和密码注册的账号需要先完成验证，才能创建工作区或接受邀请；通过第三方登录的邮箱视为已验证。"
       footer={
         <p className="text-center text-xs text-muted">
           验证完成后{" "}

@@ -12,7 +12,6 @@ import {
   PHOTO_UPLOAD_ALLOWED_TYPES,
   overBatchLimitMessage,
   restrictionMessage,
-  uploadLimitHint,
 } from "./photo-upload-limits";
 import { RoamlogUploader } from "./roamlog-uploader";
 
@@ -96,7 +95,6 @@ export function createPhotoUppy(options: CreatePhotoUppyOptions): PhotoUppyHandl
     height: 380,
     theme: "dark",
     proudlyDisplayPoweredByUppy: false,
-    note: uploadLimitHint(limits),
     // The linked PUT cannot resume, so the pause button would be a lie.
     hidePauseResumeButton: true,
     // A finished photo can still be removed from the queue before closing.

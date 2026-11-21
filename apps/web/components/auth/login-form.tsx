@@ -20,7 +20,7 @@ interface LoginErrors {
 }
 
 const DEFAULT_LOGIN_TAGLINE =
-  "登录后会进入 Workspace 总览。会话由 Better Auth 的 httpOnly cookie 维护。";
+  "登录后会进入你的旅行总览。登录状态会安全保留在当前浏览器中。";
 
 type LoginStep = "credentials" | "challenge";
 type ChallengeFactor = "totp" | "backup-code";
@@ -141,7 +141,7 @@ export function LoginFormView({
     return (
       <div>
         <div className="mb-8">
-          <p className="type-eyebrow">TWO-FACTOR CHALLENGE</p>
+          <p className="type-eyebrow">SECURITY CHECK</p>
           <h1 className="mt-3 font-serif text-[clamp(2rem,1.5rem+1vw,2.75rem)] leading-none tracking-[-0.035em] text-ink">
             再确认一次是你
           </h1>
@@ -158,7 +158,7 @@ export function LoginFormView({
         <form onSubmit={handleChallenge} className="space-y-5">
           <div
             role="group"
-            aria-label="选择双因素认证方式"
+            aria-label="选择验证方式"
             className="grid grid-cols-2 gap-1 rounded-control border border-hairline-strong bg-surface-1 p-1"
           >
             <button
@@ -239,7 +239,7 @@ export function LoginFormView({
               <p>{challengeError}</p>
               {failedAttempts > 0 ? (
                 <p className="mt-1 text-accent-red/80">
-                  本次挑战已失败 {failedAttempts} 次。请确认设备时间同步后再试。
+                  本次验证已失败 {failedAttempts} 次。请确认设备时间同步后再试。
                 </p>
               ) : null}
             </div>
@@ -326,7 +326,7 @@ export function LoginFormView({
           </a>
           <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-stone">
             <LockKeyhole aria-hidden="true" className="size-3" />
-            httpOnly session
+            安全登录
           </span>
         </div>
 

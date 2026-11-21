@@ -80,7 +80,7 @@ function participantRoleError(error: unknown): string {
     if (error.code === "INVALID_RESPONSE") {
       return "参与者数据无法识别，请刷新页面后重试。";
     }
-    return `角色调整失败（HTTP ${error.status}），请稍后重试。`;
+    return "角色调整失败，请稍后重试。";
   }
   return "网络异常，角色没有调整。请检查网络后重试。";
 }

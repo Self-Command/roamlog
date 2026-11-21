@@ -299,7 +299,11 @@ export async function enableTwoFactor(password: string): Promise<TwoFactorEnroll
   );
   const container = body as { totpURI?: unknown; backupCodes?: unknown } | null;
   if (typeof container?.totpURI !== "string" || !container.totpURI) {
-    throw new ApiError(200, "认证服务没有返回 TOTP URI。", "INVALID_TWO_FACTOR_RESPONSE");
+    throw new ApiError(
+      200,
+      "登录服务没有返回验证器密钥，请稍后重试。",
+      "INVALID_TWO_FACTOR_RESPONSE",
+    );
   }
   return {
     totpURI: container.totpURI,
@@ -364,7 +368,7 @@ export function twoFactorErrorMessage(error: unknown): string {
 
   const code = error.code.toUpperCase();
   if (code.includes("INVALID_TWO_FACTOR_COOKIE")) {
-    return "登录挑战已过期。请重新使用邮箱和密码登录。";
+    return "本次登录验证已过期。请重新使用邮箱和密码登录。";
   }
   if (code.includes("INVALID_BACKUP_CODE")) {
     return "备用码无效或已经使用。每个备用码只能使用一次。";
@@ -373,10 +377,10 @@ export function twoFactorErrorMessage(error: unknown): string {
     return "验证码不正确或已过期。请在验证器中刷新后重试。";
   }
   if (code.includes("ACCOUNT_TEMPORARILY_LOCKED") || error.status === 429) {
-    return "失败次数过多，2FA 已临时锁定。请约 15 分钟后重试，或改用未使用的备用码。";
+    return "失败次数过多，两步验证已临时锁定。请约 15 分钟后重试，或改用未使用的备用码。";
   }
   if (code.includes("TOO_MANY_ATTEMPTS")) {
-    return "本次登录挑战的尝试次数已用尽。请重新登录获取新的挑战。";
+    return "本次登录验证的尝试次数已用尽。请重新登录后再试。";
   }
   if (code.includes("INVALID_PASSWORD")) {
     return "当前密码不正确。请确认后重试；连续失败会触发临时锁定。";
@@ -385,10 +389,10 @@ export function twoFactorErrorMessage(error: unknown): string {
     return "验证失败。请检查验证码；连续失败会触发临时锁定。";
   }
   if (error.status === 403) {
-    return "当前会话没有权限完成此操作。请重新登录后再试。";
+    return "当前登录状态没有权限完成此操作。请重新登录后再试。";
   }
   if (error.status >= 500) {
-    return "认证服务暂时不可用，请稍后再试。";
+    return "登录服务暂时不可用，请稍后再试。";
   }
   return error.message;
 }
@@ -436,7 +440,7 @@ export function accountSecurityErrorMessage(
       : "当前密码不正确，密码没有修改。";
   }
   if (code === "CHANGE_EMAIL_DISABLED") {
-    return "当前部署没有开启邮箱修改。请联系管理员在认证配置中启用后重试。";
+    return "当前服务没有开启邮箱修改。请联系管理员启用后重试。";
   }
   if (code.includes("INVALID_EMAIL")) {
     return "邮箱格式不正确。";
@@ -454,12 +458,12 @@ export function accountSecurityErrorMessage(
     return "新密码过长。请控制在 128 个字符以内。";
   }
   if (code === "SESSION_NOT_FRESH" || code.includes("SESSION_EXPIRED")) {
-    return "这次会话已超过安全时效。请重新登录后再修改。";
+    return "本次登录已超过安全时效。请重新登录后再修改。";
   }
   if (code === "MAIL_NOT_CONFIGURED") return MAIL_NOT_CONFIGURED_MESSAGE;
-  if (error.status === 401) return "当前会话已失效，请重新登录后再试。";
+  if (error.status === 401) return "当前登录状态已失效，请重新登录后再试。";
   if (error.status === 403) return "当前账号没有权限完成此操作。";
   if (error.status === 429) return "尝试次数过多，请稍后再试。";
-  if (error.status >= 500) return "认证服务暂时不可用，请稍后再试。";
+  if (error.status >= 500) return "登录服务暂时不可用，请稍后再试。";
   return error.message;
 }

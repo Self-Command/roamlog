@@ -1,5 +1,6 @@
 import type { TripParticipant } from "@roamlog/contracts";
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -12,7 +13,7 @@ import {
 } from "@/test/fake-data";
 
 import { ParticipantsTab } from "../participants-tab";
-import { adapterWith, makeMember, renderTab, route, stubFetch } from "./harness";
+import { adapterWith, makeMember, problem, renderTab, route, stubFetch } from "./harness";
 
 const adapterState = vi.hoisted(() => ({
   adapter: undefined as unknown as import("@/lib/api").DataAdapter,
@@ -235,5 +236,30 @@ describe("参与者：真实邀请状态与角色", () => {
     expect(await screen.findByText("还没有参与者")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /添加参与者/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /添加第一位/ })).toBeDisabled();
+  });
+
+  it("角色调整失败时使用用户语言，不暴露 HTTP 或状态码", async () => {
+    stubFetch([
+      route("GET", `/v1/trips/${TRIP_ID}/participants`, [
+        participantOf({ id: PARTICIPANT_ID, userId: OTHER_USER_ID }),
+      ]),
+      route(
+        "PATCH",
+        `/v1/trips/${TRIP_ID}/participants/${OTHER_USER_ID}`,
+        problem(500, "INTERNAL_ERROR", "role update failed"),
+        500,
+      ),
+    ]);
+
+    const user = userEvent.setup();
+    renderParticipants();
+
+    const select = await screen.findByRole("combobox", { name: "更改 沈青禾 的旅行角色" });
+    await user.selectOptions(select, "editor");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("角色调整失败，请稍后重试。");
+    expect(alert).not.toHaveTextContent(/HTTP|服务端|后端|API|数据库|500/);
+    expect(select).toHaveValue("viewer");
   });
 });

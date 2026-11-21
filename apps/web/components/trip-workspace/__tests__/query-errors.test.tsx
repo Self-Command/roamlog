@@ -1,10 +1,32 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { TripMapPage } from "@/components/trip-map/trip-map-page";
+import { makeTrip } from "@/test/fake-data";
+
+import TripMapRoutePage from "../../../app/(app)/w/[workspaceSlug]/trips/[tripId]/map/page";
 import { QueryPanel } from "../panel";
 import { failureFrom, toApiError } from "../queries";
 
 const MEDIA_PATH = "/v1/trips/0198f000-0000-7000-8000-0000000000a1/media";
+const MAP_TRIP = makeTrip({
+  id: "0198f000-0000-7000-8000-0000000000m1",
+  title: "京都慢行",
+  startDate: "2026-11-01",
+  endDate: "2026-11-03",
+});
+
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ toString: () => "session=test" }),
+}));
+
+vi.mock("@/lib/query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/query")>();
+  return {
+    ...actual,
+    useWorkspaceBySlug: () => ({ workspace: undefined, workspacesQuery: {} as never }),
+  };
+});
 
 describe("trip workspace query errors", () => {
   it.each([400, 503])(
@@ -68,5 +90,48 @@ describe("trip workspace query errors", () => {
     expect(alert).toHaveTextContent("读取失败，请稍后重试。");
     expect(alert).not.toHaveTextContent(/\/v1\/|HTTP 503/);
     expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+  });
+});
+
+describe("trip map error copy", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the unavailable state without server or HTTP terms", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ status: 503, ok: false }) as Response),
+    );
+
+    const page = await TripMapRoutePage({
+      params: Promise.resolve({
+        workspaceSlug: "roamlog-crew",
+        tripId: "0198f000-0000-7000-8000-0000000000m1",
+      }),
+    });
+
+    render(page);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("地图数据读取失败");
+    expect(alert).toHaveTextContent("暂时无法加载这趟旅行的停靠点，请稍后重新加载。");
+    expect(alert).not.toHaveTextContent(/HTTP|服务端|后端|API|数据库/);
+  });
+
+  it("renders the empty map state without technical terms", () => {
+    render(
+      <TripMapPage
+        workspaceSlug="roamlog-crew"
+        tripId={MAP_TRIP.id}
+        trip={MAP_TRIP}
+        stops={[]}
+        media={[]}
+      />,
+    );
+
+    const page = screen.getByTestId("trip-map-page");
+    expect(screen.getByText("这趟旅行还没有停靠点")).toBeInTheDocument();
+    expect(page).not.toHaveTextContent(/HTTP|服务端|后端|API|数据库/);
   });
 });

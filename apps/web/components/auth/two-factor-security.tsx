@@ -121,7 +121,7 @@ export function TwoFactorSecurityView({
       setPanel("enrollment");
       setPassword("");
       if (next.backupCodes.length === 0) {
-        setError("认证服务没有返回备用码。请完成验证后重新生成备用码。");
+        setError("没有获取到备用码。请完成验证后重新生成备用码。");
       }
     } catch (cause) {
       setError(twoFactorErrorMessage(cause));
@@ -209,7 +209,7 @@ export function TwoFactorSecurityView({
       }
       await navigator.clipboard.writeText(value);
       setCopied(kind);
-      setNotice(kind === "secret" ? "TOTP secret 已复制。" : "备用码已复制。");
+      setNotice(kind === "secret" ? "验证器密钥已复制。" : "备用码已复制。");
     } catch {
       setError("浏览器没有允许剪贴板访问，请手动选择并复制。");
     }
@@ -262,14 +262,14 @@ export function TwoFactorSecurityView({
           <div className="flex items-center gap-2">
             <p className="type-eyebrow">ACCOUNT / SECURITY</p>
             <Badge tone={enabled ? "green" : "neutral"}>
-              {enabled ? "2FA ACTIVE" : "2FA OFF"}
+              {enabled ? "两步验证已开启" : "两步验证未开启"}
             </Badge>
           </div>
           <h1 className="mt-3 font-serif text-[clamp(2.1rem,1.7rem+1.2vw,3.25rem)] leading-none tracking-[-0.04em] text-ink">
             账号安全
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-muted">
-            用 TOTP 验证器保护邮箱登录。备用码只在生成时显示一次，每个码只能成功使用一次。
+            用验证器应用保护邮箱登录。备用码只在生成时显示一次，每个码只能成功使用一次。
           </p>
         </div>
         <a
@@ -289,9 +289,11 @@ export function TwoFactorSecurityView({
             <LockKeyhole aria-hidden="true" className="size-4 text-muted" />
             <p className="type-eyebrow">SIGN IN REQUIRED</p>
           </div>
-          <h2 className="mt-3 font-serif text-3xl tracking-[-0.03em] text-ink">先登录再管理 2FA</h2>
+          <h2 className="mt-3 font-serif text-3xl tracking-[-0.03em] text-ink">
+            先登录再管理两步验证
+          </h2>
           <p className="mt-3 text-sm leading-6 text-muted">
-            2FA 注册、备用码与关闭操作都绑定当前 Better Auth 会话，不能在未登录状态下执行。
+            启用两步验证、查看备用码和关闭功能都需要先登录。
           </p>
           <a
             href="/login?next=/settings/security"
@@ -327,14 +329,14 @@ export function TwoFactorSecurityView({
                     <ShieldCheck aria-hidden="true" className="size-4" />
                   </span>
                   <div>
-                    <p className="type-eyebrow">TOTP / AUTHENTICATOR APP</p>
+                    <p className="type-eyebrow">AUTHENTICATOR APP</p>
                     <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">
                       两步验证
                     </h2>
                     <p className="mt-1 text-[11px] leading-5 text-muted">
                       {enabled
                         ? "登录密码通过后，还会要求输入验证器动态码。"
-                        : "启用后，每次登录都需要密码和 6 位 TOTP 动态码。"}
+                        : "启用后，每次登录都需要密码和验证器中的 6 位动态码。"}
                     </p>
                   </div>
                 </div>
@@ -373,14 +375,14 @@ export function TwoFactorSecurityView({
                       <p className="type-eyebrow">STEP 1 / CONFIRM PASSWORD</p>
                       <h3 className="mt-1 text-sm font-medium text-ink">确认当前密码</h3>
                       <p className="mt-1 text-[11px] leading-5 text-muted">
-                        密码只用于本次 Better Auth 注册请求，不会写入前端存储。
+                        密码只用于本次确认，不会保存在浏览器中。
                       </p>
                     </div>
                     <FormField
                       id="security-enrollment-password"
                       label="当前密码"
                       required
-                      hint="确认后会生成 TOTP URI 与 10 个一次性备用码。"
+                      hint="确认后会生成验证器密钥与 10 个一次性备用码。"
                     >
                       <Input
                         autoComplete="current-password"
@@ -397,7 +399,7 @@ export function TwoFactorSecurityView({
                     <div className="flex flex-wrap gap-2">
                       <Button type="submit" variant="primary" disabled={busy}>
                         <QrCode aria-hidden="true" />
-                        {busy ? "正在生成…" : "生成 TOTP 密钥"}
+                        {busy ? "正在生成…" : "生成验证器密钥"}
                       </Button>
                       <Button type="button" variant="ghost" onClick={closePanel}>
                         取消
@@ -410,19 +412,19 @@ export function TwoFactorSecurityView({
                   <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
                     <div className="rounded-control border border-hairline bg-black/20 p-4">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="type-eyebrow">SCAN LOCALLY</p>
-                        <Badge tone="green">LOCAL QR</Badge>
+                        <p className="type-eyebrow">SCAN QR</p>
+                        <Badge tone="green">QR CODE</Badge>
                       </div>
                       <div className="mt-3">
-                        <TotpQr uri={enrollment.totpURI} />
+                        <TotpQr uri={enrollment.totpURI} label="验证器二维码" />
                       </div>
                       <p className="mt-3 text-[10px] leading-5 text-muted">
-                        QR 在浏览器本地生成，TOTP secret 不发送给第三方二维码服务。
+                        二维码在浏览器本地生成，验证器密钥不会发送给第三方二维码服务。
                       </p>
                       {secret ? (
                         <div className="mt-3 border-t border-hairline pt-3">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="type-eyebrow">MANUAL SECRET</p>
+                            <p className="type-eyebrow">MANUAL KEY</p>
                             <button
                               type="button"
                               onClick={() => void copyText("secret", secret)}
@@ -478,7 +480,7 @@ export function TwoFactorSecurityView({
                           onSubmit={verifyEnrollment}
                           className="rounded-control border border-hairline-strong bg-surface-1 p-4"
                         >
-                          <p className="type-eyebrow">STEP 2 / VERIFY TOTP</p>
+                          <p className="type-eyebrow">STEP 2 / VERIFY CODE</p>
                           <h3 className="mt-1 text-sm font-medium text-ink">
                             输入验证器中的 6 位数字
                           </h3>
@@ -487,7 +489,7 @@ export function TwoFactorSecurityView({
                               id="security-enrollment-totp"
                               label="验证器验证码"
                               required
-                              hint="验证成功后才会真正启用 2FA。"
+                              hint="验证成功后才会启用两步验证。"
                             >
                               <Input
                                 autoComplete="one-time-code"
@@ -516,7 +518,7 @@ export function TwoFactorSecurityView({
                             disabled={busy || code.length !== 6}
                           >
                             <ShieldCheck aria-hidden="true" />
-                            {busy ? "正在验证…" : "验证并启用 2FA"}
+                            {busy ? "正在验证…" : "验证并启用两步验证"}
                           </Button>
                         </form>
                       )}
@@ -562,7 +564,7 @@ export function TwoFactorSecurityView({
                     <div className="flex flex-wrap gap-2">
                       <Button type="submit" variant="danger" disabled={busy || code.length !== 6}>
                         <ShieldOff aria-hidden="true" />
-                        {busy ? "正在关闭…" : "确认关闭 2FA"}
+                        {busy ? "正在关闭…" : "确认关闭两步验证"}
                       </Button>
                       <Button type="button" variant="ghost" onClick={closePanel}>
                         取消
@@ -641,11 +643,10 @@ export function TwoFactorSecurityView({
                     备用码与恢复
                   </h2>
                   <p className="mt-2 text-[11px] leading-5 text-muted">
-                    在登录挑战页切换到「备用码」，输入一组尚未使用的备用码即可登录。成功使用后，该码立即从服务端删除，不能再次使用。
+                    在登录验证页切换到「备用码」，输入一组尚未使用的备用码即可登录。成功使用后，该码立即失效，不能再次使用。
                   </p>
                   <p className="mt-2 text-[11px] leading-5 text-muted">
-                    Better Auth
-                    的客户端会话接口不返回精确剩余数量。安全页仅在生成新码时显示本组数量；需要确认剩余码时，应重新生成并替换整组。
+                    页面不会显示备用码的剩余数量，只显示本次生成的这一组。如果不确定还剩多少，请重新生成一组并替换旧码。
                   </p>
                 </div>
               </div>
@@ -654,7 +655,7 @@ export function TwoFactorSecurityView({
 
           <aside className="space-y-4 xl:sticky xl:top-6">
             <section className="surface-card p-5">
-              <p className="type-eyebrow">SESSION</p>
+              <p className="type-eyebrow">ACCOUNT</p>
               <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">当前账号</h2>
               <div className="mt-4 space-y-3">
                 <div>
@@ -665,18 +666,18 @@ export function TwoFactorSecurityView({
                 </div>
                 <div>
                   <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                    2FA STATE
+                    两步验证
                   </p>
                   <p className={`mt-1 text-[12px] ${enabled ? "text-accent-green" : "text-muted"}`}>
-                    {enabled ? "Enabled · TOTP" : "Not enabled"}
+                    {enabled ? "已启用 · 验证器" : "未启用"}
                   </p>
                 </div>
                 <div>
                   <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                    TRANSPORT
+                    登录状态
                   </p>
                   <p className="mt-1 font-mono text-[10px] text-body">
-                    Better Auth / httpOnly cookie
+                    已安全登录
                   </p>
                 </div>
               </div>
@@ -688,7 +689,7 @@ export function TwoFactorSecurityView({
                 <p className="type-eyebrow">LOCKOUT</p>
               </div>
               <p className="mt-2 text-[11px] leading-5 text-muted">
-                连续输错验证码会触发临时锁定。遇到 HTTP 429 时请停止重试，等待约 15
+                连续输错验证码会触发临时锁定。尝试过于频繁时请停止重试，等待约 15
                 分钟，或改用未使用的备用码。
               </p>
             </section>
@@ -699,8 +700,7 @@ export function TwoFactorSecurityView({
                 <p className="type-eyebrow">PRIVACY</p>
               </div>
               <p className="mt-2 text-[11px] leading-5 text-muted">
-                QR、secret 和备用码只在当前页面内存中处理。不会上传到二维码服务，也不会写入
-                localStorage。
+                二维码、验证器密钥和备用码只在当前页面中处理，不会上传到二维码服务，也不会保存在浏览器本地。
               </p>
             </section>
           </aside>
@@ -725,7 +725,7 @@ function SecurityFrame({ children }: { children: React.ReactNode }) {
             </span>
             <span className="type-eyebrow text-[8px]">account security</span>
           </a>
-          <Badge tone="neutral">BETTER AUTH / TOTP</Badge>
+          <Badge tone="neutral">ACCOUNT SECURITY</Badge>
         </header>
         <div className="mt-10">{children}</div>
       </div>
@@ -737,9 +737,9 @@ function EnabledSummary({ enabled, onRegenerate }: { enabled: boolean; onRegener
   if (!enabled) {
     return (
       <div className="rounded-control border border-hairline bg-black/20 p-4">
-        <p className="text-[12px] text-ink">2FA 当前未启用</p>
+        <p className="text-[12px] text-ink">两步验证当前未启用</p>
         <p className="mt-1 text-[11px] leading-5 text-muted">
-          打开右侧开关，确认当前密码后生成 TOTP 密钥与备用码。完成 6 位验证码验证后才会启用。
+          打开开关，确认当前密码后生成验证器密钥与备用码。完成 6 位验证码验证后才会启用。
         </p>
       </div>
     );
@@ -748,9 +748,9 @@ function EnabledSummary({ enabled, onRegenerate }: { enabled: boolean; onRegener
   return (
     <div className="flex flex-col gap-4 rounded-control border border-accent-green/20 bg-accent-green/5 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-[12px] font-medium text-accent-green">TOTP 已启用</p>
+        <p className="text-[12px] font-medium text-accent-green">两步验证已启用</p>
         <p className="mt-1 text-[11px] leading-5 text-muted">
-          登录时会进入 challenge。备用码使用一次后立即失效；如无剩余码，请生成新的一组。
+          登录时会要求输入验证码。备用码使用一次后立即失效；如无剩余码，请生成新的一组。
         </p>
       </div>
       <Button variant="outline" size="sm" onClick={onRegenerate}>
@@ -777,7 +777,7 @@ function BackupCodesPanel({
           <p className="type-eyebrow">BACKUP CODES</p>
           <h3 className="mt-1 text-sm font-medium text-ink">剩余备用码（本次生成）</h3>
           <p className="mt-1 text-[10px] leading-5 text-muted">
-            当前剩余 {codes.length} 个，只在本次页面显示。每个码只能成功使用一次。
+            本组共 {codes.length} 个，只在当前页面显示。每个码只能成功使用一次。
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={onCopy} disabled={codes.length === 0}>
@@ -798,7 +798,7 @@ function BackupCodesPanel({
         </ul>
       ) : (
         <p className="mt-3 rounded-control border border-accent-red/20 bg-accent-red/5 px-3 py-2 text-[11px] text-accent-red">
-          认证服务未返回备用码。请完成验证后重新生成。
+          没有获取到备用码。请完成验证后重新生成。
         </p>
       )}
     </div>

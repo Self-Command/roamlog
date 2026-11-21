@@ -128,7 +128,7 @@ describe("参与者角色调整", () => {
     const select = await screen.findByRole("combobox", { name: "更改 沈青禾 的旅行角色" });
     await user.selectOptions(select, "editor");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("角色调整失败（HTTP 500）");
+    expect(await screen.findByRole("alert")).toHaveTextContent("角色调整失败，请稍后重试。");
     expect(select).toHaveValue("viewer");
   });
 

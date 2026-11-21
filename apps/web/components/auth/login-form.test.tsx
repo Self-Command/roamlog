@@ -6,6 +6,9 @@ import { ApiError } from "@/lib/api";
 import { twoFactorErrorMessage, type TwoFactorAuthTransport } from "@/lib/api/auth";
 import { LoginFormView } from "./login-form";
 
+const IMPLEMENTATION_DETAILS =
+  /Workspace|Better Auth|httpOnly|cookie|localStorage|HTTP|\bAPI\b|后端|服务端|数据库|TOTP|\b2FA\b|认证服务|客户端会话|前端存储/i;
+
 function transport(overrides: Partial<TwoFactorAuthTransport> = {}): TwoFactorAuthTransport {
   return {
     signIn: vi.fn().mockResolvedValue({
@@ -61,6 +64,13 @@ describe("LoginFormView", () => {
     expect(onAuthenticated).toHaveBeenCalledOnce();
   });
 
+  it("does not expose authentication implementation details on the credential step", () => {
+    const { container } = render(<LoginFormView />);
+
+    expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
+    expect(screen.getByText("安全登录")).toBeInTheDocument();
+  });
+
   it("moves from credentials to the TOTP challenge when Better Auth redirects", async () => {
     const user = userEvent.setup();
     const auth = transport({
@@ -71,7 +81,9 @@ describe("LoginFormView", () => {
     });
     const onAuthenticated = vi.fn();
 
-    render(<LoginFormView auth={auth} onAuthenticated={onAuthenticated} />);
+    const { container } = render(
+      <LoginFormView auth={auth} onAuthenticated={onAuthenticated} />,
+    );
 
     await user.type(screen.getByLabelText("邮箱"), "lin.mo@roamlog.local");
     await user.type(screen.getByLabelText("密码"), "roamlog-demo");
@@ -80,6 +92,9 @@ describe("LoginFormView", () => {
     expect(screen.getByRole("heading", { name: "再确认一次是你" })).toBeInTheDocument();
     expect(screen.getByText("lin.mo@roamlog.local")).toBeInTheDocument();
     expect(auth.signIn).toHaveBeenCalledWith("lin.mo@roamlog.local", "roamlog-demo");
+    expect(screen.getByText("SECURITY CHECK")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "选择验证方式" })).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
 
     await user.type(screen.getByLabelText(/验证器 6 位验证码/), "123456");
     await user.click(screen.getByRole("button", { name: "完成验证" }));
@@ -108,7 +123,8 @@ describe("LoginFormView", () => {
     await user.click(screen.getByRole("button", { name: "完成验证" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent("验证码不正确或已过期");
-    expect(screen.getByRole("alert")).toHaveTextContent("本次挑战已失败 1 次");
+    expect(screen.getByRole("alert")).toHaveTextContent("本次验证已失败 1 次");
+    expect(screen.getByRole("alert").textContent).not.toMatch(IMPLEMENTATION_DETAILS);
     expect(onAuthenticated).not.toHaveBeenCalled();
   });
 
