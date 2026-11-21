@@ -28,12 +28,14 @@ export const API_URL = process.env.E2E_API_URL ?? "http://localhost:4000";
 
 /**
  * Local development database used by the running stack. Override with
- * `E2E_SMOKE_DATABASE_URL` for another machine/port. The smoke suite never
- * truncates this database; it only adds a uniquely named super_admin and a
- * uniquely titled trip, and removes both again.
+ * `E2E_SMOKE_DATABASE_URL` for another machine/port. CI supplies the database
+ * through the top-level `DATABASE_URL`. The smoke suite never truncates this
+ * database; it only adds a uniquely named super_admin and a uniquely titled
+ * trip, and removes both again.
  */
 export const SMOKE_DATABASE_URL =
   process.env.E2E_SMOKE_DATABASE_URL ??
+  process.env.DATABASE_URL ??
   "postgresql://postgres@127.0.0.1:55444/roamlog_local?schema=public";
 
 export const WORKSPACE_SLUG = process.env.E2E_SMOKE_WORKSPACE_SLUG ?? "verify-crew";
@@ -73,6 +75,8 @@ interface ProvisionedUser {
   userId?: string;
   email: string;
   platformRole?: string;
+  workspaceId?: string;
+  role?: string;
 }
 
 function runProvisionScript(args: readonly string[]): ProvisionedUser {
@@ -117,6 +121,31 @@ export function provisionSuperAdmin(account: SmokeAccount): void {
   ]);
   expect(result.created, `super_admin ${account.email} must be created`).toBe(true);
   expect(result.platformRole).toBe("super_admin");
+}
+
+/** Creates a run-scoped member in an existing seeded workspace. */
+export function provisionWorkspaceMember(
+  account: SmokeAccount,
+  workspaceSlug: string,
+  role: "owner" | "admin" | "editor" | "viewer" = "viewer",
+): { userId: string; workspaceId: string; role: string } {
+  const result = runProvisionScript([
+    "--action=create-member",
+    `--email=${account.email}`,
+    `--password=${account.password}`,
+    `--name=${account.name}`,
+    `--workspace-slug=${workspaceSlug}`,
+    `--role=${role}`,
+  ]);
+  expect(result.created, `workspace member ${account.email} must be created`).toBe(true);
+  expect(result.role).toBe(role);
+  expect(result.userId).toBeTruthy();
+  expect(result.workspaceId).toBeTruthy();
+  return {
+    userId: result.userId as string,
+    workspaceId: result.workspaceId as string,
+    role: result.role as string,
+  };
 }
 
 /** Best-effort delete; safe to call when provisioning already failed. */
