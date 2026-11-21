@@ -73,6 +73,24 @@ describe("EmailDeliveryService delivery outcome", () => {
     );
   });
 
+  it("uses a user-facing invitation subject with the workspace name", async () => {
+    const mailer = {
+      send: vi.fn().mockResolvedValue({ provider: "smtp", providerId: "<invite@roamlog.test>", latencyMs: 4 }),
+    };
+    const delivery = service(mailer, prisma());
+
+    await delivery.sendInvitation({
+      to: "invitee@roamlog.test",
+      workspaceName: "北欧夏日",
+      inviterName: "Owner",
+      url: "http://localhost:3000/invite/token",
+    });
+
+    const payload = mailer.send.mock.calls[0]?.[0] as { subject: string };
+    expect(payload.subject).toContain("北欧夏日");
+    expect(payload.subject).not.toMatch(/Roamlog Workspace|Workspace/u);
+  });
+
   it("sends the email-change confirmation to the current address and logs the template", async () => {
     const prismaClient = prisma();
     const mailer = {

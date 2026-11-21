@@ -240,7 +240,7 @@ async function provisionViewer(
   expect([200, 201], await invitation.text()).toContain(invitation.status());
 
   const mail = await waitForCapturedMail(account.email, (entry) =>
-    entry.subject.includes("Roamlog Workspace"),
+    entry.subject === "邀请加入 Roamlog Crew",
   );
   const link = /https?:\/\/[^\s"'<>]+\/invite\/([A-Za-z0-9_-]+)/u.exec(
     `${mail.text}\n${mail.html}`,
@@ -394,7 +394,7 @@ test("超过服务端批量上限的照片被拒并给出明确提示", async ({
   await expect(limitCopy).toContainText(`一次最多 ${limits.maxFilesPerBatch} 张`);
   await expect(limitCopy).toContainText(`单张不超过 ${megabytes(limits.maxFileBytes)}`);
   await expect(limitCopy).toContainText(`单批合计不超过 ${megabytes(limits.maxBatchBytes)}`);
-  await expect(limitCopy).toContainText(`${limits.presignPerMinute} 次上传链接`);
+  await expect(limitCopy).toContainText(`每分钟最多上传 ${limits.presignPerMinute} 次`);
 
   await fileInput(dialog).setInputFiles(batchOf(batchSize));
 

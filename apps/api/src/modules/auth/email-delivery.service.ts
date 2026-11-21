@@ -181,7 +181,7 @@ export class EmailDeliveryService {
     const safeUrl = escapeHtml(input.url);
     await this.send({
       to: input.to,
-      subject: `加入 ${input.workspaceName} 的 Roamlog Workspace`,
+      subject: `邀请加入 ${input.workspaceName}`,
       template: "workspace.invitation",
       text: `${input.inviterName} 邀请你加入 ${input.workspaceName}：${input.url}`,
       html: emailShell(

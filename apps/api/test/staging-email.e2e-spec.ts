@@ -107,7 +107,7 @@ describe.skipIf(!enabled)("staging API email delivery through Mailpit SMTP", () 
     const verification = await waitForMessage(verificationRecipient, "验证你的 Roamlog 邮箱");
     const invitation = await waitForMessage(
       invitationRecipient,
-      "加入 Staging Atelier 的 Roamlog Workspace",
+      "邀请加入 Staging Atelier",
     );
 
     expect(verification.ID).toBeTruthy();
