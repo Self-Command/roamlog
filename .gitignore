@@ -21,6 +21,7 @@ packages/db/src/generated/
 !.env.test.example
 *.pem
 *.key
+/auth.json
 
 # Local tooling
 *.log
@@ -30,6 +31,7 @@ Thumbs.db
 .vscode/
 tooling/k6/bin/
 tooling/k6/artifacts/
+/manifest.json
 
 # Test and coverage artifacts
 playwright-report/
