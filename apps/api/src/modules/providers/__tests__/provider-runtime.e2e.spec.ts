@@ -10,8 +10,7 @@ import { randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { UnauthorizedException } from "@nestjs/common";
-import type { ArgumentsHost, ExecutionContext, INestApplication } from "@nestjs/common";
-import { HttpException } from "@nestjs/common";
+import type { ExecutionContext, INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import type {
   ProviderConnection,
@@ -246,7 +245,10 @@ async function createApp(): Promise<INestApplication> {
           });
         }
         req.user = actor.user;
-        req.ip = actor.ip ?? "127.0.0.1";
+        Object.defineProperty(req, "ip", {
+          value: actor.ip ?? "127.0.0.1",
+          configurable: true,
+        });
         req.headers["user-agent"] = actor.userAgent ?? "provider-runtime-e2e";
         return true;
       },
@@ -257,27 +259,8 @@ async function createApp(): Promise<INestApplication> {
     .useValue({ canActivate: () => true })
     .compile();
 
-  const application = moduleRef.createNestApplication({ logger: ["error", "warn"] });
+  const application = moduleRef.createNestApplication({ logger: false });
   configureApp(application);
-  application.useGlobalFilters({
-    catch(exception: unknown, host: ArgumentsHost): void {
-      console.error(
-        "PROVIDER_E2E_EXCEPTION",
-        exception instanceof Error ? exception.stack : exception,
-      );
-      const response = host.switchToHttp().getResponse<{
-        status(code: number): { json(body: unknown): void };
-      }>();
-      const status = exception instanceof HttpException ? exception.getStatus() : 500;
-      response.status(status).json(
-        exception instanceof HttpException
-          ? exception.getResponse()
-          : {
-              message: exception instanceof Error ? exception.message : String(exception),
-            },
-      );
-    },
-  });
   await application.init();
   await waitForRedis(application.get(RedisService));
   return application;
@@ -438,7 +421,6 @@ integration("Provider runtime against PostgreSQL, Redis and a local upstream stu
     process.env.PROVIDER_EGRESS_ALLOW_PRIVATE = "true";
     process.env.APP_ENV = "test";
     process.env.NODE_ENV = "test";
-    process.env.LOG_LEVEL = "error";
     process.env.CONFIG_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
 
     seedPrisma = createPrismaClient({ connectionString: testDatabaseUrl });
