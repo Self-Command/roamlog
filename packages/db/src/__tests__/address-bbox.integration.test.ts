@@ -134,6 +134,7 @@ async function expectCheckViolation(
 }
 
 integration("0006_trip_stop_address_bbox against PostgreSQL", () => {
+  if (!testDatabaseUrl) return;
   const baseSchema = schemaFromUrl(testDatabaseUrl ?? "");
   const emptySchema = `${baseSchema}_f6empty`;
   const migrationSchema = `${baseSchema}_f6`;

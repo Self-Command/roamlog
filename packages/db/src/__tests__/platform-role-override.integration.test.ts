@@ -47,6 +47,7 @@ function migrationSql(migration: string): string {
 const PROBE_USER_ID = "00000000-0000-7000-8000-00000000c501";
 
 integration("PlatformRoleOverride migration against PostgreSQL", () => {
+  if (!testDatabaseUrl) return;
   const baseSchema = schemaFromUrl(testDatabaseUrl ?? "");
   // Own private schemas so the seed and settings integration tests can run in
   // parallel without sharing DDL state.

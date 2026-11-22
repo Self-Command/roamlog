@@ -38,6 +38,7 @@ const PROBE_USER_ID = "00000000-0000-7000-8000-00000000b1a1";
 const PROBE_FLAG_KEY = "b1a.migration-probe";
 
 integration("SystemSetting migration against PostgreSQL", () => {
+  if (!testDatabaseUrl) return;
   const baseSchema = schemaFromUrl(testDatabaseUrl ?? "");
   // Own a private schema instead of mutating the shared test schema: the seed
   // integration test runs against ROAMLOG_TEST_DATABASE_URL at the same time.

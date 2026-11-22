@@ -50,8 +50,5 @@ tmp/
 .codegraph/
 
 # Local audit evidence (screenshots/logs, regenerate by re-running QA)
-.audit/evidence/
-.audit/raw/
-.audit/**/*cookies*.txt
-.audit/**/cj*.txt
+.audit/
 nohup.out

@@ -136,6 +136,7 @@ const DEST_ID = "0199f070-0000-7000-8000-000000000201";
 const DEST_ID_2 = "0199f070-0000-7000-8000-000000000202";
 
 integration("0010_trip_destinations against PostgreSQL", () => {
+  if (!testDatabaseUrl) return;
   const baseSchema = schemaFromUrl(testDatabaseUrl ?? "");
   const emptySchema = `${baseSchema}_dest_empty`;
   const dataSchema = `${baseSchema}_dest_data`;

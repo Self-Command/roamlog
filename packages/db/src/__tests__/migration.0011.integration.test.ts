@@ -150,6 +150,7 @@ async function snapshotExports(admin: Client): Promise<ExportSnapshot[]> {
 }
 
 integration("0011_export_bucket against PostgreSQL", () => {
+  if (!testDatabaseUrl) return;
   const baseSchema = schemaFromUrl(testDatabaseUrl ?? "");
   const emptySchema = `${baseSchema}_exp_empty`;
   const dataSchema = `${baseSchema}_exp_data`;

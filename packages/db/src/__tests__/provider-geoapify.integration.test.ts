@@ -132,6 +132,7 @@ async function expectCheckViolation(
 }
 
 integration("0007_stop_provider_geoapify against PostgreSQL", () => {
+  if (!testDatabaseUrl) return;
   const baseSchema = schemaFromUrl(testDatabaseUrl ?? "");
   const emptySchema = `${baseSchema}_provider_empty`;
   const migrationSchema = `${baseSchema}_provider`;

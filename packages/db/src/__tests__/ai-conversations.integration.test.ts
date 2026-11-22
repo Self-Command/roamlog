@@ -66,6 +66,7 @@ const WORKSPACE_ID = "0199f080-0000-7000-8000-000000000202";
 const MEMBER_ID = "0199f080-0000-7000-8000-000000000203";
 
 integration("0015_ai_conversations against PostgreSQL", () => {
+  if (!testDatabaseUrl) return;
   const baseSchema = schemaFromUrl(testDatabaseUrl ?? "");
   const schema = `${baseSchema}_ai_conv`;
   let admin: Client;
