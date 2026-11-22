@@ -227,31 +227,34 @@ jobs:
               const owner = await prisma.user.findUniqueOrThrow({
                 where: { email: "verify@roamlog.test" },
               });
-              const workspace = await prisma.workspace.upsert({
-                where: { slug: "verify-crew" },
-                update: { ownerId: owner.id },
-                create: {
-                  name: "Verify Crew",
-                  slug: "verify-crew",
-                  ownerId: owner.id,
-                  plan: "team",
-                  settings: {},
-                },
-              });
-              await prisma.workspaceMember.upsert({
-                where: {
-                  workspaceId_userId: {
+              const workspace = await prisma.$transaction(async (tx) => {
+                const workspace = await tx.workspace.upsert({
+                  where: { slug: "verify-crew" },
+                  update: { ownerId: owner.id },
+                  create: {
+                    name: "Verify Crew",
+                    slug: "verify-crew",
+                    ownerId: owner.id,
+                    plan: "team",
+                    settings: {},
+                  },
+                });
+                await tx.workspaceMember.upsert({
+                  where: {
+                    workspaceId_userId: {
+                      workspaceId: workspace.id,
+                      userId: owner.id,
+                    },
+                  },
+                  update: { role: "owner", status: "active" },
+                  create: {
                     workspaceId: workspace.id,
                     userId: owner.id,
+                    role: "owner",
+                    status: "active",
                   },
-                },
-                update: { role: "owner", status: "active" },
-                create: {
-                  workspaceId: workspace.id,
-                  userId: owner.id,
-                  role: "owner",
-                  status: "active",
-                },
+                });
+                return workspace;
               });
               console.log(JSON.stringify({ workspaceId: workspace.id, slug: workspace.slug }));
             } finally {
