@@ -132,7 +132,12 @@ describe("PlacesMergeService — five acceptance queries", () => {
               title: "东京城镇",
               address: "黑龙江省牡丹江市宁安市东京城镇",
               location: { lat: 44.1134353, lng: 129.2114111 },
-              ad_info: { adcode: 231084, province: "黑龙江省", city: "牡丹江市", district: "宁安市" },
+              ad_info: {
+                adcode: 231084,
+                province: "黑龙江省",
+                city: "牡丹江市",
+                district: "宁安市",
+              },
             }),
           ]),
         ]),
@@ -271,6 +276,53 @@ describe("PlacesMergeService — five acceptance queries", () => {
     expect(outcome.items).toEqual([]);
     expect(outcome.degraded).toBe(true);
   });
+
+  it.each([
+    {
+      q: "外滩",
+      title: "外滩",
+      category: "旅游景点:风景名胜",
+      expected: "外滩",
+    },
+    {
+      q: "故宫",
+      title: "故宫博物院",
+      category: "文化场馆:博物馆",
+      expected: "故宫博物院",
+    },
+    {
+      q: "上海外滩",
+      title: "外滩",
+      category: "旅游景点:风景名胜",
+      expected: "外滩",
+    },
+  ])(
+    "$q: an exact or tourism/culture Tencent POI survives the bare-Han city fallback",
+    ({ q, title, category, expected }) => {
+      const outcome = mergeService.merge({
+        q,
+        limit: 6,
+        recalls: [
+          recall("tencent", [
+            ...tencentSuggestions([
+              tencentSuggestItem({
+                title,
+                category,
+                address: "上海市黄浦区中山东一路",
+                location: { lat: 31.23925, lng: 121.49084 },
+                ad_info: { adcode: 310101, province: "上海市", city: "上海市", district: "黄浦区" },
+              }),
+            ]),
+          ]),
+          recall("geoapify", []),
+          recall("photon", []),
+        ],
+      });
+
+      expect(outcome.degraded).toBe(false);
+      expect(outcome.items[0]?.name).toBe(expected);
+    },
+  );
 
   it("建国路87号: Tencent's Beijing SKP POI stays first", () => {
     const outcome = mergeService.merge({

@@ -105,6 +105,41 @@ function tencentRequestedLayer(recalls: readonly ProviderRecall[]): PeliasLayer 
   return undefined;
 }
 
+/**
+ * 【适配层，本仓库原创】A bare Han query is ambiguous: 外滩/故宫/长城 are
+ * venues while 京都 may be a city. Tencent's suggestion payload carries a
+ * documented `category` (for example `旅游景点:风景名胜`), so keep an
+ * unmatched hit when it either names the query exactly or is a tourism/
+ * culture POI whose name and the query contain one another. Without this
+ * evidence the existing city fallback drops the hit; the 京都 regression
+ * fixture is the control case.
+ */
+const TENCENT_TRAVEL_CATEGORY = /^(?:旅游景点|文化场馆)/u;
+
+function tencentKeepsBareHanQuery(recalls: readonly ProviderRecall[], query: string): boolean {
+  for (const recall of recalls) {
+    if (recall.provider !== "tencent") {
+      continue;
+    }
+    for (const candidate of recall.candidates) {
+      if (candidate.source !== "tencent") {
+        continue;
+      }
+      if (candidate.place.name === query) {
+        return true;
+      }
+      if (
+        candidate.category !== undefined &&
+        TENCENT_TRAVEL_CATEGORY.test(candidate.category) &&
+        (candidate.place.name.includes(query) || query.includes(candidate.place.name))
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function dedupeHits(hits: readonly PeliasHit[]): PeliasHit[] {
   const byDocument = new Map(hits.map((hit) => [hit.document, hit] as const));
   const documents = hits.map((hit) => hit.document);
@@ -167,7 +202,8 @@ export class PlacesMergeService {
     const trimmed = trimByGranularity(hits, {
       ...(parsedText === undefined ? {} : { parsedText }),
       ...(requestedLayer === undefined ? {} : { requestedLayer }),
-      dropWhenUnmatched: parsedText?.city !== undefined,
+      dropWhenUnmatched:
+        parsedText?.city !== undefined && !tencentKeepsBareHanQuery(input.recalls, input.q),
     });
     if (trimmed.expectedLayers.length > 0 && !trimmed.matched) {
       // A granularity was requested but no candidate reached it: everything is
