@@ -97,13 +97,35 @@ export function JournalImageToolbar({
   const settingsTriggerRef = useRef<HTMLButtonElement>(null);
   const settingsWasOpenRef = useRef(false);
 
+  /**
+   * Radix closes the portal first; the Tiptap NodeView can remount the toolbar
+   * on the next frame. Resolve the live trigger from the document after both
+   * frames instead of focusing a ref that may already be detached.
+   *
+   * This mirrors the Gallery NodeView's delayed focus restoration
+   * (`journal-gallery-node-view.tsx`) and intentionally does not cancel the
+   * frame on unmount: the trigger we need may belong to the replacement mount.
+   */
+  function restoreSettingsFocus(): void {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const liveTrigger =
+          settingsTriggerRef.current?.isConnected === true
+            ? settingsTriggerRef.current
+            : document.querySelector<HTMLButtonElement>(
+                'button[data-journal-image-settings-trigger="true"]',
+              );
+        liveTrigger?.focus();
+      });
+    });
+  }
+
   useEffect(() => {
     const wasOpen = settingsWasOpenRef.current;
     settingsWasOpenRef.current = settingsOpen;
     if (!wasOpen || settingsOpen) return;
 
-    const frame = window.requestAnimationFrame(() => settingsTriggerRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
+    restoreSettingsFocus();
   }, [settingsOpen]);
 
   function handleSettingsOpenChange(open: boolean): void {
@@ -146,6 +168,7 @@ export function JournalImageToolbar({
             type="button"
             aria-label="图片设置"
             title="图片设置"
+            data-journal-image-settings-trigger="true"
             className={TOOLBAR_BUTTON_CLASS}
             onMouseDown={(event: MouseEvent<HTMLButtonElement>) => {
               event.preventDefault();
@@ -167,7 +190,7 @@ export function JournalImageToolbar({
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            settingsTriggerRef.current?.focus();
+            restoreSettingsFocus();
           }}
         >
           <JournalImageSettings
