@@ -24,6 +24,7 @@ interface JournalImageToolbarProps {
   onAlign: (alignment: ImageAlignment) => void;
   onApplySettings: (values: JournalImageSettingsValues) => void;
   onPreview: (trigger: HTMLButtonElement) => void;
+  onRestoreSelection: () => void;
   replacing: boolean;
   onReplace: () => void;
   onDelete: () => void;
@@ -89,6 +90,7 @@ export function JournalImageToolbar({
   onAlign,
   onApplySettings,
   onPreview,
+  onRestoreSelection,
   replacing,
   onReplace,
   onDelete,
@@ -107,6 +109,7 @@ export function JournalImageToolbar({
    * frame on unmount: the trigger we need may belong to the replacement mount.
    */
   function restoreSettingsFocus(): void {
+    onRestoreSelection();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const liveTrigger =

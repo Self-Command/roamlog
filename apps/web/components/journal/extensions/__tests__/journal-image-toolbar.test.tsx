@@ -18,7 +18,7 @@ const ATTRIBUTES: JournalImageAttributes = {
   mediaId: null,
 };
 
-function toolbar(key: string) {
+function toolbar(key: string, onRestoreSelection = vi.fn()) {
   return (
     <JournalImageToolbar
       key={key}
@@ -27,6 +27,7 @@ function toolbar(key: string) {
       onAlign={vi.fn()}
       onApplySettings={vi.fn()}
       onPreview={vi.fn()}
+      onRestoreSelection={onRestoreSelection}
       replacing={false}
       onReplace={vi.fn()}
       onDelete={vi.fn()}
@@ -41,7 +42,8 @@ afterEach(() => {
 describe("JournalImageToolbar", () => {
   it("restores focus to the replacement trigger after a NodeView remount", async () => {
     const user = userEvent.setup();
-    const view = render(toolbar("first"));
+    const restoreSelection = vi.fn();
+    const view = render(toolbar("first", restoreSelection));
     await user.click(screen.getByRole("button", { name: "图片设置" }));
     expect(await screen.findByRole("dialog", { name: "图片设置" })).toBeVisible();
 
@@ -62,7 +64,7 @@ describe("JournalImageToolbar", () => {
 
     // The real editor closes the Radix portal, then remounts the Tiptap
     // NodeView on the next frame. Replacing the key models that hand-off.
-    view.rerender(toolbar("replacement"));
+    view.rerender(toolbar("replacement", restoreSelection));
 
     await act(async () => {
       for (let pass = 0; pass < 4 && frames.size > 0; pass += 1) {
@@ -74,6 +76,7 @@ describe("JournalImageToolbar", () => {
       }
     });
 
+    expect(restoreSelection).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "图片设置" })).toHaveFocus();
   });
 });

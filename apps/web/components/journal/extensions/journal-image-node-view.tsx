@@ -223,6 +223,13 @@ export function JournalImageNodeView({
     if (typeof pos === "number") editor.commands.setNodeSelection(pos);
   }
 
+  function restoreImageSelection(): void {
+    if (editor.isDestroyed) return;
+    const pos = getPos();
+    if (typeof pos !== "number" || !editor.state.doc.nodeAt(pos)) return;
+    editor.commands.setNodeSelection(pos);
+  }
+
   function handleFigureKeyDown(event: KeyboardEvent<HTMLElement>): void {
     if (!canOpenOnClick) return;
     if (event.target !== event.currentTarget && !(event.target instanceof HTMLImageElement)) return;
@@ -315,6 +322,7 @@ export function JournalImageNodeView({
           onAlign={(alignment) => updateAttributes({ alignment })}
           onApplySettings={handleApplySettings}
           onPreview={(trigger) => openPreview(trigger)}
+          onRestoreSelection={restoreImageSelection}
           replacing={replacing}
           onReplace={() => {
             setReplaceError(null);
