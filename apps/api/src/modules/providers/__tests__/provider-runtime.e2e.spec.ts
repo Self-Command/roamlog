@@ -418,6 +418,7 @@ integration("Provider runtime against PostgreSQL, Redis and a local upstream stu
     process.env.PROVIDER_EGRESS_ALLOW_PRIVATE = "true";
     process.env.APP_ENV = "test";
     process.env.NODE_ENV = "test";
+    process.env.LOG_LEVEL = "error";
     process.env.CONFIG_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
 
     seedPrisma = createPrismaClient({ connectionString: testDatabaseUrl });
