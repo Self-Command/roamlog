@@ -256,7 +256,7 @@ async function createApp(): Promise<INestApplication> {
     .useValue({ canActivate: () => true })
     .compile();
 
-  const application = moduleRef.createNestApplication({ logger: false });
+  const application = moduleRef.createNestApplication({ logger: ["error", "warn"] });
   configureApp(application);
   await application.init();
   await waitForRedis(application.get(RedisService));
@@ -471,7 +471,12 @@ integration("Provider runtime against PostgreSQL, Redis and a local upstream stu
   }, 60_000);
 
   it("proves discovery, failover, map routing, ordering and audit without leaking keys", async () => {
-    const catalog = await http().get("/v1/admin/provider-catalog").expect(200);
+    const catalog = await http().get("/v1/admin/provider-catalog");
+    if (catalog.status !== 200) {
+      throw new Error(
+        `Provider catalog returned HTTP ${catalog.status}: ${JSON.stringify(catalog.body)}`,
+      );
+    }
     expect(catalog.body.groups.map((group: { group: string }) => group.group)).toEqual([
       "ai",
       "places",
