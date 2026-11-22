@@ -3,7 +3,7 @@ import type { TiptapDoc, TiptapNode } from "./types.js";
 
 const FIXTURE_CLOCK_START = Date.UTC(2026, 0, 1, 8, 0, 0);
 
-export const DEMO_SHARE_TOKEN = "roamlog-demo-share-2026-kyoto";
+export const DEMO_SHARE_TOKEN = "roamlog-demo-share-2026-kyoto-trip";
 
 export const demoShareTokenHash = createHash("sha256")
   .update(DEMO_SHARE_TOKEN)

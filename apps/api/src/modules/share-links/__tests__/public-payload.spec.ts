@@ -21,6 +21,7 @@ const ENTRY_ID = "01942f30-1200-7000-8000-000000000005";
 const MEDIA_READY_ID = "01942f30-1200-7000-8000-000000000010";
 const MEDIA_PENDING_ID = "01942f30-1200-7000-8000-000000000011";
 const MEDIA_KEYLESS_ID = "01942f30-1200-7000-8000-000000000012";
+const SECOND_MEDIA_ID = "01942f30-1200-7000-8000-000000000013";
 const SHARE_TOKEN = "t".repeat(43);
 const EXPIRES_AT = "2026-11-18T12:00:00.000Z";
 
@@ -89,6 +90,18 @@ function mediaRow(overrides: Record<string, unknown> = {}): Record<string, unkno
     deletedAt: null,
     ...overrides,
   };
+}
+
+function secondMediaRow(): Record<string, unknown> {
+  return mediaRow({
+    id: SECOND_MEDIA_ID,
+    key: "ws/2026/11/media/second-original.jpg",
+    variants: {
+      original: { key: "ws/2026/11/media/second-original.jpg" },
+      large: { key: "ws/2026/11/media/second-large.webp" },
+      thumb: { key: "ws/2026/11/media/second-thumb.webp" },
+    },
+  });
 }
 
 function tripRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -254,6 +267,149 @@ describe("ShareLinksService public read model", () => {
     });
     expect(payload.entries[0]?.media).toEqual(payload.media);
     expect(JSON.stringify(payload)).not.toMatch(/variants|bucket|"key"/);
+  });
+
+  it("re-signs inline media without changing gallery or cover signatures", async () => {
+    const mediaId = MEDIA_READY_ID;
+    const oldSrc =
+      "https://cdn.example.test/ws/2026/11/media/original.jpg?X-Amz-Signature=expired";
+    const bundle = bundleWith([mediaRow()], [mediaRow()]);
+    bundle.trip = { ...bundle.trip, coverMediaId: mediaId };
+    bundle.entries[0] = {
+      ...bundle.entries[0],
+      contentHtml: `<figure data-type="image"><img src="${oldSrc}" alt="Euljiro" data-media-id="${mediaId}" onerror="alert(1)"></figure>`,
+    };
+
+    const { service } = buildService(bundle);
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+    const signedUrl = payload.media[0]?.url;
+
+    expect(signedUrl).toContain("large.webp");
+    expect(payload.entries[0]?.contentHtml).toContain(`src="${signedUrl}"`);
+    expect(payload.entries[0]?.contentHtml).not.toContain("expired");
+    expect(payload.entries[0]?.contentHtml).toContain(`data-media-id="${mediaId}"`);
+    expect(payload.entries[0]?.contentHtml).not.toMatch(/onerror/i);
+    expect(payload.entries[0]?.media).toEqual(payload.media);
+    expect(payload.trip.cover?.mediaId).toBe(mediaId);
+    expect(payload.trip.cover?.url).toBe(signedUrl);
+  });
+
+  it("keeps figure, gallery and columns and re-signs every mapped inline image", async () => {
+    const first = mediaRow();
+    const second = secondMediaRow();
+    const legacySrc = "https://legacy.example.test/old-photo.jpg";
+    const contentHtml = [
+      '<p><a href="https://example.com/album" target="_blank" rel="opener">Open album</a>',
+      '<a href="https://example.com/self" target="_self">Same window</a></p>',
+      '<figure data-type="image" data-align="wide">',
+      '<img src="https://expired.example.test/hero.jpg" alt="Hero" ',
+      `data-media-id="${MEDIA_READY_ID}">`,
+      "<figcaption>Hero</figcaption>",
+      "</figure>",
+      '<div data-type="gallery" data-columns="2">',
+      '<figure data-type="gallery-item">',
+      '<img src="https://expired.example.test/gallery-one.jpg" alt="One" ',
+      `data-media-id="${MEDIA_READY_ID}">`,
+      "<figcaption>First frame</figcaption>",
+      "</figure>",
+      '<figure data-type="gallery-item">',
+      '<img src="https://expired.example.test/gallery-two.jpg" alt="Two" ',
+      `data-media-id="${SECOND_MEDIA_ID}">`,
+      "<figcaption>Second frame</figcaption>",
+      "</figure>",
+      "</div>",
+      '<div data-type="columns" data-columns="2">',
+      '<div data-type="column" data-column-index="0"><p>Left column</p></div>',
+      '<div data-type="column" data-column-index="1"><p>Right column</p></div>',
+      "</div>",
+      `<figure data-type="image"><img src="${legacySrc}" alt="Legacy"></figure>`,
+    ].join("");
+    const bundle = bundleWith([first, second], [first, second]);
+    bundle.entries[0] = { ...bundle.entries[0], contentHtml };
+
+    const { service } = buildService(bundle);
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+    const urls = new Map(payload.media.map((item) => [item.id, item.url]));
+    const firstUrl = urls.get(MEDIA_READY_ID)!;
+    const secondUrl = urls.get(SECOND_MEDIA_ID)!;
+    const html = payload.entries[0]?.contentHtml ?? "";
+
+    expect(html).toContain(`src="${firstUrl}"`);
+    expect(html).toContain(`src="${secondUrl}"`);
+    expect(html).toContain(`src="${legacySrc}"`);
+    expect(html).not.toContain("expired.example.test");
+    expect(html).toContain('data-type="image"');
+    expect(html).toContain('data-type="gallery"');
+    expect(html).toContain('data-columns="2"');
+    expect(html).toContain('data-type="gallery-item"');
+    expect(html).toContain('data-type="columns"');
+    expect(html).toContain('data-type="column"');
+    expect(html).toContain('data-column-index="0"');
+    expect(html).toContain('data-column-index="1"');
+    expect(html).toContain("<figcaption>First frame</figcaption>");
+    expect(html).toContain("<figcaption>Second frame</figcaption>");
+    expect(html).toContain('href="https://example.com/album"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).not.toMatch(/target="_self"|rel="opener"/i);
+    expect(html).toContain("<p>Left column</p>");
+    expect(html).toContain("<p>Right column</p>");
+  });
+
+  it("strips layout XSS from public content while keeping safe nodes", async () => {
+    const contentHtml = [
+      '<figure data-type="image" data-align="left" data-evil="figure" class="photo" ',
+      'style="width:99999px" onclick="alert(1)">',
+      '<img src="https://expired.example.test/hero.jpg" alt="Hero" ',
+      `data-media-id="${MEDIA_READY_ID}" data-extra="img" class="photo" `,
+      'style="width:99999px" onerror="alert(2)" srcdoc="<script>alert(3)</script>">',
+      '<figcaption class="caption" style="color:red">Hero</figcaption>',
+      "<script>alert(4)</script>",
+      "</figure>",
+      '<div data-type="gallery" data-columns="2" data-evil="gallery" class="gallery" ',
+      'style="display:none" onmouseover="alert(5)">',
+      '<figure data-type="gallery-item" data-evil="item" class="item" ',
+      'style="border:1px solid red" onclick="alert(6)">',
+      '<img src="https://expired.example.test/gallery.jpg" alt="Gallery" ',
+      `data-media-id="${MEDIA_READY_ID}" data-extra="gallery-img" class="photo" `,
+      'style="width:99999px" onerror="alert(7)" srcdoc="<script>alert(8)</script>">',
+      '<figcaption class="caption" style="color:red">Gallery</figcaption>',
+      "</figure>",
+      "<script>alert(9)</script>",
+      "</div>",
+      '<div data-type="columns" data-columns="2" data-evil="columns" class="columns" ',
+      'style="display:none" onclick="alert(10)">',
+      '<div data-type="column" data-column-index="0" data-evil="column" class="column" ',
+      'style="color:red" onfocus="alert(11)">',
+      "<p>Left column</p>",
+      "<script>alert(12)</script>",
+      "</div>",
+      '<div data-type="column" data-column-index="1"><p>Right column</p></div>',
+      "</div>",
+      '<img src="javascript:alert(13)" onerror="alert(14)">',
+      '<img src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E" onerror="alert(15)">',
+    ].join("");
+    const bundle = bundleWith([mediaRow()], [mediaRow()]);
+    bundle.entries[0] = { ...bundle.entries[0], contentHtml };
+
+    const { service } = buildService(bundle);
+    const payload = await service.readPublic(SHARE_TOKEN, {});
+    const html = payload.entries[0]?.contentHtml ?? "";
+
+    expect(html).toContain('data-type="image"');
+    expect(html).toContain('data-type="gallery"');
+    expect(html).toContain('data-columns="2"');
+    expect(html).toContain('data-type="columns"');
+    expect(html).toContain('data-type="column"');
+    expect(html).toContain('data-column-index="0"');
+    expect(html).toContain('data-column-index="1"');
+    expect(html).toContain("<figcaption>Hero</figcaption>");
+    expect(html).toContain("<figcaption>Gallery</figcaption>");
+    expect(html).toContain("<p>Left column</p>");
+    expect(html).toContain("<p>Right column</p>");
+    expect(html).not.toMatch(
+      /onerror|onclick|onmouseover|onfocus|style=|class=|data-evil|data-extra|srcdoc|<script|javascript:|data:image|alert\(/i,
+    );
   });
 
   it("drops media that is not ready or has no signable object key", async () => {

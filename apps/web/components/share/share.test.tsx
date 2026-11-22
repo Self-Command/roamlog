@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   PublicTripResponseSchema,
   type PublicMedia,
+  type PublicStop,
   type PublicTripResponse,
 } from "@roamlog/contracts";
 import { demoFixtureState } from "@/test/fixtures";
@@ -12,6 +13,7 @@ import { demoFixtureState } from "@/test/fixtures";
 import { PublicSharePage } from "./public-share-page";
 import { ShareArticle } from "./share-article";
 import { ShareLinkDialog } from "./share-link-dialog";
+import { photosFromPublicMedia } from "./share-map";
 
 /**
  * Local, schema-valid public payload built from the shared test fixtures.
@@ -217,7 +219,7 @@ describe("ShareArticle rich journal content", () => {
       `.share-prose img[src="${imageUrl}"]`,
     );
     expect(bodyImage).not.toBeNull();
-    expect(bodyImage?.closest(".share-prose")?.className).toContain("[&_img]:max-w-full");
+    expect(bodyImage?.closest(".share-prose")?.className).toContain("journal-layout");
 
     const checked = container.querySelector<HTMLInputElement>(
       'li[data-checked="true"] input[type="checkbox"]',
@@ -645,7 +647,7 @@ describe("ShareArticle place attribution", () => {
   it("shows the Geoapify credit required by a Geoapify-sourced stop", () => {
     render(<ShareArticle data={shareWithPlaceProviders({ stops: ["geoapify"] })} />);
 
-    const credit = screen.getByTestId("places-attribution");
+    const credit = within(screen.getByRole("contentinfo")).getByTestId("places-attribution");
     expect(credit).toHaveAttribute("data-provider", "geoapify");
     expect(credit).toHaveTextContent("Powered by Geoapify");
     expect(credit).toHaveTextContent("© OpenStreetMap contributors");
@@ -660,7 +662,7 @@ describe("ShareArticle place attribution", () => {
   it("shows the Photon credit for a Photon-sourced stop", () => {
     render(<ShareArticle data={shareWithPlaceProviders({ stops: ["photon"] })} />);
 
-    const credit = screen.getByTestId("places-attribution");
+    const credit = within(screen.getByRole("contentinfo")).getByTestId("places-attribution");
     expect(credit).toHaveAttribute("data-provider", "photon");
     expect(credit).toHaveTextContent("Search by Photon");
     expect(credit).toHaveTextContent("© OpenStreetMap contributors");
@@ -675,7 +677,7 @@ describe("ShareArticle place attribution", () => {
   it("labels manually entered places without borrowing a third-party credit", () => {
     render(<ShareArticle data={shareWithPlaceProviders({ stops: ["local"] })} />);
 
-    const credit = screen.getByTestId("places-attribution");
+    const credit = within(screen.getByRole("contentinfo")).getByTestId("places-attribution");
     expect(credit).toHaveAttribute("data-provider", "local");
     expect(credit).toHaveTextContent("手动录入");
     expect(credit).not.toHaveTextContent(/Geoapify|Photon|OpenStreetMap/);
@@ -693,7 +695,9 @@ describe("ShareArticle place attribution", () => {
       />,
     );
 
-    const credits = screen.getAllByTestId("places-attribution");
+    const credits = within(screen.getByRole("contentinfo")).getAllByTestId(
+      "places-attribution",
+    );
     expect(credits.map((credit) => credit.getAttribute("data-provider"))).toEqual([
       "geoapify",
       "photon",
@@ -716,7 +720,7 @@ describe("ShareArticle place attribution", () => {
       />,
     );
 
-    const credit = screen.getByTestId("places-attribution");
+    const credit = within(screen.getByRole("contentinfo")).getByTestId("places-attribution");
     expect(credit).toHaveAttribute("data-provider", "geoapify");
     expect(credit).toHaveTextContent("Powered by Geoapify");
   });
@@ -724,7 +728,7 @@ describe("ShareArticle place attribution", () => {
   it("falls back to the conservative OSM credit for a legacy share without providers", () => {
     render(<ShareArticle data={shareWithPlaceProviders({ stops: [null] })} />);
 
-    const credit = screen.getByTestId("places-attribution");
+    const credit = within(screen.getByRole("contentinfo")).getByTestId("places-attribution");
     expect(credit).toHaveAttribute("data-provider", "unknown");
     expect(credit).not.toHaveAttribute("aria-hidden");
 
@@ -948,5 +952,152 @@ describe("ShareArticle live photos", () => {
     expect(html).not.toMatch(/storageKey|storage-key|bucket|X-Amz-Security-Token/i);
     expect(html).not.toContain("media.example.invalid");
     expect(html).not.toContain("/_next/image");
+  });
+});
+
+const MAPPED_STOP: PublicStop = {
+  id: "019b7b6b-4658-769e-8153-9f88eba061c3",
+  city: "京都市",
+  country: "日本",
+  countryCode: "JP",
+  lat: 35.0116,
+  lng: 135.7681,
+  provider: null,
+  address: null,
+  startDate: "2026-11-21",
+  endDate: "2026-11-25",
+  notes: "",
+  order: 0,
+};
+
+const SECOND_MAPPED_STOP: PublicStop = {
+  ...MAPPED_STOP,
+  id: "019b7b6b-4658-769e-8153-9f88eba061c4",
+  city: "大阪市",
+  lat: 34.6937,
+  lng: 135.5023,
+  order: 1,
+};
+
+const UNMAPPED_STOP: PublicStop = {
+  ...MAPPED_STOP,
+  id: "019b7b6b-4658-769e-8153-9f88eba061c5",
+  city: "奈良市",
+  lat: null,
+  lng: null,
+  order: 2,
+};
+
+const NON_FINITE_STOP: PublicStop = {
+  ...UNMAPPED_STOP,
+  id: "019b7b6b-4658-769e-8153-9f88eba061c6",
+  city: "宇治市",
+  lat: Number.POSITIVE_INFINITY,
+  lng: 135.8,
+  order: 3,
+};
+
+const GEOTAGGED_MEDIA: PublicMedia = {
+  id: "019b7b6b-4658-769e-8153-9f88eba061d1",
+  url: "https://signed-photos.example.test/display/geotagged.jpg",
+  thumbUrl: "https://signed-photos.example.test/thumb/geotagged.jpg",
+  expiresAt: "2027-01-01T00:00:00.000Z",
+  width: 1600,
+  height: 1200,
+  blurhash: null,
+  caption: "鸭川边",
+  date: "2026-11-22",
+  location: "京都市",
+  lat: 35.0116,
+  lng: 135.7681,
+};
+
+function shareWithMapStops(stops: PublicStop[], media: PublicMedia[] = []): PublicTripResponse {
+  const data = buildDemoPublicTrip({ showBudget: false });
+  return { ...data, stops, media };
+}
+
+describe("ShareArticle route map", () => {
+  beforeAll(() => {
+    // jsdom has no WebGL, so the shared TripStopMap intentionally falls back to
+    // its accessible schematic map. Stub the probe to keep the test output free
+    // of jsdom's "getContext not implemented" noise.
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  });
+
+  afterAll(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders the shared map for stops with finite coordinates", () => {
+    render(
+      <ShareArticle
+        data={shareWithMapStops([MAPPED_STOP, SECOND_MAPPED_STOP], [
+          GEOTAGGED_MEDIA,
+          {
+            ...GEOTAGGED_MEDIA,
+            id: "019b7b6b-4658-769e-8153-9f88eba061d5",
+            lat: undefined,
+            lng: undefined,
+          },
+        ])}
+      />,
+    );
+
+    const map = screen.getByTestId("share-map");
+    expect(map).toHaveAttribute("data-mapped-stops", "2");
+    expect(map).toHaveAttribute("data-photo-points", "1");
+    expect(within(map).getByTestId("world-map")).toHaveAttribute(
+      "aria-label",
+      "简化世界地图，显示 2 个停靠点",
+    );
+    expect(screen.getByText("ROUTE MAP / 2 MAPPED STOPS")).toBeInTheDocument();
+    expect(screen.getByTestId(`trip-map-stop-${MAPPED_STOP.id}`)).toBeInTheDocument();
+  });
+
+  it("does not render a map when no stop has finite coordinates", () => {
+    render(<ShareArticle data={shareWithMapStops([UNMAPPED_STOP, NON_FINITE_STOP])} />);
+
+    expect(screen.queryByTestId("share-map")).toBeNull();
+  });
+
+  it("adapts only public media with finite coordinates into photo points", () => {
+    const points = photosFromPublicMedia([
+      GEOTAGGED_MEDIA,
+      {
+        ...GEOTAGGED_MEDIA,
+        id: "019b7b6b-4658-769e-8153-9f88eba061d2",
+        lat: undefined,
+        lng: undefined,
+      },
+      {
+        ...GEOTAGGED_MEDIA,
+        id: "019b7b6b-4658-769e-8153-9f88eba061d3",
+        lat: Number.NaN,
+        lng: 135.7681,
+      },
+    ]);
+
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({
+      id: GEOTAGGED_MEDIA.id,
+      lat: 35.0116,
+      lng: 135.7681,
+      thumbUrl: GEOTAGGED_MEDIA.thumbUrl,
+      tripId: null,
+    });
+
+    const withoutThumb = photosFromPublicMedia([
+      { ...GEOTAGGED_MEDIA, id: "019b7b6b-4658-769e-8153-9f88eba061d4", thumbUrl: null },
+    ]);
+    expect(withoutThumb[0]?.thumbUrl).toBe(GEOTAGGED_MEDIA.url);
+  });
+
+  it("exposes no editing controls inside the public map", () => {
+    render(<ShareArticle data={shareWithMapStops([MAPPED_STOP])} />);
+
+    const map = screen.getByTestId("share-map");
+    expect(within(map).queryByRole("button", { name: /编辑|删除|添加/ })).toBeNull();
+    expect(within(map).queryByRole("link", { name: /编辑|删除|添加/ })).toBeNull();
   });
 });

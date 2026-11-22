@@ -1,14 +1,7 @@
 "use client";
 
 import { Badge } from "@roamlog/ui";
-import {
-  ArrowUpRight,
-  CalendarDays,
-  Camera,
-  MapPin,
-  Route,
-  Wallet,
-} from "lucide-react";
+import { ArrowUpRight, CalendarDays, Camera, MapPin, Route, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -26,15 +19,19 @@ import type { PublicMedia, PublicTrip, PublicTripResponse } from "@roamlog/contr
 import { LivePhoto } from "@/components/media/live-photo";
 import { PlacesAttribution } from "@/components/map/places-attribution";
 
+import "../journal/journal-layout.css";
 import { sanitizePublicHtml } from "./html";
+import { ShareGalleryLightbox } from "./share-gallery-lightbox";
+import { ShareMap } from "./share-map";
 
 /**
- * Shared body typography plus the two rich-content structures the public page
- * previously lost: journal images must never overflow the column, and Tiptap
- * task lists need their checkbox/checked-state layout outside the editor.
+ * Shared body typography. `journal-layout.css` owns the public article's
+ * headings, lists, tables, images, galleries, columns and task-list states so
+ * the share page matches the editor's writing surface. The inline Tailwind
+ * fragments stay as a compatibility layer for older snapshots and tests.
  */
 const SHARE_PROSE_CLASS = [
-  "share-prose mt-4 max-w-2xl text-[15px] leading-7 text-body",
+  "journal-layout share-prose mt-4 max-w-2xl text-[15px] leading-7 text-body",
   "[&_img]:my-4 [&_img]:block [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-control [&_img]:border [&_img]:border-hairline",
   "[&_ul[data-type=taskList]]:my-2 [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0",
   "[&_li[data-type=taskItem]]:my-1 [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:items-start [&_li[data-type=taskItem]]:gap-2",
@@ -129,16 +126,15 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
       {stops.length ? (
         <section aria-labelledby="share-route" className="border-b border-hairline py-9">
           <p className="type-eyebrow">ROUTE / {stops.length} STOPS</p>
-          <h2
-            id="share-route"
-            className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink"
-          >
+          <h2 id="share-route" className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">
             路线与停靠点
           </h2>
+          <ShareMap stops={stops} media={media} />
           <ol className="mt-5 grid gap-2 sm:grid-cols-2">
             {stops.map((stop, index) => (
               <li
                 key={stop.id}
+                data-testid={`trip-map-stop-${stop.id}`}
                 className="flex items-start gap-3 rounded-card border border-hairline bg-surface-1 p-3"
               >
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-pill border border-hairline-strong font-mono text-[9px] text-muted">
@@ -197,10 +193,7 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
 
       <section aria-labelledby="share-journal" className="py-9">
         <p className="type-eyebrow">JOURNAL / {entries.length} ENTRIES</p>
-        <h2
-          id="share-journal"
-          className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink"
-        >
+        <h2 id="share-journal" className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">
           旅行日志
         </h2>
         <div className="mt-6 space-y-10">
@@ -223,9 +216,9 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
               {entry.excerpt ? (
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-muted">{entry.excerpt}</p>
               ) : null}
-              <div
+              <ShareGalleryLightbox
                 className={SHARE_PROSE_CLASS}
-                dangerouslySetInnerHTML={{ __html: sanitizePublicHtml(entry.contentHtml) }}
+                html={sanitizePublicHtml(entry.contentHtml)}
               />
               {entry.media.length ? (
                 <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -397,9 +390,7 @@ function SharePhoto({ media, index }: { media: PublicMedia; index: number }) {
       ) : photoUrl ? (
         <img
           src={photoUrl}
-          srcSet={
-            thumbUrl && media.url ? `${thumbUrl} 320w, ${media.url} 960w` : undefined
-          }
+          srcSet={thumbUrl && media.url ? `${thumbUrl} 320w, ${media.url} 960w` : undefined}
           sizes="(min-width: 1024px) 200px, (min-width: 640px) 30vw, 45vw"
           alt={caption ?? ""}
           loading="lazy"

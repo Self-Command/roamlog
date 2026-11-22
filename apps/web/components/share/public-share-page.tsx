@@ -1,82 +1,53 @@
 "use client";
 
-import {
-  PublicTripResponseSchema,
-  type ProblemDetails,
-  type PublicTripResponse,
-} from "@roamlog/contracts";
 import { Button, ErrorState, FormField, Input, Skeleton } from "@roamlog/ui";
 import { Link2Off, LockKeyhole, RefreshCcw } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { getPublicTrip } from "@roamlog/api-client";
 
+import {
+  SHARE_NETWORK_ERROR,
+  shareScreenFromResponse,
+  type ShareScreen,
+} from "./public-share-state";
 import { ShareArticle } from "./share-article";
 
-type ShareScreen =
-  | { kind: "loading" }
-  | { kind: "password"; invalid?: boolean }
-  | { kind: "error"; title: string; description: string; retryable?: boolean }
-  | { kind: "ready"; data: PublicTripResponse };
-
-export function PublicSharePage({ token }: { token: string }) {
-  const [screen, setScreen] = useState<ShareScreen>({ kind: "loading" });
+export function PublicSharePage({
+  token,
+  initialScreen,
+}: {
+  token: string;
+  initialScreen?: ShareScreen;
+}) {
+  const [screen, setScreen] = useState<ShareScreen>(initialScreen ?? { kind: "loading" });
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    // The server route already resolved the first screen. Keep it during
+    // hydration; only a retry or a client-only render (tests/legacy callers)
+    // starts a network request.
+    if (initialScreen && attempt === 0) return;
+
     let active = true;
     setScreen({ kind: "loading" });
 
     getPublicTrip(token, undefined, { credentials: "include" })
       .then((response) => {
         if (!active) return;
-        if (response.status === 200) {
-          setScreen({
-            kind: "ready",
-            data: PublicTripResponseSchema.parse(response.data),
-          });
-          return;
-        }
-        const status: number = response.status;
-        if (status === 401) {
-          const problem = response.data as unknown as ProblemDetails;
-          setScreen({
-            kind: "password",
-            invalid: problem.code === "SHARE_PASSWORD_INVALID",
-          });
-          return;
-        }
-        if (response.status === 404) {
-          setScreen({
-            kind: "error",
-            title: "这个分享链接已失效",
-            description: "链接可能已过期、被撤销，或从未存在。请联系分享者获取新的链接。",
-          });
-          return;
-        }
-        setScreen({
-          kind: "error",
-          title: "暂时无法读取分享",
-          description: "分享服务没有正常响应，请稍后重试。",
-          retryable: true,
-        });
+        setScreen(shareScreenFromResponse(response.status, response.data));
       })
       .catch(() => {
         if (!active) return;
-        setScreen({
-          kind: "error",
-          title: "网络连接中断",
-          description: "请检查网络后重试。分享内容不会保存在本机。",
-          retryable: true,
-        });
+        setScreen(SHARE_NETWORK_ERROR);
       });
 
     return () => {
       active = false;
     };
-  }, [token, attempt]);
+  }, [attempt, initialScreen, token]);
 
   async function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,40 +60,11 @@ export function PublicSharePage({ token }: { token: string }) {
         { password },
         { credentials: "include" },
       );
-      if (response.status === 200) {
-        setScreen({
-          kind: "ready",
-          data: PublicTripResponseSchema.parse(response.data),
-        });
-        return;
-      }
-      const status: number = response.status;
-      if (status === 401) {
-        setScreen({ kind: "password", invalid: true });
-        setPassword("");
-        return;
-      }
-      if (response.status === 404) {
-        setScreen({
-          kind: "error",
-          title: "这个分享链接已失效",
-          description: "链接可能已过期、被撤销，或从未存在。",
-        });
-        return;
-      }
-      setScreen({
-        kind: "error",
-        title: "暂时无法读取分享",
-        description: "分享服务没有正常响应，请稍后重试。",
-        retryable: true,
-      });
+      const next = shareScreenFromResponse(response.status, response.data);
+      setScreen(next);
+      if (next.kind === "password" && next.invalid) setPassword("");
     } catch {
-      setScreen({
-        kind: "error",
-        title: "网络连接中断",
-        description: "请检查网络后重试。",
-        retryable: true,
-      });
+      setScreen(SHARE_NETWORK_ERROR);
     } finally {
       setPending(false);
     }

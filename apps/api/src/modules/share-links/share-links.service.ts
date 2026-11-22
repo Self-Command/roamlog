@@ -228,6 +228,7 @@ export class ShareLinksService {
     const showExactPhotoLocation = trip.showExactPhotoLocation !== false;
     const media = await this.publicMediaList(bundle.media, showExactPhotoLocation);
     const mediaById = new Map(media.map((item) => [item.id, item]));
+    const signedUrlByMediaId = new Map(media.map((item) => [item.id, item.url]));
     const cover = await this.resolveCover(trip, bundle);
     return PublicTripResponseSchema.parse({
       trip: {
@@ -276,7 +277,10 @@ export class ShareLinksService {
         lng: entry.lng ?? null,
         mood: entry.mood ?? null,
         weather: entry.weather ?? null,
-        contentHtml: this.sanitizer.sanitizeHtml(String(entry.contentHtml ?? "")),
+        contentHtml: this.sanitizer.sanitizeHtmlWithSignedMediaUrls(
+          String(entry.contentHtml ?? ""),
+          signedUrlByMediaId,
+        ),
         excerpt: entry.excerpt ?? "",
         tags: entry.tags ?? [],
         media: entryMediaViews(entry.media, mediaById),

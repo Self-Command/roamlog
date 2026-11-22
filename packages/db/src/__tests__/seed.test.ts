@@ -6,6 +6,7 @@ import {
   seedAssetFiles,
   type WorkspaceScopedFixture,
 } from "../seed-data.js";
+import { DEMO_SHARE_TOKEN } from "../seed/util.js";
 
 const uuidV7Pattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -243,7 +244,7 @@ describe("deterministic seed data", () => {
     expect(shareLink).not.toHaveProperty("token");
     expect(shareLink?.tokenHash).toMatch(/^[a-f0-9]{64}$/);
     expect(shareLink?.tokenHash).toBe(demoShareTokenHash);
-    expect(JSON.stringify(data)).not.toContain("roamlog-demo-share-2026-kyoto");
+    expect(JSON.stringify(data)).not.toContain(DEMO_SHARE_TOKEN);
   });
 
   it("uses valid deterministic UUIDv7 IDs throughout", () => {

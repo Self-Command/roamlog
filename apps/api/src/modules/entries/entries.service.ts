@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import {
   CreateJournalEntryRequestSchema,
   EntryListQuerySchema,
@@ -29,10 +24,7 @@ import {
   dateOnlyToDate,
   sortParts,
 } from "../trips/content-values.js";
-import {
-  presentEntry,
-  presentRevision,
-} from "../trips/content-presenters.js";
+import { presentEntry, presentRevision } from "../trips/content-presenters.js";
 import type { EntryRecord, RevisionRecord } from "../trips/content-records.js";
 import type { ContentTransaction } from "../trips/content-transaction.js";
 import { tripVisibilityWhere } from "../trips/trip-access.js";
@@ -43,6 +35,7 @@ import {
   type EntryUpdateData,
   type RevisionCreateData,
 } from "./entries.repository.js";
+import { sanitizeContentJsonLinkMarks } from "./content-json-links.js";
 
 @Injectable()
 export class EntriesService {
@@ -121,7 +114,7 @@ export class EntriesService {
         lng: input.lng ?? null,
         mood: input.mood ?? null,
         weather: input.weather ?? null,
-        contentJson: input.contentJson,
+        contentJson: sanitizeContentJsonLinkMarks(input.contentJson),
         contentHtml,
         excerpt: input.excerpt ?? excerptFromHtml(contentHtml),
         tags: input.tags ?? [],
@@ -175,7 +168,9 @@ export class EntriesService {
       ...(input.lng !== undefined ? { lng: input.lng } : {}),
       ...(input.mood !== undefined ? { mood: input.mood } : {}),
       ...(input.weather !== undefined ? { weather: input.weather } : {}),
-      ...(input.contentJson !== undefined ? { contentJson: input.contentJson } : {}),
+      ...(input.contentJson !== undefined
+        ? { contentJson: sanitizeContentJsonLinkMarks(input.contentJson) }
+        : {}),
       ...(input.contentHtml !== undefined
         ? { contentHtml: this.sanitizer.sanitizeHtml(input.contentHtml) }
         : {}),
@@ -213,7 +208,9 @@ export class EntriesService {
         entityId: entryId,
         metadata: {
           version: updated.version,
-          fields: Object.keys(input).filter((field) => field !== "version").sort(),
+          fields: Object.keys(input)
+            .filter((field) => field !== "version")
+            .sort(),
         },
       });
       return this.presentEntry(updated);
@@ -289,10 +286,7 @@ export class EntriesService {
     this.permissions.assertCan(membership.role, "revision:read", "revision");
     const entry = await this.requireEntry(membership.workspaceId, entryId);
     await this.assertEntryTripVisible(membership, entry.tripId);
-    const revisions = await this.repository.listRevisions(
-      membership.workspaceId,
-      entryId,
-    );
+    const revisions = await this.repository.listRevisions(membership.workspaceId, entryId);
     return revisions.map((revision) => this.presentRevision(revision));
   }
 
@@ -327,16 +321,14 @@ export class EntriesService {
         version: current.version,
         data: {
           title: revision.title,
-          contentJson: asJsonObject(revision.contentJson),
+          contentJson: sanitizeContentJsonLinkMarks(asJsonObject(revision.contentJson)),
           contentHtml,
           updatedById: actor.user.id,
         },
       });
       if (count === 0) {
         const latest = await this.repository.findEntry(membership.workspaceId, entryId, tx);
-        throw latest
-          ? new VersionConflictException(this.presentEntry(latest))
-          : this.notFound();
+        throw latest ? new VersionConflictException(this.presentEntry(latest)) : this.notFound();
       }
       const updated = await this.repository.findEntry(membership.workspaceId, entryId, tx);
       if (!updated) {
@@ -386,11 +378,7 @@ export class EntriesService {
       ...(cursorId(query.cursor) ? { cursor: cursorId(query.cursor) } : {}),
       take: query.limit + 1,
     });
-    return toCursorPage(
-      records,
-      query.limit,
-      (record) => this.presentEntry(record),
-    ) as EntryPage;
+    return toCursorPage(records, query.limit, (record) => this.presentEntry(record)) as EntryPage;
   }
 
   private async requireEntry(workspaceId: string, entryId: string) {
@@ -401,10 +389,7 @@ export class EntriesService {
     return entry;
   }
 
-  private async requireTrip(
-    membership: WorkspaceMembershipAccess,
-    tripId: string,
-  ) {
+  private async requireTrip(membership: WorkspaceMembershipAccess, tripId: string) {
     const trip = await this.trips.findTrip(membership.workspaceId, tripId);
     if (!trip) {
       throw new NotFoundException({
@@ -447,7 +432,7 @@ export class EntriesService {
       entryId: entry.id,
       version: entry.version,
       title: entry.title,
-      contentJson: asJsonObject(entry.contentJson),
+      contentJson: sanitizeContentJsonLinkMarks(asJsonObject(entry.contentJson)),
       contentHtml: this.sanitizer.sanitizeHtml(entry.contentHtml),
       editedById: actorId,
     };
@@ -476,7 +461,7 @@ export class EntriesService {
       lng: record.lng,
       mood: record.mood,
       weather: record.weather,
-      contentJson: record.contentJson,
+      contentJson: sanitizeContentJsonLinkMarks(asJsonObject(record.contentJson)),
       contentHtml: this.sanitizer.sanitizeHtml(record.contentHtml),
       excerpt: record.excerpt,
       tags: record.tags,
@@ -499,7 +484,7 @@ export class EntriesService {
       entryId: record.entryId,
       version: record.version,
       title: record.title,
-      contentJson: record.contentJson,
+      contentJson: sanitizeContentJsonLinkMarks(asJsonObject(record.contentJson)),
       contentHtml: this.sanitizer.sanitizeHtml(record.contentHtml),
       editedById: record.editedById,
       createdAt: record.createdAt,
@@ -507,9 +492,9 @@ export class EntriesService {
   }
 }
 
-function asJsonObject(value: unknown): object {
+function asJsonObject(value: unknown): Record<string, unknown> {
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    return value;
+    return value as Record<string, unknown>;
   }
   throw new BadRequestException({
     code: "INVALID_CONTENT_JSON",
