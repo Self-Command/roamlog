@@ -198,7 +198,7 @@ databaseDescribe("user appearance PostgreSQL persistence", () => {
     })),
   };
   const audit = new AuditService(database, {} as never);
-  const service = new AppearanceService(prisma as never, settings as never, audit);
+  const service = new AppearanceService(database, settings as never, audit);
 
   beforeAll(async () => {
     await prisma.$connect();

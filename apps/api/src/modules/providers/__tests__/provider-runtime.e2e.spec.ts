@@ -259,8 +259,22 @@ async function createApp(): Promise<INestApplication> {
   const application = moduleRef.createNestApplication({ logger: false });
   configureApp(application);
   await application.init();
-  await application.get(RedisService).ping();
+  await waitForRedis(application.get(RedisService));
   return application;
+}
+
+async function waitForRedis(redis: RedisService): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      await redis.ping();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw lastError;
 }
 
 function http() {
@@ -399,7 +413,7 @@ integration("Provider runtime against PostgreSQL, Redis and a local upstream stu
     }
     process.env.DATABASE_URL = testDatabaseUrl;
     process.env.REDIS_PREFIX = `roamlog:test:provider-e2e:${runId}:`;
-    process.env.REDIS_REQUIRED = "true";
+    process.env.REDIS_REQUIRED = "false";
     process.env.PROVIDER_CONFIG_MODE = "v2";
     process.env.PROVIDER_EGRESS_ALLOW_PRIVATE = "true";
     process.env.APP_ENV = "test";

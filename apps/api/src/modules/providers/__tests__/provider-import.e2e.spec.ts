@@ -8,6 +8,7 @@ import { presentUser } from "../../../common/services/user-presenter.js";
 import { WorkspaceAccessService } from "../../../common/services/workspace-access.service.js";
 import type { AppConfigService } from "../../../config/app-config.service.js";
 import { AuditService } from "../../audit/audit.service.js";
+import { generateUuidV7 } from "../../auth/uuid.js";
 import type { PrismaService } from "../../prisma/prisma.service.js";
 import { ProviderConfigService } from "../provider-config.service.js";
 import {
@@ -249,11 +250,16 @@ describe.skipIf(!process.env.ROAMLOG_TEST_DATABASE_URL)(
       const providers = new ProviderConfigService(prismaService, audit, secretService);
       const importer = new ProviderImportService(providers, secretService, audit);
 
-      const actorRow = await prisma.user.findFirst({
-        where: { platformRole: "super_admin", status: "active", deletedAt: null },
-        orderBy: { createdAt: "asc" },
+      const actorRow = await prisma.user.create({
+        data: {
+          id: generateUuidV7(),
+          email: `provider-import-${generateUuidV7()}@roamlog.test`,
+          emailVerified: true,
+          name: "Provider Import E2E Admin",
+          platformRole: "super_admin",
+          status: "active",
+        },
       });
-      expect(actorRow, "CI seed must provide an active super_admin").toBeTruthy();
       const actor: AuthenticatedActor = {
         user: presentUser(actorRow!),
         ip: null,
@@ -316,6 +322,8 @@ describe.skipIf(!process.env.ROAMLOG_TEST_DATABASE_URL)(
           await prisma.auditLog.deleteMany({ where: { targetId: providerId } });
           await prisma.providerConnection.deleteMany({ where: { id: providerId } });
         }
+        await prisma.auditLog.deleteMany({ where: { actorId: actorRow.id } });
+        await prisma.user.deleteMany({ where: { id: actorRow.id } });
         await prisma.$disconnect();
       }
     }, 30_000);
