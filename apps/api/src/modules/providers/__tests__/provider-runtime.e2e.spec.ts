@@ -8,7 +8,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { UnauthorizedException } from "@nestjs/common";
 import type { ExecutionContext, INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
@@ -21,6 +21,7 @@ import { createPrismaClient } from "@roamlog/db";
 import request from "supertest";
 
 import { AppConfigModule } from "../../../config/app-config.module.js";
+import { AppConfigService } from "../../../config/app-config.service.js";
 import { configureApp } from "../../../bootstrap/configure-app.js";
 import { SessionGuard } from "../../../common/guards/session.guard.js";
 import type { AuthenticatedActor } from "../../../common/guards/actor-context.js";
@@ -63,6 +64,17 @@ import { ProviderRuntimeService } from "../provider-runtime.service.js";
 import { ProviderSecretService } from "../provider-secret.service.js";
 import { ProvidersModule } from "../providers.module.js";
 import { makeActor } from "../../../../test/identity-fixtures.js";
+
+const providerConfigBootstrap = vi.hoisted(() => {
+  const previousProviderConfigMode = process.env.PROVIDER_CONFIG_MODE;
+  process.env.APP_ENV = "test";
+  process.env.NODE_ENV = "test";
+  process.env.PROVIDER_CONFIG_MODE = "v2";
+  process.env.PROVIDER_EGRESS_ALLOW_PRIVATE = "true";
+  process.env.CONFIG_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
+  process.env.REDIS_PREFIX = `roamlog:test:provider-e2e:${process.pid}:${Date.now().toString(36)}:`;
+  return { previousProviderConfigMode };
+});
 
 const testDatabaseUrl = process.env.ROAMLOG_TEST_DATABASE_URL;
 const enabled = Boolean(testDatabaseUrl && process.env.REDIS_URL);
@@ -413,16 +425,15 @@ integration("Provider runtime against PostgreSQL, Redis and a local upstream stu
     if (!testDatabaseUrl) return;
 
     for (const key of envKeys) {
-      previousEnv.set(key, process.env[key]);
+      previousEnv.set(
+        key,
+        key === "PROVIDER_CONFIG_MODE"
+          ? providerConfigBootstrap.previousProviderConfigMode
+          : process.env[key],
+      );
     }
     process.env.DATABASE_URL = testDatabaseUrl;
-    process.env.REDIS_PREFIX = `roamlog:test:provider-e2e:${runId}:`;
     process.env.REDIS_REQUIRED = "false";
-    process.env.PROVIDER_CONFIG_MODE = "v2";
-    process.env.PROVIDER_EGRESS_ALLOW_PRIVATE = "true";
-    process.env.APP_ENV = "test";
-    process.env.NODE_ENV = "test";
-    process.env.CONFIG_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
 
     seedPrisma = createPrismaClient({ connectionString: testDatabaseUrl });
     await seedPrisma.user.create({
@@ -438,6 +449,7 @@ integration("Provider runtime against PostgreSQL, Redis and a local upstream stu
 
     stub = await createStubServer();
     app = await createApp();
+    expect(app.get(AppConfigService).providerConfigMode).toBe("v2");
   }, 60_000);
 
   afterAll(async () => {
