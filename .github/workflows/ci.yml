@@ -199,7 +199,7 @@ jobs:
 
       - name: Start media worker for upload E2E
         run: |
-          pnpm --filter @roamlog/worker start > /tmp/roamlog-worker.log 2>&1 &
+          pnpm --filter @roamlog/worker exec tsx src/main.ts > /tmp/roamlog-worker.log 2>&1 &
           echo $! > /tmp/roamlog-worker.pid
           for _ in $(seq 1 30); do
             if grep -q '"event":"worker.ready"' /tmp/roamlog-worker.log; then
