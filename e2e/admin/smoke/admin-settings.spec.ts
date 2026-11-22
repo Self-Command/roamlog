@@ -9,7 +9,7 @@
  * The service pages reuse the same single-group form, but each is its own route
  * with one section and its own Chinese page title.
  */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import {
   ADMIN_URL,
@@ -28,6 +28,8 @@ registerFailureEvidence(test);
 const runId = uniqueRunId();
 const superAdmin = createSuperAdminAccount(runId);
 let superAdminTotpSecret = "";
+let sharedContext: BrowserContext;
+let sharedPage: Page;
 
 const ADMIN_SETTINGS_PATH = "/admin/settings";
 const ADMIN_SETTINGS_URL = `${ADMIN_URL}${ADMIN_SETTINGS_PATH}`;
@@ -72,12 +74,18 @@ async function loginAsSuperAdmin(page: Page): Promise<void> {
 }
 
 test.describe("admin settings information architecture", () => {
-  test.beforeAll(async () => {
+  test.describe.configure({ mode: "serial" });
+
+  test.beforeAll(async ({ browser }) => {
     provisionSuperAdmin(superAdmin);
     superAdminTotpSecret = await enableSuperAdminTotp(superAdmin);
+    sharedContext = await browser.newContext();
+    sharedPage = await sharedContext.newPage();
+    await loginAsSuperAdmin(sharedPage);
   });
 
-  test.afterAll(() => {
+  test.afterAll(async () => {
+    await sharedContext?.close();
     deleteSuperAdmin(superAdmin.email);
   });
 
@@ -98,10 +106,10 @@ test.describe("admin settings information architecture", () => {
     await expect(page.getByRole("heading", { name: "进入平台控制台" })).toBeVisible();
   });
 
-  test("sidebar exposes 服务配置 and keeps 系统设置 as a sibling", async ({ page }) => {
+  test("sidebar exposes 服务配置 and keeps 系统设置 as a sibling", async () => {
     test.setTimeout(120_000);
 
-    await loginAsSuperAdmin(page);
+    const page = sharedPage;
 
     const nav = page.getByRole("navigation", { name: "管理后台主导航" });
     await expect(nav).toBeVisible({ timeout: 30_000 });
@@ -156,10 +164,10 @@ test.describe("admin settings information architecture", () => {
     );
   });
 
-  test("系统设置 renders exactly four sections with no nested navigation", async ({ page }) => {
+  test("系统设置 renders exactly four sections with no nested navigation", async () => {
     test.setTimeout(120_000);
 
-    await loginAsSuperAdmin(page);
+    const page = sharedPage;
 
     const settingsLink = page
       .getByRole("navigation", { name: "管理后台主导航" })
@@ -195,10 +203,10 @@ test.describe("admin settings information architecture", () => {
     await expect(page.getByText("Site title", { exact: true })).toHaveCount(0);
   });
 
-  test("five service pages each render one section and no nested navigation", async ({ page }) => {
+  test("five service pages each render one section and no nested navigation", async () => {
     test.setTimeout(180_000);
 
-    await loginAsSuperAdmin(page);
+    const page = sharedPage;
     const nav = page.getByRole("navigation", { name: "管理后台主导航" });
 
     for (const service of SERVICE_PAGES) {
