@@ -2,6 +2,10 @@ packages:
   - "apps/*"
   - "packages/*"
 
+overrides:
+  effect: 3.22.5
+  glob: 14.0.6
+
 allowBuilds:
   "@prisma/client": true
   "@prisma/engines": true
