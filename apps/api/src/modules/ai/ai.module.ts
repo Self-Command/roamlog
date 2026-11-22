@@ -9,6 +9,7 @@ import { ItineraryModule } from "../itinerary/itinerary.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { PackingModule } from "../packing/packing.module.js";
 import { PlacesModule } from "../places/places.module.js";
+import { ProvidersModule } from "../providers/providers.module.js";
 import { SettingsModule } from "../settings/settings.module.js";
 import { TripsModule } from "../trips/trips.module.js";
 import { AI_ADAPTER_FACTORY, createAiAdapter } from "./adapters/index.js";
@@ -17,6 +18,7 @@ import { AiConversationService } from "./ai-conversation.service.js";
 import { AiController } from "./ai.controller.js";
 import { AiExecuteService } from "./ai-execute.service.js";
 import { AiPlanService } from "./ai-plan.service.js";
+import { AiProviderRouter } from "./ai-provider-router.service.js";
 import { AiQuotaService } from "./ai-quota.service.js";
 import { AiRewriteController } from "./ai-rewrite.controller.js";
 import { AiRewriteService } from "./ai-rewrite.service.js";
@@ -35,6 +37,7 @@ import { AiToolbox } from "./ai-tools.js";
     ItineraryModule,
     PackingModule,
     PlacesModule,
+    ProvidersModule,
     SettingsModule,
     // Chat attachments reuse the media pipeline (presign→PUT→complete) instead
     // of a second upload stack; the planner only needs the read path.
@@ -52,6 +55,7 @@ import { AiToolbox } from "./ai-tools.js";
     AiToolbox,
     AiQuotaService,
     AiRunStore,
+    AiProviderRouter,
     AiPlanService,
     AiExecuteService,
     AiRewriteService,

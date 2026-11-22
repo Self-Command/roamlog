@@ -32,17 +32,45 @@ const mediaStatusTones: Record<MediaStatus, "neutral" | "blue" | "green" | "red"
 };
 
 const previewGradients = [
-  "from-[#243a52] via-[#111923] to-[#0b0d10]",
-  "from-[#4a342a] via-[#211812] to-[#0d0b09]",
-  "from-[#2c3a31] via-[#141c17] to-[#0a0d0b]",
-  "from-[#353047] via-[#18151f] to-[#0b0a0d]",
+  "from-surface-2 via-surface-deep to-canvas",
+  "from-accent-orange/15 via-surface-2 to-surface-deep",
+  "from-accent-blue/15 via-surface-2 to-surface-deep",
+  "from-accent-slate/15 via-surface-2 to-surface-deep",
 ];
 
-export function MediaView({
-  role,
-  media,
-  mutations,
-}: MediaViewProps) {
+function MediaThumbnail({ item, index }: { item: AdminMediaItem; index: number }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = Boolean(item.thumbnailUrl) && !failed;
+
+  return (
+    <div
+      className={`relative flex h-36 items-end bg-gradient-to-br ${
+        previewGradients[index % previewGradients.length]
+      } p-3`}
+    >
+      {showImage ? (
+        <img
+          data-testid={`media-thumbnail-${item.id}`}
+          src={item.thumbnailUrl ?? undefined}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+          className="absolute inset-0 size-full object-cover"
+        />
+      ) : null}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-gradient-to-t from-canvas/70 via-transparent to-transparent"
+      />
+      <span className="relative font-mono text-[8px] uppercase tracking-[0.12em] text-ink/70">
+        {item.mimeType}
+      </span>
+    </div>
+  );
+}
+
+export function MediaView({ role, media, mutations }: MediaViewProps) {
   const [records, setRecords] = useState<readonly AdminMediaItem[]>(media);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | MediaStatus>("all");
@@ -102,8 +130,7 @@ export function MediaView({
       <AdminPageHeader
         eyebrow="内容与资产 / 媒体"
         title="媒体库"
-        description={
-          "检查存储用量、处理状态与孤儿对象。"}
+        description={"检查存储用量、处理状态与孤儿对象。"}
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -207,14 +234,7 @@ export function MediaView({
               aria-label={`媒体 ${item.fileName}`}
               className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1"
             >
-              <div
-                aria-hidden="true"
-                className={`flex h-36 items-end bg-gradient-to-br ${previewGradients[index % previewGradients.length]} p-3`}
-              >
-                <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-white/55">
-                  {item.mimeType}
-                </span>
-              </div>
+              <MediaThumbnail item={item} index={index} />
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">

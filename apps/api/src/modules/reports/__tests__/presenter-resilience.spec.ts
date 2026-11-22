@@ -82,10 +82,19 @@ describe("presenters ignore undeclared database columns", () => {
       someFutureColumn: "x",
     };
 
-    const presented = presentAdminMedia(record as never);
+    const presented = presentAdminMedia(record as never, {
+      thumb: {
+        key: "workspace/entry/thumb.webp",
+        url: "https://media.spacedo.org/roamlog/workspace/entry/thumb.webp?X-Amz-Signature=test",
+        expiresAt: "2026-11-19T08:15:00.000Z",
+      },
+    });
 
     expect(() => MediaSchema.parse(presented)).not.toThrow();
     expect(presented.moderatedAt).toBe("2026-11-19T08:00:00.000Z");
     expect(presented).not.toHaveProperty("someFutureColumn");
+    expect(presented.variants.thumb).toMatchObject({
+      url: "https://media.spacedo.org/roamlog/workspace/entry/thumb.webp?X-Amz-Signature=test",
+    });
   });
 });

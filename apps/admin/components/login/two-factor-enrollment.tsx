@@ -182,7 +182,7 @@ export function TwoFactorEnrollmentPanel({
                   enrollment.backupCodes.map((backupCode) => (
                     <li
                       key={backupCode}
-                      className="rounded-control border border-hairline bg-black/25 px-2.5 py-2 tracking-[0.08em]"
+                      className="rounded-control border border-hairline bg-surface-deep/60 px-2.5 py-2 tracking-[0.08em]"
                     >
                       {backupCode}
                     </li>
@@ -247,6 +247,7 @@ function TOTPQRCode({ uri }: { uri: string }) {
   const size = (matrix.length + 8) * 5;
 
   return (
+    // QR modules must stay pure black on white for scanner reliability.
     <div className="mt-4 overflow-hidden rounded-control border border-hairline bg-white p-3">
       <svg
         role="img"

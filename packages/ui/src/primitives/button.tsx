@@ -7,18 +7,17 @@ import * as React from "react";
 import { cn } from "../lib/cn";
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        primary: "bg-ink text-black hover:bg-[#eaf2fb]",
+        primary: "bg-ink text-canvas hover:bg-ink/90",
         ghost:
-          "border border-hairline-strong bg-surface-2 text-ink hover:border-white/25 hover:bg-[#151518]",
+          "border border-hairline-strong bg-surface-2 text-ink hover:border-ink/25 hover:bg-surface-1",
         outline: "border border-hairline-strong bg-transparent text-ink hover:bg-surface-1",
         subtle: "bg-surface-1 text-body hover:bg-surface-2 hover:text-ink",
         link: "h-auto rounded-none p-0 text-accent-blue underline-offset-4 hover:underline",
-        danger:
-          "border border-accent-red/30 bg-accent-red/10 text-accent-red hover:bg-accent-red/15",
+        danger: "border border-danger/30 bg-danger/10 text-danger hover:bg-danger/15",
       },
       size: {
         sm: "h-11 px-3 text-xs md:h-8",

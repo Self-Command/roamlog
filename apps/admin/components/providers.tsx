@@ -3,6 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
+import { FontPairingLoader } from "./appearance/font-pairing-loader";
+
 export function AdminProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -20,5 +22,10 @@ export function AdminProviders({ children }: { children: ReactNode }) {
       }),
   );
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <FontPairingLoader />
+      {children}
+    </QueryClientProvider>
+  );
 }

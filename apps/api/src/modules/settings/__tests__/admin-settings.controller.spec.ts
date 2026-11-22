@@ -371,12 +371,12 @@ describe("admin settings routes", () => {
     expect(prisma.client.systemSetting.upsert).not.toHaveBeenCalled();
   });
 
-  it("rejects the removed light theme mode with 422", async () => {
+  it("rejects an unknown theme mode with 422", async () => {
     const { app, prisma } = await createApp({ user: superAdmin });
 
     const response = await request(app.getHttpServer())
       .patch("/v1/admin/settings")
-      .send({ updates: [{ key: "theme.defaultMode", value: "light" }] })
+      .send({ updates: [{ key: "theme.defaultMode", value: "sepia" }] })
       .expect(422);
 
     expect(response.body).toMatchObject({ status: 422, code: "SETTINGS_INVALID" });
@@ -441,8 +441,12 @@ describe("admin settings save probe gate", () => {
   it("does not probe a PATCH that only touches non-connectivity keys", async () => {
     const { app } = await createApp({ user: superAdmin });
     const internals = probeInternals(app);
-    const storageProbe = vi.spyOn(internals, "executeStorageProbe").mockResolvedValue({ ok: true, checks: [] });
-    const mailProbe = vi.spyOn(internals, "executeMailProbe").mockResolvedValue({ ok: true, checks: [] });
+    const storageProbe = vi
+      .spyOn(internals, "executeStorageProbe")
+      .mockResolvedValue({ ok: true, checks: [] });
+    const mailProbe = vi
+      .spyOn(internals, "executeMailProbe")
+      .mockResolvedValue({ ok: true, checks: [] });
 
     await request(app.getHttpServer())
       .patch("/v1/admin/settings")
@@ -577,7 +581,9 @@ describe("admin settings save probe gate", () => {
 
   it("fails closed with 422 SETTINGS_PROBE_FAILED when the probe throws", async () => {
     const { app, prisma, audit } = await createApp({ user: superAdmin });
-    vi.spyOn(probeInternals(app), "executeMailProbe").mockRejectedValue(new Error("socket hang up"));
+    vi.spyOn(probeInternals(app), "executeMailProbe").mockRejectedValue(
+      new Error("socket hang up"),
+    );
 
     const response = await request(app.getHttpServer())
       .patch("/v1/admin/settings")

@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { isUnauthorized } from "@/lib/api";
 import { DataProvider } from "@/lib/data-provider";
 import { useSessionQuery } from "@/lib/query";
+import { FontPairingLoader } from "./appearance/font-pairing-loader";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -41,6 +42,7 @@ export function Providers({ children }: ProvidersProps) {
       <TooltipProvider delayDuration={200}>
         <DataProvider>
           <SessionBootstrap />
+          <FontPairingLoader />
           {children}
         </DataProvider>
       </TooltipProvider>

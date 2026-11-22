@@ -12,6 +12,10 @@ import {
 } from "../places.settings.js";
 import { PlacesCacheService } from "../places-cache.service.js";
 import { PlacesMergeService } from "../places-merge.service.js";
+import {
+  staticPlacesProviderRuntimeSource,
+  type PlacesRoutingMode,
+} from "../places-provider-runtime.service.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesService, eligibleSources, routeFor } from "../places.service.js";
 import { TencentClient } from "../tencent.client.js";
@@ -34,7 +38,11 @@ import {
 } from "./place-fixtures.js";
 
 function setup(
-  options: { settings?: Partial<PlacesSettings>; redis?: FakeRedis } = {},
+  options: {
+    settings?: Partial<PlacesSettings>;
+    redis?: FakeRedis;
+    runtimeMode?: PlacesRoutingMode;
+  } = {},
 ): {
   settings: PlacesSettings;
   logger: ReturnType<typeof makeLogger>;
@@ -46,11 +54,7 @@ function setup(
   const source = staticPlacesSettingsSource(settings);
   const logger = makeLogger();
   const redis = options.redis ?? fakeRedis();
-  const cache = new PlacesCacheService(
-    redis as unknown as RedisService,
-    asLogger(logger),
-    source,
-  );
+  const cache = new PlacesCacheService(redis as unknown as RedisService, asLogger(logger), source);
   const service = new PlacesService(
     cache,
     new GeoapifyClient(source),
@@ -60,6 +64,7 @@ function setup(
     new PlacesMergeService(),
     asLogger(logger),
     source,
+    staticPlacesProviderRuntimeSource(settings, options.runtimeMode),
   );
   return { settings, logger, redis, cache, service };
 }
@@ -186,9 +191,7 @@ describe("PlacesService — multi-source recall", () => {
     expect(response.items[0]?.countryCode).toBe("CN");
     expect(PlaceSearchResponseSchema.parse(response)).toEqual(response);
 
-    const hosts = (fetchMock.mock.calls as unknown as [URL][])
-      .map(([url]) => url.hostname)
-      .sort();
+    const hosts = (fetchMock.mock.calls as unknown as [URL][]).map(([url]) => url.hostname).sort();
     expect(hosts).toEqual([
       "geoapify.example.test",
       "photon.example.test",
@@ -196,7 +199,11 @@ describe("PlacesService — multi-source recall", () => {
       "tencent.example.test",
     ]);
     expect(logger.log).toHaveBeenCalledWith(
-      expect.objectContaining({ cache: "miss", route: "mixed", resultCount: response.items.length }),
+      expect.objectContaining({
+        cache: "miss",
+        route: "mixed",
+        resultCount: response.items.length,
+      }),
       "places.search_completed",
     );
     // The raw query must never be logged.
@@ -328,15 +335,12 @@ describe("PlacesService — multi-source recall", () => {
     await service.search({ q: "Paris", limit: 6 });
 
     const keys = [...redis.store.keys()];
-    expect(keys.some((key) => key.startsWith("places:v3:mixed:"))).toBe(true);
-    expect(keys.some((key) => key.startsWith("places:v3:global:"))).toBe(true);
+    expect(keys.some((key) => key.startsWith("places:v4:mixed:"))).toBe(true);
+    expect(keys.some((key) => key.startsWith("places:v4:global:"))).toBe(true);
   });
 
   it("degrades to map_pick when every provider fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse({ message: "boom" }, 500)),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "boom" }, 500)));
     const { service, logger, redis } = setup({ settings: { provider: "geoapify" } });
 
     const response = await service.search({ q: "Paris", limit: 6 });
@@ -377,6 +381,25 @@ describe("PlacesService — multi-source recall", () => {
       expect.objectContaining({ event: "places.upstream_failed", provider: "tencent" }),
       "places.search_degraded",
     );
+  });
+
+  it("priority_failover stops before calling the next provider once enough results exist", async () => {
+    const fetchMock = providerFetch({
+      geoapify: () => jsonResponse(beijingGeoapifyPayload()),
+      photon: () => jsonResponse(beijingPhotonPayload()),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { service } = setup({
+      settings: { provider: "photon", defaultLimit: 1 },
+      runtimeMode: "priority_failover",
+    });
+
+    const response = await service.search({ q: "Paris", limit: 1 });
+    const hosts = (fetchMock.mock.calls as unknown as [URL][]).map(([url]) => url.hostname);
+
+    expect(response.items).toHaveLength(1);
+    expect(hosts.some((host) => host.startsWith("geoapify"))).toBe(true);
+    expect(hosts.some((host) => host.startsWith("photon"))).toBe(false);
   });
 
   it("stops calling Geoapify once its daily cap is exhausted and lets Photon answer", async () => {
@@ -460,10 +483,12 @@ describe("PlacesService — multi-source recall", () => {
     const base = { q: "Paris", limit: 6, route: "global" as const };
     expect(cache.key(base)).not.toBe(cache.key({ ...base, route: "mixed" }));
     expect(cache.key(base)).not.toBe(cache.key({ ...base, country: "FR" }));
-    expect(cache.key(base)).not.toBe(
-      cache.key({ ...base, focus: { lat: 48.85, lon: 2.35 } }),
+    expect(cache.key(base)).not.toBe(cache.key({ ...base, focus: { lat: 48.85, lon: 2.35 } }));
+    expect(cache.key(base)).not.toBe(cache.key({ ...base, providerSignature: "v1:geoapify@10" }));
+    expect(cache.key({ ...base, providerSignature: "v1:geoapify@10" })).not.toBe(
+      cache.key({ ...base, providerSignature: "v2:geoapify@10" }),
     );
-    expect(cache.key(base)).toMatch(/^places:v3:global:[a-f0-9]{64}$/);
+    expect(cache.key(base)).toMatch(/^places:v4:global:[a-f0-9]{64}$/);
   });
 });
 
@@ -477,6 +502,9 @@ describe("PlacesService — eligibility helpers", () => {
   it("orders eligible sources by settings.sourceOrder", () => {
     const settings = resolvePlacesSettings({ GEOAPIFY_API_KEY: "key" });
     expect(eligibleSources({ q: "北京" }, settings)).toEqual(["tencent", "geoapify", "photon"]);
-    expect(eligibleSources({ q: "Paris", country: "JP" }, settings)).toEqual(["geoapify", "photon"]);
+    expect(eligibleSources({ q: "Paris", country: "JP" }, settings)).toEqual([
+      "geoapify",
+      "photon",
+    ]);
   });
 });

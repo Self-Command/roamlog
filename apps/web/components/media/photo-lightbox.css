@@ -6,15 +6,15 @@
  */
 
 .roamlog-photo-lightbox {
-  --yarl__color_backdrop: rgba(0, 0, 0, 0.94);
-  --yarl__color_button: rgba(252, 253, 255, 0.72);
-  --yarl__color_button_active: #fcfdff;
-  --yarl__color_button_disabled: rgba(252, 253, 255, 0.28);
-  --yarl__slide_captions_container_background: rgba(0, 0, 0, 0.72);
-  --yarl__counter_color: rgba(252, 253, 255, 0.72);
-  --yarl__thumbnails_thumbnail_background: #101012;
-  --yarl__thumbnails_thumbnail_border_color: rgba(255, 255, 255, 0.14);
-  --yarl__thumbnails_thumbnail_active_border_color: #ff801f;
+  --yarl__color_backdrop: color-mix(in srgb, var(--canvas) 94%, transparent);
+  --yarl__color_button: color-mix(in srgb, var(--ink) 72%, transparent);
+  --yarl__color_button_active: var(--ink);
+  --yarl__color_button_disabled: color-mix(in srgb, var(--ink) 28%, transparent);
+  --yarl__slide_captions_container_background: color-mix(in srgb, var(--canvas) 72%, transparent);
+  --yarl__counter_color: color-mix(in srgb, var(--ink) 72%, transparent);
+  --yarl__thumbnails_thumbnail_background: var(--surface-2);
+  --yarl__thumbnails_thumbnail_border_color: var(--hairline);
+  --yarl__thumbnails_thumbnail_active_border_color: var(--accent-orange);
   --yarl__thumbnails_thumbnail_fade_in_animation_duration: 0.18s;
   font-family: var(--roamlog-font-sans);
 }

@@ -10,6 +10,7 @@ export function TotpQr({ uri, label = "验证器二维码" }: { uri: string; lab
   const size = (matrix.length + 8) * 5;
 
   return (
+    // QR modules must stay pure black on white for scanner reliability.
     <div className="overflow-hidden rounded-control border border-hairline bg-white p-3">
       <svg
         role="img"

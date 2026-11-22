@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { IsoTimestampSchema } from "../common/ids";
+import { APPEARANCE_MODES } from "./appearance";
 
 /**
  * Runtime platform settings contracts.
@@ -46,18 +47,23 @@ export const SystemSettingValueTypeSchema = z.enum(SETTINGS_VALUE_TYPES);
 export type SystemSettingValueType = z.infer<typeof SystemSettingValueTypeSchema>;
 
 /**
- * Color modes the runtime actually implements.
+ * Appearance modes shared by platform settings and user preferences.
  *
- * `light` used to be offered even though `@roamlog/ui` only shipped dark
- * tokens: selecting it wrote `data-theme="light"` and a light `color-scheme`
- * but the canvas stayed dark, so it was an honest-to-goodness fake setting.
- * It is removed from the contract rather than shipped as a half-finished
- * palette. `system` is the only non-dark intent until a light token set lands;
- * today it renders with the same dark tokens.
+ * The runtime must ship a complete light and dark token set before offering
+ * `light`; `system` follows the operating-system preference.
  */
-export const THEME_MODES = ["dark", "system"] as const;
+export const THEME_MODES = APPEARANCE_MODES;
 export const ThemeModeSchema = z.enum(THEME_MODES);
 export type ThemeMode = z.infer<typeof ThemeModeSchema>;
+
+/** Public platform defaults consumed by the anonymous shell. */
+export const APPEARANCE_SETTING_KEYS = [
+  "theme.defaultSkin",
+  "theme.defaultMode",
+  "theme.defaultFont",
+  "theme.allowUserOverride",
+] as const;
+export type AppearanceSettingKey = (typeof APPEARANCE_SETTING_KEYS)[number];
 
 /**
  * Any JSON value a non-secret setting may hold (null included).

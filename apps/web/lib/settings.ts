@@ -1,6 +1,12 @@
 import {
+  APPEARANCE_MODES,
+  FONT_PAIRING_IDS,
   PublicSettingsResponseSchema,
+  SKIN_IDS,
+  type AppearanceMode,
+  type FontPairingId,
   type PublicSettingsResponse,
+  type SkinId,
 } from "@roamlog/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { cache, useMemo } from "react";
@@ -39,7 +45,10 @@ export const PUBLIC_SETTING_KEYS = [
   "seo.ogImageUrl",
   "seo.robots",
   "theme.accent",
+  "theme.defaultSkin",
   "theme.defaultMode",
+  "theme.defaultFont",
+  "theme.allowUserOverride",
   "theme.loginTagline",
   "media.maxEdge",
   "media.quality",
@@ -207,7 +216,8 @@ export function applyTitleTemplate(template: string, title: string): string {
 export function buildSiteMetadata(settings: PublicSettingsMap): Metadata {
   const configuredTitle = readPublicString(settings, "site.title");
   const siteTitle = configuredTitle ?? DEFAULT_SITE_TITLE;
-  const siteDescription = readPublicString(settings, "site.description") ?? DEFAULT_SITE_DESCRIPTION;
+  const siteDescription =
+    readPublicString(settings, "site.description") ?? DEFAULT_SITE_DESCRIPTION;
 
   // `seo.*` is part of the public projection. Blank or missing values fall back
   // to the code defaults, never to an empty tag or an error.
@@ -239,16 +249,24 @@ export function buildSiteMetadata(settings: PublicSettingsMap): Metadata {
   };
 }
 
-/**
- * Only the modes the runtime renders. `light` was removed from the contract
- * because `@roamlog/ui` ships dark tokens only; keeping it here would keep the
- * fake setting alive on stale caches.
- */
-export type ThemeMode = "dark" | "system";
+export type ThemeMode = AppearanceMode;
+export type ThemeSkin = SkinId;
+export type ThemeFont = FontPairingId;
 export type ThemeAccent = "white" | "amber" | "blue" | "emerald" | "rose";
 
 export const DEFAULT_THEME_MODE: ThemeMode = "system";
+export const DEFAULT_THEME_SKIN: ThemeSkin = "editorial-noir";
+export const DEFAULT_THEME_FONT: ThemeFont = "editorial-classic";
 export const DEFAULT_THEME_ACCENT: ThemeAccent = "white";
+
+/** Legacy accent -> skin compatibility mapping; explicit skin always wins. */
+export const LEGACY_THEME_ACCENT_TO_SKIN: Record<ThemeAccent, ThemeSkin> = {
+  white: "editorial-noir",
+  amber: "catppuccin",
+  blue: "tokyo-night",
+  emerald: "everforest",
+  rose: "rose-pine",
+};
 
 /**
  * Registry accent -> design token values from `@roamlog/ui` tokens.css.
@@ -271,12 +289,9 @@ export const THEME_ACCENT_TOKENS: Record<
 };
 
 export function resolveThemeMode(value: unknown): ThemeMode {
-  if (value === "dark" || value === "system") {
-    return value;
-  }
-  // A cached historical `"light"` value (the API normalizes stored rows) falls
-  // back to `system`: there is no light palette, so it must not reintroduce one.
-  return DEFAULT_THEME_MODE;
+  return APPEARANCE_MODES.includes(value as AppearanceMode)
+    ? (value as AppearanceMode)
+    : DEFAULT_THEME_MODE;
 }
 
 export function resolveThemeAccent(value: unknown): ThemeAccent {
@@ -289,33 +304,62 @@ export function resolveThemeAccent(value: unknown): ThemeAccent {
     : DEFAULT_THEME_ACCENT;
 }
 
+export function resolveDefaultSkin(input: {
+  storedSkin?: unknown;
+  legacyAccent?: unknown;
+}): ThemeSkin {
+  if (SKIN_IDS.includes(input.storedSkin as SkinId)) {
+    return input.storedSkin as ThemeSkin;
+  }
+  return LEGACY_THEME_ACCENT_TO_SKIN[resolveThemeAccent(input.legacyAccent)];
+}
+
+export function resolveThemeFont(value: unknown): ThemeFont {
+  return FONT_PAIRING_IDS.includes(value as FontPairingId)
+    ? (value as ThemeFont)
+    : DEFAULT_THEME_FONT;
+}
+
 export interface ThemePresentation {
-  /** Configured mode, always `dark` or `system` (never `light`). */
+  /** Configured appearance mode. */
   mode: ThemeMode;
   accent: ThemeAccent;
-  /**
-   * Server-rendered `data-theme`. Only `dark` and `system` are emitted. There
-   * is no light palette yet, so the `:root` dark tokens apply either way:
-   * `system` means "follow the OS when a light palette exists", which today
-   * renders exactly like dark.
-   */
+  skin: ThemeSkin;
+  fontPairing: ThemeFont;
+  /** Backwards-compatible mode attribute during the migration. */
   dataTheme: ThemeMode;
+  dataSkin: ThemeSkin;
+  dataFont: ThemeFont;
   /** `<meta name="color-scheme">` / CSS `color-scheme` value. */
-  colorScheme: "dark" | "light dark";
+  colorScheme: "light" | "dark" | "light dark";
   /** Inline custom properties written on `<html>` during SSR (no flash). */
   style: Record<string, string>;
 }
 
-export function resolveThemePresentation(settings: PublicSettingsMap): ThemePresentation {
-  const mode = resolveThemeMode(settings["theme.defaultMode"]);
+export function resolveThemePresentation(
+  settings: PublicSettingsMap,
+  appearance?: Pick<ThemePresentation, "mode" | "skin" | "fontPairing"> | null,
+): ThemePresentation {
+  const mode = appearance?.mode ?? resolveThemeMode(settings["theme.defaultMode"]);
   const accent = resolveThemeAccent(settings["theme.accent"]);
+  const skin =
+    appearance?.skin ??
+    resolveDefaultSkin({
+      storedSkin: settings["theme.defaultSkin"],
+      legacyAccent: settings["theme.accent"],
+    });
+  const fontPairing = appearance?.fontPairing ?? resolveThemeFont(settings["theme.defaultFont"]);
   const tokens = THEME_ACCENT_TOKENS[accent];
-  const colorScheme = mode === "system" ? "light dark" : "dark";
+  const colorScheme = mode === "system" ? "light dark" : mode;
 
   return {
     mode,
     accent,
+    skin,
+    fontPairing,
     dataTheme: mode,
+    dataSkin: skin,
+    dataFont: fontPairing,
     colorScheme,
     style: {
       "--accent-primary": tokens.primary,
@@ -333,10 +377,7 @@ export function resolveThemePresentation(settings: PublicSettingsMap): ThemePres
  * are intentionally absent until they are implemented.
  */
 export type PublicMediaSettingKey =
-  | "media.maxEdge"
-  | "media.quality"
-  | "media.targetBytes"
-  | "media.maxUploadBytes";
+  "media.maxEdge" | "media.quality" | "media.targetBytes" | "media.maxUploadBytes";
 
 export interface MediaCompressionPolicy {
   /** Longest edge kept by the browser compressor, in CSS pixels. */

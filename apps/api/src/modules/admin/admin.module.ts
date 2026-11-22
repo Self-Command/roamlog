@@ -5,6 +5,7 @@ import { AuditModule } from "../audit/audit.module.js";
 import { JobQueueModule } from "../exports/job-queue.module.js";
 import { FeatureFlagsModule } from "../feature-flags/feature-flags.module.js";
 import { IdempotencyModule } from "../idempotency/idempotency.module.js";
+import { MediaUrlModule } from "../media/media-url.module.js";
 import { AdminAuditService } from "./admin-audit.service.js";
 import { AdminContentController } from "./admin-content.controller.js";
 import { AdminContentService } from "./admin-content.service.js";
@@ -32,6 +33,7 @@ import { PlatformTwoFactorGuard } from "./platform-two-factor.guard.js";
     FeatureFlagsModule,
     IdempotencyModule,
     JobQueueModule,
+    MediaUrlModule,
   ],
   controllers: [
     AdminDashboardController,

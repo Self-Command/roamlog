@@ -313,7 +313,7 @@ describe("SettingsService read cache", () => {
     expect(keys).not.toContain("limits.searchPerMinute");
   });
 
-  it("normalizes a stored legacy light mode to system and warns once", async () => {
+  it("reads the now-valid light appearance mode without normalization", async () => {
     const { service, logger } = setup({
       seed: [
         makeRow({
@@ -325,26 +325,20 @@ describe("SettingsService read cache", () => {
       ],
     });
 
-    await expect(service.get("theme.defaultMode")).resolves.toBe("system");
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ key: "theme.defaultMode", stored: "light", normalized: "system" }),
-      "settings.legacy_value_normalized",
-    );
-
-    // The admin projection shows the same READ normalization without logging twice.
+    await expect(service.get("theme.defaultMode")).resolves.toBe("light");
+    expect(logger.warn).not.toHaveBeenCalled();
     await expect(service.getAdminSetting("theme.defaultMode")).resolves.toMatchObject({
-      value: "system",
+      value: "light",
     });
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it("normalizes a legacy light value cached in Redis", async () => {
+  it("accepts a light value cached in Redis", async () => {
     const redis = new FakeRedisBroker();
     redis.values.set("settings:v0:theme.defaultMode", JSON.stringify({ value: "light" }));
     const { service, logger } = setup({ redis });
 
-    await expect(service.get("theme.defaultMode")).resolves.toBe("system");
+    await expect(service.get("theme.defaultMode")).resolves.toBe("light");
     expect(logger.error).not.toHaveBeenCalled();
   });
 

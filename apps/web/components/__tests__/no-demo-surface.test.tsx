@@ -15,7 +15,10 @@ import { describe, expect, it } from "vitest";
  */
 
 const ROOT = join(process.cwd(), "app");
-const FORBIDDEN = [/data-mode/i, /DATA_MODE/, /legacy-mock/, /api-mocks/];
+// `data-mode` is now the appearance contract written by the root layout. The
+// retired build-time switch is the uppercase `DATA_MODE` symbol; do not ban the
+// legitimate appearance attribute.
+const FORBIDDEN = [/DATA_MODE/, /legacy-mock/, /api-mocks/];
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -36,8 +39,8 @@ const LIVE_ROUTES = [
   "app/(app)/w/[workspaceSlug]/trips/[tripId]/map/page.tsx",
 ];
 
-describe("app routes carry no data-mode switch", () => {
-  it("imports no data-mode module", () => {
+describe("app routes carry no legacy data-source switch", () => {
+  it("imports no legacy data-mode module", () => {
     for (const file of walk(ROOT)) {
       const source = readFileSync(file, "utf8");
       for (const pattern of FORBIDDEN) {
@@ -111,9 +114,7 @@ const RETIRED_MOCK_PACKAGE = ["@roamlog", "api-mocks"].join("/");
 
 describe("the shared mock package is not a web dependency", () => {
   it("is absent from both dependencies and devDependencies", () => {
-    const manifest = JSON.parse(
-      readFileSync(join(process.cwd(), "package.json"), "utf8"),
-    ) as {
+    const manifest = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };

@@ -27,6 +27,7 @@ import { moveCamera } from "./map-camera";
 import type { MapPoint } from "./map-types";
 import { photoFocus, photoGroupKey, photosToGeoJson, type PhotoPoint } from "./photo-points";
 import { PlacesAttribution } from "./places-attribution";
+import { useThemeColor } from "./use-theme-color";
 
 export interface MapCanvasProps {
   points: MapPoint[];
@@ -64,9 +65,7 @@ export interface MapCanvasProps {
 const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 if (typeof window !== "undefined") {
-  setWorkerUrl(
-    "https://cdn.jsdelivr.net/npm/maplibre-gl@6.18.0/dist/maplibre-gl-worker.mjs",
-  );
+  setWorkerUrl("https://cdn.jsdelivr.net/npm/maplibre-gl@6.18.0/dist/maplibre-gl-worker.mjs");
 }
 
 export default function MapCanvas({
@@ -87,6 +86,7 @@ export default function MapCanvas({
   const mapRef = useRef<MapRef | null>(null);
   const styleUrl = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || DEFAULT_STYLE_URL;
   const reducedMotion = useReducedMotion();
+  const routeColor = useThemeColor("--map-route", "orange");
   const initialViewState = useMemo(
     () => initialView(points, showPhotos ? photos : []),
     [points, photos, showPhotos],
@@ -127,7 +127,9 @@ export default function MapCanvas({
       return;
     }
 
-    if (await expandClusterIfAny(event.target, PHOTO_CLUSTER_SPEC, properties, geometry.coordinates)) {
+    if (
+      await expandClusterIfAny(event.target, PHOTO_CLUSTER_SPEC, properties, geometry.coordinates)
+    ) {
       onSelectPhotoGroup?.(null);
       return;
     }
@@ -162,9 +164,7 @@ export default function MapCanvas({
         mapStyle={styleUrl}
         attributionControl={{ compact: false }}
         reuseMaps
-        interactiveLayerIds={
-          clusterPhotos ? clusterInteractiveLayerIds(PHOTO_CLUSTER_SPEC) : []
-        }
+        interactiveLayerIds={clusterPhotos ? clusterInteractiveLayerIds(PHOTO_CLUSTER_SPEC) : []}
         onClick={(event) => {
           void handleClick(event);
         }}
@@ -183,8 +183,14 @@ export default function MapCanvas({
             try {
               map.fitBounds(
                 [
-                  [Math.min(...coordinates.map(([lng]) => lng)), Math.min(...coordinates.map(([, lat]) => lat))],
-                  [Math.max(...coordinates.map(([lng]) => lng)), Math.max(...coordinates.map(([, lat]) => lat))],
+                  [
+                    Math.min(...coordinates.map(([lng]) => lng)),
+                    Math.min(...coordinates.map(([, lat]) => lat)),
+                  ],
+                  [
+                    Math.max(...coordinates.map(([lng]) => lng)),
+                    Math.max(...coordinates.map(([, lat]) => lat)),
+                  ],
                 ],
                 { padding: 64, maxZoom: 12, duration: 0 },
               );
@@ -203,7 +209,7 @@ export default function MapCanvas({
               id="trip-route-line"
               type="line"
               paint={{
-                "line-color": "#ff801f",
+                "line-color": routeColor,
                 "line-width": 2,
                 "line-opacity": 0.72,
                 "line-dasharray": [1.5, 1.5],
@@ -238,9 +244,9 @@ export default function MapCanvas({
                     event.stopPropagation();
                     onOpenPhoto?.(photo.id);
                   }}
-                  className="group flex size-10 cursor-zoom-in items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  className="group flex size-10 cursor-zoom-in items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                 >
-                  <span className="flex size-8 items-center justify-center overflow-hidden rounded-full border-2 border-white/85 bg-surface-deep shadow-[0_2px_10px_rgba(0,0,0,0.65)] transition-transform group-hover:scale-110">
+                  <span className="flex size-8 items-center justify-center overflow-hidden rounded-full border-2 border-ink/85 bg-surface-deep shadow-lg transition-transform group-hover:scale-110">
                     {photo.thumbUrl ? (
                       // Signed, short-lived S3 URL; next/image has no remote pattern for it.
                       <img
@@ -279,24 +285,22 @@ export default function MapCanvas({
                 }}
                 aria-pressed={selected}
                 aria-label={`选择停靠点 ${point.label}`}
-                className={`group relative flex flex-col items-center outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
+                className={`group relative flex flex-col items-center outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
                   selected ? "z-10" : ""
                 }`}
               >
                 <span
                   className={`whitespace-nowrap rounded-pill border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] shadow-lg ${
                     selected
-                      ? "border-accent-orange/70 bg-black/85 text-ink"
-                      : "border-white/20 bg-black/70 text-white/75 group-hover:text-ink"
+                      ? "border-accent-orange/70 bg-surface-deep/90 text-ink"
+                      : "border-hairline-strong bg-surface-deep/80 text-ink/75 group-hover:text-ink"
                   }`}
                 >
                   {point.label}
                 </span>
                 <span
                   className={`mt-1 size-2.5 rounded-full border ${
-                    selected
-                      ? "border-white bg-accent-orange"
-                      : "border-black/80 bg-white/85"
+                    selected ? "border-canvas bg-accent-orange" : "border-canvas/80 bg-ink/85"
                   }`}
                 />
               </button>
@@ -311,9 +315,9 @@ export default function MapCanvas({
         the same line. The plate is nearly opaque so the 10px credit keeps
         >=4.5:1 contrast even over a white tile.
       */}
-      <div className="pointer-events-none absolute bottom-1 left-2 z-10 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-black/85 px-2 py-0.5">
+      <div className="pointer-events-none absolute bottom-1 left-2 z-10 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-surface-deep/90 px-2 py-0.5">
         <PlacesAttribution provider={placesProvider} tone="overlay" />
-        <span className="font-mono text-[8px] leading-4 text-white/60">· OpenFreeMap</span>
+        <span className="font-mono text-[8px] leading-4 text-ink/60">· OpenFreeMap</span>
       </div>
     </div>
   );

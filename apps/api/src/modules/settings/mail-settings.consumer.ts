@@ -2,6 +2,14 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DEFAULT_SETTINGS } from "@roamlog/db";
 
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
+import {
+  resendProviderConfigSchema,
+  smtpProviderConfigSchema,
+} from "../providers/provider-contracts.js";
+import {
+  ProviderRuntimeService,
+  resolveProviderConfigMode,
+} from "../providers/provider-runtime.service.js";
 import { SettingsService } from "./settings.service.js";
 
 /**
@@ -126,9 +134,22 @@ export class MailSettingsConsumer implements MailSettingsSource {
     @Inject(SettingsService)
     private readonly settings: SettingsService | undefined,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
+    @Optional()
+    @Inject(ProviderRuntimeService)
+    private readonly providers?: ProviderRuntimeService,
   ) {}
 
   async resolve(environment: NodeJS.ProcessEnv = process.env): Promise<MailRuntime> {
+    if (resolveProviderConfigMode(environment) === "v2") {
+      if (this.providers) {
+        return this.resolveProviderRuntime();
+      }
+      this.logger.warn(
+        { event: "mail.provider_runtime_unavailable" },
+        "mail.provider_runtime_unavailable",
+      );
+    }
+
     const loaded = await this.load();
     const emptyFallbacks: MailSettingKey[] = [];
 
@@ -223,6 +244,98 @@ export class MailSettingsConsumer implements MailSettingsSource {
       secure: port === SECURE_SMTP_PORT,
       from,
       source: hostKey.source,
+    };
+  }
+
+  /**
+   * Provider-mode mail is deliberately single-active in v1. The provider
+   * registry already enforces one enabled mail row; this consumer only maps
+   * that row back to the existing MailRuntime contract so MailService and the
+   * mail probe do not need a second code path.
+   */
+  private async resolveProviderRuntime(): Promise<MailRuntime> {
+    let group: Awaited<ReturnType<ProviderRuntimeService["resolveGroup"]>>;
+    try {
+      group = await this.providers!.resolveGroup("mail");
+    } catch (error) {
+      this.logger.warn(
+        {
+          event: "mail.provider_runtime_unavailable",
+          reason: error instanceof Error ? error.name : "UnknownError",
+        },
+        "mail.provider_runtime_unavailable",
+      );
+      return {
+        configured: false,
+        provider: "smtp",
+        missing: ["mail.provider"],
+        source: "db",
+      };
+    }
+
+    const active = group.providers[0];
+    if (!active) {
+      return {
+        configured: false,
+        provider: "smtp",
+        missing: ["mail.provider"],
+        source: "db",
+      };
+    }
+
+    if (active.adapter === "resend") {
+      const parsed = resendProviderConfigSchema.safeParse(active.config);
+      const apiKey = active.secrets.apiKey?.trim();
+      const from = parsed.success ? parsed.data.from : "";
+      const missing: MailSettingKey[] = [];
+      if (!from) {
+        missing.push("mail.from");
+      }
+      if (!apiKey) {
+        missing.push("mail.resendApiKey");
+      }
+      if (missing.length > 0 || !parsed.success || !apiKey) {
+        return { configured: false, provider: "resend", missing, source: "db" };
+      }
+      return { configured: true, provider: "resend", apiKey, from, source: "db" };
+    }
+
+    if (active.adapter === "smtp") {
+      const parsed = smtpProviderConfigSchema.safeParse(active.config);
+      if (!parsed.success) {
+        return {
+          configured: false,
+          provider: "smtp",
+          missing: ["mail.provider"],
+          source: "db",
+        };
+      }
+      const password = active.secrets.password?.trim();
+      const missing: MailSettingKey[] = [];
+      if (parsed.data.user && !password) {
+        missing.push("mail.smtpPassword");
+      }
+      if (missing.length > 0) {
+        return { configured: false, provider: "smtp", missing, source: "db" };
+      }
+      return {
+        configured: true,
+        provider: "smtp",
+        host: parsed.data.host,
+        port: parsed.data.port,
+        ...(parsed.data.user ? { user: parsed.data.user } : {}),
+        ...(password ? { password } : {}),
+        secure: parsed.data.secure || parsed.data.port === SECURE_SMTP_PORT,
+        from: parsed.data.from,
+        source: "db",
+      };
+    }
+
+    return {
+      configured: false,
+      provider: "smtp",
+      missing: ["mail.provider"],
+      source: "db",
     };
   }
 

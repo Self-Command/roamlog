@@ -11,6 +11,7 @@ import {
 } from "@roamlog/contracts";
 
 import { AuditLogReadSchema } from "../audit/audit-read.js";
+import type { MediaVariantView } from "../media/media.presenter.js";
 import { iso, nullableIso, presentDate } from "../trips/content-values.js";
 
 function jsonObject(value: unknown): Record<string, unknown> {
@@ -79,7 +80,7 @@ export function presentFeatureFlag(record: {
   });
 }
 
-export function presentMedia(record: {
+export interface AdminMediaRecord {
   id: string;
   workspaceId: string;
   tripId: string | null;
@@ -102,7 +103,13 @@ export function presentMedia(record: {
   deletedAt: Date | string | null;
   moderatedAt?: Date | string | null;
   moderatedById?: string | null;
-}): Media {
+}
+
+export function presentMedia(
+  record: AdminMediaRecord,
+  variantUrls: Record<string, MediaVariantView> = {},
+): Media {
+  const variants = { ...jsonObject(record.variants), ...variantUrls };
   return MediaSchema.parse({
     id: record.id,
     workspaceId: record.workspaceId,
@@ -115,7 +122,7 @@ export function presentMedia(record: {
     width: record.width,
     height: record.height,
     blurhash: record.blurhash,
-    variants: jsonObject(record.variants),
+    variants,
     status: record.status,
     error: record.error,
     caption: record.caption,

@@ -8,6 +8,7 @@ import {
   readPublicString,
   resolveThemePresentation,
 } from "@/lib/settings";
+import { getResolvedAppearance, themeColorsForSkin } from "@/lib/appearance";
 
 import { Providers } from "../components/providers";
 
@@ -30,21 +31,31 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * `color-scheme` mirrors the configured mode: `dark` for dark, `light dark` for
- * `system`. The UI itself still renders dark in both cases because
- * `@roamlog/ui` has only dark tokens; `light` is no longer a valid mode.
+ * `color-scheme` mirrors the configured mode. The appearance token rollout
+ * supplies the matching light/dark palettes; `system` emits `light dark` so
+ * native controls follow the operating system until hydration.
  */
 export async function generateViewport(): Promise<Viewport> {
-  const theme = resolveThemePresentation(await getPublicSettings());
+  const [settings, appearance] = await Promise.all([getPublicSettings(), getResolvedAppearance()]);
+  const theme = resolveThemePresentation(settings, appearance);
+  const colors = themeColorsForSkin(theme.skin);
   return {
     colorScheme: theme.colorScheme,
-    themeColor: "#000000",
+    themeColor:
+      theme.mode === "system"
+        ? [
+            { media: "(prefers-color-scheme: light)", color: colors.light },
+            { media: "(prefers-color-scheme: dark)", color: colors.dark },
+          ]
+        : theme.mode === "light"
+          ? colors.light
+          : colors.dark,
   };
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const settings = await getPublicSettings();
-  const theme = resolveThemePresentation(settings);
+  const [settings, appearance] = await Promise.all([getPublicSettings(), getResolvedAppearance()]);
+  const theme = resolveThemePresentation(settings, appearance);
   // Written during SSR, so the first paint already carries the runtime theme.
   const themeStyle = theme.style as CSSProperties;
 
@@ -52,7 +63,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html
       lang={readPublicString(settings, "general.defaultLanguage") ?? DEFAULT_LANGUAGE}
       data-theme={theme.dataTheme}
+      data-mode={theme.mode}
       data-accent={theme.accent}
+      data-skin={theme.dataSkin}
+      data-font={theme.dataFont}
       style={themeStyle}
       suppressHydrationWarning
     >

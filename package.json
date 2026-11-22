@@ -21,6 +21,7 @@
     "contracts:check": "pnpm --filter @roamlog/contracts contracts:check && pnpm --filter @roamlog/api-client api-client:check",
     "api-client:generate": "pnpm --filter @roamlog/api-client api-client:generate",
     "admin:bootstrap": "pnpm --filter @roamlog/api exec tsx scripts/bootstrap-admin.ts",
+    "providers:import": "pnpm --filter @roamlog/api exec tsx scripts/import-provider.ts",
     "tooling:minio-smoke": "tsx tooling/scripts/minio-smoke.ts",
     "check:env": "tsx tooling/scripts/check-env.ts",
     "staging:validate": "python tooling/scripts/staging-validate.py",

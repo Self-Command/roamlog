@@ -11,6 +11,8 @@ import type {
   UpdateMemberRequest,
   UpdateTripRequest,
   UpdateWorkspaceRequest,
+  ResolvedAppearance,
+  UpdateAppearancePreference,
   WorkspaceMemberWithUser,
   WorkspaceWithRole,
 } from "@roamlog/contracts";
@@ -18,6 +20,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { isApiError } from "@/lib/api";
+import {
+  applyAppearanceToDocument,
+  clearAppearanceCookie,
+  fetchAppearance,
+  resetAppearance,
+  saveAppearance,
+} from "@/lib/api/appearance";
 import { useDataAdapter } from "@/lib/data-provider";
 
 import type {
@@ -41,6 +50,7 @@ const defaultQueryOptions = {
 
 export const queryKeys = {
   me: ["v1", "me"] as const,
+  appearance: ["v1", "me", "appearance"] as const,
   session: ["v1", "auth", "session"] as const,
   workspaces: ["v1", "workspaces"] as const,
   trips: (workspaceId: string | undefined, params?: TripListParams) =>
@@ -51,8 +61,7 @@ export const queryKeys = {
     ["v1", "entries", workspaceId, params ?? null] as const,
   tripEntries: (tripId: string | undefined, params?: EntryListParams) =>
     ["v1", "trip-entries", tripId, params ?? null] as const,
-  comments: (params: CommentListParams | undefined) =>
-    ["v1", "comments", params ?? null] as const,
+  comments: (params: CommentListParams | undefined) => ["v1", "comments", params ?? null] as const,
   notifications: (params?: NotificationListParams) =>
     ["v1", "notifications", params ?? null] as const,
   notificationPreferences: ["v1", "notification-preferences"] as const,
@@ -82,6 +91,14 @@ export function useMeQuery() {
   return useQuery({
     queryKey: queryKeys.me,
     queryFn: ({ signal }) => adapter.fetchMe(signal),
+    ...defaultQueryOptions,
+  });
+}
+
+export function useAppearanceQuery() {
+  return useQuery({
+    queryKey: queryKeys.appearance,
+    queryFn: ({ signal }) => fetchAppearance(signal),
     ...defaultQueryOptions,
   });
 }
@@ -494,18 +511,38 @@ export function useUpdateMeMutation() {
   });
 }
 
+export function useUpdateAppearanceMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (patch: UpdateAppearancePreference) => saveAppearance(patch),
+    onSuccess: (appearance: ResolvedAppearance) => {
+      queryClient.setQueryData(queryKeys.appearance, appearance);
+      applyAppearanceToDocument(appearance);
+    },
+  });
+}
+
+export function useResetAppearanceMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => resetAppearance(),
+    onSuccess: (appearance: ResolvedAppearance) => {
+      queryClient.setQueryData(queryKeys.appearance, appearance);
+      applyAppearanceToDocument(appearance);
+      clearAppearanceCookie();
+    },
+  });
+}
+
 export function useUpdateWorkspaceMutation() {
   const adapter = useDataAdapter();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      workspaceId,
-      input,
-    }: {
-      workspaceId: string;
-      input: UpdateWorkspaceRequest;
-    }) => adapter.updateWorkspace(workspaceId, input),
+    mutationFn: ({ workspaceId, input }: { workspaceId: string; input: UpdateWorkspaceRequest }) =>
+      adapter.updateWorkspace(workspaceId, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
     },

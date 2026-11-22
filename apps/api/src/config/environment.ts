@@ -290,6 +290,15 @@ const EnvironmentSchema = z
      */
     CONFIG_ENCRYPTION_KEY: optionalString,
     CONFIG_ENCRYPTION_KEYS: optionalString,
+    /**
+     * Provider configuration cutover mode.
+     *
+     * `legacy` keeps the existing scalar settings path, `shadow` compares the
+     * database-backed provider registry without serving it, and `v2` serves the
+     * provider registry. Development/test default to legacy; production must
+     * choose explicitly so a cutover is never accidental.
+     */
+    PROVIDER_CONFIG_MODE: z.enum(["legacy", "shadow", "v2"]).default("legacy"),
     ADMIN_2FA_ENFORCED: booleanFromEnvironment.optional(),
     SESSION_COOKIE_DOMAIN: optionalString,
     GOOGLE_CLIENT_ID: optionalString,
@@ -331,8 +340,10 @@ const EnvironmentSchema = z
      * Anthropic messages). Optional as a group: an unconfigured deployment keeps
      * booting and the AI endpoints answer 503 AI_NOT_CONFIGURED.
      */
-    AI_PROTOCOL: z
-      .preprocess(emptyStringToUndefined, z.enum(["openai-chat", "openai-responses", "anthropic-messages"]).optional()),
+    AI_PROTOCOL: z.preprocess(
+      emptyStringToUndefined,
+      z.enum(["openai-chat", "openai-responses", "anthropic-messages"]).optional(),
+    ),
     AI_BASE_URL: z.preprocess(emptyStringToUndefined, z.url().optional()),
     AI_API_KEY: optionalString,
     AI_MODEL: z.preprocess(emptyStringToUndefined, z.string().min(1).max(200).optional()),
@@ -589,6 +600,15 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
       .map((issue) => `${issue.path.map(String).join(".") || "environment"}: ${issue.message}`)
       .join("; ");
     throw new Error(`Invalid environment configuration: ${details}`);
+  }
+
+  if (
+    result.data.APP_ENV === "production" &&
+    (typeof input.PROVIDER_CONFIG_MODE !== "string" || input.PROVIDER_CONFIG_MODE.trim() === "")
+  ) {
+    throw new Error(
+      "Invalid environment configuration: PROVIDER_CONFIG_MODE is required when APP_ENV=production; set legacy, shadow, or v2 explicitly",
+    );
   }
 
   const configuredOrigins =

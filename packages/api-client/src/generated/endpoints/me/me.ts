@@ -25,6 +25,7 @@ import type {
   CreateAccountExportRequest,
   DeleteMeRequest,
   Export,
+  GetMyAppearance200,
   ListMyNotificationsParams,
   MessageResponse,
   MyWorkspacesResponse,
@@ -33,8 +34,11 @@ import type {
   NotificationPreferencesResponse,
   ProblemDetails,
   ReadAllNotificationsResponse,
+  ResetMyAppearance200,
   SessionListResponse,
   UpdateMeRequest,
+  UpdateMyAppearance200,
+  UpdateMyAppearanceBody,
   UpdateNotificationPreferencesRequest,
   User,
 } from "../../schemas";
@@ -512,6 +516,390 @@ export const useDeleteMyAccount = <TError = ProblemDetails, TContext = unknown>(
   TContext
 > => {
   return useMutation(getDeleteMyAccountMutationOptions(options), queryClient);
+};
+export type getMyAppearanceResponse200 = {
+  data: GetMyAppearance200;
+  status: 200;
+};
+
+export type getMyAppearanceResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type getMyAppearanceResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type getMyAppearanceResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getMyAppearanceResponseSuccess = getMyAppearanceResponse200 & {
+  headers: Headers;
+};
+export type getMyAppearanceResponseError = (
+  getMyAppearanceResponse401 | getMyAppearanceResponse403 | getMyAppearanceResponse500
+) & {
+  headers: Headers;
+};
+
+export type getMyAppearanceResponse = getMyAppearanceResponseSuccess | getMyAppearanceResponseError;
+
+export const getGetMyAppearanceUrl = () => {
+  return `/v1/me/appearance`;
+};
+
+/**
+ * @summary Get the current user's resolved appearance
+ */
+export const getMyAppearance = async (options?: RequestInit): Promise<getMyAppearanceResponse> => {
+  const res = await fetch(getGetMyAppearanceUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyAppearanceResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getMyAppearanceResponse;
+};
+
+export const getGetMyAppearanceQueryKey = () => {
+  return [`/v1/me/appearance`] as const;
+};
+
+export const getGetMyAppearanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyAppearance>>,
+  TError = ProblemDetails,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyAppearance>>, TError, TData>>;
+  fetch?: RequestInit;
+}) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyAppearanceQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyAppearance>>> = ({ signal }) =>
+    getMyAppearance({ signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAppearance>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetMyAppearanceQueryResult = NonNullable<Awaited<ReturnType<typeof getMyAppearance>>>;
+export type GetMyAppearanceQueryError = ProblemDetails;
+
+/** @summary Get the current user's resolved appearance */
+export function useGetMyAppearance<
+  TData = Awaited<ReturnType<typeof getMyAppearance>>,
+  TError = ProblemDetails,
+>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyAppearance>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyAppearance>>,
+          TError,
+          Awaited<ReturnType<typeof getMyAppearance>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get the current user's resolved appearance */
+export function useGetMyAppearance<
+  TData = Awaited<ReturnType<typeof getMyAppearance>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyAppearance>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyAppearance>>,
+          TError,
+          Awaited<ReturnType<typeof getMyAppearance>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get the current user's resolved appearance */
+export function useGetMyAppearance<
+  TData = Awaited<ReturnType<typeof getMyAppearance>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyAppearance>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get the current user's resolved appearance */
+export function useGetMyAppearance<
+  TData = Awaited<ReturnType<typeof getMyAppearance>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyAppearance>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetMyAppearanceQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type updateMyAppearanceResponse200 = {
+  data: UpdateMyAppearance200;
+  status: 200;
+};
+
+export type updateMyAppearanceResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type updateMyAppearanceResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type updateMyAppearanceResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateMyAppearanceResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type updateMyAppearanceResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type updateMyAppearanceResponseSuccess = updateMyAppearanceResponse200 & {
+  headers: Headers;
+};
+export type updateMyAppearanceResponseError = (
+  | updateMyAppearanceResponse400
+  | updateMyAppearanceResponse401
+  | updateMyAppearanceResponse403
+  | updateMyAppearanceResponse422
+  | updateMyAppearanceResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateMyAppearanceResponse =
+  updateMyAppearanceResponseSuccess | updateMyAppearanceResponseError;
+
+export const getUpdateMyAppearanceUrl = () => {
+  return `/v1/me/appearance`;
+};
+
+/**
+ * @summary Update the current user's appearance overrides
+ */
+export const updateMyAppearance = async (
+  updateMyAppearanceBody: UpdateMyAppearanceBody,
+  options?: RequestInit,
+): Promise<updateMyAppearanceResponse> => {
+  const res = await fetch(getUpdateMyAppearanceUrl(), {
+    ...options,
+    method: "PUT",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateMyAppearanceBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateMyAppearanceResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateMyAppearanceResponse;
+};
+
+export const getUpdateMyAppearanceMutationKey = () => ["updateMyAppearance"] as const;
+
+export const getUpdateMyAppearanceMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMyAppearance>>,
+    TError,
+    UpdateMyAppearanceMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMyAppearance>>,
+  TError,
+  UpdateMyAppearanceMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateMyAppearanceMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMyAppearance>>,
+    UpdateMyAppearanceMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateMyAppearance(data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMyAppearanceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMyAppearance>>
+>;
+export type UpdateMyAppearanceMutationBody = UpdateMyAppearanceBody;
+export type UpdateMyAppearanceMutationError = ProblemDetails;
+export type UpdateMyAppearanceMutationVariables = { data: UpdateMyAppearanceBody };
+
+/** @summary Update the current user's appearance overrides */
+export const useUpdateMyAppearance = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateMyAppearance>>,
+      TError,
+      UpdateMyAppearanceMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateMyAppearance>>,
+  TError,
+  UpdateMyAppearanceMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateMyAppearanceMutationOptions(options), queryClient);
+};
+export type resetMyAppearanceResponse200 = {
+  data: ResetMyAppearance200;
+  status: 200;
+};
+
+export type resetMyAppearanceResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type resetMyAppearanceResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type resetMyAppearanceResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type resetMyAppearanceResponseSuccess = resetMyAppearanceResponse200 & {
+  headers: Headers;
+};
+export type resetMyAppearanceResponseError = (
+  resetMyAppearanceResponse401 | resetMyAppearanceResponse403 | resetMyAppearanceResponse500
+) & {
+  headers: Headers;
+};
+
+export type resetMyAppearanceResponse =
+  resetMyAppearanceResponseSuccess | resetMyAppearanceResponseError;
+
+export const getResetMyAppearanceUrl = () => {
+  return `/v1/me/appearance`;
+};
+
+/**
+ * @summary Reset the current user's appearance overrides
+ */
+export const resetMyAppearance = async (
+  options?: RequestInit,
+): Promise<resetMyAppearanceResponse> => {
+  const res = await fetch(getResetMyAppearanceUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resetMyAppearanceResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as resetMyAppearanceResponse;
+};
+
+export const getResetMyAppearanceMutationKey = () => ["resetMyAppearance"] as const;
+
+export const getResetMyAppearanceMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetMyAppearance>>,
+    TError,
+    void,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<Awaited<ReturnType<typeof resetMyAppearance>>, TError, void, TContext> => {
+  const mutationKey = getResetMyAppearanceMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetMyAppearance>>, void> = () => {
+    return resetMyAppearance(fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetMyAppearanceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetMyAppearance>>
+>;
+
+export type ResetMyAppearanceMutationError = ProblemDetails;
+
+/** @summary Reset the current user's appearance overrides */
+export const useResetMyAppearance = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof resetMyAppearance>>,
+      TError,
+      void,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<Awaited<ReturnType<typeof resetMyAppearance>>, TError, void, TContext> => {
+  return useMutation(getResetMyAppearanceMutationOptions(options), queryClient);
 };
 export type listMyWorkspacesResponse200 = {
   data: MyWorkspacesResponse;

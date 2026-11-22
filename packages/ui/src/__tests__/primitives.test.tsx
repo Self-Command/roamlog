@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   Button,
+  buttonVariants,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -13,6 +14,20 @@ import {
 } from "../index";
 
 describe("design system primitives", () => {
+  it("builds every button variant from semantic theme tokens", () => {
+    const variants = ["primary", "ghost", "outline", "subtle", "link", "danger"] as const;
+    const rawColor = /#[0-9a-f]{3,8}|(?:bg|text|border|ring)-(?:black|white)(?:\/|\b)/iu;
+
+    for (const variant of variants) {
+      const classes = buttonVariants({ variant });
+      expect(classes).not.toMatch(rawColor);
+      expect(classes).toContain("focus-visible:ring-focus-ring");
+    }
+
+    expect(buttonVariants({ variant: "primary" })).toContain("text-canvas");
+    expect(buttonVariants({ variant: "danger" })).toContain("text-danger");
+  });
+
   it("renders one native button and blocks clicks while disabled", async () => {
     const onClick = vi.fn();
     const user = userEvent.setup();

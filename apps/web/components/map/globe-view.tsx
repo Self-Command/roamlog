@@ -4,7 +4,11 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import { setWorkerUrl, type Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Map, { NavigationControl, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
+import Map, {
+  NavigationControl,
+  type MapLayerMouseEvent,
+  type MapRef,
+} from "react-map-gl/maplibre";
 
 import { Button } from "@roamlog/ui";
 
@@ -20,6 +24,7 @@ import {
 import { moveCamera } from "./map-camera";
 import { photoFocus, photoGroupKey, photosToGeoJson, type PhotoPoint } from "./photo-points";
 import { PlacesAttribution } from "./places-attribution";
+import { useThemeColor } from "./use-theme-color";
 
 /**
  * The cluster stack (source + cluster/cluster-count/unclustered-point layers)
@@ -41,9 +46,7 @@ const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 // Same worker wiring as map-canvas.tsx; the globe chunk can load first.
 if (typeof window !== "undefined") {
-  setWorkerUrl(
-    "https://cdn.jsdelivr.net/npm/maplibre-gl@6.18.0/dist/maplibre-gl-worker.mjs",
-  );
+  setWorkerUrl("https://cdn.jsdelivr.net/npm/maplibre-gl@6.18.0/dist/maplibre-gl-worker.mjs");
 }
 
 export const GLOBE_ZOOM = 2.2;
@@ -56,7 +59,7 @@ export const CITY_ZOOM = 11;
 // style's own background colour instead.
 const GLOBE_BASE_SOURCE_ID = "globe-land-base";
 const GLOBE_BASE_LAYER_ID = "globe-land-base";
-const GLOBE_BASE_FALLBACK_COLOR = "#f8f4f0";
+const GLOBE_BASE_FALLBACK_COLOR = "white";
 const WORLD_BASE_POLYGON = {
   type: "Feature" as const,
   properties: {},
@@ -116,7 +119,7 @@ function initialView(points: GlobePoint[]) {
  * style's `background` layer, so all style layers (water, landcover, roads…)
  * keep their normal order on top of it.
  */
-function prepareGlobeBase(map: MapLibreMap) {
+function prepareGlobeBase(map: MapLibreMap, spaceColor: string) {
   try {
     const style = map.getStyle();
     const background = style?.layers?.find((layer) => layer.id === "background");
@@ -125,7 +128,7 @@ function prepareGlobeBase(map: MapLibreMap) {
     const baseColor = typeof configured === "string" ? configured : GLOBE_BASE_FALLBACK_COLOR;
 
     if (background) {
-      map.setPaintProperty("background", "background-color", "#000000");
+      map.setPaintProperty("background", "background-color", spaceColor);
     }
     if (map.getLayer(GLOBE_BASE_LAYER_ID)) return;
     if (!map.getSource(GLOBE_BASE_SOURCE_ID)) {
@@ -178,10 +181,14 @@ export default function GlobeView({
     return window.matchMedia("(max-width: 639px)").matches;
   });
   const reducedMotion = useReducedMotion();
+  const spaceColor = useThemeColor("--canvas", "black");
 
   const styleUrl = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || DEFAULT_STYLE_URL;
   const geojson = useMemo(() => pointsToGeoJson(points), [points]);
-  const photoGeoJson = useMemo(() => photosToGeoJson(showPhotos ? photos : []), [photos, showPhotos]);
+  const photoGeoJson = useMemo(
+    () => photosToGeoJson(showPhotos ? photos : []),
+    [photos, showPhotos],
+  );
   const viewState = useMemo(() => initialView(points), [points]);
   const selected = points.find((point) => point.id === selectedId) ?? null;
 
@@ -230,6 +237,18 @@ export default function GlobeView({
     return () => query.removeEventListener("change", onChange);
   }, []);
 
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    try {
+      if (map.getLayer("background")) {
+        map.setPaintProperty("background", "background-color", spaceColor);
+      }
+    } catch {
+      // A style without a background layer keeps its own color.
+    }
+  }, [spaceColor]);
+
   /**
    * Moves go through ./map-camera.ts's single `moveCamera()` contract: user
    * requests fly, `prefers-reduced-motion` places the camera instead. The
@@ -255,7 +274,9 @@ export default function GlobeView({
 
     if (isPhotoHit) {
       setSelectedId(null);
-      if (await expandClusterIfAny(event.target, PHOTO_CLUSTER_SPEC, properties, geometry.coordinates)) {
+      if (
+        await expandClusterIfAny(event.target, PHOTO_CLUSTER_SPEC, properties, geometry.coordinates)
+      ) {
         onSelectPhotoGroup?.(null);
         return;
       }
@@ -266,7 +287,9 @@ export default function GlobeView({
       return;
     }
 
-    if (await expandClusterIfAny(event.target, GLOBE_CLUSTER_SPEC, properties, geometry.coordinates)) {
+    if (
+      await expandClusterIfAny(event.target, GLOBE_CLUSTER_SPEC, properties, geometry.coordinates)
+    ) {
       setSelectedId(null);
       return;
     }
@@ -280,7 +303,7 @@ export default function GlobeView({
 
   return (
     <section
-      className={`relative bg-black ${className ?? ""}`}
+      className={`relative bg-canvas ${className ?? ""}`}
       aria-label="3D 地球视图"
       data-testid="globe-view"
     >
@@ -303,7 +326,7 @@ export default function GlobeView({
             void handleClick(event);
           }}
           onLoad={(event) => {
-            prepareGlobeBase(event.target);
+            prepareGlobeBase(event.target, spaceColor);
           }}
           onError={() => onError?.()}
           style={{ width: "100%", height: "100%" }}
@@ -323,7 +346,7 @@ export default function GlobeView({
               type="button"
               size="sm"
               variant={autoRotate ? "subtle" : "ghost"}
-              className="border border-hairline-strong bg-black/75"
+              className="border border-hairline-strong bg-surface-deep/85"
               aria-pressed={autoRotate}
               onClick={() => setAutoRotate((current) => !current)}
             >
@@ -333,9 +356,9 @@ export default function GlobeView({
         )}
 
         {/* Same OSM/OpenFreeMap credit plate as the flat map. */}
-        <div className="pointer-events-none absolute bottom-1 left-2 z-10 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-black/85 px-2 py-0.5">
+        <div className="pointer-events-none absolute bottom-1 left-2 z-10 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-surface-deep/90 px-2 py-0.5">
           <PlacesAttribution provider={null} tone="overlay" />
-          <span className="font-mono text-[8px] leading-4 text-white/60">· OpenFreeMap</span>
+          <span className="font-mono text-[8px] leading-4 text-ink/60">· OpenFreeMap</span>
         </div>
       </div>
 
@@ -347,12 +370,7 @@ export default function GlobeView({
               {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
             </p>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => onEnterMap?.(selected)}
-          >
+          <Button type="button" size="sm" variant="outline" onClick={() => onEnterMap?.(selected)}>
             进入地图
           </Button>
         </div>
@@ -373,7 +391,7 @@ export default function GlobeView({
                   className={`flex w-full items-center justify-between gap-3 rounded-control border px-2 py-1.5 text-left text-[11px] ${
                     active
                       ? "border-accent-orange/50 bg-surface-2 text-ink"
-                      : "border-transparent text-muted hover:bg-white/[0.025] hover:text-ink"
+                      : "border-transparent text-muted hover:bg-ink/[0.025] hover:text-ink"
                   }`}
                 >
                   <span className="truncate">{point.label}</span>

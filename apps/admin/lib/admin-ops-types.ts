@@ -9,6 +9,7 @@ export interface AdminMediaItem {
   sizeBytes: number;
   status: MediaStatus;
   usage: "linked" | "orphan";
+  thumbnailUrl: string | null;
   caption: string | null;
   createdAt: string;
   deletedAt: string | null;

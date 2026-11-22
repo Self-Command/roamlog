@@ -48,6 +48,38 @@ export function registerAuthPaths(registry: OpenAPIRegistry): void {
   });
   registerOperation(registry, {
     method: "get",
+    path: "/v1/me/appearance",
+    operationId: "getMyAppearance",
+    tag: "Me",
+    summary: "Get the current user's resolved appearance",
+    response: c.ResolvedAppearanceSchema,
+    errors: [401, 403, 500],
+  });
+  registerOperation(registry, {
+    method: "put",
+    path: "/v1/me/appearance",
+    operationId: "updateMyAppearance",
+    tag: "Me",
+    summary: "Update the current user's appearance overrides",
+    body: c.UpdateAppearancePreferenceSchema,
+    status: 200,
+    response: c.ResolvedAppearanceSchema,
+    errors: [400, 401, 403, 422, 500],
+    idempotent: true,
+  });
+  registerOperation(registry, {
+    method: "delete",
+    path: "/v1/me/appearance",
+    operationId: "resetMyAppearance",
+    tag: "Me",
+    summary: "Reset the current user's appearance overrides",
+    status: 200,
+    response: c.ResolvedAppearanceSchema,
+    errors: [401, 403, 500],
+    idempotent: true,
+  });
+  registerOperation(registry, {
+    method: "get",
     path: "/v1/me/workspaces",
     operationId: "listMyWorkspaces",
     tag: "Me",

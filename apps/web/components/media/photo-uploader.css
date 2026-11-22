@@ -153,15 +153,15 @@
   padding: 0 14px;
   border-radius: var(--roamlog-radius-control);
   background-color: var(--ink);
-  color: #000;
+  color: var(--canvas);
   font-weight: 600;
   font-size: 11px;
   letter-spacing: 0.02em;
 }
 
 .photo-uploader-mount .uppy-StatusBar-actionBtn--upload:hover {
-  background-color: #e6e8ec;
-  color: #000;
+  background-color: color-mix(in srgb, var(--ink) 88%, var(--canvas));
+  color: var(--canvas);
 }
 
 .photo-uploader-mount .uppy-StatusBar-actionBtn--retry {
@@ -192,12 +192,12 @@
 
 .photo-uploader-mount .uppy-c-btn-primary {
   background-color: var(--ink);
-  color: #000;
+  color: var(--canvas);
 }
 
 .photo-uploader-mount .uppy-c-btn-primary:hover {
-  background-color: #e6e8ec;
-  color: #000;
+  background-color: color-mix(in srgb, var(--ink) 88%, var(--canvas));
+  color: var(--canvas);
 }
 
 .photo-uploader-mount .uppy-Informer p {

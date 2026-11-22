@@ -10,16 +10,20 @@ import { designTokens } from "../styles/tokens";
 const tokenCss = readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8");
 
 describe("Roamlog design tokens", () => {
-  it("publishes the exact core surface and text values", () => {
+  it("publishes semantic variable references and keeps the CSS source authoritative", () => {
     expect(designTokens).toMatchObject({
-      canvas: "#000000",
-      surface1: "#0a0a0c",
-      surface2: "#101012",
-      surfaceDeep: "#06060a",
-      ink: "#fcfdff",
-      muted: "#a1a4a5",
-      ash: "#888e90",
-      stone: "#464a4d",
+      canvas: "var(--canvas)",
+      surface1: "var(--surface-1)",
+      surface2: "var(--surface-2)",
+      surfaceDeep: "var(--surface-deep)",
+      surfaceOverlay: "var(--surface-overlay)",
+      ink: "var(--ink)",
+      muted: "var(--muted)",
+      ash: "var(--ash)",
+      stone: "var(--stone)",
+      hairline: "var(--hairline)",
+      focusRing: "var(--focus-ring)",
+      danger: "var(--danger)",
     });
 
     expect(tokenCss).toContain("--canvas: #000000;");
@@ -29,14 +33,14 @@ describe("Roamlog design tokens", () => {
     expect(tokenCss).toContain("--ink: #fcfdff;");
   });
 
-  it("publishes six accent values for restrained glows and data emphasis", () => {
+  it("publishes semantic accent references for restrained glows and data emphasis", () => {
     expect(designTokens.accents).toEqual({
-      orange: "#ff801f",
-      blue: "#3b9eff",
-      green: "#11ff99",
-      red: "#ff2047",
-      yellow: "#ffc53d",
-      slate: "#64748b",
+      orange: "var(--accent-orange)",
+      blue: "var(--accent-blue)",
+      green: "var(--accent-green)",
+      red: "var(--accent-red)",
+      yellow: "var(--accent-yellow)",
+      slate: "var(--accent-slate)",
     });
 
     expect(tokenCss).toContain("--accent-orange: #ff801f;");

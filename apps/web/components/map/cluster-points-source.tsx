@@ -3,6 +3,8 @@
 import { type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
 import { Layer, Source } from "react-map-gl/maplibre";
 
+import { useThemeColor } from "./use-theme-color";
+
 /**
  * One cluster source + cluster/cluster-count/unclustered-point layer stack,
  * shared by every map surface in this folder.
@@ -29,8 +31,10 @@ export interface ClusterSpec {
   clusterLayerId: string;
   countLayerId: string;
   pointLayerId: string;
-  /** Marker fill. The count label stays white on every layer. */
-  color: string;
+  /** Semantic token whose resolved value is used for the marker fill. */
+  colorToken: `--${string}`;
+  /** Named-color fallback before the document theme resolves. */
+  fallbackColor: string;
   clusterMaxZoom: number;
   clusterRadius: number;
 }
@@ -41,7 +45,8 @@ export const GLOBE_CLUSTER_SPEC: ClusterSpec = {
   clusterLayerId: "globe-clusters",
   countLayerId: "globe-cluster-count",
   pointLayerId: "globe-point",
-  color: "#ff801f",
+  colorToken: "--map-marker",
+  fallbackColor: "orange",
   clusterMaxZoom: 14,
   clusterRadius: 50,
 };
@@ -52,7 +57,8 @@ export const PHOTO_CLUSTER_SPEC: ClusterSpec = {
   clusterLayerId: "photo-clusters",
   countLayerId: "photo-cluster-count",
   pointLayerId: "photo-point",
-  color: "#4da3ff",
+  colorToken: "--map-route",
+  fallbackColor: "blue",
   clusterMaxZoom: 16,
   clusterRadius: 46,
 };
@@ -89,6 +95,10 @@ export function ClusterPointsSource({
   spec: ClusterSpec;
   data: ReturnType<typeof pointsToGeoJson>;
 }) {
+  const markerColor = useThemeColor(spec.colorToken, spec.fallbackColor);
+  const countColor = useThemeColor("--accent-contrast", "black");
+  const strokeColor = useThemeColor("--canvas", "black");
+
   return (
     <Source
       id={spec.sourceId}
@@ -103,19 +113,11 @@ export function ClusterPointsSource({
         type="circle"
         filter={["has", "point_count"] as never}
         paint={{
-          "circle-color": spec.color,
+          "circle-color": markerColor,
           "circle-opacity": 0.92,
-          "circle-radius": [
-            "step",
-            ["get", "point_count"],
-            20,
-            10,
-            25,
-            30,
-            30,
-          ] as never,
+          "circle-radius": ["step", ["get", "point_count"], 20, 10, 25, 30, 30] as never,
           "circle-stroke-width": 1,
-          "circle-stroke-color": "rgba(0, 0, 0, 0.85)",
+          "circle-stroke-color": strokeColor,
         }}
       />
       <Layer
@@ -127,17 +129,17 @@ export function ClusterPointsSource({
           "text-font": ["Noto Sans Regular"],
           "text-size": 12,
         }}
-        paint={{ "text-color": "#ffffff" }}
+        paint={{ "text-color": countColor }}
       />
       <Layer
         id={spec.pointLayerId}
         type="circle"
         filter={["!", ["has", "point_count"]] as never}
         paint={{
-          "circle-color": spec.color,
+          "circle-color": markerColor,
           "circle-radius": 4,
           "circle-stroke-width": 1,
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": strokeColor,
         }}
       />
     </Source>

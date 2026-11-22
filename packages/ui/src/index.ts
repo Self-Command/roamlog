@@ -3,8 +3,14 @@ export {
   accentNames,
   accentCssVariable,
   accentGlowCssVariable,
+  SKIN_LABELS,
+  SKIN_PALETTES,
+  SKIN_SOURCES,
+  THEME_CONTRAST_PAIRS,
+  THEME_SKINS,
+  THEME_TOKEN_ROLES,
 } from "./styles/tokens";
-export type { AccentName } from "./styles/tokens";
+export type { AccentName, SkinPalette, ThemeModeId, ThemeSkinId } from "./styles/tokens";
 export {
   fontFamilyVariables,
   fontVariableNames,
@@ -87,6 +93,8 @@ export { PageHeader } from "./patterns/page-header";
 export type { PageHeaderProps } from "./patterns/page-header";
 export { PageGlow } from "./patterns/page-glow";
 export type { PageGlowProps } from "./patterns/page-glow";
+export { AppearancePreview } from "./appearance/appearance-preview";
+export type { AppearancePreviewProps, AppearanceSurface } from "./appearance/appearance-preview";
 export { Sidebar, SidebarContent } from "./patterns/sidebar";
 export type {
   ShellLinkComponent,

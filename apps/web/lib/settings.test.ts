@@ -7,6 +7,8 @@ import {
   DEFAULT_ROBOTS,
   DEFAULT_SITE_DESCRIPTION,
   DEFAULT_SITE_TITLE,
+  DEFAULT_THEME_FONT,
+  DEFAULT_THEME_SKIN,
   DEFAULT_TITLE_TEMPLATE,
   MEDIA_COMPRESSION_DEFAULTS,
   MEDIA_COMPRESSION_LIMITS,
@@ -17,7 +19,9 @@ import {
   buildSiteMetadata,
   getMediaCompressionPolicy,
   getPublicSettings,
+  resolveDefaultSkin,
   resolveThemeAccent,
+  resolveThemeFont,
   resolveThemeMode,
   resolveThemePresentation,
   useMediaCompressionPolicy,
@@ -213,6 +217,10 @@ describe("resolveThemePresentation", () => {
     expect(fallback.dataTheme).toBe("system");
     expect(fallback.colorScheme).toBe("light dark");
     expect(fallback.accent).toBe("white");
+    expect(fallback.skin).toBe(DEFAULT_THEME_SKIN);
+    expect(fallback.fontPairing).toBe(DEFAULT_THEME_FONT);
+    expect(fallback.dataSkin).toBe(DEFAULT_THEME_SKIN);
+    expect(fallback.dataFont).toBe(DEFAULT_THEME_FONT);
     expect(fallback.style.colorScheme).toBe("light dark");
 
     const themed = resolveThemePresentation({
@@ -222,34 +230,49 @@ describe("resolveThemePresentation", () => {
     expect(themed.dataTheme).toBe("dark");
     expect(themed.colorScheme).toBe("dark");
     expect(themed.style.colorScheme).toBe("dark");
+    expect(themed.skin).toBe("tokyo-night");
+    expect(themed.fontPairing).toBe(DEFAULT_THEME_FONT);
     expect(themed.style["--accent-primary"]).toBe(THEME_ACCENT_TOKENS.blue.primary);
     expect(themed.style["--accent-primary"]).not.toBe(fallback.style["--accent-primary"]);
     expect(themed.style["--accent-primary-glow"]).toBe(THEME_ACCENT_TOKENS.blue.glow);
   });
 
-  it("normalizes the removed light mode to system instead of rendering it", () => {
-    expect(resolveThemeMode("light")).toBe("system");
+  it("accepts light once the light token set ships", () => {
+    expect(resolveThemeMode("light")).toBe("light");
     expect(resolveThemeMode("dark")).toBe("dark");
     expect(resolveThemeMode("system")).toBe("system");
 
     const presentation = resolveThemePresentation({ "theme.defaultMode": "light" });
-    expect(presentation.mode).toBe("system");
-    expect(presentation.dataTheme).toBe("system");
-    expect(presentation.colorScheme).toBe("light dark");
-    expect(JSON.stringify(presentation)).not.toContain('"light"');
+    expect(presentation.mode).toBe("light");
+    expect(presentation.dataTheme).toBe("light");
+    expect(presentation.colorScheme).toBe("light");
+    expect(JSON.stringify(presentation)).toContain('"light"');
   });
 
-  it("rejects unknown accent and mode values instead of throwing", () => {
+  it("rejects unknown accent, skin, font and mode values instead of throwing", () => {
     expect(resolveThemeMode("sepia")).toBe("system");
     expect(resolveThemeAccent("chartreuse")).toBe("white");
+    expect(resolveDefaultSkin({ storedSkin: "not-a-skin", legacyAccent: "rose" })).toBe(
+      "rose-pine",
+    );
+    expect(resolveThemeFont("not-a-font")).toBe(DEFAULT_THEME_FONT);
   });
 
-  it("mirrors every public SEO key in PUBLIC_SETTING_KEYS", () => {
+  it("maps legacy accents only when no explicit skin is present", () => {
+    expect(resolveDefaultSkin({ storedSkin: null, legacyAccent: "rose" })).toBe("rose-pine");
+    expect(resolveDefaultSkin({ storedSkin: "kanagawa", legacyAccent: "rose" })).toBe("kanagawa");
+  });
+
+  it("mirrors every public SEO and appearance key in PUBLIC_SETTING_KEYS", () => {
     for (const key of [
       "seo.titleTemplate",
       "seo.descriptionTemplate",
       "seo.ogImageUrl",
       "seo.robots",
+      "theme.defaultSkin",
+      "theme.defaultMode",
+      "theme.defaultFont",
+      "theme.allowUserOverride",
     ]) {
       expect(PUBLIC_SETTING_KEYS).toContain(key);
     }
@@ -417,8 +440,7 @@ describe("useMediaCompressionPolicy", () => {
     });
 
     const { result } = renderHook(
-      () =>
-        useMediaCompressionPolicy({ fetcher: fetcher as unknown as typeof fetch }),
+      () => useMediaCompressionPolicy({ fetcher: fetcher as unknown as typeof fetch }),
       { wrapper: wrapper(client) },
     );
 

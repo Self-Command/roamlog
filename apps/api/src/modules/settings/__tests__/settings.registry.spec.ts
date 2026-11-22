@@ -44,7 +44,10 @@ describe("SETTINGS_REGISTRY", () => {
         "seo.ogImageUrl",
         "seo.robots",
         "theme.accent",
+        "theme.defaultSkin",
         "theme.defaultMode",
+        "theme.defaultFont",
+        "theme.allowUserOverride",
         "theme.loginTagline",
         "media.maxEdge",
         "media.quality",
@@ -139,14 +142,14 @@ describe("SETTINGS_REGISTRY", () => {
     expect(help).toContain("客户端会先拦一次");
   });
 
-  it("offers only the color modes that actually render", () => {
+  it("offers light, dark and system appearance modes", () => {
     const entry = SETTINGS_BY_KEY.get("theme.defaultMode");
 
-    expect(entry?.options).toEqual(["dark", "system"]);
+    expect(entry?.options).toEqual(["system", "light", "dark"]);
     expect(entry?.defaultValue).toBe("system");
     expect(entry?.schema.safeParse("dark").success).toBe(true);
     expect(entry?.schema.safeParse("system").success).toBe(true);
-    expect(entry?.schema.safeParse("light").success).toBe(false);
+    expect(entry?.schema.safeParse("light").success).toBe(true);
   });
 
   it("covers every requested group and first-release key", () => {
@@ -170,6 +173,10 @@ describe("SETTINGS_REGISTRY", () => {
       "seo.ogImageUrl",
       "seo.robots",
       "seo.sitemapEnabled",
+      "theme.defaultSkin",
+      "theme.defaultMode",
+      "theme.defaultFont",
+      "theme.allowUserOverride",
       "mail.provider",
       "mail.from",
       "mail.smtpPort",
@@ -261,7 +268,9 @@ describe("SETTINGS_REGISTRY", () => {
     for (const key of [
       "general.defaultLanguage",
       "theme.accent",
+      "theme.defaultSkin",
       "theme.defaultMode",
+      "theme.defaultFont",
       "mail.provider",
       "places.provider",
     ]) {

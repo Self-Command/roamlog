@@ -24,6 +24,7 @@ import { ObservabilityModule } from "./modules/observability/observability.modul
 import { PackingModule } from "./modules/packing/packing.module.js";
 import { PlacesModule } from "./modules/places/places.module.js";
 import { PrismaModule } from "./modules/prisma/prisma.module.js";
+import { ProvidersModule } from "./modules/providers/providers.module.js";
 import { RealtimeModule } from "./modules/realtime/realtime.module.js";
 import { RedisModule } from "./modules/redis/redis.module.js";
 import { ReportsModule } from "./modules/reports/reports.module.js";
@@ -53,6 +54,7 @@ import { WorkspacesModule } from "./modules/workspaces/workspaces.module.js";
     NotificationsModule,
     RealtimeModule,
     TripsModule,
+    ProvidersModule,
     AiModule,
     EntriesModule,
     ItineraryModule,

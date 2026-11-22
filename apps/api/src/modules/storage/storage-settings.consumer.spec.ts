@@ -2,6 +2,7 @@ import type { AdminSettingItem, AdminSettingsResponse } from "@roamlog/contracts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { StorageSettings } from "../../config/storage-settings.js";
+import type { ProviderRuntimeService } from "../providers/provider-runtime.service.js";
 import type { SettingDefinition } from "../settings/settings.registry.js";
 import { StorageSettingsConsumer } from "../settings/storage-settings.consumer.js";
 
@@ -69,7 +70,10 @@ function item(
     ...(secret
       ? { secret: { hasValue: value !== null && value !== undefined, last4: null } }
       : { value: value as never }),
-    updatedAt: options.updatedAt === null ? null : (options.updatedAt ?? new Date("2026-11-19T00:00:00.000Z")).toISOString(),
+    updatedAt:
+      options.updatedAt === null
+        ? null
+        : (options.updatedAt ?? new Date("2026-11-19T00:00:00.000Z")).toISOString(),
     updatedById: null,
   } as AdminSettingItem;
 }
@@ -112,6 +116,7 @@ function setup(options: {
   groupOverrides?: Record<string, unknown>;
   groupError?: Error;
   registry?: readonly SettingDefinition[];
+  providers?: ProviderRuntimeService;
 }) {
   const items = options.items ?? [];
   const settings = {
@@ -134,8 +139,46 @@ function setup(options: {
     ENV_SETTINGS,
     log as never,
     options.registry ?? FAKE_REGISTRY,
+    options.providers,
   );
   return { consumer, settings, log };
+}
+
+function providerRuntime(
+  providers: Array<{
+    adapter: "s3";
+    config: Record<string, unknown>;
+    secrets?: Record<string, string>;
+  }>,
+) {
+  const resolveGroup = vi.fn(async () => ({
+    policy: {
+      group: "storage",
+      routingMode: "single",
+      maxAttempts: 1,
+      cooldownSeconds: 0,
+      version: 1,
+    },
+    providers: providers.map((provider, index) => ({
+      id: `storage-provider-${index + 1}`,
+      group: "storage",
+      adapter: provider.adapter,
+      preset: provider.adapter,
+      label: "S3",
+      priority: (index + 1) * 10,
+      config: provider.config,
+      secrets: provider.secrets ?? {},
+      health: {
+        status: "unknown",
+        lastCheckedAt: null,
+        lastErrorCode: null,
+        cooldownUntil: null,
+      },
+    })),
+  }));
+  return { resolveGroup } as unknown as ProviderRuntimeService & {
+    resolveGroup: typeof resolveGroup;
+  };
 }
 
 const originalEnv = { ...process.env };
@@ -204,10 +247,7 @@ describe("StorageSettingsConsumer precedence", () => {
 
   it("falls back to env when a stored value is empty", async () => {
     const { consumer } = setup({
-      items: [
-        item("storage.publicEndpoint", null),
-        item("storage.secretKey", null),
-      ],
+      items: [item("storage.publicEndpoint", null), item("storage.secretKey", null)],
     });
 
     const resolved = await consumer.resolve();
@@ -219,7 +259,9 @@ describe("StorageSettingsConsumer precedence", () => {
   });
 
   it("uses env when no row exists and the code default only when env is absent", async () => {
-    const { consumer } = setup({ items: [{ ...item("storage.bucket", "db-bucket"), updatedAt: null }] });
+    const { consumer } = setup({
+      items: [{ ...item("storage.bucket", "db-bucket"), updatedAt: null }],
+    });
 
     const resolved = await consumer.resolve();
 
@@ -269,6 +311,96 @@ describe("StorageSettingsConsumer secret hygiene", () => {
     expect(warnings).not.toContain("sentinel-secret-value");
     expect(logged).not.toContain("sentinel-secret-value");
     expect(logged).not.toContain(ENV_SETTINGS.accessKey);
+  });
+});
+
+describe("StorageSettingsConsumer provider mode", () => {
+  it("maps the single active S3 Provider and ignores scalar storage rows", async () => {
+    process.env.PROVIDER_CONFIG_MODE = "v2";
+    const providers = providerRuntime([
+      {
+        adapter: "s3",
+        config: {
+          endpoint: "http://provider-minio:9000",
+          publicEndpoint: "https://provider-media.example.com",
+          bucket: "provider-bucket",
+          region: "provider-region",
+          forcePathStyle: true,
+        },
+        secrets: { accessKey: "provider-access", secretKey: "provider-secret" },
+      },
+    ]);
+    const { consumer, settings } = setup({ items: [], providers });
+
+    const resolved = await consumer.resolve();
+
+    expect(resolved.settings.endpoint).toBe("http://provider-minio:9000");
+    expect(resolved.settings.publicEndpoint).toBe("https://provider-media.example.com");
+    expect(resolved.settings.bucket).toBe("provider-bucket");
+    expect(resolved.settings.region).toBe("provider-region");
+    expect(resolved.settings.accessKey).toBe("provider-access");
+    expect(resolved.settings.secretKey).toBe("provider-secret");
+    expect(resolved.sources.endpoint).toBe("database");
+    expect(resolved.sources.accessKey).toBe("database");
+    expect(resolved.warnings).toEqual([]);
+    expect(settings.getGroup).not.toHaveBeenCalled();
+  });
+
+  it("returns empty credentials with a warning when the Provider secret is missing", async () => {
+    process.env.PROVIDER_CONFIG_MODE = "v2";
+    const { consumer } = setup({
+      items: [],
+      providers: providerRuntime([
+        {
+          adapter: "s3",
+          config: {
+            endpoint: "http://provider-minio:9000",
+            bucket: "provider-bucket",
+            region: "us-east-1",
+            forcePathStyle: true,
+          },
+        },
+      ]),
+    });
+
+    const resolved = await consumer.resolve();
+
+    expect(resolved.settings.accessKey).toBe("");
+    expect(resolved.settings.secretKey).toBe("");
+    expect(resolved.warnings).toContain("PROVIDER_SECRET_MISSING");
+  });
+
+  it("does not fall back to env credentials when no Provider is active", async () => {
+    process.env.PROVIDER_CONFIG_MODE = "v2";
+    const { consumer } = setup({ items: [], providers: providerRuntime([]) });
+
+    const resolved = await consumer.resolve();
+
+    expect(resolved.settings.accessKey).toBe("");
+    expect(resolved.settings.secretKey).toBe("");
+    expect(resolved.warnings).toContain("PROVIDER_NOT_CONFIGURED");
+  });
+
+  it("keeps the legacy scalar resolver when the mode is not v2", async () => {
+    const providers = providerRuntime([
+      {
+        adapter: "s3",
+        config: {
+          endpoint: "http://provider-minio:9000",
+          bucket: "provider-bucket",
+          region: "us-east-1",
+          forcePathStyle: true,
+        },
+        secrets: { accessKey: "provider-access", secretKey: "provider-secret" },
+      },
+    ]);
+    const { consumer, settings } = setup({ items: [], providers });
+
+    const resolved = await consumer.resolve();
+
+    expect(resolved.settings.bucket).toBe(ENV_SETTINGS.bucket);
+    expect(settings.getGroup).toHaveBeenCalled();
+    expect(providers.resolveGroup).not.toHaveBeenCalled();
   });
 });
 

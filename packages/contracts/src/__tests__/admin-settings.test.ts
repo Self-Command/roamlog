@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  APPEARANCE_SETTING_KEYS,
   AdminSettingItemSchema,
   AdminSettingsResponseSchema,
   PublicSettingsResponseSchema,
@@ -119,13 +120,21 @@ describe("admin settings contracts", () => {
     expect(() => RevealAdminSettingRequestSchema.parse({})).toThrow();
   });
 
-  it("only accepts theme modes the runtime can actually render", () => {
-    expect(THEME_MODES).toEqual(["dark", "system"]);
+  it("accepts the three appearance modes once the light palette ships", () => {
+    expect(THEME_MODES).toEqual(["system", "light", "dark"]);
     expect(ThemeModeSchema.parse("dark")).toBe("dark");
     expect(ThemeModeSchema.parse("system")).toBe("system");
-    // The removed fake light mode is a contract error, which the API maps to 422.
-    expect(ThemeModeSchema.safeParse("light").success).toBe(false);
+    expect(ThemeModeSchema.parse("light")).toBe("light");
     expect(ThemeModeSchema.safeParse("auto").success).toBe(false);
+  });
+
+  it("freezes the four public appearance defaults", () => {
+    expect(APPEARANCE_SETTING_KEYS).toEqual([
+      "theme.defaultSkin",
+      "theme.defaultMode",
+      "theme.defaultFont",
+      "theme.allowUserOverride",
+    ]);
   });
 
   it("serves only key/value pairs on the public projection", () => {

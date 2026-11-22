@@ -40,6 +40,8 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspacePage,
   ClearAdminQueueResponse,
+  CreateProviderRequest,
+  DeleteProviderParams,
   EmailLog,
   ExportAdminAuditCsvParams,
   ExportAdminUsersCsvParams,
@@ -58,7 +60,23 @@ import type {
   ListAdminWorkspacesParams,
   MessageResponse,
   PauseAdminQueueResponse,
+  ProbeProviderParams,
   ProblemDetails,
+  ProviderCatalog,
+  ProviderConnection,
+  ProviderDeleteResponse,
+  ProviderDraftProbeRequest,
+  ProviderGroupResponse,
+  ProviderModel,
+  ProviderModelDiscoveryRequest,
+  ProviderModelDiscoveryResponse,
+  ProviderProbeResponse,
+  ProviderSecretRevealRequest,
+  ProviderSecretRevealResponse,
+  ProviderSecretState,
+  RefreshProviderModelsParams,
+  ReorderProvidersRequest,
+  ReplaceProviderSecretRequest,
   ResetTwoFactorResponse,
   ResumeAdminQueueResponse,
   RetryJobResponse,
@@ -71,6 +89,9 @@ import type {
   UpdateAdminUserRequest,
   UpdateAdminWorkspaceRequest,
   UpdateFeatureFlagRequest,
+  UpdateProviderModelRequest,
+  UpdateProviderPolicyRequest,
+  UpdateProviderRequest,
 } from "../../schemas";
 
 const getHeaders = (
@@ -117,6 +138,2377 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
+export type listProviderCatalogResponse200 = {
+  data: ProviderCatalog;
+  status: 200;
+};
+
+export type listProviderCatalogResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type listProviderCatalogResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type listProviderCatalogResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type listProviderCatalogResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type listProviderCatalogResponseSuccess = listProviderCatalogResponse200 & {
+  headers: Headers;
+};
+export type listProviderCatalogResponseError = (
+  | listProviderCatalogResponse401
+  | listProviderCatalogResponse403
+  | listProviderCatalogResponse500
+  | listProviderCatalogResponse503
+) & {
+  headers: Headers;
+};
+
+export type listProviderCatalogResponse =
+  listProviderCatalogResponseSuccess | listProviderCatalogResponseError;
+
+export const getListProviderCatalogUrl = () => {
+  return `/v1/admin/provider-catalog`;
+};
+
+/**
+ * Returns the code-owned provider catalog used by the Admin UI. It contains no credentials or saved values.
+ * @summary List provider adapters, presets, and typed form fields
+ */
+export const listProviderCatalog = async (
+  options?: RequestInit,
+): Promise<listProviderCatalogResponse> => {
+  const res = await fetch(getListProviderCatalogUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listProviderCatalogResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as listProviderCatalogResponse;
+};
+
+export const getListProviderCatalogQueryKey = () => {
+  return [`/v1/admin/provider-catalog`] as const;
+};
+
+export const getListProviderCatalogQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProviderCatalog>>,
+  TError = ProblemDetails,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listProviderCatalog>>, TError, TData>>;
+  fetch?: RequestInit;
+}) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListProviderCatalogQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listProviderCatalog>>> = ({ signal }) =>
+    listProviderCatalog({ signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProviderCatalog>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListProviderCatalogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProviderCatalog>>
+>;
+export type ListProviderCatalogQueryError = ProblemDetails;
+
+/**
+ * Returns the code-owned provider catalog used by the Admin UI. It contains no credentials or saved values.
+ * @summary List provider adapters, presets, and typed form fields
+ */
+export function useListProviderCatalog<
+  TData = Awaited<ReturnType<typeof listProviderCatalog>>,
+  TError = ProblemDetails,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listProviderCatalog>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProviderCatalog>>,
+          TError,
+          Awaited<ReturnType<typeof listProviderCatalog>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns the code-owned provider catalog used by the Admin UI. It contains no credentials or saved values.
+ * @summary List provider adapters, presets, and typed form fields
+ */
+export function useListProviderCatalog<
+  TData = Awaited<ReturnType<typeof listProviderCatalog>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listProviderCatalog>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProviderCatalog>>,
+          TError,
+          Awaited<ReturnType<typeof listProviderCatalog>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns the code-owned provider catalog used by the Admin UI. It contains no credentials or saved values.
+ * @summary List provider adapters, presets, and typed form fields
+ */
+export function useListProviderCatalog<
+  TData = Awaited<ReturnType<typeof listProviderCatalog>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listProviderCatalog>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns the code-owned provider catalog used by the Admin UI. It contains no credentials or saved values.
+ * @summary List provider adapters, presets, and typed form fields
+ */
+export function useListProviderCatalog<
+  TData = Awaited<ReturnType<typeof listProviderCatalog>>,
+  TError = ProblemDetails,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listProviderCatalog>>, TError, TData>
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListProviderCatalogQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type getProviderGroupResponse200 = {
+  data: ProviderGroupResponse;
+  status: 200;
+};
+
+export type getProviderGroupResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type getProviderGroupResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type getProviderGroupResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type getProviderGroupResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type getProviderGroupResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getProviderGroupResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type getProviderGroupResponseSuccess = getProviderGroupResponse200 & {
+  headers: Headers;
+};
+export type getProviderGroupResponseError = (
+  | getProviderGroupResponse400
+  | getProviderGroupResponse401
+  | getProviderGroupResponse403
+  | getProviderGroupResponse404
+  | getProviderGroupResponse500
+  | getProviderGroupResponse503
+) & {
+  headers: Headers;
+};
+
+export type getProviderGroupResponse =
+  getProviderGroupResponseSuccess | getProviderGroupResponseError;
+
+export const getGetProviderGroupUrl = (group: "ai" | "places" | "mail" | "storage") => {
+  return `/v1/admin/provider-groups/${group}`;
+};
+
+/**
+ * @summary Get a provider group and its ordered providers
+ */
+export const getProviderGroup = async (
+  group: "ai" | "places" | "mail" | "storage",
+  options?: RequestInit,
+): Promise<getProviderGroupResponse> => {
+  const res = await fetch(getGetProviderGroupUrl(group), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getProviderGroupResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getProviderGroupResponse;
+};
+
+export const getGetProviderGroupQueryKey = (group: "ai" | "places" | "mail" | "storage") => {
+  return [`/v1/admin/provider-groups/${group}`] as const;
+};
+
+export const getGetProviderGroupQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProviderGroup>>,
+  TError = ProblemDetails,
+>(
+  group: "ai" | "places" | "mail" | "storage",
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderGroup>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetProviderGroupQueryKey(group);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getProviderGroup>>> = ({ signal }) =>
+    getProviderGroup(group, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: group !== null && group !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getProviderGroup>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetProviderGroupQueryResult = NonNullable<Awaited<ReturnType<typeof getProviderGroup>>>;
+export type GetProviderGroupQueryError = ProblemDetails;
+
+/** @summary Get a provider group and its ordered providers */
+export function useGetProviderGroup<
+  TData = Awaited<ReturnType<typeof getProviderGroup>>,
+  TError = ProblemDetails,
+>(
+  group: "ai" | "places" | "mail" | "storage",
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderGroup>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProviderGroup>>,
+          TError,
+          Awaited<ReturnType<typeof getProviderGroup>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get a provider group and its ordered providers */
+export function useGetProviderGroup<
+  TData = Awaited<ReturnType<typeof getProviderGroup>>,
+  TError = ProblemDetails,
+>(
+  group: "ai" | "places" | "mail" | "storage",
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderGroup>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProviderGroup>>,
+          TError,
+          Awaited<ReturnType<typeof getProviderGroup>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get a provider group and its ordered providers */
+export function useGetProviderGroup<
+  TData = Awaited<ReturnType<typeof getProviderGroup>>,
+  TError = ProblemDetails,
+>(
+  group: "ai" | "places" | "mail" | "storage",
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderGroup>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/** @summary Get a provider group and its ordered providers */
+export function useGetProviderGroup<
+  TData = Awaited<ReturnType<typeof getProviderGroup>>,
+  TError = ProblemDetails,
+>(
+  group: "ai" | "places" | "mail" | "storage",
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderGroup>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetProviderGroupQueryOptions(group, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type updateProviderGroupPolicyResponse200 = {
+  data: ProviderGroupResponse;
+  status: 200;
+};
+
+export type updateProviderGroupPolicyResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type updateProviderGroupPolicyResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type updateProviderGroupPolicyResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateProviderGroupPolicyResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type updateProviderGroupPolicyResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type updateProviderGroupPolicyResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type updateProviderGroupPolicyResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type updateProviderGroupPolicyResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type updateProviderGroupPolicyResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type updateProviderGroupPolicyResponseSuccess = updateProviderGroupPolicyResponse200 & {
+  headers: Headers;
+};
+export type updateProviderGroupPolicyResponseError = (
+  | updateProviderGroupPolicyResponse400
+  | updateProviderGroupPolicyResponse401
+  | updateProviderGroupPolicyResponse403
+  | updateProviderGroupPolicyResponse404
+  | updateProviderGroupPolicyResponse409
+  | updateProviderGroupPolicyResponse422
+  | updateProviderGroupPolicyResponse429
+  | updateProviderGroupPolicyResponse500
+  | updateProviderGroupPolicyResponse503
+) & {
+  headers: Headers;
+};
+
+export type updateProviderGroupPolicyResponse =
+  updateProviderGroupPolicyResponseSuccess | updateProviderGroupPolicyResponseError;
+
+export const getUpdateProviderGroupPolicyUrl = (group: "ai" | "places" | "mail" | "storage") => {
+  return `/v1/admin/provider-groups/${group}`;
+};
+
+/**
+ * @summary Update a provider group routing policy
+ */
+export const updateProviderGroupPolicy = async (
+  group: "ai" | "places" | "mail" | "storage",
+  updateProviderPolicyRequest: UpdateProviderPolicyRequest,
+  options?: RequestInit,
+): Promise<updateProviderGroupPolicyResponse> => {
+  const res = await fetch(getUpdateProviderGroupPolicyUrl(group), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateProviderPolicyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateProviderGroupPolicyResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateProviderGroupPolicyResponse;
+};
+
+export const getUpdateProviderGroupPolicyMutationKey = () => ["updateProviderGroupPolicy"] as const;
+
+export const getUpdateProviderGroupPolicyMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProviderGroupPolicy>>,
+    TError,
+    UpdateProviderGroupPolicyMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProviderGroupPolicy>>,
+  TError,
+  UpdateProviderGroupPolicyMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateProviderGroupPolicyMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProviderGroupPolicy>>,
+    UpdateProviderGroupPolicyMutationVariables
+  > = (props) => {
+    const { group, data } = props ?? {};
+
+    return updateProviderGroupPolicy(group, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProviderGroupPolicyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateProviderGroupPolicy>>
+>;
+export type UpdateProviderGroupPolicyMutationBody = UpdateProviderPolicyRequest;
+export type UpdateProviderGroupPolicyMutationError = ProblemDetails;
+export type UpdateProviderGroupPolicyMutationVariables = {
+  group: "ai" | "places" | "mail" | "storage";
+  data: UpdateProviderPolicyRequest;
+};
+
+/** @summary Update a provider group routing policy */
+export const useUpdateProviderGroupPolicy = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateProviderGroupPolicy>>,
+      TError,
+      UpdateProviderGroupPolicyMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateProviderGroupPolicy>>,
+  TError,
+  UpdateProviderGroupPolicyMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateProviderGroupPolicyMutationOptions(options), queryClient);
+};
+export type reorderProvidersResponse200 = {
+  data: ProviderGroupResponse;
+  status: 200;
+};
+
+export type reorderProvidersResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type reorderProvidersResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type reorderProvidersResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type reorderProvidersResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type reorderProvidersResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type reorderProvidersResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type reorderProvidersResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type reorderProvidersResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type reorderProvidersResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type reorderProvidersResponseSuccess = reorderProvidersResponse200 & {
+  headers: Headers;
+};
+export type reorderProvidersResponseError = (
+  | reorderProvidersResponse400
+  | reorderProvidersResponse401
+  | reorderProvidersResponse403
+  | reorderProvidersResponse404
+  | reorderProvidersResponse409
+  | reorderProvidersResponse422
+  | reorderProvidersResponse429
+  | reorderProvidersResponse500
+  | reorderProvidersResponse503
+) & {
+  headers: Headers;
+};
+
+export type reorderProvidersResponse =
+  reorderProvidersResponseSuccess | reorderProvidersResponseError;
+
+export const getReorderProvidersUrl = (group: "ai" | "places" | "mail" | "storage") => {
+  return `/v1/admin/provider-groups/${group}/order`;
+};
+
+/**
+ * @summary Replace provider priority order
+ */
+export const reorderProviders = async (
+  group: "ai" | "places" | "mail" | "storage",
+  reorderProvidersRequest: ReorderProvidersRequest,
+  options?: RequestInit,
+): Promise<reorderProvidersResponse> => {
+  const res = await fetch(getReorderProvidersUrl(group), {
+    ...options,
+    method: "PUT",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(reorderProvidersRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reorderProvidersResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as reorderProvidersResponse;
+};
+
+export const getReorderProvidersMutationKey = () => ["reorderProviders"] as const;
+
+export const getReorderProvidersMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderProviders>>,
+    TError,
+    ReorderProvidersMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reorderProviders>>,
+  TError,
+  ReorderProvidersMutationVariables,
+  TContext
+> => {
+  const mutationKey = getReorderProvidersMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reorderProviders>>,
+    ReorderProvidersMutationVariables
+  > = (props) => {
+    const { group, data } = props ?? {};
+
+    return reorderProviders(group, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReorderProvidersMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reorderProviders>>
+>;
+export type ReorderProvidersMutationBody = ReorderProvidersRequest;
+export type ReorderProvidersMutationError = ProblemDetails;
+export type ReorderProvidersMutationVariables = {
+  group: "ai" | "places" | "mail" | "storage";
+  data: ReorderProvidersRequest;
+};
+
+/** @summary Replace provider priority order */
+export const useReorderProviders = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof reorderProviders>>,
+      TError,
+      ReorderProvidersMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof reorderProviders>>,
+  TError,
+  ReorderProvidersMutationVariables,
+  TContext
+> => {
+  return useMutation(getReorderProvidersMutationOptions(options), queryClient);
+};
+export type createProviderResponse201 = {
+  data: ProviderConnection;
+  status: 201;
+};
+
+export type createProviderResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type createProviderResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type createProviderResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type createProviderResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type createProviderResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type createProviderResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type createProviderResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type createProviderResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type createProviderResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type createProviderResponseSuccess = createProviderResponse201 & {
+  headers: Headers;
+};
+export type createProviderResponseError = (
+  | createProviderResponse400
+  | createProviderResponse401
+  | createProviderResponse403
+  | createProviderResponse404
+  | createProviderResponse409
+  | createProviderResponse422
+  | createProviderResponse429
+  | createProviderResponse500
+  | createProviderResponse503
+) & {
+  headers: Headers;
+};
+
+export type createProviderResponse = createProviderResponseSuccess | createProviderResponseError;
+
+export const getCreateProviderUrl = () => {
+  return `/v1/admin/providers`;
+};
+
+/**
+ * Initial secret fields may be supplied once in the create request and are encrypted in the same transaction as the provider.
+ * @summary Create a provider connection
+ */
+export const createProvider = async (
+  createProviderRequest: CreateProviderRequest,
+  options?: RequestInit,
+): Promise<createProviderResponse> => {
+  const res = await fetch(getCreateProviderUrl(), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(createProviderRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createProviderResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as createProviderResponse;
+};
+
+export const getCreateProviderMutationKey = () => ["createProvider"] as const;
+
+export const getCreateProviderMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProvider>>,
+    TError,
+    CreateProviderMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createProvider>>,
+  TError,
+  CreateProviderMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCreateProviderMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createProvider>>,
+    CreateProviderMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createProvider(data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateProviderMutationResult = NonNullable<Awaited<ReturnType<typeof createProvider>>>;
+export type CreateProviderMutationBody = CreateProviderRequest;
+export type CreateProviderMutationError = ProblemDetails;
+export type CreateProviderMutationVariables = { data: CreateProviderRequest };
+
+/**
+ * Initial secret fields may be supplied once in the create request and are encrypted in the same transaction as the provider.
+ * @summary Create a provider connection
+ */
+export const useCreateProvider = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createProvider>>,
+      TError,
+      CreateProviderMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createProvider>>,
+  TError,
+  CreateProviderMutationVariables,
+  TContext
+> => {
+  return useMutation(getCreateProviderMutationOptions(options), queryClient);
+};
+export type updateProviderResponse200 = {
+  data: ProviderConnection;
+  status: 200;
+};
+
+export type updateProviderResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type updateProviderResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type updateProviderResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateProviderResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type updateProviderResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type updateProviderResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type updateProviderResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type updateProviderResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type updateProviderResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type updateProviderResponseSuccess = updateProviderResponse200 & {
+  headers: Headers;
+};
+export type updateProviderResponseError = (
+  | updateProviderResponse400
+  | updateProviderResponse401
+  | updateProviderResponse403
+  | updateProviderResponse404
+  | updateProviderResponse409
+  | updateProviderResponse422
+  | updateProviderResponse429
+  | updateProviderResponse500
+  | updateProviderResponse503
+) & {
+  headers: Headers;
+};
+
+export type updateProviderResponse = updateProviderResponseSuccess | updateProviderResponseError;
+
+export const getUpdateProviderUrl = (id: string) => {
+  return `/v1/admin/providers/${id}`;
+};
+
+/**
+ * Secret fields are not accepted here. Use the dedicated secret replacement endpoint.
+ * @summary Update a provider connection
+ */
+export const updateProvider = async (
+  id: string,
+  updateProviderRequest: UpdateProviderRequest,
+  options?: RequestInit,
+): Promise<updateProviderResponse> => {
+  const res = await fetch(getUpdateProviderUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateProviderRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateProviderResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateProviderResponse;
+};
+
+export const getUpdateProviderMutationKey = () => ["updateProvider"] as const;
+
+export const getUpdateProviderMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProvider>>,
+    TError,
+    UpdateProviderMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProvider>>,
+  TError,
+  UpdateProviderMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateProviderMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProvider>>,
+    UpdateProviderMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateProvider(id, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProviderMutationResult = NonNullable<Awaited<ReturnType<typeof updateProvider>>>;
+export type UpdateProviderMutationBody = UpdateProviderRequest;
+export type UpdateProviderMutationError = ProblemDetails;
+export type UpdateProviderMutationVariables = { id: string; data: UpdateProviderRequest };
+
+/**
+ * Secret fields are not accepted here. Use the dedicated secret replacement endpoint.
+ * @summary Update a provider connection
+ */
+export const useUpdateProvider = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateProvider>>,
+      TError,
+      UpdateProviderMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateProvider>>,
+  TError,
+  UpdateProviderMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateProviderMutationOptions(options), queryClient);
+};
+export type deleteProviderResponse200 = {
+  data: ProviderDeleteResponse;
+  status: 200;
+};
+
+export type deleteProviderResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type deleteProviderResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type deleteProviderResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type deleteProviderResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type deleteProviderResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type deleteProviderResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type deleteProviderResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type deleteProviderResponseSuccess = deleteProviderResponse200 & {
+  headers: Headers;
+};
+export type deleteProviderResponseError = (
+  | deleteProviderResponse400
+  | deleteProviderResponse401
+  | deleteProviderResponse403
+  | deleteProviderResponse404
+  | deleteProviderResponse409
+  | deleteProviderResponse500
+  | deleteProviderResponse503
+) & {
+  headers: Headers;
+};
+
+export type deleteProviderResponse = deleteProviderResponseSuccess | deleteProviderResponseError;
+
+export const getDeleteProviderUrl = (id: string, params: DeleteProviderParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/admin/providers/${id}?${stringifiedParams}`
+    : `/v1/admin/providers/${id}`;
+};
+
+/**
+ * @summary Soft-delete a provider connection
+ */
+export const deleteProvider = async (
+  id: string,
+  params: DeleteProviderParams,
+  options?: RequestInit,
+): Promise<deleteProviderResponse> => {
+  const res = await fetch(getDeleteProviderUrl(id, params), {
+    ...options,
+    method: "DELETE",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteProviderResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as deleteProviderResponse;
+};
+
+export const getDeleteProviderMutationKey = () => ["deleteProvider"] as const;
+
+export const getDeleteProviderMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProvider>>,
+    TError,
+    DeleteProviderMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProvider>>,
+  TError,
+  DeleteProviderMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteProviderMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProvider>>,
+    DeleteProviderMutationVariables
+  > = (props) => {
+    const { id, params } = props ?? {};
+
+    return deleteProvider(id, params, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProviderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteProvider>>>;
+
+export type DeleteProviderMutationError = ProblemDetails;
+export type DeleteProviderMutationVariables = { id: string; params: DeleteProviderParams };
+
+/** @summary Soft-delete a provider connection */
+export const useDeleteProvider = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteProvider>>,
+      TError,
+      DeleteProviderMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProvider>>,
+  TError,
+  DeleteProviderMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteProviderMutationOptions(options), queryClient);
+};
+export type probeProviderResponse200 = {
+  data: ProviderProbeResponse;
+  status: 200;
+};
+
+export type probeProviderResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type probeProviderResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type probeProviderResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type probeProviderResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type probeProviderResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type probeProviderResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type probeProviderResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type probeProviderResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type probeProviderResponse502 = {
+  data: ProblemDetails;
+  status: 502;
+};
+
+export type probeProviderResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type probeProviderResponse504 = {
+  data: ProblemDetails;
+  status: 504;
+};
+
+export type probeProviderResponseSuccess = probeProviderResponse200 & {
+  headers: Headers;
+};
+export type probeProviderResponseError = (
+  | probeProviderResponse400
+  | probeProviderResponse401
+  | probeProviderResponse403
+  | probeProviderResponse404
+  | probeProviderResponse409
+  | probeProviderResponse422
+  | probeProviderResponse429
+  | probeProviderResponse500
+  | probeProviderResponse502
+  | probeProviderResponse503
+  | probeProviderResponse504
+) & {
+  headers: Headers;
+};
+
+export type probeProviderResponse = probeProviderResponseSuccess | probeProviderResponseError;
+
+export const getProbeProviderUrl = (id: string, params: ProbeProviderParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/admin/providers/${id}/probe?${stringifiedParams}`
+    : `/v1/admin/providers/${id}/probe`;
+};
+
+/**
+ * @summary Test a saved provider connection
+ */
+export const probeProvider = async (
+  id: string,
+  params: ProbeProviderParams,
+  options?: RequestInit,
+): Promise<probeProviderResponse> => {
+  const res = await fetch(getProbeProviderUrl(id, params), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: probeProviderResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as probeProviderResponse;
+};
+
+export const getProbeProviderMutationKey = () => ["probeProvider"] as const;
+
+export const getProbeProviderMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof probeProvider>>,
+    TError,
+    ProbeProviderMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof probeProvider>>,
+  TError,
+  ProbeProviderMutationVariables,
+  TContext
+> => {
+  const mutationKey = getProbeProviderMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof probeProvider>>,
+    ProbeProviderMutationVariables
+  > = (props) => {
+    const { id, params } = props ?? {};
+
+    return probeProvider(id, params, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ProbeProviderMutationResult = NonNullable<Awaited<ReturnType<typeof probeProvider>>>;
+
+export type ProbeProviderMutationError = ProblemDetails;
+export type ProbeProviderMutationVariables = { id: string; params: ProbeProviderParams };
+
+/** @summary Test a saved provider connection */
+export const useProbeProvider = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof probeProvider>>,
+      TError,
+      ProbeProviderMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof probeProvider>>,
+  TError,
+  ProbeProviderMutationVariables,
+  TContext
+> => {
+  return useMutation(getProbeProviderMutationOptions(options), queryClient);
+};
+export type probeProviderDraftResponse200 = {
+  data: ProviderProbeResponse;
+  status: 200;
+};
+
+export type probeProviderDraftResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type probeProviderDraftResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type probeProviderDraftResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type probeProviderDraftResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type probeProviderDraftResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type probeProviderDraftResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type probeProviderDraftResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type probeProviderDraftResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type probeProviderDraftResponse502 = {
+  data: ProblemDetails;
+  status: 502;
+};
+
+export type probeProviderDraftResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type probeProviderDraftResponse504 = {
+  data: ProblemDetails;
+  status: 504;
+};
+
+export type probeProviderDraftResponseSuccess = probeProviderDraftResponse200 & {
+  headers: Headers;
+};
+export type probeProviderDraftResponseError = (
+  | probeProviderDraftResponse400
+  | probeProviderDraftResponse401
+  | probeProviderDraftResponse403
+  | probeProviderDraftResponse404
+  | probeProviderDraftResponse409
+  | probeProviderDraftResponse422
+  | probeProviderDraftResponse429
+  | probeProviderDraftResponse500
+  | probeProviderDraftResponse502
+  | probeProviderDraftResponse503
+  | probeProviderDraftResponse504
+) & {
+  headers: Headers;
+};
+
+export type probeProviderDraftResponse =
+  probeProviderDraftResponseSuccess | probeProviderDraftResponseError;
+
+export const getProbeProviderDraftUrl = () => {
+  return `/v1/admin/providers/probe`;
+};
+
+/**
+ * @summary Test a provider draft without saving it
+ */
+export const probeProviderDraft = async (
+  providerDraftProbeRequest: ProviderDraftProbeRequest,
+  options?: RequestInit,
+): Promise<probeProviderDraftResponse> => {
+  const res = await fetch(getProbeProviderDraftUrl(), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(providerDraftProbeRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: probeProviderDraftResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as probeProviderDraftResponse;
+};
+
+export const getProbeProviderDraftMutationKey = () => ["probeProviderDraft"] as const;
+
+export const getProbeProviderDraftMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof probeProviderDraft>>,
+    TError,
+    ProbeProviderDraftMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof probeProviderDraft>>,
+  TError,
+  ProbeProviderDraftMutationVariables,
+  TContext
+> => {
+  const mutationKey = getProbeProviderDraftMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof probeProviderDraft>>,
+    ProbeProviderDraftMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return probeProviderDraft(data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ProbeProviderDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof probeProviderDraft>>
+>;
+export type ProbeProviderDraftMutationBody = ProviderDraftProbeRequest;
+export type ProbeProviderDraftMutationError = ProblemDetails;
+export type ProbeProviderDraftMutationVariables = { data: ProviderDraftProbeRequest };
+
+/** @summary Test a provider draft without saving it */
+export const useProbeProviderDraft = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof probeProviderDraft>>,
+      TError,
+      ProbeProviderDraftMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof probeProviderDraft>>,
+  TError,
+  ProbeProviderDraftMutationVariables,
+  TContext
+> => {
+  return useMutation(getProbeProviderDraftMutationOptions(options), queryClient);
+};
+export type discoverProviderModelsResponse200 = {
+  data: ProviderModelDiscoveryResponse;
+  status: 200;
+};
+
+export type discoverProviderModelsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type discoverProviderModelsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type discoverProviderModelsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type discoverProviderModelsResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type discoverProviderModelsResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type discoverProviderModelsResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type discoverProviderModelsResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type discoverProviderModelsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type discoverProviderModelsResponse502 = {
+  data: ProblemDetails;
+  status: 502;
+};
+
+export type discoverProviderModelsResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type discoverProviderModelsResponse504 = {
+  data: ProblemDetails;
+  status: 504;
+};
+
+export type discoverProviderModelsResponseSuccess = discoverProviderModelsResponse200 & {
+  headers: Headers;
+};
+export type discoverProviderModelsResponseError = (
+  | discoverProviderModelsResponse400
+  | discoverProviderModelsResponse401
+  | discoverProviderModelsResponse403
+  | discoverProviderModelsResponse404
+  | discoverProviderModelsResponse409
+  | discoverProviderModelsResponse422
+  | discoverProviderModelsResponse429
+  | discoverProviderModelsResponse500
+  | discoverProviderModelsResponse502
+  | discoverProviderModelsResponse503
+  | discoverProviderModelsResponse504
+) & {
+  headers: Headers;
+};
+
+export type discoverProviderModelsResponse =
+  discoverProviderModelsResponseSuccess | discoverProviderModelsResponseError;
+
+export const getDiscoverProviderModelsUrl = () => {
+  return `/v1/admin/provider-models/discover`;
+};
+
+/**
+ * The API performs the upstream catalog request server-side. Credentials and upstream response bodies are never returned.
+ * @summary Discover models from a saved or draft AI provider
+ */
+export const discoverProviderModels = async (
+  providerModelDiscoveryRequest: ProviderModelDiscoveryRequest,
+  options?: RequestInit,
+): Promise<discoverProviderModelsResponse> => {
+  const res = await fetch(getDiscoverProviderModelsUrl(), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(providerModelDiscoveryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discoverProviderModelsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as discoverProviderModelsResponse;
+};
+
+export const getDiscoverProviderModelsMutationKey = () => ["discoverProviderModels"] as const;
+
+export const getDiscoverProviderModelsMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof discoverProviderModels>>,
+    TError,
+    DiscoverProviderModelsMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof discoverProviderModels>>,
+  TError,
+  DiscoverProviderModelsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDiscoverProviderModelsMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof discoverProviderModels>>,
+    DiscoverProviderModelsMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return discoverProviderModels(data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DiscoverProviderModelsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof discoverProviderModels>>
+>;
+export type DiscoverProviderModelsMutationBody = ProviderModelDiscoveryRequest;
+export type DiscoverProviderModelsMutationError = ProblemDetails;
+export type DiscoverProviderModelsMutationVariables = { data: ProviderModelDiscoveryRequest };
+
+/**
+ * The API performs the upstream catalog request server-side. Credentials and upstream response bodies are never returned.
+ * @summary Discover models from a saved or draft AI provider
+ */
+export const useDiscoverProviderModels = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof discoverProviderModels>>,
+      TError,
+      DiscoverProviderModelsMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof discoverProviderModels>>,
+  TError,
+  DiscoverProviderModelsMutationVariables,
+  TContext
+> => {
+  return useMutation(getDiscoverProviderModelsMutationOptions(options), queryClient);
+};
+export type refreshProviderModelsResponse200 = {
+  data: ProviderModelDiscoveryResponse;
+  status: 200;
+};
+
+export type refreshProviderModelsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type refreshProviderModelsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type refreshProviderModelsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type refreshProviderModelsResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type refreshProviderModelsResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type refreshProviderModelsResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type refreshProviderModelsResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type refreshProviderModelsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type refreshProviderModelsResponse502 = {
+  data: ProblemDetails;
+  status: 502;
+};
+
+export type refreshProviderModelsResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type refreshProviderModelsResponse504 = {
+  data: ProblemDetails;
+  status: 504;
+};
+
+export type refreshProviderModelsResponseSuccess = refreshProviderModelsResponse200 & {
+  headers: Headers;
+};
+export type refreshProviderModelsResponseError = (
+  | refreshProviderModelsResponse400
+  | refreshProviderModelsResponse401
+  | refreshProviderModelsResponse403
+  | refreshProviderModelsResponse404
+  | refreshProviderModelsResponse409
+  | refreshProviderModelsResponse422
+  | refreshProviderModelsResponse429
+  | refreshProviderModelsResponse500
+  | refreshProviderModelsResponse502
+  | refreshProviderModelsResponse503
+  | refreshProviderModelsResponse504
+) & {
+  headers: Headers;
+};
+
+export type refreshProviderModelsResponse =
+  refreshProviderModelsResponseSuccess | refreshProviderModelsResponseError;
+
+export const getRefreshProviderModelsUrl = (id: string, params: RefreshProviderModelsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/admin/providers/${id}/models/refresh?${stringifiedParams}`
+    : `/v1/admin/providers/${id}/models/refresh`;
+};
+
+/**
+ * @summary Refresh the saved model catalog for an AI provider
+ */
+export const refreshProviderModels = async (
+  id: string,
+  params: RefreshProviderModelsParams,
+  options?: RequestInit,
+): Promise<refreshProviderModelsResponse> => {
+  const res = await fetch(getRefreshProviderModelsUrl(id, params), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refreshProviderModelsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as refreshProviderModelsResponse;
+};
+
+export const getRefreshProviderModelsMutationKey = () => ["refreshProviderModels"] as const;
+
+export const getRefreshProviderModelsMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshProviderModels>>,
+    TError,
+    RefreshProviderModelsMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof refreshProviderModels>>,
+  TError,
+  RefreshProviderModelsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getRefreshProviderModelsMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof refreshProviderModels>>,
+    RefreshProviderModelsMutationVariables
+  > = (props) => {
+    const { id, params } = props ?? {};
+
+    return refreshProviderModels(id, params, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RefreshProviderModelsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof refreshProviderModels>>
+>;
+
+export type RefreshProviderModelsMutationError = ProblemDetails;
+export type RefreshProviderModelsMutationVariables = {
+  id: string;
+  params: RefreshProviderModelsParams;
+};
+
+/** @summary Refresh the saved model catalog for an AI provider */
+export const useRefreshProviderModels = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof refreshProviderModels>>,
+      TError,
+      RefreshProviderModelsMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof refreshProviderModels>>,
+  TError,
+  RefreshProviderModelsMutationVariables,
+  TContext
+> => {
+  return useMutation(getRefreshProviderModelsMutationOptions(options), queryClient);
+};
+export type updateProviderModelResponse200 = {
+  data: ProviderModel;
+  status: 200;
+};
+
+export type updateProviderModelResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type updateProviderModelResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type updateProviderModelResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type updateProviderModelResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type updateProviderModelResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type updateProviderModelResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type updateProviderModelResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type updateProviderModelResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type updateProviderModelResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type updateProviderModelResponseSuccess = updateProviderModelResponse200 & {
+  headers: Headers;
+};
+export type updateProviderModelResponseError = (
+  | updateProviderModelResponse400
+  | updateProviderModelResponse401
+  | updateProviderModelResponse403
+  | updateProviderModelResponse404
+  | updateProviderModelResponse409
+  | updateProviderModelResponse422
+  | updateProviderModelResponse429
+  | updateProviderModelResponse500
+  | updateProviderModelResponse503
+) & {
+  headers: Headers;
+};
+
+export type updateProviderModelResponse =
+  updateProviderModelResponseSuccess | updateProviderModelResponseError;
+
+export const getUpdateProviderModelUrl = (id: string, modelId: string) => {
+  return `/v1/admin/providers/${id}/models/${modelId}`;
+};
+
+/**
+ * @summary Enable, default, or change capabilities for a provider model
+ */
+export const updateProviderModel = async (
+  id: string,
+  modelId: string,
+  updateProviderModelRequest: UpdateProviderModelRequest,
+  options?: RequestInit,
+): Promise<updateProviderModelResponse> => {
+  const res = await fetch(getUpdateProviderModelUrl(id, modelId), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(updateProviderModelRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateProviderModelResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as updateProviderModelResponse;
+};
+
+export const getUpdateProviderModelMutationKey = () => ["updateProviderModel"] as const;
+
+export const getUpdateProviderModelMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProviderModel>>,
+    TError,
+    UpdateProviderModelMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProviderModel>>,
+  TError,
+  UpdateProviderModelMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateProviderModelMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProviderModel>>,
+    UpdateProviderModelMutationVariables
+  > = (props) => {
+    const { id, modelId, data } = props ?? {};
+
+    return updateProviderModel(id, modelId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProviderModelMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateProviderModel>>
+>;
+export type UpdateProviderModelMutationBody = UpdateProviderModelRequest;
+export type UpdateProviderModelMutationError = ProblemDetails;
+export type UpdateProviderModelMutationVariables = {
+  id: string;
+  modelId: string;
+  data: UpdateProviderModelRequest;
+};
+
+/** @summary Enable, default, or change capabilities for a provider model */
+export const useUpdateProviderModel = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateProviderModel>>,
+      TError,
+      UpdateProviderModelMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateProviderModel>>,
+  TError,
+  UpdateProviderModelMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateProviderModelMutationOptions(options), queryClient);
+};
+export type replaceProviderSecretResponse200 = {
+  data: ProviderSecretState;
+  status: 200;
+};
+
+export type replaceProviderSecretResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type replaceProviderSecretResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type replaceProviderSecretResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type replaceProviderSecretResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type replaceProviderSecretResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type replaceProviderSecretResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type replaceProviderSecretResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type replaceProviderSecretResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type replaceProviderSecretResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type replaceProviderSecretResponseSuccess = replaceProviderSecretResponse200 & {
+  headers: Headers;
+};
+export type replaceProviderSecretResponseError = (
+  | replaceProviderSecretResponse400
+  | replaceProviderSecretResponse401
+  | replaceProviderSecretResponse403
+  | replaceProviderSecretResponse404
+  | replaceProviderSecretResponse409
+  | replaceProviderSecretResponse422
+  | replaceProviderSecretResponse429
+  | replaceProviderSecretResponse500
+  | replaceProviderSecretResponse503
+) & {
+  headers: Headers;
+};
+
+export type replaceProviderSecretResponse =
+  replaceProviderSecretResponseSuccess | replaceProviderSecretResponseError;
+
+export const getReplaceProviderSecretUrl = (id: string, field: string) => {
+  return `/v1/admin/providers/${id}/secrets/${field}`;
+};
+
+/**
+ * The previous ciphertext moves to a private 24-hour history record for rollback and is never returned by the API.
+ * @summary Atomically replace one provider secret
+ */
+export const replaceProviderSecret = async (
+  id: string,
+  field: string,
+  replaceProviderSecretRequest: ReplaceProviderSecretRequest,
+  options?: RequestInit,
+): Promise<replaceProviderSecretResponse> => {
+  const res = await fetch(getReplaceProviderSecretUrl(id, field), {
+    ...options,
+    method: "PUT",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(replaceProviderSecretRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: replaceProviderSecretResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as replaceProviderSecretResponse;
+};
+
+export const getReplaceProviderSecretMutationKey = () => ["replaceProviderSecret"] as const;
+
+export const getReplaceProviderSecretMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof replaceProviderSecret>>,
+    TError,
+    ReplaceProviderSecretMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof replaceProviderSecret>>,
+  TError,
+  ReplaceProviderSecretMutationVariables,
+  TContext
+> => {
+  const mutationKey = getReplaceProviderSecretMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof replaceProviderSecret>>,
+    ReplaceProviderSecretMutationVariables
+  > = (props) => {
+    const { id, field, data } = props ?? {};
+
+    return replaceProviderSecret(id, field, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReplaceProviderSecretMutationResult = NonNullable<
+  Awaited<ReturnType<typeof replaceProviderSecret>>
+>;
+export type ReplaceProviderSecretMutationBody = ReplaceProviderSecretRequest;
+export type ReplaceProviderSecretMutationError = ProblemDetails;
+export type ReplaceProviderSecretMutationVariables = {
+  id: string;
+  field: string;
+  data: ReplaceProviderSecretRequest;
+};
+
+/**
+ * The previous ciphertext moves to a private 24-hour history record for rollback and is never returned by the API.
+ * @summary Atomically replace one provider secret
+ */
+export const useReplaceProviderSecret = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof replaceProviderSecret>>,
+      TError,
+      ReplaceProviderSecretMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof replaceProviderSecret>>,
+  TError,
+  ReplaceProviderSecretMutationVariables,
+  TContext
+> => {
+  return useMutation(getReplaceProviderSecretMutationOptions(options), queryClient);
+};
+export type revealProviderSecretResponse200 = {
+  data: ProviderSecretRevealResponse;
+  status: 200;
+};
+
+export type revealProviderSecretResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type revealProviderSecretResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type revealProviderSecretResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type revealProviderSecretResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type revealProviderSecretResponse409 = {
+  data: ProblemDetails;
+  status: 409;
+};
+
+export type revealProviderSecretResponse422 = {
+  data: ProblemDetails;
+  status: 422;
+};
+
+export type revealProviderSecretResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type revealProviderSecretResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type revealProviderSecretResponseSuccess = revealProviderSecretResponse200 & {
+  headers: Headers;
+};
+export type revealProviderSecretResponseError = (
+  | revealProviderSecretResponse400
+  | revealProviderSecretResponse401
+  | revealProviderSecretResponse403
+  | revealProviderSecretResponse404
+  | revealProviderSecretResponse409
+  | revealProviderSecretResponse422
+  | revealProviderSecretResponse429
+  | revealProviderSecretResponse500
+) & {
+  headers: Headers;
+};
+
+export type revealProviderSecretResponse =
+  revealProviderSecretResponseSuccess | revealProviderSecretResponseError;
+
+export const getRevealProviderSecretUrl = (id: string, field: string) => {
+  return `/v1/admin/providers/${id}/secrets/${field}/reveal`;
+};
+
+/**
+ * Requires super_admin, verified TOTP, and an explicit confirm body. The reveal is audited.
+ * @summary Reveal one provider secret after explicit confirmation
+ */
+export const revealProviderSecret = async (
+  id: string,
+  field: string,
+  providerSecretRevealRequest: ProviderSecretRevealRequest,
+  options?: RequestInit,
+): Promise<revealProviderSecretResponse> => {
+  const res = await fetch(getRevealProviderSecretUrl(id, field), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(providerSecretRevealRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revealProviderSecretResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as revealProviderSecretResponse;
+};
+
+export const getRevealProviderSecretMutationKey = () => ["revealProviderSecret"] as const;
+
+export const getRevealProviderSecretMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof revealProviderSecret>>,
+    TError,
+    RevealProviderSecretMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof revealProviderSecret>>,
+  TError,
+  RevealProviderSecretMutationVariables,
+  TContext
+> => {
+  const mutationKey = getRevealProviderSecretMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof revealProviderSecret>>,
+    RevealProviderSecretMutationVariables
+  > = (props) => {
+    const { id, field, data } = props ?? {};
+
+    return revealProviderSecret(id, field, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RevealProviderSecretMutationResult = NonNullable<
+  Awaited<ReturnType<typeof revealProviderSecret>>
+>;
+export type RevealProviderSecretMutationBody = ProviderSecretRevealRequest;
+export type RevealProviderSecretMutationError = ProblemDetails;
+export type RevealProviderSecretMutationVariables = {
+  id: string;
+  field: string;
+  data: ProviderSecretRevealRequest;
+};
+
+/**
+ * Requires super_admin, verified TOTP, and an explicit confirm body. The reveal is audited.
+ * @summary Reveal one provider secret after explicit confirmation
+ */
+export const useRevealProviderSecret = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof revealProviderSecret>>,
+      TError,
+      RevealProviderSecretMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof revealProviderSecret>>,
+  TError,
+  RevealProviderSecretMutationVariables,
+  TContext
+> => {
+  return useMutation(getRevealProviderSecretMutationOptions(options), queryClient);
+};
 export type getAdminPermissionsResponse200 = {
   data: GetAdminPermissions200;
   status: 200;

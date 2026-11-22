@@ -31,7 +31,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   "seo.sitemapEnabled": true,
 
   "theme.accent": "white",
+  "theme.defaultSkin": "editorial-noir",
   "theme.defaultMode": "system",
+  "theme.defaultFont": "editorial-classic",
+  "theme.allowUserOverride": true,
   "theme.loginTagline": "Every trip deserves a memory.",
 
   "mail.provider": "smtp",

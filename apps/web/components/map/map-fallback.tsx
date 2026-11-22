@@ -27,13 +27,9 @@ export function MapFallback({
 }: MapFallbackProps) {
   return (
     <div className="grid min-h-72 lg:grid-cols-[minmax(0,1fr)_300px] lg:divide-x lg:divide-hairline">
-      <div className="relative min-h-64 overflow-hidden bg-[radial-gradient(circle_at_50%_35%,rgba(59,158,255,0.08),transparent_58%)]">
-        <SchematicRouteMap
-          points={points}
-          selectedId={selectedId}
-          onSelect={onSelect}
-        />
-        <div className="absolute left-3 top-3 rounded-pill border border-hairline-strong bg-black/65 px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-white/65">
+      <div className="relative min-h-64 overflow-hidden bg-[radial-gradient(circle_at_50%_35%,var(--glow-blue),transparent_58%)]">
+        <SchematicRouteMap points={points} selectedId={selectedId} onSelect={onSelect} />
+        <div className="absolute left-3 top-3 rounded-pill border border-hairline-strong bg-surface-deep/80 px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-ink/70">
           {reason === "manual" ? "LIST VIEW" : "TILE FALLBACK"} / ACCESSIBLE MAP
         </div>
       </div>
@@ -127,19 +123,19 @@ export function SchematicRouteMap({
     >
       <defs>
         <linearGradient id="fallback-ocean" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#0b1017" />
-          <stop offset="1" stopColor="#050608" />
+          <stop offset="0" stopColor="var(--surface-deep)" />
+          <stop offset="1" stopColor="var(--canvas)" />
         </linearGradient>
         <pattern id="fallback-grid" width="50" height="50" patternUnits="userSpaceOnUse">
-          <path d="M50 0H0V50" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+          <path d="M50 0H0V50" fill="none" stroke="var(--hairline)" strokeWidth="1" />
         </pattern>
       </defs>
       <rect width="1000" height="520" fill="url(#fallback-ocean)" />
       <rect width="1000" height="520" fill="url(#fallback-grid)" />
       <g
         aria-hidden="true"
-        fill="#12161a"
-        stroke="rgba(255,255,255,0.1)"
+        fill="var(--surface-2)"
+        stroke="var(--hairline-strong)"
         strokeWidth="1.2"
         strokeLinejoin="round"
       >
@@ -157,7 +153,8 @@ export function SchematicRouteMap({
         <polyline
           points={projected.map((point) => `${point.x},${point.y}`).join(" ")}
           fill="none"
-          stroke="rgba(255,128,31,0.5)"
+          stroke="var(--map-route)"
+          strokeOpacity="0.7"
           strokeWidth="1.4"
           strokeDasharray="5 5"
         />
@@ -182,19 +179,27 @@ export function SchematicRouteMap({
               }
             }}
           >
-            <circle cx={point.x} cy={point.y} r={selected ? 18 : 12} fill="rgba(255,128,31,0.14)" />
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r={selected ? 18 : 12}
+              fill="var(--map-marker)"
+              fillOpacity="0.14"
+            />
             <circle
               cx={point.x}
               cy={point.y}
               r={selected ? 6 : 4}
-              fill={selected ? "#ff801f" : "rgba(252,253,255,0.78)"}
-              stroke={selected ? "#fff" : "rgba(0,0,0,0.78)"}
+              fill={selected ? "var(--map-marker)" : "var(--ink)"}
+              fillOpacity={selected ? undefined : 0.78}
+              stroke="var(--canvas)"
+              strokeOpacity={selected ? 1 : 0.78}
               strokeWidth="1.5"
             />
             <text
               x={point.x + 9}
               y={point.y + 3}
-              fill={selected ? "#fcfdff" : "rgba(252,253,255,0.55)"}
+              fill={selected ? "var(--ink)" : "var(--muted)"}
               fontSize="9"
               fontFamily="monospace"
             >
@@ -204,7 +209,7 @@ export function SchematicRouteMap({
         );
       })}
 
-      <text x="20" y="500" fill="rgba(255,255,255,0.35)" fontSize="8" fontFamily="monospace">
+      <text x="20" y="500" fill="var(--muted)" fontSize="8" fontFamily="monospace">
         SCHEMATIC WORLD / REAL STOP COORDINATES
       </text>
     </svg>

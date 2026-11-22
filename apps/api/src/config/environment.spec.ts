@@ -14,6 +14,7 @@ const baseEnvironment = {
   REDIS_URL: "redis://localhost:6379",
   REDIS_PREFIX: "roamlog:test",
   BETTER_AUTH_SECRET: "test-only-secret-that-is-at-least-32-bytes",
+  PROVIDER_CONFIG_MODE: "legacy",
   S3_ENDPOINT: "http://localhost:9000",
   S3_BUCKET: "roamlog-test",
   S3_ACCESS_KEY: "test-access-key",
@@ -69,6 +70,37 @@ describe("validateEnvironment", () => {
         CORS_ORIGINS: "http://app.roamlog.app",
       }),
     ).toThrow(/must use https|production CORS origins must use https/);
+  });
+
+  it("defaults provider cutover to legacy outside production", () => {
+    const { PROVIDER_CONFIG_MODE: _mode, ...withoutMode } = baseEnvironment;
+    expect(validateEnvironment({ ...withoutMode }).PROVIDER_CONFIG_MODE).toBe("legacy");
+  });
+
+  it("requires an explicit provider cutover mode in production", () => {
+    const { PROVIDER_CONFIG_MODE: _mode, ...withoutMode } = baseEnvironment;
+    expect(() =>
+      validateEnvironment({
+        ...withoutMode,
+        NODE_ENV: "production",
+        APP_ENV: "production",
+        APP_URL: "https://we.example.com",
+        ADMIN_URL: "https://we.example.com",
+        API_URL: "https://we.example.com",
+        CORS_ORIGINS: "https://we.example.com",
+        S3_PUBLIC_ENDPOINT: "https://media.example.com",
+        EMAIL_PROVIDER: "resend",
+        EMAIL_FROM: "Roamlog <no-reply@roamlog.app>",
+        RESEND_API_KEY: "re_live_example_key_value",
+        SMTP_HOST: "",
+      }),
+    ).toThrow(/PROVIDER_CONFIG_MODE is required when APP_ENV=production/);
+  });
+
+  it("rejects an unknown provider cutover mode", () => {
+    expect(() =>
+      validateEnvironment({ ...baseEnvironment, PROVIDER_CONFIG_MODE: "round_robin" }),
+    ).toThrow(/PROVIDER_CONFIG_MODE/);
   });
 });
 

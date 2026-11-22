@@ -1,7 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Place } from "@roamlog/contracts";
 
-import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
+import {
+  PLACES_SETTINGS,
+  type PlacesSettings,
+  type PlacesSettingsSource,
+} from "./places.settings.js";
 import { PhotonPayloadError, normalizePhotonPayloadCandidates } from "./photon-normalizer.js";
 import type { PhotonCandidate } from "./ranking/pelias-document.js";
 
@@ -9,11 +13,7 @@ import type { PhotonCandidate } from "./ranking/pelias-document.js";
  * Reasons a search degrades. They are safe to log: no query text is included.
  */
 export type PhotonFailureReason =
-  | "timeout"
-  | "http_error"
-  | "network_error"
-  | "invalid_payload"
-  | "invalid_url";
+  "timeout" | "http_error" | "network_error" | "invalid_payload" | "invalid_url";
 
 export type PhotonSearchOutcome =
   | { readonly ok: true; readonly items: Place[]; readonly durationMs: number }
@@ -79,8 +79,11 @@ function forwardedLang(
 export class PhotonClient {
   constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource) {}
 
-  async search(input: PhotonSearchInput): Promise<PhotonSearchOutcome> {
-    const outcome = await this.searchCandidates(input);
+  async search(
+    input: PhotonSearchInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<PhotonSearchOutcome> {
+    const outcome = await this.searchCandidates(input, settingsOverride);
     return outcome.ok
       ? {
           ok: true,
@@ -94,8 +97,11 @@ export class PhotonClient {
    * Candidate-preserving form of `search`: keeps `type` / `osm_value` /
    * `extra.population` for the Pelias adapter.
    */
-  async searchCandidates(input: PhotonSearchInput): Promise<PhotonCandidatesOutcome> {
-    const settings = await this.settings.resolve();
+  async searchCandidates(
+    input: PhotonSearchInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<PhotonCandidatesOutcome> {
+    const settings = settingsOverride ?? (await this.settings.resolve());
     let endpoint: URL;
     try {
       endpoint = new URL(settings.baseUrl);

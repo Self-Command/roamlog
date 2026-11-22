@@ -129,19 +129,17 @@ function demoBudget(
 ): NonNullable<PublicTripResponse["budget"]> {
   const total = expenses.reduce((sum, expense) => sum + expense.amountMinor, 0);
   const currencies = [...new Set(expenses.map((expense) => expense.currency))];
-  const categories = [...new Set(expenses.map((expense) => expense.category))].map(
-    (category) => ({
-      category,
-      totals: [
-        {
-          currency: "CNY",
-          amountMinor: expenses
-            .filter((expense) => expense.category === category)
-            .reduce((sum, expense) => sum + expense.amountMinor, 0),
-        },
-      ],
-    }),
-  );
+  const categories = [...new Set(expenses.map((expense) => expense.category))].map((category) => ({
+    category,
+    totals: [
+      {
+        currency: "CNY",
+        amountMinor: expenses
+          .filter((expense) => expense.category === category)
+          .reduce((sum, expense) => sum + expense.amountMinor, 0),
+      },
+    ],
+  }));
 
   return {
     tripId,
@@ -295,9 +293,7 @@ describe("ShareArticle cover", () => {
     expect(coverImage(container)).toBeNull();
     const fallback = container.querySelector(".trip-cover");
     expect(fallback).not.toBeNull();
-    expect(fallback?.getAttribute("class")).toMatch(
-      /trip-cover--(amber|moss|ice|coast|rose)/,
-    );
+    expect(fallback?.getAttribute("class")).toMatch(/trip-cover--(amber|moss|ice|coast|rose)/);
     expect(fallback?.getAttribute("aria-hidden")).toBe("true");
   });
 
@@ -365,10 +361,7 @@ function photo(overrides: Partial<PhotoFixture> = {}): PhotoFixture {
   };
 }
 
-function shareWithPhotos(
-  photos: PhotoFixture[],
-  inlineInFirstEntry = false,
-): PublicTripResponse {
+function shareWithPhotos(photos: PhotoFixture[], inlineInFirstEntry = false): PublicTripResponse {
   const data = buildDemoPublicTrip({ showBudget: false });
   return {
     ...data,
@@ -376,8 +369,7 @@ function shareWithPhotos(
     media: photos as unknown as PublicMedia[],
     entries: data.entries.map((entry, index) => ({
       ...entry,
-      media:
-        inlineInFirstEntry && index === 0 ? (photos as unknown as PublicMedia[]) : [],
+      media: inlineInFirstEntry && index === 0 ? (photos as unknown as PublicMedia[]) : [],
     })),
   };
 }
@@ -388,7 +380,7 @@ function photoImages(container: HTMLElement): HTMLImageElement[] {
 }
 
 function photoGradients(container: HTMLElement): Element[] {
-  return [...container.querySelectorAll("figure .bg-gradient-to-br")];
+  return [...container.querySelectorAll('figure [data-photo-fallback="true"]')];
 }
 
 describe("ShareArticle photo wall", () => {
@@ -405,9 +397,7 @@ describe("ShareArticle photo wall", () => {
   });
 
   it("renders the signed thumbnail when only the thumbnail is available", () => {
-    const { container } = render(
-      <ShareArticle data={shareWithPhotos([photo({ url: null })])} />,
-    );
+    const { container } = render(<ShareArticle data={shareWithPhotos([photo({ url: null })])} />);
 
     const images = photoImages(container);
     expect(images).toHaveLength(1);
@@ -450,9 +440,7 @@ describe("ShareArticle photo wall", () => {
   });
 
   it("renders journal photos through the same signed path", () => {
-    const { container } = render(
-      <ShareArticle data={shareWithPhotos([photo()], true)} />,
-    );
+    const { container } = render(<ShareArticle data={shareWithPhotos([photo()], true)} />);
 
     const images = photoImages(container);
     expect(images).toHaveLength(2);
@@ -538,9 +526,7 @@ describe("PublicSharePage", () => {
     const user = userEvent.setup();
     render(<PublicSharePage token="password-demo" />);
 
-    expect(
-      await screen.findByRole("heading", { name: "输入分享密码" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "输入分享密码" })).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("分享密码"), "wrong-password");
     await user.click(screen.getByRole("button", { name: "打开分享" }));
@@ -593,7 +579,10 @@ describe("ShareLinkDialog", () => {
       token: shareToken,
       url: `https://roamlog.test/share/${shareToken}`,
     };
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(createdByApi, 201)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(createdByApi, 201)),
+    );
 
     render(<ShareLinkDialog tripId={createdByApi.tripId} />);
 
@@ -602,9 +591,7 @@ describe("ShareLinkDialog", () => {
     await user.click(screen.getByRole("button", { name: "创建链接" }));
 
     await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "分享链接已创建" }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole("heading", { name: "分享链接已创建" })).toBeInTheDocument(),
     );
     expect(screen.getByText(new RegExp(`/share/${shareToken}`))).toBeInTheDocument();
 
@@ -695,9 +682,7 @@ describe("ShareArticle place attribution", () => {
       />,
     );
 
-    const credits = within(screen.getByRole("contentinfo")).getAllByTestId(
-      "places-attribution",
-    );
+    const credits = within(screen.getByRole("contentinfo")).getAllByTestId("places-attribution");
     expect(credits.map((credit) => credit.getAttribute("data-provider"))).toEqual([
       "geoapify",
       "photon",
@@ -1032,15 +1017,18 @@ describe("ShareArticle route map", () => {
   it("renders the shared map for stops with finite coordinates", () => {
     render(
       <ShareArticle
-        data={shareWithMapStops([MAPPED_STOP, SECOND_MAPPED_STOP], [
-          GEOTAGGED_MEDIA,
-          {
-            ...GEOTAGGED_MEDIA,
-            id: "019b7b6b-4658-769e-8153-9f88eba061d5",
-            lat: undefined,
-            lng: undefined,
-          },
-        ])}
+        data={shareWithMapStops(
+          [MAPPED_STOP, SECOND_MAPPED_STOP],
+          [
+            GEOTAGGED_MEDIA,
+            {
+              ...GEOTAGGED_MEDIA,
+              id: "019b7b6b-4658-769e-8153-9f88eba061d5",
+              lat: undefined,
+              lng: undefined,
+            },
+          ],
+        )}
       />,
     );
 

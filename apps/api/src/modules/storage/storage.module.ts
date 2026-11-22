@@ -6,6 +6,7 @@ import { AuditModule } from "../audit/audit.module.js";
 import { AdminGuard } from "../admin/admin.guard.js";
 import { PlatformTwoFactorGuard } from "../admin/platform-two-factor.guard.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
+import { ProvidersModule } from "../providers/providers.module.js";
 import { SETTINGS_REGISTRY } from "../settings/settings.registry.js";
 import { SettingsModule } from "../settings/settings.module.js";
 import { SettingsService } from "../settings/settings.service.js";
@@ -16,17 +17,14 @@ import {
   StorageSettingsConsumer,
 } from "../settings/storage-settings.consumer.js";
 import { StorageAdminController } from "./storage-admin.controller.js";
-import {
-  buildStorageClients,
-  type StorageClientBuilder,
-} from "./storage-clients.js";
+import { buildStorageClients, type StorageClientBuilder } from "./storage-clients.js";
 import { STORAGE_CLIENT_BUILDER, StorageClientFactory } from "./storage-client.factory.js";
 import { StorageProbeService } from "./storage-probe.service.js";
 import { StorageService } from "./storage.service.js";
 
 @Global()
 @Module({
-  imports: [AccessControlModule, AuditModule, SettingsModule],
+  imports: [AccessControlModule, AuditModule, SettingsModule, ProvidersModule],
   controllers: [StorageAdminController],
   providers: [
     {
@@ -47,8 +45,11 @@ import { StorageService } from "./storage.service.js";
     StorageProbeService,
     {
       provide: StorageService,
-      useFactory: (config: AppConfigService, logger: PinoLoggerService, factory: StorageClientFactory) =>
-        new StorageService(config.storageSettings, logger, undefined, undefined, factory),
+      useFactory: (
+        config: AppConfigService,
+        logger: PinoLoggerService,
+        factory: StorageClientFactory,
+      ) => new StorageService(config.storageSettings, logger, undefined, undefined, factory),
       inject: [AppConfigService, PinoLoggerService, StorageClientFactory],
     },
   ],

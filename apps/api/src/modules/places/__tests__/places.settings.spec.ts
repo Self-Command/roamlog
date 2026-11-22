@@ -5,6 +5,7 @@ import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
 import { PlacesCacheService } from "../places-cache.service.js";
 import { PlacesMergeService } from "../places-merge.service.js";
+import { settingsSourcePlacesProviderRuntimeSource } from "../places-provider-runtime.service.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesService } from "../places.service.js";
 import { TencentClient } from "../tencent.client.js";
@@ -30,9 +31,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function storedPlaces(
-  overrides: Partial<Record<string, unknown>> = {},
-): Record<string, unknown> {
+function storedPlaces(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     "places.provider": "geoapify",
     "places.apiKey": null,
@@ -49,9 +48,7 @@ function storedPlaces(
   };
 }
 
-function settingsService(
-  stored: Record<string, unknown> | Error,
-): SettingsService {
+function settingsService(stored: Record<string, unknown> | Error): SettingsService {
   return {
     getGroup: vi.fn(async () => {
       if (stored instanceof Error) {
@@ -84,6 +81,7 @@ function harness(stored: Record<string, unknown> | Error, logger: LoggerMock = m
     new PlacesMergeService(),
     asLogger(logger),
     resolver,
+    settingsSourcePlacesProviderRuntimeSource(resolver),
   );
   return { service, resolver, redis, logger, geoapify, photon };
 }
@@ -143,9 +141,7 @@ describe("PlacesSettingsResolver", () => {
       env: { PLACES_PROVIDER: "photon" },
       stored: storedPlaces({ "places.provider": "geoapify" }),
       envLockOf: (key) =>
-        key === "places.provider"
-          ? { envLocked: true, envVar: "PLACES_PROVIDER" }
-          : undefined,
+        key === "places.provider" ? { envLocked: true, envVar: "PLACES_PROVIDER" } : undefined,
     });
 
     expect(resolution.settings.provider).toBe("photon");

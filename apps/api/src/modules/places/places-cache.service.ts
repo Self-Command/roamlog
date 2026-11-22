@@ -12,13 +12,13 @@ import {
 } from "./places.settings.js";
 
 /**
- * Versioned, route-scoped cache namespace. The `v3` segment invalidates the
+ * Versioned, route-scoped cache namespace. The `v4` segment invalidates the
  * Photon-only payload shape, and the route segment prevents a cache entry
  * produced by one recall set (China / mixed / global) from being replayed for
- * another. Provider is no longer part of the key: a search now reads from
- * several providers at once (spec §6.1).
+ * another. The provider signature carries the provider group version and the
+ * eligible provider ids so ordering/policy changes cannot reuse old results.
  */
-const CACHE_KEY_PREFIX = "places:v3:";
+const CACHE_KEY_PREFIX = "places:v4:";
 const CACHE_WARN_THROTTLE_MS = 10_000;
 
 export type PlacesCacheRoute = "china" | "mixed" | "global";
@@ -31,6 +31,8 @@ export interface PlacesCacheKeyInput {
   readonly route?: PlacesCacheRoute;
   readonly country?: string;
   readonly focus?: { readonly lat: number; readonly lon: number };
+  /** Provider group version + eligible ids, e.g. `v7:p1@10,p2@20`. */
+  readonly providerSignature?: string;
   /**
    * Legacy provider segment, kept for callers/tests written before the
    * multi-source switch. New code must pass `route`; when both are absent the
@@ -67,10 +69,10 @@ export class PlacesCacheService {
       input.lang ?? "",
       input.country ?? "",
       input.focus ? `${input.focus.lat},${input.focus.lon}` : "",
+      input.providerSignature ?? "",
     ].join("\u0000");
     const digest = createHash("sha256").update(normalized, "utf8").digest("hex");
-    const route =
-      input.route ?? (input.provider === "tencent" ? "china" : "global");
+    const route = input.route ?? (input.provider === "tencent" ? "china" : "global");
     return `${CACHE_KEY_PREFIX}${route}:${digest}`;
   }
 

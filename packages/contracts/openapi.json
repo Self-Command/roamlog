@@ -6461,6 +6461,68 @@
         ],
         "additionalProperties": false
       },
+      "CreateProviderRequest": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "places",
+              "mail",
+              "storage"
+            ]
+          },
+          "adapter": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "secrets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          "expectedGroupVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "group",
+          "adapter",
+          "label",
+          "config"
+        ],
+        "additionalProperties": false
+      },
       "CreateShareLinkRequest": {
         "type": "object",
         "properties": {
@@ -13205,6 +13267,1852 @@
         ],
         "additionalProperties": false
       },
+      "ProviderAdapterDescriptor": {
+        "type": "object",
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "maxItems": 40
+          },
+          "configFields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "url",
+                    "integer",
+                    "number",
+                    "boolean",
+                    "select",
+                    "multi-select",
+                    "model"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "help": {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "min": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                },
+                "step": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "label"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 100
+                },
+                "default": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {}
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "type",
+                "label",
+                "required"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 80
+          },
+          "secretFields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+                  "description": "Provider secret field name."
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "required": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "required"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 40
+          },
+          "presets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "preset": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "defaultBaseUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 2048,
+                  "format": "uri"
+                }
+              },
+              "required": [
+                "preset",
+                "label",
+                "defaultBaseUrl"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 40
+          }
+        },
+        "required": [
+          "adapter",
+          "label",
+          "capabilities",
+          "configFields",
+          "secretFields",
+          "presets"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderCatalog": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "enum": [
+                    "ai",
+                    "places",
+                    "mail",
+                    "storage"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "routingModes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "priority",
+                      "merge",
+                      "priority_failover",
+                      "single"
+                    ]
+                  },
+                  "minItems": 1
+                },
+                "adapters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "adapter": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "capabilities": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "maxItems": 40
+                      },
+                      "configFields": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "text",
+                                "url",
+                                "integer",
+                                "number",
+                                "boolean",
+                                "select",
+                                "multi-select",
+                                "model"
+                              ]
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "help": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "required": {
+                              "type": "boolean"
+                            },
+                            "min": {
+                              "type": "number"
+                            },
+                            "max": {
+                              "type": "number"
+                            },
+                            "step": {
+                              "type": "number",
+                              "exclusiveMinimum": 0
+                            },
+                            "options": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "label"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "maxItems": 100
+                            },
+                            "default": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {}
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": {}
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "type",
+                            "label",
+                            "required"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 80
+                      },
+                      "secretFields": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+                              "description": "Provider secret field name."
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "required": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "required"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 40
+                      },
+                      "presets": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "preset": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "defaultBaseUrl": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 2048,
+                              "format": "uri"
+                            }
+                          },
+                          "required": [
+                            "preset",
+                            "label",
+                            "defaultBaseUrl"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 40
+                      }
+                    },
+                    "required": [
+                      "adapter",
+                      "label",
+                      "capabilities",
+                      "configFields",
+                      "secretFields",
+                      "presets"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "group",
+                "label",
+                "routingModes",
+                "adapters"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "version",
+          "groups"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderCatalogGroup": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "places",
+              "mail",
+              "storage"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "routingModes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "priority",
+                "merge",
+                "priority_failover",
+                "single"
+              ]
+            },
+            "minItems": 1
+          },
+          "adapters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "adapter": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "capabilities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "maxItems": 40
+                },
+                "configFields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "text",
+                          "url",
+                          "integer",
+                          "number",
+                          "boolean",
+                          "select",
+                          "multi-select",
+                          "model"
+                        ]
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "help": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "step": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "options": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 160
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "label"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 100
+                      },
+                      "default": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "array",
+                            "items": {}
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "type",
+                      "label",
+                      "required"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 80
+                },
+                "secretFields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+                        "description": "Provider secret field name."
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "required": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "required"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 40
+                },
+                "presets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "preset": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "defaultBaseUrl": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 2048,
+                        "format": "uri"
+                      }
+                    },
+                    "required": [
+                      "preset",
+                      "label",
+                      "defaultBaseUrl"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 40
+                }
+              },
+              "required": [
+                "adapter",
+                "label",
+                "capabilities",
+                "configFields",
+                "secretFields",
+                "presets"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "group",
+          "label",
+          "routingModes",
+          "adapters"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderConfigField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "url",
+              "integer",
+              "number",
+              "boolean",
+              "select",
+              "multi-select",
+              "model"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "help": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "min": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                }
+              },
+              "required": [
+                "value",
+                "label"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 100
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "array",
+                "items": {}
+              },
+              {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "type",
+          "label",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderConfigFieldOption": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderConnection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "places",
+              "mail",
+              "storage"
+            ]
+          },
+          "adapter": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "secrets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+                  "description": "Provider secret field name."
+                },
+                "hasValue": {
+                  "type": "boolean"
+                },
+                "last4": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 8
+                },
+                "version": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "field",
+                "hasValue",
+                "last4",
+                "version"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "health": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "unknown",
+                  "healthy",
+                  "degraded",
+                  "unhealthy"
+                ]
+              },
+              "lastCheckedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              },
+              "lastErrorCode": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 80
+              },
+              "cooldownUntil": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "ISO 8601 timestamp with an explicit UTC offset."
+              }
+            },
+            "required": [
+              "status",
+              "lastCheckedAt",
+              "lastErrorCode",
+              "cooldownUntil"
+            ],
+            "additionalProperties": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "id",
+          "group",
+          "adapter",
+          "preset",
+          "label",
+          "enabled",
+          "priority",
+          "config",
+          "version",
+          "secrets",
+          "health",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderDiscoveredModel": {
+        "type": "object",
+        "properties": {
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "ownedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "vision": {
+                "type": "boolean"
+              },
+              "reasoning": {
+                "type": "boolean"
+              },
+              "tools": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "modelId",
+          "displayName",
+          "ownedBy",
+          "capabilities"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderDraftProbeRequest": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "places",
+              "mail",
+              "storage"
+            ]
+          },
+          "adapter": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "secrets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        },
+        "required": [
+          "group",
+          "adapter",
+          "config"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderGroup": {
+        "type": "string",
+        "enum": [
+          "ai",
+          "places",
+          "mail",
+          "storage"
+        ]
+      },
+      "ProviderGroupPolicy": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "places",
+              "mail",
+              "storage"
+            ]
+          },
+          "routingMode": {
+            "type": "string",
+            "enum": [
+              "priority",
+              "merge",
+              "priority_failover",
+              "single"
+            ]
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "cooldownSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "group",
+          "routingMode",
+          "maxAttempts",
+          "cooldownSeconds",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderGroupResponse": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "places",
+              "mail",
+              "storage"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "routingMode": {
+            "type": "string",
+            "enum": [
+              "priority",
+              "merge",
+              "priority_failover",
+              "single"
+            ]
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "cooldownSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "group": {
+                  "type": "string",
+                  "enum": [
+                    "ai",
+                    "places",
+                    "mail",
+                    "storage"
+                  ]
+                },
+                "adapter": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "preset": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "priority": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "config": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "version": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "secrets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+                        "description": "Provider secret field name."
+                      },
+                      "hasValue": {
+                        "type": "boolean"
+                      },
+                      "last4": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 8
+                      },
+                      "version": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "required": [
+                      "field",
+                      "hasValue",
+                      "last4",
+                      "version"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "health": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "unknown",
+                        "healthy",
+                        "degraded",
+                        "unhealthy"
+                      ]
+                    },
+                    "lastCheckedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "lastErrorCode": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 80
+                    },
+                    "cooldownUntil": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "lastCheckedAt",
+                    "lastErrorCode",
+                    "cooldownUntil"
+                  ],
+                  "additionalProperties": false
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp with an explicit UTC offset."
+                }
+              },
+              "required": [
+                "id",
+                "group",
+                "adapter",
+                "preset",
+                "label",
+                "enabled",
+                "priority",
+                "config",
+                "version",
+                "secrets",
+                "health",
+                "createdAt",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "group",
+          "label",
+          "routingMode",
+          "maxAttempts",
+          "cooldownSeconds",
+          "version",
+          "providers"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderHealth": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "healthy",
+              "degraded",
+              "unhealthy"
+            ]
+          },
+          "lastCheckedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "lastErrorCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "cooldownUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "status",
+          "lastCheckedAt",
+          "lastErrorCode",
+          "cooldownUntil"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "providerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "ownedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "vision": {
+                "type": "boolean"
+              },
+              "reasoning": {
+                "type": "boolean"
+              },
+              "tools": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "discoveredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "id",
+          "providerId",
+          "modelId",
+          "displayName",
+          "ownedBy",
+          "enabled",
+          "isDefault",
+          "capabilities",
+          "discoveredAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderModelCapabilities": {
+        "type": "object",
+        "properties": {
+          "vision": {
+            "type": "boolean"
+          },
+          "reasoning": {
+            "type": "boolean"
+          },
+          "tools": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProviderModelDiscoveryRequest": {
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "places",
+              "mail",
+              "storage"
+            ]
+          },
+          "adapter": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "baseUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "apiKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "group",
+          "adapter"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderModelDiscoveryResponse": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "modelId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "displayName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "ownedBy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 80
+                },
+                "capabilities": {
+                  "type": "object",
+                  "properties": {
+                    "vision": {
+                      "type": "boolean"
+                    },
+                    "reasoning": {
+                      "type": "boolean"
+                    },
+                    "tools": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "modelId",
+                "displayName",
+                "ownedBy",
+                "capabilities"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 200
+          },
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "manualEntryRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "models",
+          "fetchedAt",
+          "manualEntryRequired"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderPreset": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "defaultBaseUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048,
+            "format": "uri"
+          }
+        },
+        "required": [
+          "preset",
+          "label",
+          "defaultBaseUrl"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderProbeCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "skip"
+            ]
+          },
+          "latencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "latencyMs",
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderProbeResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "providerId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "testedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pass",
+                    "fail",
+                    "skip"
+                  ]
+                },
+                "latencyMs": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 80
+                },
+                "message": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "name",
+                "status",
+                "latencyMs",
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "providerId",
+          "testedAt",
+          "checks"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderSecretFieldDescriptor": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+            "description": "Provider secret field name."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderSecretRevealRequest": {
+        "type": "object",
+        "properties": {
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "confirm"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderSecretRevealResponse": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+            "description": "Provider secret field name."
+          },
+          "value": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp with an explicit UTC offset."
+          }
+        },
+        "required": [
+          "field",
+          "value",
+          "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "ProviderSecretState": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+            "description": "Provider secret field name."
+          },
+          "hasValue": {
+            "type": "boolean"
+          },
+          "last4": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 8
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "field",
+          "hasValue",
+          "last4",
+          "version"
+        ],
+        "additionalProperties": false
+      },
       "PublicEntry": {
         "type": "object",
         "properties": {
@@ -16177,6 +18085,30 @@
           "additionalProperties": false
         }
       },
+      "ReorderProvidersRequest": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "expectedGroupVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "ids",
+          "expectedGroupVersion"
+        ],
+        "additionalProperties": false
+      },
       "ReorderStopsRequest": {
         "type": "object",
         "properties": {
@@ -16412,6 +18344,25 @@
           ],
           "additionalProperties": false
         }
+      },
+      "ReplaceProviderSecretRequest": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "value",
+          "expectedVersion"
+        ],
+        "additionalProperties": false
       },
       "ResetTwoFactorResponse": {
         "type": "object",
@@ -20104,6 +22055,117 @@
         ],
         "additionalProperties": false
       },
+      "UpdateProviderModelRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "vision": {
+                "type": "boolean"
+              },
+              "reasoning": {
+                "type": "boolean"
+              },
+              "tools": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateProviderPolicyRequest": {
+        "type": "object",
+        "properties": {
+          "routingMode": {
+            "type": "string",
+            "enum": [
+              "priority",
+              "merge",
+              "priority_failover",
+              "single"
+            ]
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "cooldownSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "routingMode",
+          "maxAttempts",
+          "cooldownSeconds",
+          "expectedVersion"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateProviderRequest": {
+        "type": "object",
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ],
+        "additionalProperties": false
+      },
       "UpdateStopRequest": {
         "type": "object",
         "properties": {
@@ -22867,6 +24929,563 @@
           },
           "429": {
             "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/appearance": {
+      "get": {
+        "operationId": "getMyAppearance",
+        "tags": [
+          "Me"
+        ],
+        "summary": "Get the current user's resolved appearance",
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "system",
+                        "light",
+                        "dark"
+                      ]
+                    },
+                    "skin": {
+                      "type": "string",
+                      "enum": [
+                        "editorial-noir",
+                        "catppuccin",
+                        "tokyo-night",
+                        "rose-pine",
+                        "kanagawa",
+                        "everforest"
+                      ]
+                    },
+                    "fontPairing": {
+                      "type": "string",
+                      "enum": [
+                        "editorial-classic",
+                        "literary-warm",
+                        "modern-editorial",
+                        "expressive-serif",
+                        "cjk-editorial",
+                        "swiss-modern"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "cookie",
+                        "user",
+                        "platform",
+                        "default"
+                      ]
+                    },
+                    "canOverride": {
+                      "type": "boolean"
+                    },
+                    "updatedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "defaults": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "light",
+                            "dark"
+                          ]
+                        },
+                        "skin": {
+                          "type": "string",
+                          "enum": [
+                            "editorial-noir",
+                            "catppuccin",
+                            "tokyo-night",
+                            "rose-pine",
+                            "kanagawa",
+                            "everforest"
+                          ]
+                        },
+                        "fontPairing": {
+                          "type": "string",
+                          "enum": [
+                            "editorial-classic",
+                            "literary-warm",
+                            "modern-editorial",
+                            "expressive-serif",
+                            "cjk-editorial",
+                            "swiss-modern"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "mode",
+                        "skin",
+                        "fontPairing"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "skin",
+                    "fontPairing",
+                    "source",
+                    "canOverride",
+                    "updatedAt",
+                    "defaults"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateMyAppearance",
+        "tags": [
+          "Me"
+        ],
+        "summary": "Update the current user's appearance overrides",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "system",
+                      "light",
+                      "dark",
+                      null
+                    ]
+                  },
+                  "skin": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "editorial-noir",
+                      "catppuccin",
+                      "tokyo-night",
+                      "rose-pine",
+                      "kanagawa",
+                      "everforest",
+                      null
+                    ]
+                  },
+                  "fontPairing": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "editorial-classic",
+                      "literary-warm",
+                      "modern-editorial",
+                      "expressive-serif",
+                      "cjk-editorial",
+                      "swiss-modern",
+                      null
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "system",
+                        "light",
+                        "dark"
+                      ]
+                    },
+                    "skin": {
+                      "type": "string",
+                      "enum": [
+                        "editorial-noir",
+                        "catppuccin",
+                        "tokyo-night",
+                        "rose-pine",
+                        "kanagawa",
+                        "everforest"
+                      ]
+                    },
+                    "fontPairing": {
+                      "type": "string",
+                      "enum": [
+                        "editorial-classic",
+                        "literary-warm",
+                        "modern-editorial",
+                        "expressive-serif",
+                        "cjk-editorial",
+                        "swiss-modern"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "cookie",
+                        "user",
+                        "platform",
+                        "default"
+                      ]
+                    },
+                    "canOverride": {
+                      "type": "boolean"
+                    },
+                    "updatedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "defaults": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "light",
+                            "dark"
+                          ]
+                        },
+                        "skin": {
+                          "type": "string",
+                          "enum": [
+                            "editorial-noir",
+                            "catppuccin",
+                            "tokyo-night",
+                            "rose-pine",
+                            "kanagawa",
+                            "everforest"
+                          ]
+                        },
+                        "fontPairing": {
+                          "type": "string",
+                          "enum": [
+                            "editorial-classic",
+                            "literary-warm",
+                            "modern-editorial",
+                            "expressive-serif",
+                            "cjk-editorial",
+                            "swiss-modern"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "mode",
+                        "skin",
+                        "fontPairing"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "skin",
+                    "fontPairing",
+                    "source",
+                    "canOverride",
+                    "updatedAt",
+                    "defaults"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "resetMyAppearance",
+        "tags": [
+          "Me"
+        ],
+        "summary": "Reset the current user's appearance overrides",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "system",
+                        "light",
+                        "dark"
+                      ]
+                    },
+                    "skin": {
+                      "type": "string",
+                      "enum": [
+                        "editorial-noir",
+                        "catppuccin",
+                        "tokyo-night",
+                        "rose-pine",
+                        "kanagawa",
+                        "everforest"
+                      ]
+                    },
+                    "fontPairing": {
+                      "type": "string",
+                      "enum": [
+                        "editorial-classic",
+                        "literary-warm",
+                        "modern-editorial",
+                        "expressive-serif",
+                        "cjk-editorial",
+                        "swiss-modern"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "cookie",
+                        "user",
+                        "platform",
+                        "default"
+                      ]
+                    },
+                    "canOverride": {
+                      "type": "boolean"
+                    },
+                    "updatedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "defaults": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "light",
+                            "dark"
+                          ]
+                        },
+                        "skin": {
+                          "type": "string",
+                          "enum": [
+                            "editorial-noir",
+                            "catppuccin",
+                            "tokyo-night",
+                            "rose-pine",
+                            "kanagawa",
+                            "everforest"
+                          ]
+                        },
+                        "fontPairing": {
+                          "type": "string",
+                          "enum": [
+                            "editorial-classic",
+                            "literary-warm",
+                            "modern-editorial",
+                            "expressive-serif",
+                            "cjk-editorial",
+                            "swiss-modern"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "mode",
+                        "skin",
+                        "fontPairing"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "skin",
+                    "fontPairing",
+                    "source",
+                    "canOverride",
+                    "updatedAt",
+                    "defaults"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -31247,6 +33866,1820 @@
           },
           "404": {
             "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/provider-catalog": {
+      "get": {
+        "operationId": "listProviderCatalog",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List provider adapters, presets, and typed form fields",
+        "description": "Returns the code-owned provider catalog used by the Admin UI. It contains no credentials or saved values.",
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCatalog"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/provider-groups/{group}": {
+      "get": {
+        "operationId": "getProviderGroup",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get a provider group and its ordered providers",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ai",
+                "places",
+                "mail",
+                "storage"
+              ]
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderGroupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateProviderGroupPolicy",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update a provider group routing policy",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ai",
+                "places",
+                "mail",
+                "storage"
+              ]
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProviderPolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderGroupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/provider-groups/{group}/order": {
+      "put": {
+        "operationId": "reorderProviders",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Replace provider priority order",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ai",
+                "places",
+                "mail",
+                "storage"
+              ]
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderProvidersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderGroupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/providers": {
+      "post": {
+        "operationId": "createProvider",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Create a provider connection",
+        "description": "Initial secret fields may be supplied once in the create request and are encrypted in the same transaction as the provider.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProviderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConnection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/providers/{id}": {
+      "patch": {
+        "operationId": "updateProvider",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update a provider connection",
+        "description": "Secret fields are not accepted here. Use the dedicated secret replacement endpoint.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProviderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConnection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteProvider",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Soft-delete a provider connection",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "required": true,
+            "name": "expectedVersion",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/providers/{id}/probe": {
+      "post": {
+        "operationId": "probeProvider",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Test a saved provider connection",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "required": true,
+            "name": "expectedVersion",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderProbeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/providers/probe": {
+      "post": {
+        "operationId": "probeProviderDraft",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Test a provider draft without saving it",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderDraftProbeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderProbeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/provider-models/discover": {
+      "post": {
+        "operationId": "discoverProviderModels",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Discover models from a saved or draft AI provider",
+        "description": "The API performs the upstream catalog request server-side. Credentials and upstream response bodies are never returned.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderModelDiscoveryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModelDiscoveryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/providers/{id}/models/refresh": {
+      "post": {
+        "operationId": "refreshProviderModels",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Refresh the saved model catalog for an AI provider",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "required": true,
+            "name": "expectedVersion",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModelDiscoveryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/providers/{id}/models/{modelId}": {
+      "patch": {
+        "operationId": "updateProviderModel",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Enable, default, or change capabilities for a provider model",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "required": true,
+            "name": "modelId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProviderModelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/providers/{id}/secrets/{field}": {
+      "put": {
+        "operationId": "replaceProviderSecret",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Atomically replace one provider secret",
+        "description": "The previous ciphertext moves to a private 24-hour history record for rollback and is never returned by the API.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+              "description": "Provider secret field name."
+            },
+            "required": true,
+            "description": "Provider secret field name.",
+            "name": "field",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceProviderSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderSecretState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/providers/{id}/secrets/{field}/reveal": {
+      "post": {
+        "operationId": "revealProviderSecret",
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Reveal one provider secret after explicit confirmation",
+        "description": "Requires super_admin, verified TOTP, and an explicit confirm body. The reveal is audited.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,79}$",
+              "description": "Provider secret field name."
+            },
+            "required": true,
+            "description": "Provider secret field name.",
+            "name": "field",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderSecretRevealRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderSecretRevealResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource version is stale or the operation conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is syntactically valid but violates a business rule.",
             "content": {
               "application/json": {
                 "schema": {

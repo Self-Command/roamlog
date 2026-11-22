@@ -19,7 +19,7 @@ import {
 export const SETTINGS_GROUP_SUMMARIES: Record<SystemSettingGroup, string> = {
   general: "站点身份、默认语言与时区，以及注册策略。",
   seo: "搜索引擎与社交分享使用的默认元数据。",
-  theme: "站点强调色、默认模式与登录页文案。",
+  theme: "平台默认外观、6 套皮肤、6 套字体与用户覆盖策略。",
   mail: "事务邮件提供商与发信凭据。",
   storage: "S3 兼容对象存储端点、桶与签名凭据。",
   media: "客户端压缩目标与上传边界。",
@@ -208,9 +208,7 @@ export interface JsonRowDraft {
   valueText: string;
 }
 
-export type JsonDraft =
-  | { mode: "object"; rows: JsonRowDraft[] }
-  | { mode: "raw"; text: string };
+export type JsonDraft = { mode: "object"; rows: JsonRowDraft[] } | { mode: "raw"; text: string };
 
 /**
  * Draft values are stored as the control's editing representation: strings and
@@ -383,7 +381,10 @@ function deepEqual(left: unknown, right: unknown): boolean {
   const rightRecord = right as Record<string, unknown>;
   const leftKeys = Object.keys(leftRecord).sort();
   const rightKeys = Object.keys(rightRecord).sort();
-  if (leftKeys.length !== rightKeys.length || leftKeys.some((key, index) => key !== rightKeys[index])) {
+  if (
+    leftKeys.length !== rightKeys.length ||
+    leftKeys.some((key, index) => key !== rightKeys[index])
+  ) {
     return false;
   }
   return leftKeys.every((key) => deepEqual(leftRecord[key], rightRecord[key]));
@@ -524,4 +525,12 @@ export function fieldErrorMessages(
 
 export function groupLabel(group: SystemSettingGroup): string {
   return SETTINGS_GROUP_LABELS[group];
+}
+
+/**
+ * The wire group stays `theme` for compatibility, but the operator-facing tab
+ * now owns the complete appearance defaults surface.
+ */
+export function settingsTabLabel(group: SystemSettingGroup): string {
+  return group === "theme" ? "外观与字体" : groupLabel(group);
 }

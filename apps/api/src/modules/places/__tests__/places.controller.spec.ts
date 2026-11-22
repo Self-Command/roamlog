@@ -17,6 +17,10 @@ import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
 import { PlacesCacheService } from "../places-cache.service.js";
 import { PlacesMergeService } from "../places-merge.service.js";
+import {
+  PlacesProviderRuntimeService,
+  staticPlacesProviderRuntimeSource,
+} from "../places-provider-runtime.service.js";
 import { PlaceSearchRateLimitGuard } from "../places-rate-limit.guard.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesRateLimiter } from "../places-rate-limiter.service.js";
@@ -56,6 +60,10 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
     controllers: [PlacesController],
     providers: [
       { provide: PLACES_SETTINGS, useValue: staticPlacesSettingsSource(settings) },
+      {
+        provide: PlacesProviderRuntimeService,
+        useValue: staticPlacesProviderRuntimeSource(settings),
+      },
       { provide: LIMITS_SETTINGS, useValue: { resolve: async () => ({ ...limits }) } },
       { provide: PinoLoggerService, useValue: asLogger(logger) },
       { provide: RedisService, useValue: redis },
@@ -194,13 +202,9 @@ describe("GET /v1/places/search", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { app } = await createApp({ authenticated: true });
 
-    const first = await request(app.getHttpServer())
-      .get("/v1/places/search?q=paris")
-      .expect(200);
+    const first = await request(app.getHttpServer()).get("/v1/places/search?q=paris").expect(200);
     const callsAfterFirst = fetchMock.mock.calls.length;
-    const second = await request(app.getHttpServer())
-      .get("/v1/places/search?q=paris")
-      .expect(200);
+    const second = await request(app.getHttpServer()).get("/v1/places/search?q=paris").expect(200);
 
     expect(first.body.cached).toBe(false);
     expect(second.body.cached).toBe(true);
@@ -262,9 +266,7 @@ describe("GET /v1/places/search", () => {
     // Raising the allowance in the settings must apply to the very next
     // request: the guard resolves the limit per request instead of caching it.
     limits.searchPerMinute = 30;
-    const allowed = await request(app.getHttpServer())
-      .get("/v1/places/search?q=paris")
-      .expect(200);
+    const allowed = await request(app.getHttpServer()).get("/v1/places/search?q=paris").expect(200);
     expect(allowed.headers["ratelimit-limit"]).toBe("30");
   });
 

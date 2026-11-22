@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { createHash } from "node:crypto";
 
 import { withTimeout } from "../../common/utils/with-timeout.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
@@ -7,8 +8,10 @@ import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js
 
 const GEOAPIFY_QUOTA_KEY_PREFIX = "places:quota:geoapify:";
 const TENCENT_QUOTA_KEY_PREFIX = "places:quota:tencent:";
+const PROVIDER_QUOTA_KEY_PREFIX = "places:quota:provider:";
 const GEOAPIFY_QUOTA_POLICY = "geoapifyDaily";
 const TENCENT_QUOTA_POLICY = "tencentDaily";
+const PROVIDER_QUOTA_POLICY = "providerDaily";
 const QUOTA_WARN_THROTTLE_MS = 10_000;
 
 export interface PlacesQuotaDecision {
@@ -76,6 +79,23 @@ export class PlacesQuotaService {
       settings.tencentDailyLimit,
       settings.redisTimeoutMs,
       TENCENT_QUOTA_POLICY,
+      now,
+    );
+  }
+
+  /** Per-provider quota used by the v2 provider registry. */
+  async consumeProvider(
+    providerId: string,
+    dailyLimit: number,
+    redisTimeoutMs: number,
+    now: Date = new Date(),
+  ): Promise<PlacesQuotaDecision> {
+    const digest = createHash("sha256").update(providerId, "utf8").digest("hex").slice(0, 32);
+    return this.consumeFor(
+      `${PROVIDER_QUOTA_KEY_PREFIX}${digest}:`,
+      dailyLimit,
+      redisTimeoutMs,
+      PROVIDER_QUOTA_POLICY,
       now,
     );
   }

@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { PinoLoggerService } from "../../observability/pino-logger.service.js";
+import type { ProviderRuntimeService } from "../../providers/provider-runtime.service.js";
 import type { SettingsService } from "../settings.service.js";
 import { MailSettingsConsumer } from "../mail-settings.consumer.js";
 
@@ -65,6 +66,43 @@ function completeSmtp(overrides: Record<string, unknown> = {}) {
 
 const NO_ENV: NodeJS.ProcessEnv = {};
 
+function providerRuntime(
+  providers: Array<{
+    adapter: "resend" | "smtp";
+    config: Record<string, unknown>;
+    secrets?: Record<string, string>;
+  }>,
+) {
+  const resolveGroup = vi.fn(async () => ({
+    policy: {
+      group: "mail",
+      routingMode: "single",
+      maxAttempts: 1,
+      cooldownSeconds: 0,
+      version: 1,
+    },
+    providers: providers.map((provider, index) => ({
+      id: `provider-${index + 1}`,
+      group: "mail",
+      adapter: provider.adapter,
+      preset: provider.adapter,
+      label: provider.adapter,
+      priority: (index + 1) * 10,
+      config: provider.config,
+      secrets: provider.secrets ?? {},
+      health: {
+        status: "unknown",
+        lastCheckedAt: null,
+        lastErrorCode: null,
+        cooldownUntil: null,
+      },
+    })),
+  }));
+  return { resolveGroup } as unknown as ProviderRuntimeService & {
+    resolveGroup: typeof resolveGroup;
+  };
+}
+
 describe("MailSettingsConsumer", () => {
   it("prefers a stored admin value over the environment and the default", async () => {
     const settings = settingsService({
@@ -111,10 +149,7 @@ describe("MailSettingsConsumer", () => {
 
   it("falls back to env then defaults when the database is unavailable, with a warning", async () => {
     const log = logger();
-    const consumer = new MailSettingsConsumer(
-      settingsService({ values: {}, fail: true }),
-      log,
-    );
+    const consumer = new MailSettingsConsumer(settingsService({ values: {}, fail: true }), log);
 
     const runtime = await consumer.resolve({
       SMTP_HOST: "env.relay.example",
@@ -286,4 +321,97 @@ describe("MailSettingsConsumer", () => {
       expect(runtime.source).toBe("env");
     }
   });
+
+  it("uses the single active Resend Provider and does not read scalar settings", async () => {
+    const settings = settingsService({ values: {}, storedKeys: [] });
+    const providers = providerRuntime([
+      {
+        adapter: "resend",
+        config: { from: "provider@roamlog.test" },
+        secrets: { apiKey: "re_provider_sentinel" },
+      },
+    ]);
+    const consumer = new MailSettingsConsumer(settings, logger(), providers);
+
+    const runtime = await consumer.resolve({ PROVIDER_CONFIG_MODE: "v2" });
+
+    expect(runtime.configured).toBe(true);
+    if (runtime.configured && runtime.provider === "resend") {
+      expect(runtime.apiKey).toBe("re_provider_sentinel");
+      expect(runtime.from).toBe("provider@roamlog.test");
+      expect(runtime.source).toBe("db");
+    }
+    expect(settings.getGroup).not.toHaveBeenCalled();
+  });
+
+  it("maps the active SMTP Provider and keeps implicit TLS on port 465", async () => {
+    const consumer = new MailSettingsConsumer(
+      settingsService({ values: {}, storedKeys: [] }),
+      logger(),
+      providerRuntime([
+        {
+          adapter: "smtp",
+          config: {
+            from: "smtp@roamlog.test",
+            host: "smtp.provider.test",
+            port: 465,
+            secure: false,
+            user: "mailer",
+          },
+          secrets: { password: "provider-smtp-password" },
+        },
+      ]),
+    );
+
+    const runtime = await consumer.resolve({ PROVIDER_CONFIG_MODE: "v2" });
+
+    expect(runtime.configured).toBe(true);
+    if (runtime.configured && runtime.provider === "smtp") {
+      expect(runtime.host).toBe("smtp.provider.test");
+      expect(runtime.port).toBe(465);
+      expect(runtime.secure).toBe(true);
+      expect(runtime.user).toBe("mailer");
+      expect(runtime.password).toBe("provider-smtp-password");
+    }
+  });
+
+  it("reports a missing Provider credential as not configured", async () => {
+    const consumer = new MailSettingsConsumer(
+      settingsService({ values: {}, storedKeys: [] }),
+      logger(),
+      providerRuntime([
+        {
+          adapter: "resend",
+          config: { from: "provider@roamlog.test" },
+        },
+      ]),
+    );
+
+    const runtime = await consumer.resolve({ PROVIDER_CONFIG_MODE: "v2" });
+
+    expect(runtime.configured).toBe(false);
+    if (!runtime.configured) {
+      expect(runtime.provider).toBe("resend");
+      expect(runtime.missing).toContain("mail.resendApiKey");
+    }
+  });
+
+  it("does not fake a Provider when none is active", async () => {
+    const consumer = new MailSettingsConsumer(
+      settingsService({ values: {}, storedKeys: [] }),
+      logger(),
+      providerRuntime([]),
+    );
+
+    const runtime = await consumer.resolve({ PROVIDER_CONFIG_MODE: "v2" });
+
+    expect(runtime.configured).toBe(false);
+    if (!runtime.configured) {
+      expect(runtime.missing).toContain("mail.provider");
+    }
+  });
+});
+
+afterEach(() => {
+  delete process.env.PROVIDER_CONFIG_MODE;
 });

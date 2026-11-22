@@ -15,5 +15,8 @@ describe("MediaView", () => {
     expect(
       screen.getByRole("button", { name: "删除媒体 naoshima-pier-rain.jpg" }),
     ).toBeDisabled();
+    expect(
+      screen.getByTestId("media-thumbnail-0199b0c1-2200-7000-8000-000000000001"),
+    ).toBeInTheDocument();
   });
 });

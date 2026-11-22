@@ -89,11 +89,11 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
           {hasCover ? (
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface-deep/80 via-surface-deep/20 to-transparent"
             />
           ) : null}
           <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
-            <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/60">
+            <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink/70">
               {trip.countryCodes.join(" · ")} / {tripDurationDays(trip.startDate, trip.endDate)}{" "}
               DAYS
             </p>
@@ -281,7 +281,7 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
           <p className="font-serif text-xl text-ink">把共同记忆留在同一个地方。</p>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 rounded-control border border-hairline-strong px-3 py-2 text-[11px] text-body transition-colors hover:border-white/25 hover:text-ink"
+            className="inline-flex items-center gap-1.5 rounded-control border border-hairline-strong px-3 py-2 text-[11px] text-body transition-colors hover:border-hairline-strong hover:text-ink"
           >
             Create your own travel archive
             <ArrowUpRight aria-hidden="true" className="size-3.5" />
@@ -353,13 +353,8 @@ const PUBLIC_LIVE_PHOTO_LABEL = "播放这段 Live Photo";
  */
 function SharePhoto({ media, index }: { media: PublicMedia; index: number }) {
   const [failed, setFailed] = useState(false);
-  const gradients = [
-    "from-[#25160d] via-[#11100d] to-[#070708]",
-    "from-[#0c1822] via-[#0b1117] to-[#070708]",
-    "from-[#122019] via-[#0b1210] to-[#070708]",
-    "from-[#211015] via-[#121012] to-[#070708]",
-  ];
   const score = [...media.id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const fallbackClass = `trip-cover ${coverClassForTrip(score + index)}`;
   const caption = media.caption?.trim() ? media.caption : null;
   const location = media.location;
   // Same rule as the hero: a missing or failing signed URL keeps the generated
@@ -400,7 +395,8 @@ function SharePhoto({ media, index }: { media: PublicMedia; index: number }) {
         />
       ) : (
         <div
-          className={`aspect-[4/3] bg-gradient-to-br ${gradients[(score + index) % gradients.length]}`}
+          data-photo-fallback="true"
+          className={`aspect-[4/3] ${fallbackClass}`}
           aria-hidden="true"
         />
       )}

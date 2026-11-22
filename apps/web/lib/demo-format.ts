@@ -1,5 +1,7 @@
 import type { JournalEntry, Mood, Weather } from "@roamlog/contracts";
 
+import { coverClassForTrip } from "./trip-presentation";
+
 export const moodLabels: Record<Mood, string> = {
   calm: "平静",
   happy: "开心",
@@ -59,13 +61,6 @@ export function entryBody(entry: JournalEntry) {
 }
 
 export function gradientFor(id: string) {
-  const palettes = [
-    "from-[#25160d] via-[#11100d] to-[#070708]",
-    "from-[#0c1822] via-[#0b1117] to-[#070708]",
-    "from-[#122019] via-[#0b1210] to-[#070708]",
-    "from-[#211015] via-[#121012] to-[#070708]",
-    "from-[#1a1710] via-[#12100c] to-[#070708]",
-  ];
   const seed = [...id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  return palettes[seed % palettes.length]!;
+  return `trip-cover ${coverClassForTrip(seed)}`;
 }

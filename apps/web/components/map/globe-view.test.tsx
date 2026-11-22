@@ -78,10 +78,17 @@ const points: GlobePoint[] = [
 ];
 
 /** jsdom has no real media queries; `useReducedMotion` reads `matchMedia`. */
-function stubMatchMedia({ reduce = false, narrow = false }: { reduce?: boolean; narrow?: boolean } = {}) {
+function stubMatchMedia({
+  reduce = false,
+  narrow = false,
+}: { reduce?: boolean; narrow?: boolean } = {}) {
   const original = window.matchMedia;
   window.matchMedia = ((query: string) => ({
-    matches: query.includes("prefers-reduced-motion") ? reduce : query.includes("max-width: 639px") ? narrow : false,
+    matches: query.includes("prefers-reduced-motion")
+      ? reduce
+      : query.includes("max-width: 639px")
+        ? narrow
+        : false,
     media: query,
     onchange: null,
     addEventListener: () => {},
@@ -135,7 +142,7 @@ describe("GlobeView", () => {
     expect(fakeMap.setPaintProperty).toHaveBeenCalledWith(
       "background",
       "background-color",
-      "#000000",
+      "rgb(0, 0, 0)",
     );
   });
 

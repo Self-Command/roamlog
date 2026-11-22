@@ -2,7 +2,11 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Place } from "@roamlog/contracts";
 
 import { GeoapifyPayloadError, normalizeGeoapifyPayloadCandidates } from "./geoapify-normalizer.js";
-import { PLACES_SETTINGS, type PlacesSettingsSource } from "./places.settings.js";
+import {
+  PLACES_SETTINGS,
+  type PlacesSettings,
+  type PlacesSettingsSource,
+} from "./places.settings.js";
 import type { GeoapifyCandidate } from "./ranking/pelias-document.js";
 
 /**
@@ -10,12 +14,7 @@ import type { GeoapifyCandidate } from "./ranking/pelias-document.js";
  * no API key are included.
  */
 export type GeoapifyFailureReason =
-  | "timeout"
-  | "http_error"
-  | "network_error"
-  | "invalid_payload"
-  | "invalid_url"
-  | "not_configured";
+  "timeout" | "http_error" | "network_error" | "invalid_payload" | "invalid_url" | "not_configured";
 
 export type GeoapifySearchOutcome =
   | { readonly ok: true; readonly items: Place[]; readonly durationMs: number }
@@ -55,8 +54,11 @@ export interface GeoapifySearchInput {
 export class GeoapifyClient {
   constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource) {}
 
-  async search(input: GeoapifySearchInput): Promise<GeoapifySearchOutcome> {
-    const outcome = await this.searchCandidates(input);
+  async search(
+    input: GeoapifySearchInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<GeoapifySearchOutcome> {
+    const outcome = await this.searchCandidates(input, settingsOverride);
     return outcome.ok
       ? {
           ok: true,
@@ -70,8 +72,11 @@ export class GeoapifyClient {
    * Candidate-preserving form of `search`: keeps `result_type`,
    * `rank.confidence` and address parts for the Pelias adapter.
    */
-  async searchCandidates(input: GeoapifySearchInput): Promise<GeoapifyCandidatesOutcome> {
-    const settings = await this.settings.resolve();
+  async searchCandidates(
+    input: GeoapifySearchInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<GeoapifyCandidatesOutcome> {
+    const settings = settingsOverride ?? (await this.settings.resolve());
     const apiKey = settings.geoapifyApiKey;
     if (!apiKey) {
       return { ok: false, reason: "not_configured", durationMs: 0 };
@@ -96,10 +101,7 @@ export class GeoapifyClient {
 
     const startedAt = Date.now();
     const controller = new AbortController();
-    const timer = setTimeout(
-      () => controller.abort(),
-      Math.max(1, settings.geoapifyTimeoutMs),
-    );
+    const timer = setTimeout(() => controller.abort(), Math.max(1, settings.geoapifyTimeoutMs));
 
     try {
       const response = await fetch(endpoint, {

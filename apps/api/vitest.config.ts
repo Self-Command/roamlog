@@ -32,6 +32,7 @@ export default defineConfig({
       S3_REGION: "us-east-1",
       S3_FORCE_PATH_STYLE: "true",
       EXPORT_SIGNED_URL_TTL: "900",
+      CONFIG_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString("base64"),
     },
   },
 });

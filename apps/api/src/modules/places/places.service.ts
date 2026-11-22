@@ -18,6 +18,11 @@ import {
 } from "./places-merge.service.js";
 import { PlacesQuotaService } from "./places-quota.service.js";
 import {
+  PlacesProviderRuntimeService,
+  type PlacesProviderRuntimeSource,
+  type PlacesRuntimeProvider,
+} from "./places-provider-runtime.service.js";
+import {
   PLACES_SETTINGS,
   type PlacesResponseProvider,
   type PlacesSettings,
@@ -88,7 +93,8 @@ export function eligibleSources(
   settings: PlacesSettings,
 ): PlacesSource[] {
   const enabled = new Set(settings.sources);
-  const hanRoute = query.country === "CN" || (query.country === undefined && HAN_SCRIPT.test(query.q));
+  const hanRoute =
+    query.country === "CN" || (query.country === undefined && HAN_SCRIPT.test(query.q));
   const eligible: PlacesSource[] = [];
 
   if (enabled.has("tencent") && hanRoute) {
@@ -105,7 +111,10 @@ export function eligibleSources(
   return eligible.sort((left, right) => {
     const leftIndex = order.indexOf(left);
     const rightIndex = order.indexOf(right);
-    return (leftIndex === -1 ? order.length : leftIndex) - (rightIndex === -1 ? order.length : rightIndex);
+    return (
+      (leftIndex === -1 ? order.length : leftIndex) -
+      (rightIndex === -1 ? order.length : rightIndex)
+    );
   });
 }
 
@@ -133,7 +142,10 @@ function withRank(candidates: readonly ProviderCandidate[], offset: number): Pro
   return candidates.map((candidate, index) => ({ ...candidate, providerRank: offset + index }));
 }
 
-function servedProvider(item: Place | undefined, fallback: PlacesResponseProvider): PlacesResponseProvider {
+function servedProvider(
+  item: Place | undefined,
+  fallback: PlacesResponseProvider,
+): PlacesResponseProvider {
   const provider = item?.provider;
   return provider === "tencent" || provider === "geoapify" || provider === "photon"
     ? provider
@@ -167,6 +179,8 @@ export class PlacesService {
     @Inject(PlacesMergeService) private readonly merge: PlacesMergeService,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
     @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource,
+    @Inject(PlacesProviderRuntimeService)
+    private readonly providerRuntime: PlacesProviderRuntimeSource,
   ) {}
 
   async search(rawQuery: unknown): Promise<PlaceSearchResponse> {
@@ -174,6 +188,8 @@ export class PlacesService {
     const query = parseRequest(PlaceSearchQuerySchema, withSettingsDefaults(rawQuery, settings));
     const startedAt = Date.now();
     const route = routeFor(query);
+    const runtime = await this.providerRuntime.resolveGroup(query);
+    const providers = runtime.providers;
     const primary: PlacesResponseProvider = route === "china" ? "tencent" : settings.provider;
     const focus = settings.focusPoint ?? undefined;
     const cacheKey = this.cache.key({
@@ -183,6 +199,7 @@ export class PlacesService {
       route,
       ...(query.country ? { country: query.country } : {}),
       ...(focus ? { focus } : {}),
+      providerSignature: runtime.generation,
     });
 
     const cached = await this.cache.read(cacheKey);
@@ -209,10 +226,8 @@ export class PlacesService {
       limit: query.limit,
       ...(query.lang ? { lang: query.lang } : {}),
     };
-    const sources = eligibleSources(query, settings);
-    const recalls = await Promise.all(
-      sources.map((source) => this.recall(source, input, settings)),
-    );
+    const planned = await this.planRecalls(input, query, providers, runtime, focus ?? undefined);
+    const recalls = planned.map((entry) => entry.recall);
 
     const merged = this.merge.merge({
       q: query.q,
@@ -251,11 +266,14 @@ export class PlacesService {
           ...(firstFailure?.failure?.upstreamStatus === undefined
             ? {}
             : { upstreamStatus: firstFailure.failure.upstreamStatus }),
-          providers: recalls.map((recall) => ({
-            provider: recall.provider,
-            candidates: recall.candidates.length,
-            failed: recall.failure !== undefined,
-            durationMs: recall.durationMs,
+          providers: planned.map((entry) => ({
+            provider: entry.recall.provider,
+            providerId: entry.provider.id,
+            adapter: entry.provider.adapter,
+            priority: entry.provider.priority,
+            candidates: entry.recall.candidates.length,
+            failed: entry.recall.failure !== undefined,
+            durationMs: entry.recall.durationMs,
           })),
           fallback: fallback ?? null,
           durationMs: upstreamDurationMs,
@@ -279,11 +297,14 @@ export class PlacesService {
           provider: response.provider,
           resultCount: merged.items.length,
           layers: merged.layers,
-          providers: recalls.map((recall) => ({
-            provider: recall.provider,
-            candidates: recall.candidates.length,
-            failed: recall.failure !== undefined,
-            durationMs: recall.durationMs,
+          providers: planned.map((entry) => ({
+            provider: entry.recall.provider,
+            providerId: entry.provider.id,
+            adapter: entry.provider.adapter,
+            priority: entry.provider.priority,
+            candidates: entry.recall.candidates.length,
+            failed: entry.recall.failure !== undefined,
+            durationMs: entry.recall.durationMs,
           })),
           degraded: false,
           durationMs: Date.now() - startedAt,
@@ -294,29 +315,71 @@ export class PlacesService {
 
     // Tencent results are cached for 5 minutes; the global-only route keeps the
     // 15-minute `places.cacheTtlSeconds`.
+    const providerTtls = planned.map((entry) =>
+      entry.provider.adapter === "tencent"
+        ? entry.provider.settings.tencentCacheTtlSeconds
+        : entry.provider.settings.cacheTtlSeconds,
+    );
     const ttlSeconds =
       response.degraded || response.items.length === 0
         ? settings.emptyCacheTtlSeconds
-        : route === "global"
-          ? settings.cacheTtlSeconds
-          : settings.tencentCacheTtlSeconds;
+        : Math.max(settings.cacheTtlSeconds, ...providerTtls);
     await this.cache.write(cacheKey, response, ttlSeconds);
 
     return response;
   }
 
-  private async recall(
-    source: PlacesSource,
+  private async planRecalls(
     input: RecallInput,
-    settings: PlacesSettings,
+    query: { readonly q: string; readonly country?: string | undefined },
+    providers: readonly PlacesRuntimeProvider[],
+    runtime: { readonly routingMode: "merge" | "priority_failover"; readonly maxAttempts: number },
+    focus: { readonly lat: number; readonly lon: number } | undefined,
+  ): Promise<Array<{ readonly provider: PlacesRuntimeProvider; readonly recall: ProviderRecall }>> {
+    const merge = (recalls: readonly ProviderRecall[]) =>
+      this.merge.merge({
+        q: query.q,
+        limit: input.limit,
+        ...(input.lang ? { lang: input.lang } : {}),
+        ...(query.country ? { country: query.country } : {}),
+        ...(focus ? { focus } : {}),
+        recalls,
+      });
+
+    if (runtime.routingMode === "priority_failover") {
+      const planned: Array<{
+        readonly provider: PlacesRuntimeProvider;
+        readonly recall: ProviderRecall;
+      }> = [];
+      for (const provider of providers.slice(0, runtime.maxAttempts)) {
+        const recall = await this.recall(provider, input);
+        planned.push({ provider, recall });
+        if (merge(planned.map((entry) => entry.recall)).items.length >= input.limit) {
+          break;
+        }
+      }
+      return planned;
+    }
+
+    return Promise.all(
+      providers.map(async (provider) => ({
+        provider,
+        recall: await this.recall(provider, input),
+      })),
+    );
+  }
+
+  private async recall(
+    provider: PlacesRuntimeProvider,
+    input: RecallInput,
   ): Promise<ProviderRecall> {
-    switch (source) {
+    switch (provider.adapter) {
       case "tencent":
-        return this.recallTencent(input, settings);
+        return this.recallTencent(input, provider);
       case "geoapify":
-        return this.recallGeoapify(input, settings);
+        return this.recallGeoapify(input, provider);
       case "photon":
-        return this.recallPhoton(input, settings);
+        return this.recallPhoton(input, provider);
     }
   }
 
@@ -328,7 +391,11 @@ export class PlacesService {
    * city query gets the authoritative `locality` and an address query gets the
    * POI. One quota decision covers the provider call, not each endpoint.
    */
-  private async recallTencent(input: RecallInput, settings: PlacesSettings): Promise<ProviderRecall> {
+  private async recallTencent(
+    input: RecallInput,
+    provider: PlacesRuntimeProvider,
+  ): Promise<ProviderRecall> {
+    const settings = provider.settings;
     if (settings.tencentApiKey === null) {
       return {
         provider: "tencent",
@@ -337,7 +404,11 @@ export class PlacesService {
         durationMs: 0,
       };
     }
-    const quota = await this.quota.consumeTencent();
+    const quota = await this.quota.consumeProvider(
+      provider.id,
+      settings.tencentDailyLimit,
+      settings.redisTimeoutMs,
+    );
     if (!quota.allowed) {
       return {
         provider: "tencent",
@@ -348,8 +419,8 @@ export class PlacesService {
     }
 
     const [geocode, suggest] = await Promise.all([
-      this.tencent.geocodeCandidate({ address: input.q }),
-      this.tencent.suggestCandidates({ q: input.q, limit: input.limit }),
+      this.tencent.geocodeCandidate({ address: input.q }, settings),
+      this.tencent.suggestCandidates({ q: input.q, limit: input.limit }, settings),
     ]);
 
     const geocodeCandidates = geocode.ok ? [geocode.candidate] : [];
@@ -372,7 +443,11 @@ export class PlacesService {
     };
   }
 
-  private async recallGeoapify(input: RecallInput, settings: PlacesSettings): Promise<ProviderRecall> {
+  private async recallGeoapify(
+    input: RecallInput,
+    provider: PlacesRuntimeProvider,
+  ): Promise<ProviderRecall> {
+    const settings = provider.settings;
     if (settings.geoapifyApiKey === null) {
       return {
         provider: "geoapify",
@@ -381,7 +456,11 @@ export class PlacesService {
         durationMs: 0,
       };
     }
-    const quota = await this.quota.consume();
+    const quota = await this.quota.consumeProvider(
+      provider.id,
+      settings.geoapifyDailyLimit,
+      settings.redisTimeoutMs,
+    );
     if (!quota.allowed) {
       return {
         provider: "geoapify",
@@ -394,11 +473,14 @@ export class PlacesService {
     const variants = queryVariants("geoapify", input.q);
     const outcomes = await Promise.all(
       variants.map((variant) =>
-        this.geoapify.searchCandidates({
-          q: variant,
-          limit: input.limit,
-          ...(input.lang ? { lang: input.lang } : {}),
-        }),
+        this.geoapify.searchCandidates(
+          {
+            q: variant,
+            limit: input.limit,
+            ...(input.lang ? { lang: input.lang } : {}),
+          },
+          settings,
+        ),
       ),
     );
 
@@ -422,15 +504,22 @@ export class PlacesService {
     };
   }
 
-  private async recallPhoton(input: RecallInput, _settings: PlacesSettings): Promise<ProviderRecall> {
+  private async recallPhoton(
+    input: RecallInput,
+    provider: PlacesRuntimeProvider,
+  ): Promise<ProviderRecall> {
+    const settings = provider.settings;
     const variants = queryVariants("photon", input.q);
     const outcomes = await Promise.all(
       variants.map((variant) =>
-        this.photon.searchCandidates({
-          q: variant,
-          limit: input.limit,
-          ...(input.lang ? { lang: input.lang } : {}),
-        }),
+        this.photon.searchCandidates(
+          {
+            q: variant,
+            limit: input.limit,
+            ...(input.lang ? { lang: input.lang } : {}),
+          },
+          settings,
+        ),
       ),
     );
 

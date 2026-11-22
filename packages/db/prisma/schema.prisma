@@ -250,9 +250,23 @@ model User {
   emails            EmailLog[]
   exports           Export[]
   aiConversations   AiConversation[]
+  appearancePreference UserAppearancePreference?
 
   @@index([platformRole, status])
   @@index([status, createdAt])
+}
+
+/// Per-user appearance override. Null fields inherit the platform default.
+model UserAppearancePreference {
+  userId      String   @id @db.Uuid
+  mode        String?  @db.VarChar(16)
+  skin        String?  @db.VarChar(40)
+  fontPairing String?  @db.VarChar(40)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("UserAppearancePreference")
 }
 
 model Session {
@@ -1000,6 +1014,109 @@ model SystemSetting {
 
   @@index([group])
   @@map("SystemSetting")
+}
+
+/// Runtime provider configuration is a first-class resource.
+///
+/// Scalar platform settings stay in SystemSetting. A provider has its own
+/// lifecycle, ordering, health, credentials and optional model catalog, so it
+/// cannot be represented by one key/value row. Secrets are stored only in
+/// ProviderSecret/ProviderSecretHistory; `config` never contains credentials.
+model ProviderGroupPolicy {
+  group           String   @id @db.VarChar(40)
+  routingMode     String   @default("priority") @db.VarChar(32)
+  maxAttempts     Int      @default(1)
+  cooldownSeconds Int      @default(30)
+  config          Json     @default("{}") @db.JsonB
+  version         Int      @default(1)
+  updatedById     String?  @db.Uuid
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("ProviderGroupPolicy")
+}
+
+model ProviderConnection {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  group               String    @db.VarChar(40)
+  adapter             String    @db.VarChar(40)
+  preset              String?   @db.VarChar(40)
+  label               String    @db.VarChar(80)
+  enabled             Boolean   @default(true)
+  priority            Int       @default(100)
+  config              Json      @db.JsonB
+  version             Int       @default(1)
+  healthStatus        String    @default("unknown") @db.VarChar(20)
+  consecutiveFailures Int       @default(0)
+  cooldownUntil       DateTime? @db.Timestamptz(3)
+  lastCheckedAt       DateTime? @db.Timestamptz(3)
+  lastErrorCode       String?   @db.VarChar(80)
+  legacyKey           String?   @db.VarChar(120)
+  createdById         String?   @db.Uuid
+  updatedById         String?   @db.Uuid
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt           DateTime? @db.Timestamptz(3)
+
+  secrets       ProviderSecret[]
+  secretHistory ProviderSecretHistory[]
+  models        ProviderModel[]
+
+  @@unique([group, legacyKey])
+  @@index([group, deletedAt, enabled, priority])
+  @@map("ProviderConnection")
+}
+
+model ProviderSecret {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  providerId String   @db.Uuid
+  field      String   @db.VarChar(80)
+  ciphertext String
+  last4      String?  @db.VarChar(8)
+  keyVersion Int      @default(1)
+  version    Int      @default(1)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  provider ProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, field])
+  @@map("ProviderSecret")
+}
+
+model ProviderSecretHistory {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  providerId String   @db.Uuid
+  field      String   @db.VarChar(80)
+  ciphertext String
+  last4      String?  @db.VarChar(8)
+  keyVersion Int
+  replacedAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt  DateTime @db.Timestamptz(3)
+
+  provider ProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, field, expiresAt])
+  @@map("ProviderSecretHistory")
+}
+
+model ProviderModel {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  providerId   String   @db.Uuid
+  modelId      String   @db.VarChar(200)
+  displayName  String   @db.VarChar(160)
+  ownedBy      String?  @db.VarChar(80)
+  enabled      Boolean  @default(true)
+  isDefault    Boolean  @default(false)
+  capabilities Json     @default("{}") @db.JsonB
+  discoveredAt DateTime @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  provider ProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, modelId])
+  @@index([providerId, enabled])
+  @@map("ProviderModel")
 }
 
 model EmailLog {

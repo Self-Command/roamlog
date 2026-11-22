@@ -79,6 +79,18 @@ describe("OpenAPI document", () => {
       "/v1/admin/settings",
       "/v1/admin/settings/{key}",
       "/v1/admin/settings/{key}/reveal",
+      "/v1/admin/provider-catalog",
+      "/v1/admin/provider-groups/{group}",
+      "/v1/admin/provider-groups/{group}/order",
+      "/v1/admin/providers",
+      "/v1/admin/providers/{id}",
+      "/v1/admin/providers/{id}/probe",
+      "/v1/admin/providers/probe",
+      "/v1/admin/provider-models/discover",
+      "/v1/admin/providers/{id}/models/refresh",
+      "/v1/admin/providers/{id}/models/{modelId}",
+      "/v1/admin/providers/{id}/secrets/{field}",
+      "/v1/admin/providers/{id}/secrets/{field}/reveal",
       "/v1/public/settings",
       "/v1/health",
       "/v1/ready",
@@ -92,8 +104,9 @@ describe("OpenAPI document", () => {
     // collapse into 7 path items (GET/POST share `/conversations`, GET/PATCH/
     // DELETE share `/{conversationId}`, GET/DELETE share `/{messages}`) and the
     // stream endpoint adds 1 more: 105 + 8 = 113 unique paths, 144 + 12 = 156
-    // operations. Insights adds 2 unique paths and 2 operations.
-    expect(paths.length).toBe(115);
+    // operations. Insights adds 2 unique paths and 2 operations. The user
+    // appearance endpoint adds one more path.
+    expect(paths.length).toBe(128);
 
     const operations = Object.values(doc.paths).reduce(
       (count, pathItem) =>

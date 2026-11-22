@@ -20,6 +20,7 @@ import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
 import { PlacesCacheService } from "../places-cache.service.js";
 import { PlacesMergeService } from "../places-merge.service.js";
+import { staticPlacesProviderRuntimeSource } from "../places-provider-runtime.service.js";
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesService } from "../places.service.js";
 import { resolvePlacesSettings, staticPlacesSettingsSource } from "../places.settings.js";
@@ -79,6 +80,7 @@ const service = new PlacesService(
   new PlacesMergeService(),
   logger,
   source,
+  staticPlacesProviderRuntimeSource(settings),
 );
 
 function brief(response: PlaceSearchResponse) {
@@ -107,4 +109,6 @@ for (const q of queries) {
   results[q] = brief(await service.search({ q, limit: 6, lang: "zh" }));
 }
 
-process.stdout.write(`${JSON.stringify({ capturedAt: new Date().toISOString(), results }, null, 2)}\n`);
+process.stdout.write(
+  `${JSON.stringify({ capturedAt: new Date().toISOString(), results }, null, 2)}\n`,
+);

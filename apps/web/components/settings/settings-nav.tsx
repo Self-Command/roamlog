@@ -1,6 +1,14 @@
 "use client";
 
-import { Bell, Building2, LockKeyhole, TriangleAlert, UserRound, Users } from "lucide-react";
+import {
+  Bell,
+  Building2,
+  LockKeyhole,
+  Palette,
+  TriangleAlert,
+  UserRound,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -33,6 +41,12 @@ const sections: SettingsSection[] = [
     label: "通知",
     hint: "应用内提醒与邮件投递",
     icon: Bell,
+  },
+  {
+    segment: "appearance",
+    label: "外观",
+    hint: "主题、字体与深色模式",
+    icon: Palette,
   },
   {
     segment: "workspace",

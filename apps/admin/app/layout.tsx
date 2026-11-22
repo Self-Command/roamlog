@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import "@fontsource-variable/geist/wght.css";
 import "@fontsource-variable/geist-mono/wght.css";
@@ -21,9 +21,21 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  colorScheme: "dark",
+  themeColor: "#000000",
+};
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN">
+    <html
+      lang="zh-CN"
+      data-mode="dark"
+      data-theme="dark"
+      data-skin="editorial-noir"
+      data-font="editorial-classic"
+      style={{ colorScheme: "dark" }}
+    >
       <body className="min-h-dvh bg-canvas text-body antialiased">
         <AdminProviders>{children}</AdminProviders>
       </body>

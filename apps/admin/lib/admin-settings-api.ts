@@ -26,10 +26,7 @@ export class AdminSettingsError extends AdminMutationError {
   readonly fieldErrors: readonly AdminSettingsFieldError[];
   readonly errorsByField: Record<string, string>;
 
-  constructor(
-    failure: AdminApiFailure,
-    fieldErrors: readonly AdminSettingsFieldError[] = [],
-  ) {
+  constructor(failure: AdminApiFailure, fieldErrors: readonly AdminSettingsFieldError[] = []) {
     super(failure);
     this.name = "AdminSettingsError";
     this.fieldErrors = fieldErrors;
@@ -84,6 +81,19 @@ function failureFromResponse(
     toAdminApiFailure(status, payload, headers),
     parseFieldErrors(payload),
   );
+}
+
+/**
+ * Shared error projection for Admin clients that reuse the settings Problem
+ * Details shape. Keeping it here preserves the existing field-error mapping
+ * without duplicating it in every provider/configuration client.
+ */
+export function adminSettingsErrorFromResponse(
+  status: number,
+  payload: unknown,
+  headers: Headers,
+): AdminSettingsError {
+  return failureFromResponse(status, payload, headers);
 }
 
 function invalidResponse(status: number, detail: string): AdminMutationError {

@@ -27,15 +27,15 @@ export function WorldMap({
     >
       <defs>
         <linearGradient id="ocean-wash" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#0c1118" />
-          <stop offset="1" stopColor="#050608" />
+          <stop offset="0" stopColor="var(--surface-deep)" />
+          <stop offset="1" stopColor="var(--canvas)" />
         </linearGradient>
         <radialGradient id="marker-glow">
-          <stop offset="0" stopColor="#ff801f" stopOpacity="0.34" />
-          <stop offset="1" stopColor="#ff801f" stopOpacity="0" />
+          <stop offset="0" stopColor="var(--map-marker)" stopOpacity="0.34" />
+          <stop offset="1" stopColor="var(--map-marker)" stopOpacity="0" />
         </radialGradient>
         <pattern id="map-grid" width="50" height="50" patternUnits="userSpaceOnUse">
-          <path d="M50 0H0V50" fill="none" stroke="rgba(255,255,255,0.055)" strokeWidth="1" />
+          <path d="M50 0H0V50" fill="none" stroke="var(--hairline)" strokeWidth="1" />
         </pattern>
       </defs>
 
@@ -44,8 +44,8 @@ export function WorldMap({
 
       <g
         aria-hidden="true"
-        fill="#12161a"
-        stroke="rgba(255,255,255,0.12)"
+        fill="var(--surface-2)"
+        stroke="var(--hairline-strong)"
         strokeWidth="1.2"
         strokeLinejoin="round"
       >
@@ -86,12 +86,14 @@ export function WorldMap({
               cx={x}
               cy={y}
               r={selected ? 6.5 : 4.5}
-              fill={selected ? "#ff801f" : "rgba(252,253,255,0.74)"}
-              stroke={selected ? "#fff" : "rgba(0,0,0,0.8)"}
+              fill={selected ? "var(--map-marker)" : "var(--ink)"}
+              fillOpacity={selected ? undefined : 0.74}
+              stroke="var(--canvas)"
+              strokeOpacity={selected ? 1 : 0.8}
               strokeWidth="1.5"
             />
             {selected ? (
-              <text x={x + 11} y={y + 3} fill="#fcfdff" fontSize="10" fontFamily="monospace">
+              <text x={x + 11} y={y + 3} fill="var(--ink)" fontSize="10" fontFamily="monospace">
                 {point.label.slice(0, 10)}
               </text>
             ) : null}
@@ -100,7 +102,7 @@ export function WorldMap({
       })}
 
       <g transform="translate(20 484)">
-        <text x="0" y="8" fill="rgba(255,255,255,0.35)" fontSize="8" fontFamily="monospace">
+        <text x="0" y="8" fill="var(--muted)" fontSize="8" fontFamily="monospace">
           SCHEMATIC WORLD / REAL STOP COORDINATES
         </text>
       </g>

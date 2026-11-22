@@ -13,11 +13,7 @@ import { AmountMinorSchema, CurrencyCodeSchema } from "../common/money";
  * timezone, per-item price or visibility can be expressed by the model.
  */
 
-export const AiProtocolSchema = z.enum([
-  "openai-chat",
-  "openai-responses",
-  "anthropic-messages",
-]);
+export const AiProtocolSchema = z.enum(["openai-chat", "openai-responses", "anthropic-messages"]);
 export type AiProtocol = z.infer<typeof AiProtocolSchema>;
 
 /**
@@ -301,12 +297,8 @@ export type AiChatRequest = z.infer<typeof AiChatRequestSchema>;
  */
 export const AiRunIdSchema = z
   .string()
-  .regex(
-    /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
-  )
-  .describe(
-    "Opaque plan-run identifier: legacy 32-hex digits or an RFC 4122 UUID (8-4-4-4-12).",
-  );
+  .regex(/^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i)
+  .describe("Opaque plan-run identifier: legacy 32-hex digits or an RFC 4122 UUID (8-4-4-4-12).");
 
 export const AiUsageSchema = z
   .object({
@@ -361,10 +353,7 @@ export type AiPlanSubject = z.infer<typeof AiPlanSubjectSchema>;
  * provider place id for `stops.add`). The server caps the number of entries
  * before sending; the schema only guarantees a bounded key/label size.
  */
-export const AiPlanSubjectsSchema = z.record(
-  z.string().min(1).max(300),
-  AiPlanSubjectSchema,
-);
+export const AiPlanSubjectsSchema = z.record(z.string().min(1).max(300), AiPlanSubjectSchema);
 export type AiPlanSubjects = z.infer<typeof AiPlanSubjectsSchema>;
 
 export const AiChatResponseSchema = z
@@ -563,6 +552,8 @@ export const AI_ERROR_CODES = {
   unresolvedPlace: "UNRESOLVED_PLACE",
   toolFailed: "AI_TOOL_FAILED",
   upstream: "AI_UPSTREAM",
+  /** A provider stream failed after its first user-visible event was committed. */
+  providerStreamFailed: "AI_PROVIDER_STREAM_FAILED",
   rewriteTextTooLong: "AI_REWRITE_TEXT_TOO_LONG",
   rewriteSelectionMismatch: "AI_SELECTION_HASH_MISMATCH",
   rewriteEmpty: "AI_REWRITE_EMPTY",

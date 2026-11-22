@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  CheckCircle2,
-  RefreshCw,
-  Save,
-  ShieldAlert,
-  Undo2,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, RefreshCw, Save, ShieldAlert, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -65,6 +58,8 @@ export interface SettingsGroupFormProps {
   api: AdminSettingsApi;
   /** System settings shows one permission note for the whole page instead. */
   showReadOnlyNote?: boolean;
+  /** Lets the parent shell guard navigation while this panel has pending edits. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 interface ConsoleBanner {
@@ -165,7 +160,10 @@ function replaceGroup(
   };
 }
 
-function groupOf(response: AdminSettingsResponse, group: SystemSettingGroup): AdminSettingsGroup | null {
+function groupOf(
+  response: AdminSettingsResponse,
+  group: SystemSettingGroup,
+): AdminSettingsGroup | null {
   return response.groups.find((entry) => entry.group === group) ?? null;
 }
 
@@ -183,6 +181,7 @@ export function SettingsGroupForm({
   role,
   api,
   showReadOnlyNote = true,
+  onDirtyChange,
 }: SettingsGroupFormProps) {
   const [response, setResponse] = useState<AdminSettingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -275,15 +274,16 @@ export function SettingsGroupForm({
     return () => clearInterval(interval);
   }, [revealed]);
 
-  const items = useMemo(
-    () => (response ? groupItems(response, group) : []),
-    [response, group],
-  );
+  const items = useMemo(() => (response ? groupItems(response, group) : []), [response, group]);
 
   const dirtyKeys = useMemo(
     () => dirtySettingKeys(items, values, secretDrafts),
     [items, values, secretDrafts],
   );
+
+  useEffect(() => {
+    onDirtyChange?.(dirtyKeys.length > 0);
+  }, [dirtyKeys.length, onDirtyChange]);
 
   const localErrors = useMemo(() => {
     const errors: Record<string, string> = {};
@@ -299,10 +299,7 @@ export function SettingsGroupForm({
     return errors;
   }, [items, values]);
 
-  const errors = useMemo(
-    () => ({ ...localErrors, ...serverErrors }),
-    [localErrors, serverErrors],
-  );
+  const errors = useMemo(() => ({ ...localErrors, ...serverErrors }), [localErrors, serverErrors]);
 
   const canSave =
     canWrite && dirtyKeys.length > 0 && Object.keys(localErrors).length === 0 && !saving;
@@ -635,9 +632,7 @@ export function SettingsGroupForm({
           <h2 className="mt-1 font-serif text-xl tracking-[-0.02em] text-ink">
             {groupLabel(group)}
           </h2>
-          <p className="mt-1 text-[11px] leading-5 text-muted">
-            {SETTINGS_GROUP_SUMMARIES[group]}
-          </p>
+          <p className="mt-1 text-[11px] leading-5 text-muted">{SETTINGS_GROUP_SUMMARIES[group]}</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Badge tone="neutral">{items.length} 项</Badge>

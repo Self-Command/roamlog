@@ -9,8 +9,9 @@ export const metadata: Metadata = { title: "设置" };
  * Settings shell: one persistent section navigator plus the selected page.
  *
  * The nav is the only place the section list is declared, so `/settings/profile`,
- * `/settings/security`, `/settings/notifications`, `/settings/workspace` and
- * `/settings/danger` stay reachable from every one of those pages.
+ * `/settings/security`, `/settings/notifications`, `/settings/appearance`,
+ * `/settings/workspace` and `/settings/danger` stay reachable from every one of
+ * those pages.
  */
 export default async function SettingsLayout({
   children,

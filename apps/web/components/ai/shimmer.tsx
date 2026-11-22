@@ -39,17 +39,14 @@ const ShimmerComponent = ({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
-  const dynamicSpread = useMemo(
-    () => (children?.length ?? 0) * spread,
-    [children, spread],
-  );
+  const dynamicSpread = useMemo(() => (children?.length ?? 0) * spread, [children, spread]);
 
   return (
     <Component
       className={cn("roamlog-ai-shimmer", className)}
       style={
         {
-          "--bg": `linear-gradient(90deg, #0000 calc(50% - var(--spread)), var(--ink), #0000 calc(50% + var(--spread)))`,
+          "--bg": `linear-gradient(90deg, transparent calc(50% - var(--spread)), var(--ink), transparent calc(50% + var(--spread)))`,
           "--spread": `${dynamicSpread}px`,
           animationDuration: `${duration}s`,
         } as CSSProperties

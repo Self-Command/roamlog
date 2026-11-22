@@ -287,14 +287,13 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
                   className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                 >
                   <div
-                    className={`relative aspect-video overflow-hidden border-b border-hairline bg-gradient-to-br ${gradientFor(entry.id)}`}
+                    className={`relative aspect-video overflow-hidden border-b border-hairline ${gradientFor(entry.id)}`}
                   >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_18%,rgba(255,255,255,0.16),transparent_45%)]" />
                     <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">
-                      <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-white/70">
+                      <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink/70">
                         {entry.date} · {entry.location}
                       </span>
-                      <span className="inline-flex items-center gap-1.5 rounded-pill border border-white/15 bg-black/30 px-2 py-1 text-[9px] text-white/80">
+                      <span className="inline-flex items-center gap-1.5 rounded-pill border border-hairline-strong bg-canvas/40 px-2 py-1 text-[9px] text-ink">
                         <span
                           aria-hidden="true"
                           className={`size-1.5 rounded-pill ${moodColors[entry.mood ?? "calm"]}`}

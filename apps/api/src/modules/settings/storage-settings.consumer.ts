@@ -1,9 +1,14 @@
 import { createHash } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import type { AdminSettingItem, SettingValue } from "@roamlog/contracts";
 
 import type { StorageSettings } from "../../config/storage-settings.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
+import { s3ProviderConfigSchema } from "../providers/provider-contracts.js";
+import {
+  ProviderRuntimeService,
+  resolveProviderConfigMode,
+} from "../providers/provider-runtime.service.js";
 import type { SettingDefinition } from "./settings.registry.js";
 import type { SettingsService } from "./settings.service.js";
 
@@ -28,7 +33,14 @@ export const STORAGE_SETTING_KEYS = [
 ] as const;
 
 export type StorageSettingKey = (typeof STORAGE_SETTING_KEYS)[number];
-export type StorageConfigField = "endpoint" | "publicEndpoint" | "bucket" | "region" | "accessKey" | "secretKey" | "forcePathStyle";
+export type StorageConfigField =
+  | "endpoint"
+  | "publicEndpoint"
+  | "bucket"
+  | "region"
+  | "accessKey"
+  | "secretKey"
+  | "forcePathStyle";
 export type StorageConfigSource = "database" | "environment" | "default";
 
 type StorageSettingsReader = Pick<SettingsService, "getGroup" | "listAdminSettings">;
@@ -43,12 +55,22 @@ interface StorageFieldDescriptor {
 
 const FIELDS: readonly StorageFieldDescriptor[] = [
   { field: "endpoint", key: "storage.endpoint", envVar: "S3_ENDPOINT", kind: "string" },
-  { field: "publicEndpoint", key: "storage.publicEndpoint", envVar: "S3_PUBLIC_ENDPOINT", kind: "string" },
+  {
+    field: "publicEndpoint",
+    key: "storage.publicEndpoint",
+    envVar: "S3_PUBLIC_ENDPOINT",
+    kind: "string",
+  },
   { field: "bucket", key: "storage.bucket", envVar: "S3_BUCKET", kind: "string" },
   { field: "region", key: "storage.region", envVar: "S3_REGION", kind: "string" },
   { field: "accessKey", key: "storage.accessKey", envVar: "S3_ACCESS_KEY", kind: "string" },
   { field: "secretKey", key: "storage.secretKey", envVar: "S3_SECRET_KEY", kind: "string" },
-  { field: "forcePathStyle", key: "storage.forcePathStyle", envVar: "S3_FORCE_PATH_STYLE", kind: "boolean" },
+  {
+    field: "forcePathStyle",
+    key: "storage.forcePathStyle",
+    envVar: "S3_FORCE_PATH_STYLE",
+    kind: "boolean",
+  },
 ];
 
 /** Mirrors `DEFAULT_SETTINGS`; only reached when the registry is unavailable. */
@@ -106,6 +128,9 @@ export class StorageSettingsConsumer {
     @Inject(STORAGE_ENV_SETTINGS) private readonly environment: StorageSettings,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
     @Inject(STORAGE_SETTINGS_REGISTRY) registry: readonly SettingDefinition[],
+    @Optional()
+    @Inject(ProviderRuntimeService)
+    private readonly providers?: ProviderRuntimeService,
   ) {
     this.definitions = new Map(
       registry.filter((entry) => entry.group === "storage").map((entry) => [entry.key, entry]),
@@ -118,6 +143,15 @@ export class StorageSettingsConsumer {
   }
 
   async resolve(): Promise<ResolvedStorageConfig> {
+    if (resolveProviderConfigMode() === "v2") {
+      if (this.providers) {
+        return this.resolveProviderRuntime();
+      }
+      this.warnOnce("provider-runtime-unavailable", "storage.provider_runtime_unavailable", {
+        fallback: "legacy",
+      });
+    }
+
     if (this.cached && this.cached.expiresAt > Date.now()) {
       return this.cached.value;
     }
@@ -125,6 +159,96 @@ export class StorageSettingsConsumer {
     const value = await this.read();
     this.cached = { expiresAt: Date.now() + RESOLVE_CACHE_TTL_MS, value };
     return value;
+  }
+
+  /**
+   * Provider-mode storage is single-active in v1. The provider registry
+   * enforces one enabled storage row; this mapper preserves the existing
+   * ResolvedStorageConfig contract so the S3 client factory, health checks and
+   * signed-url code do not need a second implementation.
+   */
+  private async resolveProviderRuntime(): Promise<ResolvedStorageConfig> {
+    let group: Awaited<ReturnType<ProviderRuntimeService["resolveGroup"]>>;
+    try {
+      group = await this.providers!.resolveGroup("storage");
+    } catch (error) {
+      this.warnOnce("provider-runtime-unavailable", "storage.provider_runtime_unavailable", {
+        reason: error instanceof Error ? error.name : "UnknownError",
+      });
+      return this.providerUnconfigured("PROVIDER_RUNTIME_UNAVAILABLE");
+    }
+
+    const active = group.providers[0];
+    if (!active || active.adapter !== "s3") {
+      return this.providerUnconfigured("PROVIDER_NOT_CONFIGURED");
+    }
+
+    const parsed = s3ProviderConfigSchema.safeParse(active.config);
+    if (!parsed.success) {
+      return this.providerUnconfigured("PROVIDER_CONFIG_INVALID");
+    }
+
+    const warnings: string[] = [];
+    const accessKey = active.secrets.accessKey?.trim() ?? "";
+    const secretKey = active.secrets.secretKey?.trim() ?? "";
+    if (!accessKey || !secretKey) {
+      warnings.push("PROVIDER_SECRET_MISSING");
+    }
+
+    const publicEndpoint = parsed.data.publicEndpoint?.trim();
+    const settings: StorageSettings = {
+      endpoint: parsed.data.endpoint,
+      ...(publicEndpoint ? { publicEndpoint } : {}),
+      bucket: parsed.data.bucket,
+      region: parsed.data.region,
+      accessKey,
+      secretKey,
+      forcePathStyle: parsed.data.forcePathStyle,
+      signedUrlTtlSeconds: this.environment.signedUrlTtlSeconds ?? DEFAULT_SIGNED_URL_TTL_SECONDS,
+      ...(this.environment.mediaSignedUrlTtlSeconds !== undefined
+        ? { mediaSignedUrlTtlSeconds: this.environment.mediaSignedUrlTtlSeconds }
+        : {}),
+    };
+
+    return {
+      settings,
+      version: storageConfigVersion(settings),
+      sources: {
+        endpoint: "database",
+        publicEndpoint: publicEndpoint ? "database" : "default",
+        bucket: "database",
+        region: "database",
+        accessKey: "database",
+        secretKey: "database",
+        forcePathStyle: "database",
+      },
+      envLockedKeys: [],
+      warnings,
+    };
+  }
+
+  private providerUnconfigured(warning: string): ResolvedStorageConfig {
+    const settings: StorageSettings = {
+      ...this.environment,
+      accessKey: "",
+      secretKey: "",
+      signedUrlTtlSeconds: this.environment.signedUrlTtlSeconds ?? DEFAULT_SIGNED_URL_TTL_SECONDS,
+    };
+    return {
+      settings,
+      version: storageConfigVersion(settings),
+      sources: {
+        endpoint: "default",
+        publicEndpoint: "default",
+        bucket: "default",
+        region: "default",
+        accessKey: "database",
+        secretKey: "database",
+        forcePathStyle: "default",
+      },
+      envLockedKeys: [],
+      warnings: [warning],
+    };
   }
 
   /** Diagnostics: the env-only TTLs and the raw env baseline. */
@@ -205,9 +329,10 @@ export class StorageSettingsConsumer {
       accessKey: asString(values.accessKey) ?? asString(this.environment.accessKey) ?? "",
       secretKey: asString(values.secretKey) ?? asString(this.environment.secretKey) ?? "",
       forcePathStyle:
-        typeof values.forcePathStyle === "boolean" ? values.forcePathStyle : this.environment.forcePathStyle,
-      signedUrlTtlSeconds:
-        this.environment.signedUrlTtlSeconds ?? DEFAULT_SIGNED_URL_TTL_SECONDS,
+        typeof values.forcePathStyle === "boolean"
+          ? values.forcePathStyle
+          : this.environment.forcePathStyle,
+      signedUrlTtlSeconds: this.environment.signedUrlTtlSeconds ?? DEFAULT_SIGNED_URL_TTL_SECONDS,
       mediaSignedUrlTtlSeconds: this.environment.mediaSignedUrlTtlSeconds,
     };
 
@@ -224,8 +349,7 @@ export class StorageSettingsConsumer {
     const settings: StorageSettings = {
       ...this.environment,
       publicEndpoint: this.environment.publicEndpoint,
-      signedUrlTtlSeconds:
-        this.environment.signedUrlTtlSeconds ?? DEFAULT_SIGNED_URL_TTL_SECONDS,
+      signedUrlTtlSeconds: this.environment.signedUrlTtlSeconds ?? DEFAULT_SIGNED_URL_TTL_SECONDS,
     };
     return {
       settings,

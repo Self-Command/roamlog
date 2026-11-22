@@ -364,7 +364,31 @@ jobs:
         env:
           E2E_SKIP_WEB_SERVER: "1"
           E2E_START_API: "1"
+          AUTH_RATE_LIMIT_MAX: "100"
         run: pnpm exec playwright test e2e/admin/smoke/admin-settings.spec.ts --project=admin
+
+      - name: E2E admin provider settings
+        env:
+          AUTH_RATE_LIMIT_MAX: "100"
+          E2E_START_API: "1"
+          PROVIDER_CONFIG_MODE: "v2"
+          PROVIDER_EGRESS_ALLOW_PRIVATE: "1"
+          CONFIG_ENCRYPTION_KEY: "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+        run: >-
+          pnpm exec playwright test
+          e2e/admin/smoke/admin-providers.spec.ts
+          --project=admin
+          --workers=1
+
+      - name: E2E appearance
+        env:
+          AUTH_RATE_LIMIT_MAX: "100"
+          E2E_START_API: "1"
+        run: >-
+          pnpm exec playwright test
+          e2e/web/appearance.spec.ts
+          e2e/admin/settings-appearance.spec.ts
+          --workers=1
 
       - name: E2E API smoke
         env:
@@ -386,6 +410,17 @@ jobs:
             .audit/journal-layout/a11y-*
             .audit/journal-layout/security-e2e-*
             .audit/journal-layout/gallery-drag-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload settings E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-e2e-evidence-${{ github.run_attempt }}
+          path: |
+            .audit/settings-provider-e2e/**
+            .audit/theme-font/**
           if-no-files-found: ignore
           retention-days: 7
 

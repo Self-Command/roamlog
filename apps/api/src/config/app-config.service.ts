@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
+import type { ProviderConfigMode } from "../modules/providers/provider-config-mode.js";
 import type { Environment } from "./environment.js";
 import type { StorageSettings } from "./storage-settings.js";
 
@@ -115,6 +116,10 @@ export class AppConfigService {
 
   get configEncryptionKeys(): string | undefined {
     return this.config.get<string>("CONFIG_ENCRYPTION_KEYS");
+  }
+
+  get providerConfigMode(): ProviderConfigMode {
+    return this.required("PROVIDER_CONFIG_MODE");
   }
 
   get sessionCookieDomain(): string | undefined {

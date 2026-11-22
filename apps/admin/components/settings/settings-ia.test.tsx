@@ -72,7 +72,9 @@ describe("settings information architecture", () => {
       ["媒体处理", "/admin/services/media"],
     ]);
     const dataGroup = ADMIN_NAV_GROUPS.find((group) => group.label === "数据与运营");
-    expect(dataGroup?.items.find((item) => item.label === "系统设置")?.href).toBe("/admin/settings");
+    expect(dataGroup?.items.find((item) => item.label === "系统设置")?.href).toBe(
+      "/admin/settings",
+    );
   });
 
   it("derives breadcrumbs from the sidebar hierarchy", () => {
@@ -88,20 +90,23 @@ describe("settings information architecture", () => {
     ]);
   });
 
-  it("renders four stacked sections and no second-level settings navigation", async () => {
+  it("renders one tablist for the four system groups with no nested settings navigation", async () => {
     render(<SettingsConsole role="super_admin" api={fakeApi()} />);
 
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "系统设置" })).toBeInTheDocument();
-    });
-    for (const label of ["通用", "SEO", "主题", "限制"]) {
-      expect(screen.getByRole("heading", { name: label })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "系统设置" })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("tablist", { name: "系统设置分组" })).toBeInTheDocument();
+    for (const label of ["通用", "SEO", "外观与字体", "限制"]) {
+      expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
     }
     for (const label of ["邮件", "存储", "媒体", "AI", "地点"]) {
-      expect(screen.queryByRole("heading", { name: label })).not.toBeInTheDocument();
+      expect(screen.queryByRole("tab", { name: label })).not.toBeInTheDocument();
     }
     expect(screen.queryByRole("navigation", { name: "设置分组" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("region", { name: /设置$/ })).toHaveLength(4);
+    expect(screen.getByRole("tabpanel", { name: "通用" })).toBeVisible();
+    expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(4);
+    expect(document.getElementById("settings-panel-seo")).not.toBeVisible();
   });
 
   it("localizes field type badges and option values without touching stored values", () => {

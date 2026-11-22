@@ -40,7 +40,13 @@ import type {
 import { AiUpstreamError } from "./adapters/http.js";
 import { AI_ADAPTER_FACTORY, type AiAdapterFactory } from "./adapters/index.js";
 import { AiConversationService } from "./ai-conversation.service.js";
-import { findPastDateIssue, formatDateOnly, pastDateFeedback, resolveAiTimeZone } from "./ai-dates.js";
+import {
+  findPastDateIssue,
+  formatDateOnly,
+  pastDateFeedback,
+  resolveAiTimeZone,
+} from "./ai-dates.js";
+import { AiProviderRouter, type AiProviderCandidate } from "./ai-provider-router.service.js";
 import { newRunId, AiRunStore, AI_RUN_TTL_SECONDS, type StoredAiRun } from "./ai-run.store.js";
 import {
   AI_CLOCK,
@@ -99,6 +105,8 @@ interface PlanLoopInput {
   readonly locale?: string;
   readonly streaming: boolean;
   readonly signal?: AbortSignal;
+  /** Provider failover needs the original kind/status to classify the error. */
+  readonly preserveUpstreamErrors?: boolean;
   /** Receives the run id as soon as it exists, so error paths can reference it. */
   readonly state?: { runId?: string };
 }
@@ -176,13 +184,14 @@ function toConversationMessages(messages: readonly unknown[]): AiConversationMes
       result.push({ role: "user", content: record.content });
       continue;
     }
-    if (record.role === "assistant" && (typeof record.content === "string" || record.content === null)) {
+    if (
+      record.role === "assistant" &&
+      (typeof record.content === "string" || record.content === null)
+    ) {
       result.push({
         role: "assistant",
         content: record.content,
-        toolCalls: Array.isArray(record.toolCalls)
-          ? (record.toolCalls as AiToolCallRequest[])
-          : [],
+        toolCalls: Array.isArray(record.toolCalls) ? (record.toolCalls as AiToolCallRequest[]) : [],
       });
       continue;
     }
@@ -246,6 +255,14 @@ export class AiPlanService {
     @Optional()
     @Inject(MediaService)
     private readonly media?: MediaService,
+    /**
+     * Optional only for the hand-built unit-test harness. Production always
+     * provides it; when absent, the service keeps the legacy single-provider
+     * path for callers that construct it directly.
+     */
+    @Optional()
+    @Inject(AiProviderRouter)
+    private readonly providerRouter?: AiProviderRouter,
   ) {}
 
   /**
@@ -262,24 +279,56 @@ export class AiPlanService {
     rawBody: unknown,
   ): Promise<AiChatResponse> {
     const body = parseRequest(AiChatRequestSchema, rawBody);
+    const attachmentParts = await this.resolveAttachmentParts(actor, membership, body.attachments);
+
+    if (this.providerRouter) {
+      const candidates = await this.providerRouter.candidates(body.model);
+      await this.consumeQuota(actor);
+      const result = await this.providerRouter.runWithFailover(candidates, async (candidate) => {
+        const settings: AiSettings = {
+          ...candidate.settings,
+          ...(body.reasoningEffort === undefined ? {} : { reasoningEffort: body.reasoningEffort }),
+        };
+        const adapter = this.adapterFactory(settings);
+        this.assertConfigured(settings, adapter);
+        const images =
+          settings.vision === true ? await this.resolveAttachmentImages(attachmentParts) : [];
+        const messages: AiConversationMessage[] = [
+          {
+            role: "user",
+            content: this.userMessage(body, {
+              count: attachmentParts.length,
+              vision: settings.vision === true,
+            }),
+            ...(images.length > 0 ? { images } : {}),
+          },
+        ];
+        const loop = this.runPlanLoop({
+          actor,
+          membership,
+          settings,
+          adapter,
+          messages,
+          ...(body.locale === undefined ? {} : { locale: body.locale }),
+          streaming: false,
+          preserveUpstreamErrors: true,
+        });
+        let next = await loop.next();
+        while (!next.done) {
+          next = await loop.next();
+        }
+        return { outcome: next.value, settings };
+      });
+      return this.chatResponse(result.outcome, result.settings);
+    }
+
+    // Legacy callers/tests that do not wire the provider router.
     const { settings, adapter } = await this.resolveAdapter({
       ...(body.model === undefined ? {} : { model: body.model }),
-      ...(body.reasoningEffort === undefined
-        ? {}
-        : { reasoningEffort: body.reasoningEffort }),
+      ...(body.reasoningEffort === undefined ? {} : { reasoningEffort: body.reasoningEffort }),
     });
-    // The references are always validated (a bogus media id stays a 400 on this
-    // endpoint); the bytes are only inlined when the model can actually read
-    // them. `chat` persists nothing, so the parts are model-facing here.
-    const attachmentParts = await this.resolveAttachmentParts(
-      actor,
-      membership,
-      body.attachments,
-    );
     const images =
-      settings.vision === true
-        ? await this.resolveAttachmentImages(attachmentParts)
-        : [];
+      settings.vision === true ? await this.resolveAttachmentImages(attachmentParts) : [];
     await this.consumeQuota(actor);
 
     const messages: AiConversationMessage[] = [
@@ -305,8 +354,10 @@ export class AiPlanService {
     while (!next.done) {
       next = await loop.next();
     }
-    const outcome = next.value;
+    return this.chatResponse(next.value, settings);
+  }
 
+  private chatResponse(outcome: PlanLoopOutcome, settings: AiSettings): AiChatResponse {
     return {
       runId: outcome.runId,
       message: outcome.message,
@@ -345,22 +396,24 @@ export class AiPlanService {
     }
 
     const startedAt = Date.now();
-    const { settings, adapter } = await this.resolveAdapter({
-      ...(body.model === undefined ? {} : { model: body.model }),
-      ...(body.reasoningEffort === undefined
-        ? {}
-        : { reasoningEffort: body.reasoningEffort }),
-    });
+    const candidates = this.providerRouter
+      ? await this.providerRouter.candidates(body.model)
+      : null;
+    const legacyResolution = candidates
+      ? null
+      : await this.resolveAdapter({
+          ...(body.model === undefined ? {} : { model: body.model }),
+          ...(body.reasoningEffort === undefined ? {} : { reasoningEffort: body.reasoningEffort }),
+        });
     // Resolved before the commit point: a bad attachment is still a 400 JSON
     // response, never an in-stream failure after `meta`. These parts back the
     // persisted turn below; they become model input only when vision is on.
-    const attachmentParts = await this.resolveAttachmentParts(
-      actor,
-      membership,
-      body.attachments,
-    );
+    const attachmentParts = await this.resolveAttachmentParts(actor, membership, body.attachments);
+    const visionPossible = candidates
+      ? candidates.some((candidate) => candidate.settings.vision === true)
+      : legacyResolution!.settings.vision === true;
     const images =
-      settings.vision === true
+      visionPossible && attachmentParts.length > 0
         ? await this.resolveAttachmentImages(attachmentParts)
         : [];
     const conversations = this.conversations;
@@ -426,10 +479,14 @@ export class AiPlanService {
     // A pre-created user row is already the last history entry. Drop it so the
     // canonical `userMessage(body)` envelope below is the only copy.
     const lastHistory = history.at(-1);
-    if (body.clientMessageId && lastHistory?.role === "user" && lastHistory.content === body.message) {
+    if (
+      body.clientMessageId &&
+      lastHistory?.role === "user" &&
+      lastHistory.content === body.message
+    ) {
       history.pop();
     }
-    const messages: AiConversationMessage[] = [
+    const buildMessages = (settings: AiSettings): AiConversationMessage[] => [
       ...history,
       {
         role: "user",
@@ -441,66 +498,130 @@ export class AiPlanService {
         // the "cannot see the attached image" note, never an `image_url` part
         // it would ignore or hallucinate about; the attachments still live in
         // the persisted turn above.
-        ...(images.length > 0 ? { images } : {}),
+        ...(settings.vision === true && images.length > 0 ? { images } : {}),
       },
     ];
-
-    const firstByteMs = Date.now() - startedAt;
-    yield {
+    const metaFor = (settings: AiSettings): AiStreamEvent => ({
       type: "meta",
       v: 1,
       conversationId: conversation.id,
       userMessageId: appended.messageId,
       assistantMessageId,
       provider: { protocol: settings.protocol, model: settings.model },
-    };
-    this.logger.log(
-      {
-        event: "ai.stream_started",
-        protocol: settings.protocol,
-        model: settings.model,
-        conversationId: conversation.id,
-        firstByteMs,
-      },
-      "ai.stream_started",
-    );
+    });
 
+    let selectedSettings: AiSettings = candidates?.[0]?.settings ?? legacyResolution!.settings;
+    let outcome: PlanLoopOutcome | undefined;
+    let firstByteMs = 0;
+    let committed = false;
     let text = "";
     let firstDeltaAt: number | null = null;
     let deltaCount = 0;
     const state: { runId?: string } = {};
+    const trackEvent = (event: AiStreamEvent): void => {
+      if (event.type === "text.delta") {
+        if (firstDeltaAt === null) {
+          firstDeltaAt = Date.now() - startedAt;
+        }
+        deltaCount += 1;
+        text += event.delta;
+      }
+    };
 
     try {
-      const loop = this.runPlanLoop({
-        actor,
-        membership,
-        settings,
-        adapter,
-        messages,
-        facts: context.facts,
-        ...(body.locale === undefined ? {} : { locale: body.locale }),
-        streaming: true,
-        ...(options.signal ? { signal: options.signal } : {}),
-        state,
-      });
+      if (candidates && this.providerRouter) {
+        const frames = this.providerRouter.streamWithFailover<AiStreamEvent, PlanLoopOutcome>(
+          candidates,
+          (candidate) =>
+            this.streamCandidate({
+              candidate,
+              actor,
+              membership,
+              body,
+              conversationId: conversation.id,
+              userMessageId: appended.messageId,
+              assistantMessageId,
+              history,
+              attachmentParts,
+              images,
+              facts: context.facts,
+              ...(body.locale === undefined ? {} : { locale: body.locale }),
+              state,
+              ...(options.signal ? { signal: options.signal } : {}),
+            }),
+          (event) => event.type !== "meta" && event.type !== "progress",
+          options.signal ? { signal: options.signal } : {},
+        );
 
-      let outcome: PlanLoopOutcome | null = null;
-      for (;;) {
-        const next = await loop.next();
-        if (next.done) {
-          outcome = next.value;
-          break;
-        }
-        if (next.value.type === "text.delta") {
-          if (firstDeltaAt === null) {
-            firstDeltaAt = Date.now() - startedAt;
+        for (;;) {
+          const next = await frames.next();
+          if (next.done) {
+            selectedSettings = next.value.candidate.settings;
+            outcome = next.value.outcome;
+            break;
           }
-          deltaCount += 1;
-          text += next.value.delta;
+          if (!committed) {
+            committed = true;
+            selectedSettings = next.value.candidate.settings;
+          }
+          const event = next.value.event;
+          if (event.type === "meta") {
+            firstByteMs = Date.now() - startedAt;
+            this.logger.log(
+              {
+                event: "ai.stream_started",
+                protocol: selectedSettings.protocol,
+                model: selectedSettings.model,
+                conversationId: conversation.id,
+                firstByteMs,
+                providerId: next.value.candidate.runtime.id,
+              },
+              "ai.stream_started",
+            );
+          }
+          trackEvent(event);
+          // Every frame yielded by this path is already committed; progress is
+          // transient and `done` remains exclusive to the finalizer below.
+          yield event;
         }
-        // `progress` is a transient frame: yield it as-is, never count it as
-        // answer text, and keep `done` as the only terminal frame.
-        yield next.value;
+      } else {
+        const resolved = legacyResolution!;
+        const settings = resolved.settings;
+        selectedSettings = settings;
+        firstByteMs = Date.now() - startedAt;
+        yield metaFor(settings);
+        committed = true;
+        this.logger.log(
+          {
+            event: "ai.stream_started",
+            protocol: settings.protocol,
+            model: settings.model,
+            conversationId: conversation.id,
+            firstByteMs,
+          },
+          "ai.stream_started",
+        );
+        const loop = this.runPlanLoop({
+          actor,
+          membership,
+          settings,
+          adapter: resolved.adapter,
+          messages: buildMessages(settings),
+          facts: context.facts,
+          ...(body.locale === undefined ? {} : { locale: body.locale }),
+          streaming: true,
+          ...(options.signal ? { signal: options.signal } : {}),
+          state,
+        });
+        for (;;) {
+          const next = await loop.next();
+          if (next.done) {
+            outcome = next.value;
+            break;
+          }
+          trackEvent(next.value);
+          yield next.value;
+        }
       }
 
       if (options.signal?.aborted) {
@@ -510,6 +631,7 @@ export class AiPlanService {
         throw new Error("The planning loop ended without a result.");
       }
 
+      const settings = selectedSettings;
       const finishReason = outcome.plannedCalls.length > 0 ? "tool-calls" : "stop";
       const usage = aiUsage(outcome.usage);
       const planPayload: AiPlanPayload = {
@@ -587,7 +709,10 @@ export class AiPlanService {
           status: { type: "incomplete", reason: "cancelled" },
           metadata: {
             ...(state.runId ? { runId: state.runId } : {}),
-            provider: { protocol: settings.protocol, model: settings.model },
+            provider: {
+              protocol: selectedSettings.protocol,
+              model: selectedSettings.model,
+            },
             timing: { totalMs: Date.now() - startedAt, firstByteMs, deltaCount },
           },
           finishReason: "aborted",
@@ -595,7 +720,7 @@ export class AiPlanService {
         this.logger.warn(
           {
             event: "ai.stream_aborted",
-            protocol: settings.protocol,
+            protocol: selectedSettings.protocol,
             deltaCount,
             responseChars: text.length,
             totalMs: Date.now() - startedAt,
@@ -606,7 +731,62 @@ export class AiPlanService {
         return;
       }
 
-      const mapped = toStreamError(error);
+      const providerFailoverActive = candidates !== null && this.providerRouter !== undefined;
+      if (providerFailoverActive && !committed) {
+        const mapped = toStreamError(error);
+        await this.finishSafely({
+          workspaceId: membership.workspaceId,
+          conversationId: conversation.id,
+          streamId: stream.streamId,
+          clientId: assistantMessageId,
+          content: [],
+          status: {
+            type: "incomplete",
+            reason: "error",
+            error: { code: mapped.code, message: mapped.message },
+          },
+          metadata: {
+            ...(state.runId ? { runId: state.runId } : {}),
+            provider: {
+              protocol: selectedSettings.protocol,
+              model: selectedSettings.model,
+            },
+            timing: { totalMs: Date.now() - startedAt, firstByteMs, deltaCount },
+            error: { code: mapped.code, message: mapped.message },
+          },
+          finishReason: "error",
+        });
+        this.logger.error(
+          {
+            event: "ai.stream_precommit_error",
+            protocol: selectedSettings.protocol,
+            code: mapped.code,
+            retryable: mapped.retryable,
+            totalMs: Date.now() - startedAt,
+            ...(state.runId ? { runId: state.runId } : {}),
+          },
+          "ai.stream_precommit_error",
+        );
+        if (error instanceof HttpException) {
+          throw error;
+        }
+        throw new HttpException(
+          {
+            code: "AI_UPSTREAM",
+            message: "The AI provider did not answer correctly. Try again.",
+          },
+          HttpStatus.BAD_GATEWAY,
+        );
+      }
+
+      const mapped =
+        providerFailoverActive && committed
+          ? {
+              code: AI_ERROR_CODES.providerStreamFailed,
+              message: "The AI provider stream failed after it started. Try again.",
+              retryable: true,
+            }
+          : toStreamError(error);
       await this.finishSafely({
         workspaceId: membership.workspaceId,
         conversationId: conversation.id,
@@ -620,7 +800,10 @@ export class AiPlanService {
         },
         metadata: {
           ...(state.runId ? { runId: state.runId } : {}),
-          provider: { protocol: settings.protocol, model: settings.model },
+          provider: {
+            protocol: selectedSettings.protocol,
+            model: selectedSettings.model,
+          },
           timing: { totalMs: Date.now() - startedAt, firstByteMs, deltaCount },
           error: { code: mapped.code, message: mapped.message },
         },
@@ -629,7 +812,7 @@ export class AiPlanService {
       this.logger.error(
         {
           event: "ai.stream_error",
-          protocol: settings.protocol,
+          protocol: selectedSettings.protocol,
           code: mapped.code,
           retryable: mapped.retryable,
           deltaCount,
@@ -654,6 +837,83 @@ export class AiPlanService {
         finishReason: "error",
       };
     }
+  }
+
+  /**
+   * One provider attempt for a streaming turn.
+   *
+   * The caller buffers every event until this generator either yields its
+   * first committed user-visible event or completes. The provider's `meta`
+   * frame is deliberately the first event so a failed attempt can be discarded
+   * before the client sees a conversation/message id from the wrong provider.
+   */
+  private async *streamCandidate(input: {
+    readonly candidate: AiProviderCandidate;
+    readonly actor: AuthenticatedActor;
+    readonly membership: WorkspaceMembershipAccess;
+    readonly body: AiChatRequest;
+    readonly conversationId: string;
+    readonly userMessageId: string;
+    readonly assistantMessageId: string;
+    readonly history: readonly AiConversationMessage[];
+    readonly attachmentParts: readonly AiAttachmentPart[];
+    readonly images: readonly AiImagePart[];
+    readonly facts?: Readonly<Record<string, unknown>>;
+    readonly locale?: string;
+    readonly state: { runId?: string };
+    readonly signal?: AbortSignal;
+  }): AsyncGenerator<AiStreamEvent, PlanLoopOutcome, void> {
+    const settings: AiSettings = {
+      ...input.candidate.settings,
+      ...(input.body.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: input.body.reasoningEffort }),
+    };
+    const adapter = this.adapterFactory(settings);
+    this.assertConfigured(settings, adapter);
+
+    yield {
+      type: "meta",
+      v: 1,
+      conversationId: input.conversationId,
+      userMessageId: input.userMessageId,
+      assistantMessageId: input.assistantMessageId,
+      provider: { protocol: settings.protocol, model: settings.model },
+    };
+
+    const messages: AiConversationMessage[] = [
+      ...input.history,
+      {
+        role: "user",
+        content: this.userMessage(input.body, {
+          count: input.attachmentParts.length,
+          vision: settings.vision === true,
+        }),
+        ...(settings.vision === true && input.images.length > 0
+          ? { images: [...input.images] }
+          : {}),
+      },
+    ];
+    const loop = this.runPlanLoop({
+      actor: input.actor,
+      membership: input.membership,
+      settings,
+      adapter,
+      messages,
+      ...(input.facts === undefined ? {} : { facts: input.facts }),
+      ...(input.locale === undefined ? {} : { locale: input.locale }),
+      streaming: true,
+      preserveUpstreamErrors: true,
+      ...(input.signal ? { signal: input.signal } : {}),
+      state: input.state,
+    });
+
+    let next = await loop.next();
+    while (!next.done) {
+      yield next.value;
+      next = await loop.next();
+    }
+    return next.value;
   }
 
   /**
@@ -766,6 +1026,9 @@ export class AiPlanService {
 
   /** The model list the selector renders (`GET .../ai/models`). */
   async chatModels(): Promise<AiChatModelsResponse> {
+    if (this.providerRouter) {
+      return this.providerRouter.chatModels();
+    }
     const settings = await this.settingsSource.resolve();
     // Only the OpenAI-family protocols define a reasoning-effort parameter; the
     // Anthropic Messages adapter ignores it (see its `toMessage`).
@@ -1015,7 +1278,10 @@ export class AiPlanService {
      * ids never need a second lookup.
      */
     const seenLabels = new Map<string, string>();
-    const usage: { inputTokens: number; outputTokens: number } = { inputTokens: 0, outputTokens: 0 };
+    const usage: { inputTokens: number; outputTokens: number } = {
+      inputTokens: 0,
+      outputTokens: 0,
+    };
 
     // Everything from the current user message onward is this turn's model
     // context; history before it came from `loadContext`.
@@ -1077,6 +1343,9 @@ export class AiPlanService {
           },
           "ai.step_failed",
         );
+        if (input.preserveUpstreamErrors && error instanceof AiUpstreamError) {
+          throw error;
+        }
         throw new HttpException(
           {
             code: "AI_UPSTREAM",
@@ -1117,7 +1386,11 @@ export class AiPlanService {
         );
       }
 
-      input.messages.push({ role: "assistant", content: turn.text, toolCalls: [...turn.toolCalls] });
+      input.messages.push({
+        role: "assistant",
+        content: turn.text,
+        toolCalls: [...turn.toolCalls],
+      });
       const results: Array<{ id: string; name: string; content: string }> = [];
       let queuedThisRound = 0;
       pastDateIgnoredThisTurn = false;
@@ -1430,17 +1703,19 @@ export class AiPlanService {
         }
       },
     });
-    completion.then(
-      (value) => {
-        result = value;
-      },
-      (error: unknown) => {
-        failure = error;
-      },
-    ).finally(() => {
-      settled = true;
-      notify();
-    });
+    completion
+      .then(
+        (value) => {
+          result = value;
+        },
+        (error: unknown) => {
+          failure = error;
+        },
+      )
+      .finally(() => {
+        settled = true;
+        notify();
+      });
 
     while (!settled || pending.length > 0) {
       if (pending.length === 0) {
@@ -1501,7 +1776,11 @@ export class AiPlanService {
       // Never pick another protocol silently: the selected provider is either
       // configured or the endpoint answers 503.
       this.logger.warn(
-        { event: "ai.not_configured", protocol: settings.protocol, configured: settings.configured },
+        {
+          event: "ai.not_configured",
+          protocol: settings.protocol,
+          configured: settings.configured,
+        },
         "ai.not_configured",
       );
       throw new HttpException(
@@ -1537,6 +1816,13 @@ function toStreamError(error: unknown): {
   message: string;
   retryable: boolean;
 } {
+  if (error instanceof AiUpstreamError) {
+    return {
+      code: AI_ERROR_CODES.upstream,
+      message: "The AI provider did not answer correctly. Try again.",
+      retryable: true,
+    };
+  }
   if (error instanceof HttpException) {
     const response = error.getResponse();
     const payload =
@@ -1545,7 +1831,9 @@ function toStreamError(error: unknown): {
         : undefined;
     const rawCode = typeof payload?.code === "string" ? payload.code : "AI_INTERNAL";
     const rawMessage =
-      typeof payload?.message === "string" ? payload.message : error.message || "The AI stream failed.";
+      typeof payload?.message === "string"
+        ? payload.message
+        : error.message || "The AI stream failed.";
     const code = KNOWN_AI_CODES.has(rawCode) ? (rawCode as AiErrorCode) : "AI_INTERNAL";
     return {
       code,
@@ -1706,10 +1994,7 @@ interface AiAttachmentPart {
  * providerMetadata}`) so `thread-list-adapter.toThreadMessageLike` can hand the
  * stored JSON straight back to the renderer after a reload.
  */
-function userTurnParts(
-  text: string,
-  parts: readonly AiAttachmentPart[],
-): readonly unknown[] {
+function userTurnParts(text: string, parts: readonly AiAttachmentPart[]): readonly unknown[] {
   return [
     { type: "text", text },
     ...parts.map((image) => ({
@@ -1746,9 +2031,7 @@ export function readableModelName(id: string): string {
     slug
       .split(/[-_.]+/u)
       .filter((word) => word.length > 0)
-      .map((word) =>
-        /^[a-z]+$/iu.test(word) ? `${word[0]!.toUpperCase()}${word.slice(1)}` : word,
-      )
+      .map((word) => (/^[a-z]+$/iu.test(word) ? `${word[0]!.toUpperCase()}${word.slice(1)}` : word))
       .join(" ") || id
   );
 }

@@ -1,5 +1,7 @@
 import {
+  FONT_PAIRING_IDS,
   SETTINGS_GROUP_LABELS,
+  SKIN_IDS,
   THEME_MODES,
   type SettingValue,
   type SystemSettingGroup,
@@ -45,9 +47,7 @@ function textSetting(label: string, min: number, max: number) {
 }
 
 function maxTextSetting(label: string, max: number) {
-  return z
-    .string({ error: `${label}必须是文本。` })
-    .max(max, `${label}不能超过 ${max} 个字符。`);
+  return z.string({ error: `${label}必须是文本。` }).max(max, `${label}不能超过 ${max} 个字符。`);
 }
 
 function numberSetting(label: string, min: number, max: number) {
@@ -271,16 +271,51 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = Object.freeze([
     options: THEME_ACCENTS,
   }),
   define({
-    key: "theme.defaultMode",
+    key: "theme.defaultSkin",
     group: "theme",
     type: "string",
-    schema: enumSetting("默认配色模式", THEME_MODES),
+    schema: enumSetting("默认皮肤", SKIN_IDS),
     isPublic: true,
     isSecret: false,
     envLocked: false,
-    label: "默认配色模式",
-    help: "深色或跟随系统；当前没有浅色调色板，跟随系统仍显示深色。",
+    label: "默认皮肤",
+    help: "未单独选择外观的访客和成员使用的皮肤；旧版强调色仅作为兼容回退。",
+    options: SKIN_IDS,
+  }),
+  define({
+    key: "theme.defaultMode",
+    group: "theme",
+    type: "string",
+    schema: enumSetting("默认外观模式", THEME_MODES),
+    isPublic: true,
+    isSecret: false,
+    envLocked: false,
+    label: "默认外观模式",
+    help: "浅色、深色或跟随系统；system 会读取访客操作系统的配色偏好。",
     options: THEME_MODES,
+  }),
+  define({
+    key: "theme.defaultFont",
+    group: "theme",
+    type: "string",
+    schema: enumSetting("默认字体配对", FONT_PAIRING_IDS),
+    isPublic: true,
+    isSecret: false,
+    envLocked: false,
+    label: "默认字体配对",
+    help: "未单独选择字体时使用的本地字体组合；所有字体随应用打包，不依赖外部 CDN。",
+    options: FONT_PAIRING_IDS,
+  }),
+  define({
+    key: "theme.allowUserOverride",
+    group: "theme",
+    type: "boolean",
+    schema: booleanSetting("允许用户覆盖外观"),
+    isPublic: true,
+    isSecret: false,
+    envLocked: false,
+    label: "允许用户覆盖外观",
+    help: "关闭后，已登录用户不能用个人选择覆盖平台默认皮肤、模式和字体。",
   }),
   define({
     key: "theme.loginTagline",

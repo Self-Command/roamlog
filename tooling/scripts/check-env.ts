@@ -496,6 +496,29 @@ const checkEncryptionKey = (): void => {
 };
 
 /**
+ * Provider cutover is explicit in production. Development/test may omit the
+ * variable and fall back to legacy, but a misspelled value must never boot.
+ */
+const checkProviderConfigMode = (): void => {
+  const raw = env.PROVIDER_CONFIG_MODE?.trim().toLowerCase() ?? "";
+  if (!raw) {
+    if (env.APP_ENV?.trim() === "production") {
+      errors.push(
+        "PROVIDER_CONFIG_MODE is required when APP_ENV=production; set legacy, shadow, or v2 explicitly.",
+      );
+    } else {
+      warnings.push(
+        "PROVIDER_CONFIG_MODE is not set; development/test defaults to legacy. Set it explicitly before a provider cutover.",
+      );
+    }
+    return;
+  }
+  if (!["legacy", "shadow", "v2"].includes(raw)) {
+    errors.push("PROVIDER_CONFIG_MODE must be one of legacy, shadow, or v2.");
+  }
+};
+
+/**
  * AI is opt-in and the runtime has exactly one definition of “configured”:
  * `AI_BASE_URL && AI_MODEL`, which is also what turns the endpoints into 503
  * AI_NOT_CONFIGURED. There is deliberately no preflight-only switch — a flag
@@ -627,6 +650,7 @@ reportRetiredDataModeFlags();
 // hard production requirement; AI, Places and media compression are optional
 // features that only fail when explicitly enabled with an unusable value.
 checkEncryptionKey();
+checkProviderConfigMode();
 checkAiSettings();
 checkPlacesSettings();
 checkMediaCompression();

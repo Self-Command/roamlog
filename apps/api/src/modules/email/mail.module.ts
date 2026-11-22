@@ -1,6 +1,7 @@
 import { Global, Module } from "@nestjs/common";
 
 import { AuditModule } from "../audit/audit.module.js";
+import { ProvidersModule } from "../providers/providers.module.js";
 import { SettingsModule } from "../settings/settings.module.js";
 import { MailSettingsConsumer } from "../settings/mail-settings.consumer.js";
 import { MailTestRateLimitGuard } from "./mail-test-rate-limit.guard.js";
@@ -17,7 +18,7 @@ import { MailService } from "./mail.service.js";
  */
 @Global()
 @Module({
-  imports: [SettingsModule, AuditModule],
+  imports: [SettingsModule, AuditModule, ProvidersModule],
   controllers: [MailTestController],
   providers: [MailSettingsConsumer, MailService, MailTestRateLimitGuard],
   exports: [MailSettingsConsumer, MailService],

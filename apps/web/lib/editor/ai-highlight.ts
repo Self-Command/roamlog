@@ -20,10 +20,10 @@ export interface AIHighlightOptions {
 }
 
 /**
- * 设计 token 适配：`--accent-blue` (#3b9eff) 的 22% 透明度。
+ * 设计 token 适配：`--accent-blue` 的 22% 透明度。
  * 上游用 `#c1ecf970`（浅青色 + 44% alpha），在真黑画布上会盖住正文对比度。
  */
-export const AI_HIGHLIGHT_DEFAULT_COLOR = "rgba(59, 158, 255, 0.22)";
+export const AI_HIGHLIGHT_DEFAULT_COLOR = "color-mix(in srgb, var(--accent-blue) 22%, transparent)";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {

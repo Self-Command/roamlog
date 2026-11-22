@@ -168,8 +168,9 @@ describe("AdminMediaService", () => {
       },
     };
     const audit = { record: vi.fn().mockResolvedValue({ id: "audit" }) };
-    const service = new AdminMediaService(prisma as never, audit as never);
-    return { prisma, audit, service };
+    const mediaUrls = { signKeys: vi.fn().mockResolvedValue(new Map()) };
+    const service = new AdminMediaService(prisma as never, audit as never, mediaUrls as never);
+    return { prisma, audit, mediaUrls, service };
   }
 
   it("lists media filtered by Workspace and status", async () => {
@@ -185,6 +186,46 @@ describe("AdminMediaService", () => {
       where: Record<string, unknown>;
     };
     expect(query.where).toMatchObject({ workspaceId: WORKSPACE_A_ID, status: "ready" });
+  });
+
+  it("signs every admin media variant for the moderation preview", async () => {
+    const { prisma, mediaUrls, service } = setup();
+    const record = mediaRecord({
+      variants: { thumb: { key: "workspaces/a/thumb.webp" } },
+    });
+    prisma.client.media.findMany.mockResolvedValue([record]);
+    mediaUrls.signKeys.mockResolvedValue(
+      new Map([
+        [
+          record.key,
+          {
+            key: record.key,
+            url: "https://media.spacedo.org/roamlog/workspaces/a/photo.jpg?signature=original",
+            expiresAt: "2026-11-22T12:15:00.000Z",
+          },
+        ],
+        [
+          "workspaces/a/thumb.webp",
+          {
+            key: "workspaces/a/thumb.webp",
+            url: "https://media.spacedo.org/roamlog/workspaces/a/thumb.webp?signature=thumb",
+            expiresAt: "2026-11-22T12:15:00.000Z",
+          },
+        ],
+      ]),
+    );
+
+    const page = await service.list(makeActor(USER_ADMIN_ID, { platformRole: "admin" }), {
+      limit: 10,
+    });
+
+    expect(page.items[0]?.variants.thumb).toMatchObject({
+      url: "https://media.spacedo.org/roamlog/workspaces/a/thumb.webp?signature=thumb",
+    });
+    expect(mediaUrls.signKeys).toHaveBeenCalledWith(record, [
+      record.key,
+      "workspaces/a/thumb.webp",
+    ]);
   });
 
   it("soft-deletes media and audits the target", async () => {

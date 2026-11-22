@@ -570,6 +570,28 @@ function workspaceName(
   );
 }
 
+function mediaVariantUrl(variants: unknown): string | null {
+  if (!variants || typeof variants !== "object" || Array.isArray(variants)) {
+    return null;
+  }
+  const record = variants as Record<string, unknown>;
+  for (const name of ["thumb", "medium", "large", "original"]) {
+    const variant = record[name];
+    if (
+      variant &&
+      typeof variant === "object" &&
+      !Array.isArray(variant) &&
+      typeof (variant as Record<string, unknown>).url === "string"
+    ) {
+      const url = (variant as Record<string, unknown>).url;
+      if (typeof url === "string" && url.length > 0) {
+        return url;
+      }
+    }
+  }
+  return null;
+}
+
 function userName(userId: string | null, users: readonly AdminUserPageItemsItem[]): string {
   if (!userId) {
     return "Unknown user";
@@ -620,6 +642,7 @@ export function mapAdminMedia(
     sizeBytes: item.size,
     status: item.status as MediaStatus,
     usage: item.tripId === null ? "orphan" : "linked",
+    thumbnailUrl: mediaVariantUrl(item.variants),
     caption: item.caption,
     createdAt: item.createdAt,
     deletedAt: item.deletedAt,

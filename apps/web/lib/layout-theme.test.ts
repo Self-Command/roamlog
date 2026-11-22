@@ -1,6 +1,10 @@
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers(),
+}));
+
 vi.mock("@/components/providers", () => ({
   Providers: ({ children }: { children: unknown }) => children,
 }));
@@ -10,6 +14,9 @@ import RootLayout, { generateMetadata, generateViewport } from "@/app/layout";
 interface RenderedHtmlProps {
   lang?: string;
   "data-theme"?: string;
+  "data-mode"?: string;
+  "data-skin"?: string;
+  "data-font"?: string;
   "data-accent"?: string;
   style?: Record<string, string>;
   children?: ReactElement;
@@ -60,6 +67,9 @@ describe("root layout runtime theme", () => {
     const html = await renderLayout();
 
     expect(html.props["data-theme"]).toBe("dark");
+    expect(html.props["data-mode"]).toBe("dark");
+    expect(html.props["data-skin"]).toBe("tokyo-night");
+    expect(html.props["data-font"]).toBe("editorial-classic");
     expect(html.props["data-accent"]).toBe("blue");
     expect(html.props.style?.["--accent-primary"]).toBe("#3b9eff");
     expect(html.props.style?.colorScheme).toBe("dark");
@@ -67,11 +77,17 @@ describe("root layout runtime theme", () => {
   });
 
   it("changes the rendered style when the accent setting changes", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => settingsResponse({ "theme.accent": "white" })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => settingsResponse({ "theme.accent": "white" })),
+    );
     const first = await renderLayout();
     const whiteAccent = first.props.style?.["--accent-primary"];
 
-    vi.stubGlobal("fetch", vi.fn(async () => settingsResponse({ "theme.accent": "rose" })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => settingsResponse({ "theme.accent": "rose" })),
+    );
     const second = await renderLayout();
     const roseAccent = second.props.style?.["--accent-primary"];
 
@@ -80,7 +96,7 @@ describe("root layout runtime theme", () => {
     expect(roseAccent).not.toBe(whiteAccent);
   });
 
-  it("renders a legacy light mode as system and never as a light theme", async () => {
+  it("renders an explicit light mode truthfully", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => settingsResponse({ "theme.defaultMode": "light" })),
@@ -88,9 +104,10 @@ describe("root layout runtime theme", () => {
 
     const html = await renderLayout();
 
-    expect(html.props["data-theme"]).toBe("system");
-    expect(html.props.style?.colorScheme).toBe("light dark");
-    expect(JSON.stringify(html.props)).not.toContain('"light"');
+    expect(html.props["data-theme"]).toBe("light");
+    expect(html.props["data-mode"]).toBe("light");
+    expect(html.props.style?.colorScheme).toBe("light");
+    expect(JSON.stringify(html.props)).toContain('"light"');
   });
 
   it("serves SEO metadata from the public settings", async () => {
@@ -118,14 +135,26 @@ describe("root layout runtime theme", () => {
     expect(metadata.robots).toBe("noindex,nofollow");
   });
 
-  it("emits the matching color-scheme viewport for dark and system", async () => {
+  it("emits the matching color-scheme viewport for light, dark and system", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => settingsResponse({ "theme.defaultMode": "light" })),
+    );
+    await expect(generateViewport()).resolves.toEqual({
+      colorScheme: "light",
+      themeColor: "#f9f9f8",
+    });
+
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => settingsResponse({ "theme.defaultMode": "system" })),
     );
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "light dark",
-      themeColor: "#000000",
+      themeColor: [
+        { media: "(prefers-color-scheme: light)", color: "#f9f9f8" },
+        { media: "(prefers-color-scheme: dark)", color: "#000000" },
+      ],
     });
 
     vi.stubGlobal(
@@ -149,6 +178,9 @@ describe("root layout runtime theme", () => {
     const html = await renderLayout();
 
     expect(html.props["data-theme"]).toBe("system");
+    expect(html.props["data-mode"]).toBe("system");
+    expect(html.props["data-skin"]).toBe("editorial-noir");
+    expect(html.props["data-font"]).toBe("editorial-classic");
     expect(html.props["data-accent"]).toBe("white");
     expect(html.props.style?.colorScheme).toBe("light dark");
     expect(html.props.style?.["--accent-primary"]).toBe("#fcfdff");

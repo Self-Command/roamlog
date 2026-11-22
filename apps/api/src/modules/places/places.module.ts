@@ -1,16 +1,15 @@
 import { Module } from "@nestjs/common";
 
 import { AccessControlModule } from "../../common/guards/access-control.module.js";
-import {
-  LIMITS_SETTINGS,
-  LimitsSettingsResolver,
-} from "../settings/limits-settings.consumer.js";
+import { ProvidersModule } from "../providers/providers.module.js";
+import { LIMITS_SETTINGS, LimitsSettingsResolver } from "../settings/limits-settings.consumer.js";
 import { SettingsModule } from "../settings/settings.module.js";
 import { GeoapifyClient } from "./geoapify.client.js";
 import { PhotonClient } from "./photon.client.js";
 import { PlacesCacheService } from "./places-cache.service.js";
 import { PlaceSearchRateLimitGuard } from "./places-rate-limit.guard.js";
 import { PlacesMergeService } from "./places-merge.service.js";
+import { PlacesProviderRuntimeService } from "./places-provider-runtime.service.js";
 import { PlacesQuotaService } from "./places-quota.service.js";
 import { PlacesRateLimiter } from "./places-rate-limiter.service.js";
 import { PlacesController } from "./places.controller.js";
@@ -25,7 +24,7 @@ import { TencentClient } from "./tencent.client.js";
  * which keeps an unavailable DB from blocking API startup.
  */
 @Module({
-  imports: [AccessControlModule, SettingsModule],
+  imports: [AccessControlModule, ProvidersModule, SettingsModule],
   controllers: [PlacesController],
   providers: [
     PlacesSettingsResolver,
@@ -39,6 +38,7 @@ import { TencentClient } from "./tencent.client.js";
     PlacesCacheService,
     PlacesQuotaService,
     PlacesMergeService,
+    PlacesProviderRuntimeService,
     PlacesRateLimiter,
     PlacesService,
     PlaceSearchRateLimitGuard,

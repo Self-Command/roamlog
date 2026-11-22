@@ -1,7 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Place } from "@roamlog/contracts";
 
-import { PLACES_SETTINGS, type PlacesSettings, type PlacesSettingsSource } from "./places.settings.js";
+import {
+  PLACES_SETTINGS,
+  type PlacesSettings,
+  type PlacesSettingsSource,
+} from "./places.settings.js";
 import type { TencentCandidate } from "./ranking/pelias-document.js";
 import {
   TencentPayloadError,
@@ -36,8 +40,11 @@ export class TencentClient {
   constructor(@Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource) {}
 
   /** `place/v1/suggestion` — the autocomplete used for Chinese address entry. */
-  async suggest(input: TencentSuggestInput): Promise<TencentSuggestOutcome> {
-    const outcome = await this.suggestCandidates(input);
+  async suggest(
+    input: TencentSuggestInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<TencentSuggestOutcome> {
+    const outcome = await this.suggestCandidates(input, settingsOverride);
     return outcome.ok
       ? {
           ok: true,
@@ -51,8 +58,11 @@ export class TencentClient {
    * Candidate-preserving form of `suggest`: keeps `type` / `adcode` /
    * administrative parts for the Pelias layer adapter.
    */
-  async suggestCandidates(input: TencentSuggestInput): Promise<TencentCandidatesOutcome> {
-    const settings = await this.settings.resolve();
+  async suggestCandidates(
+    input: TencentSuggestInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<TencentCandidatesOutcome> {
+    const settings = settingsOverride ?? (await this.settings.resolve());
     const startedAt = Date.now();
     const target = endpointOf(settings, "place/v1/suggestion");
     if ("failure" in target) {
@@ -77,8 +87,11 @@ export class TencentClient {
   }
 
   /** `geocoder/v1?address=` — forward geocoding of one structured address. */
-  async geocode(input: TencentGeocodeInput): Promise<TencentPlaceOutcome> {
-    const outcome = await this.geocodeCandidate(input);
+  async geocode(
+    input: TencentGeocodeInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<TencentPlaceOutcome> {
+    const outcome = await this.geocodeCandidate(input, settingsOverride);
     return outcome.ok
       ? { ok: true, place: outcome.candidate.place, durationMs: outcome.durationMs }
       : outcome;
@@ -88,8 +101,11 @@ export class TencentClient {
    * Candidate-preserving form of `geocode`: keeps `level` and
    * `address_components` so the Pelias adapter can map `level=9` to `address`.
    */
-  async geocodeCandidate(input: TencentGeocodeInput): Promise<TencentCandidateOutcome> {
-    const settings = await this.settings.resolve();
+  async geocodeCandidate(
+    input: TencentGeocodeInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<TencentCandidateOutcome> {
+    const settings = settingsOverride ?? (await this.settings.resolve());
     const startedAt = Date.now();
     const target = endpointOf(settings, "geocoder/v1");
     if ("failure" in target) {
@@ -99,11 +115,8 @@ export class TencentClient {
     target.url.searchParams.set("address", input.address);
     target.url.searchParams.set("key", target.apiKey);
 
-    const outcome = await this.send(
-      target.url,
-      settings.tencentTimeoutMs,
-      startedAt,
-      (payload) => normalizeTencentGeocodeCandidate(payload),
+    const outcome = await this.send(target.url, settings.tencentTimeoutMs, startedAt, (payload) =>
+      normalizeTencentGeocodeCandidate(payload),
     );
     return outcome.ok
       ? { ok: true, candidate: outcome.value, durationMs: Date.now() - startedAt }
@@ -111,8 +124,11 @@ export class TencentClient {
   }
 
   /** `geocoder/v1?location=lat,lng` — reverse geocoding; note the lat,lng order. */
-  async reverse(input: TencentReverseInput): Promise<TencentPlaceOutcome> {
-    const settings = await this.settings.resolve();
+  async reverse(
+    input: TencentReverseInput,
+    settingsOverride?: PlacesSettings,
+  ): Promise<TencentPlaceOutcome> {
+    const settings = settingsOverride ?? (await this.settings.resolve());
     const startedAt = Date.now();
     const target = endpointOf(settings, "geocoder/v1");
     if ("failure" in target) {
@@ -122,12 +138,8 @@ export class TencentClient {
     target.url.searchParams.set("location", `${input.lat},${input.lng}`);
     target.url.searchParams.set("key", target.apiKey);
 
-    const outcome = await this.send(
-      target.url,
-      settings.tencentTimeoutMs,
-      startedAt,
-      (payload) =>
-        normalizeTencentReversePayload(payload, { lat: input.lat, lng: input.lng }),
+    const outcome = await this.send(target.url, settings.tencentTimeoutMs, startedAt, (payload) =>
+      normalizeTencentReversePayload(payload, { lat: input.lat, lng: input.lng }),
     );
     return outcome.ok
       ? { ok: true, place: outcome.value, durationMs: Date.now() - startedAt }
@@ -159,7 +171,11 @@ export class TencentClient {
 
       const elapsed = Date.now() - startedAt;
       if (!response.ok) {
-        return { ...transportFailure("HTTP_ERROR"), httpStatus: response.status, durationMs: elapsed };
+        return {
+          ...transportFailure("HTTP_ERROR"),
+          httpStatus: response.status,
+          durationMs: elapsed,
+        };
       }
 
       let payload: unknown;
@@ -326,7 +342,10 @@ interface TencentEndpoint {
   readonly apiKey: string;
 }
 
-function endpointOf(settings: PlacesSettings, path: string): TencentEndpoint | { failure: TencentFailure } {
+function endpointOf(
+  settings: PlacesSettings,
+  path: string,
+): TencentEndpoint | { failure: TencentFailure } {
   const apiKey = settings.tencentApiKey;
   if (!apiKey) {
     return { failure: transportFailure("NOT_CONFIGURED") };
@@ -341,16 +360,14 @@ function endpointOf(settings: PlacesSettings, path: string): TencentEndpoint | {
 }
 
 export type TencentSuggestOutcome =
-  | { readonly ok: true; readonly items: Place[]; readonly durationMs: number }
-  | TencentFailure;
+  { readonly ok: true; readonly items: Place[]; readonly durationMs: number } | TencentFailure;
 
 export type TencentCandidatesOutcome =
   | { readonly ok: true; readonly candidates: TencentCandidate[]; readonly durationMs: number }
   | TencentFailure;
 
 export type TencentPlaceOutcome =
-  | { readonly ok: true; readonly place: Place; readonly durationMs: number }
-  | TencentFailure;
+  { readonly ok: true; readonly place: Place; readonly durationMs: number } | TencentFailure;
 
 export type TencentCandidateOutcome =
   | { readonly ok: true; readonly candidate: TencentCandidate; readonly durationMs: number }

@@ -14,6 +14,7 @@ import { registerInsightsPaths } from "./openapi/paths-insights";
 import { registerMediaPaths } from "./openapi/paths-media";
 import { registerMoneyPaths } from "./openapi/paths-money";
 import { registerPlacePaths } from "./openapi/paths-places";
+import { registerProviderPaths } from "./openapi/paths-providers";
 import { registerSettingsPaths } from "./openapi/paths-settings";
 import { registerSharingPaths } from "./openapi/paths-sharing";
 import { registerTripPaths } from "./openapi/paths-trips";
@@ -38,6 +39,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
   registerTripPaths(registry);
   registerContentPaths(registry);
   registerMediaPaths(registry);
+  registerProviderPaths(registry);
   registerPlacePaths(registry);
   registerAiPaths(registry);
   registerMoneyPaths(registry);

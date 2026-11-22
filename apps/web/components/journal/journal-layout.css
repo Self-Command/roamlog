@@ -349,9 +349,7 @@
   min-width: 0;
 }
 
-.journal-layout
-  div[data-type="columns"]:not([data-node-view-wrapper])
-  > div[data-type="column"] {
+.journal-layout div[data-type="columns"]:not([data-node-view-wrapper]) > div[data-type="column"] {
   flex: 1 1 0;
 }
 
@@ -412,7 +410,7 @@
 }
 
 .journal-layout ::selection {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--selection);
   color: var(--ink);
 }
 
@@ -461,9 +459,7 @@
     gap: 1rem;
   }
 
-  .journal-layout
-    div[data-type="columns"]:not([data-node-view-wrapper])
-    > div[data-type="column"] {
+  .journal-layout div[data-type="columns"]:not([data-node-view-wrapper]) > div[data-type="column"] {
     flex: 0 0 auto;
     width: 100%;
   }
