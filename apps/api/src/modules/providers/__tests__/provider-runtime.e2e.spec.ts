@@ -298,6 +298,7 @@ async function createAiProvider(
   label: string,
   baseUrl: string,
   key: string,
+  priority = 10,
 ): Promise<ProviderConnection> {
   const response = await http()
     .post("/v1/admin/providers")
@@ -307,7 +308,7 @@ async function createAiProvider(
       preset: "custom-openai-compatible",
       label,
       enabled: true,
-      priority: 10,
+      priority,
       config: {
         baseUrl,
         timeoutMs: 5_000,
@@ -489,8 +490,13 @@ integration("Provider runtime against PostgreSQL, Redis and a local upstream stu
 
     await request(app!.getHttpServer()).get("/v1/admin/provider-catalog").expect(401);
 
-    const aiFail = await createAiProvider(labels.aiFail, `${stubBaseUrl}/fail/v1`, secrets.aiFail);
-    const aiOk = await createAiProvider(labels.aiOk, `${stubBaseUrl}/ok/v1`, secrets.aiOk);
+    const aiFail = await createAiProvider(
+      labels.aiFail,
+      `${stubBaseUrl}/fail/v1`,
+      secrets.aiFail,
+      10,
+    );
+    const aiOk = await createAiProvider(labels.aiOk, `${stubBaseUrl}/ok/v1`, secrets.aiOk, 20);
 
     const initialAiGroup = await getGroup("ai");
     expect(initialAiGroup.providers.map((provider) => provider.id)).toEqual([aiFail.id, aiOk.id]);
