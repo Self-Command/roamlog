@@ -20,9 +20,9 @@ const RUN_ID = `${Date.now()}`;
 const ENTRY_TITLE = `E2E 排版验收 ${RUN_ID}`;
 const TRIP_TITLE = `E2E 排版旅行 ${RUN_ID}`;
 const VIEWER_ACCOUNT: SmokeAccount = {
-  email: "e2e-stops-viewer@roamlog.test",
-  password: "Roamlog-Stops-Aa1!",
-  name: "StopsViewer",
+  email: "e2e-journal-viewer@roamlog.test",
+  password: "Roamlog-JournalViewer-Aa1!",
+  name: "JournalViewer",
 };
 
 let ownerApi: APIRequestContext;

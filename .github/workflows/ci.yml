@@ -269,9 +269,9 @@ jobs:
         run: |
           pnpm --filter @roamlog/api exec tsx ../../e2e/support/provision-smoke-accounts.ts \
             --action=create-member \
-            --email='e2e-stops-viewer@roamlog.test' \
-            --password='Roamlog-Stops-Aa1!' \
-            --name='StopsViewer' \
+            --email='e2e-journal-viewer@roamlog.test' \
+            --password='Roamlog-JournalViewer-Aa1!' \
+            --name='JournalViewer' \
             --workspace-slug='verify-crew' \
             --role=viewer
 
