@@ -119,6 +119,16 @@ async function diagnoseImage(
   ].join(" ");
 }
 
+/**
+ * SSR and the test's independent public-payload request each receive a fresh
+ * SigV4 query string, so the signature/date legitimately differ. The object
+ * identity is the origin + pathname; the query is only a short-lived grant.
+ */
+function signedObjectIdentity(value: string): string {
+  const url = new URL(value);
+  return `${url.origin}${url.pathname}`;
+}
+
 async function expectImageLoaded(
   page: Page,
   image: Locator,
@@ -128,9 +138,10 @@ async function expectImageLoaded(
   try {
     await image.scrollIntoViewIfNeeded();
     const initial = await imageState(image);
-    expect(initial.src, `${label} must render the signed URL from the public payload`).toBe(
-      expectedSrc,
-    );
+    expect(
+      signedObjectIdentity(initial.src),
+      `${label} must render the same signed media object as the public payload`,
+    ).toBe(signedObjectIdentity(expectedSrc));
 
     await expect
       .poll(
@@ -173,7 +184,8 @@ async function expectPhotoWallCount(
         nodes.map((node) => (node as HTMLImageElement).getAttribute("src") ?? "<missing>"),
       )
       .catch(() => []);
-    const missing = expectedSrcs.filter((src) => !rendered.includes(src));
+    const renderedObjects = new Set(rendered.map((src) => signedObjectIdentity(src)));
+    const missing = expectedSrcs.filter((src) => !renderedObjects.has(signedObjectIdentity(src)));
     const diagnostics = await Promise.all(
       missing.map(async (src) => `missing src=${src} http=${await probeImageUrl(page, src)}`),
     );
