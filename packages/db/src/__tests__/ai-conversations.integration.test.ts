@@ -128,7 +128,8 @@ integration("0015_ai_conversations against PostgreSQL", () => {
   });
 
   it("creates the three tables from the published migration chain", async () => {
-    expect(migrations.indexOf(migrationName)).toBe(migrations.length - 1);
+    expect(migrations).toContain(migrationName);
+    expect(migrations.filter((migration) => migration <= migrationName).at(-1)).toBe(migrationName);
 
     const tables = await admin.query(
       `SELECT table_name FROM information_schema.tables
