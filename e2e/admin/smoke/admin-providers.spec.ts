@@ -3,7 +3,7 @@
  *
  * The suite uses the real Admin login, Better Auth TOTP, real Admin/API
  * processes, and a local OpenAI-compatible HTTP stub. The API must be started
- * with PROVIDER_EGRESS_ALLOW_PRIVATE=1 in a non-production environment; CI
+ * with PROVIDER_EGRESS_ALLOW_PRIVATE=true in a non-production environment; CI
  * supplies that test-only setting. No product request is mocked.
  */
 import {
@@ -220,8 +220,8 @@ test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000);
   expect(
     process.env.PROVIDER_EGRESS_ALLOW_PRIVATE,
-    "Provider E2E requires PROVIDER_EGRESS_ALLOW_PRIVATE=1 for the local stub",
-  ).toBe("1");
+    "Provider E2E requires PROVIDER_EGRESS_ALLOW_PRIVATE=true for the local stub",
+  ).toBe("true");
 
   stub = await startProviderStub();
   evidence.stubBaseUrl = stub.baseUrl;

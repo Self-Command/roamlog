@@ -372,7 +372,7 @@ jobs:
           AUTH_RATE_LIMIT_MAX: "100"
           E2E_START_API: "1"
           PROVIDER_CONFIG_MODE: "v2"
-          PROVIDER_EGRESS_ALLOW_PRIVATE: "1"
+          PROVIDER_EGRESS_ALLOW_PRIVATE: "true"
           CONFIG_ENCRYPTION_KEY: "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
         run: >-
           pnpm exec playwright test

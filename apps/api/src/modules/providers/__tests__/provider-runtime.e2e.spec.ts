@@ -683,12 +683,23 @@ integration("Provider runtime against PostgreSQL, Redis and a local upstream stu
     }
 
     const audits = await seedPrisma!.auditLog.findMany({
-      where: { targetId: { in: providerIds } },
+      where: {
+        actorId,
+        OR: [
+          { targetId: { in: providerIds } },
+          {
+            action: {
+              in: ["admin.provider.policy_updated", "admin.provider.reordered"],
+            },
+          },
+        ],
+      },
       select: { action: true, metadata: true },
     });
     expect(audits.some((entry) => entry.action === "admin.provider.created")).toBe(true);
     expect(audits.some((entry) => entry.action === "admin.provider.models_refreshed")).toBe(true);
     expect(audits.some((entry) => entry.action === "admin.provider.reordered")).toBe(true);
+    expect(audits.some((entry) => entry.action === "admin.provider.policy_updated")).toBe(true);
     expect(JSON.stringify(audits)).not.toContain(secrets.aiFail);
     expect(JSON.stringify(audits)).not.toContain(secrets.aiOk);
     expect(JSON.stringify(audits)).not.toContain(secrets.tencent);

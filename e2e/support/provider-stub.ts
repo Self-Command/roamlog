@@ -41,7 +41,7 @@ function respondJson(
 /**
  * Local OpenAI-compatible stub for the Provider Admin E2E.
  *
- * The API process must run with `PROVIDER_EGRESS_ALLOW_PRIVATE=1` in a
+ * The API process must run with `PROVIDER_EGRESS_ALLOW_PRIVATE=true` in a
  * non-production/test environment so its SSRF guard permits `127.0.0.1`.
  * This server is started by the test worker, not by the product runtime.
  */
