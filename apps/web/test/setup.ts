@@ -92,12 +92,16 @@ for (const prototype of [
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   for (const timer of animationFrameTimers.values()) {
     clearTimeout(timer);
   }
   animationFrameTimers.clear();
   nextAnimationFrameId = 1;
+  // Preact's scheduler keeps a 35ms fallback timer alive when a component is
+  // unmounted. Let it run while jsdom globals still exist; otherwise the timer
+  // calls `cancelAnimationFrame` after the test environment has been torn down.
+  await new Promise((resolve) => setTimeout(resolve, 80));
   window.localStorage.clear();
 });
