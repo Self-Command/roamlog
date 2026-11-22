@@ -113,6 +113,17 @@ async function fillConfig(
   }
 }
 
+async function selectProviderType(
+  dialog: ReturnType<typeof providerDialog>,
+  label: string,
+): Promise<void> {
+  const select = dialog.getByLabel("类型", { exact: false });
+  await expect(select).toBeVisible();
+  if (await select.isEnabled()) {
+    await select.selectOption({ label });
+  }
+}
+
 async function saveProvider(dialog: ReturnType<typeof providerDialog>) {
   await dialog.getByRole("button", { name: "保存服务商", exact: true }).click();
 }
@@ -124,7 +135,16 @@ async function waitForDialogClosed(dialog: ReturnType<typeof providerDialog>) {
 async function addMapProvider(pageToUse: Page, label: string, typeLabel: string, apiKey: string) {
   const dialog = await openAddProvider(pageToUse);
   await dialog.getByLabel("名称", { exact: false }).fill(label);
-  await dialog.getByLabel("类型", { exact: false }).selectOption({ label: typeLabel });
+  await selectProviderType(dialog, typeLabel);
+  const region = dialog.getByRole("checkbox", {
+    name: typeLabel === "腾讯地图" ? "中国" : "全球",
+    exact: true,
+  });
+  await expect(region).toBeVisible();
+  if (!(await region.isChecked())) {
+    await region.click();
+  }
+  await expect(region).toBeChecked();
   const baseUrl = dialog.getByLabel("Base URL", { exact: false });
   if ((await baseUrl.count()) > 0 && (await baseUrl.inputValue()) === "") {
     await baseUrl.fill(
@@ -331,9 +351,7 @@ test("AI provider discovers models without auto-selecting, saves masked key, and
 
   const dialog = await openAddProvider(page);
   await dialog.getByLabel("名称", { exact: false }).fill(label);
-  await dialog.getByLabel("类型", { exact: false }).selectOption({
-    label: "自定义 OpenAI 兼容",
-  });
+  await selectProviderType(dialog, "自定义 OpenAI 兼容");
   await dialog.getByLabel("Base URL", { exact: false }).fill(`${stub.baseUrl}/v1`);
   await dialog.getByLabel("API Key", { exact: false }).fill(`stub-key-${runId}`);
   evidence.providerLabels.push(label);
@@ -359,7 +377,7 @@ test("AI provider discovers models without auto-selecting, saves masked key, and
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/••••/).first()).toBeVisible();
-  await expect(page.content()).not.toContain(`stub-key-${runId}`);
+  await expect(await page.content()).not.toContain(`stub-key-${runId}`);
 
   await page
     .getByRole("button", { name: `测试 ${label}`, exact: true })
@@ -387,7 +405,7 @@ test("mail and storage enforce one active provider", async () => {
   });
   const mailDialog = await openAddProvider(page);
   await mailDialog.getByLabel("名称", { exact: false }).fill(mailA);
-  await mailDialog.getByLabel("类型", { exact: false }).selectOption({ label: "Resend" });
+  await selectProviderType(mailDialog, "Resend");
   await fillConfig(mailDialog, {
     发件地址: `Roamlog <no-reply+${runId}@example.test>`,
   });
@@ -401,7 +419,7 @@ test("mail and storage enforce one active provider", async () => {
 
   const mailConflictDialog = await openAddProvider(page);
   await mailConflictDialog.getByLabel("名称", { exact: false }).fill(mailB);
-  await mailConflictDialog.getByLabel("类型", { exact: false }).selectOption({ label: "Resend" });
+  await selectProviderType(mailConflictDialog, "Resend");
   await fillConfig(mailConflictDialog, {
     发件地址: `Roamlog <no-reply+${runId}@example.test>`,
   });
@@ -433,9 +451,7 @@ test("mail and storage enforce one active provider", async () => {
   });
   const storageDialog = await openAddProvider(page);
   await storageDialog.getByLabel("名称", { exact: false }).fill(storageA);
-  await storageDialog.getByLabel("类型", { exact: false }).selectOption({
-    label: "S3 兼容存储",
-  });
+  await selectProviderType(storageDialog, "S3 兼容存储");
   await fillConfig(storageDialog, {
     "S3 Endpoint": `https://s3-${runId}.example.test`,
     Bucket: `roamlog-${runId}`,
@@ -451,9 +467,7 @@ test("mail and storage enforce one active provider", async () => {
 
   const storageConflictDialog = await openAddProvider(page);
   await storageConflictDialog.getByLabel("名称", { exact: false }).fill(storageB);
-  await storageConflictDialog.getByLabel("类型", { exact: false }).selectOption({
-    label: "S3 兼容存储",
-  });
+  await selectProviderType(storageConflictDialog, "S3 兼容存储");
   await fillConfig(storageConflictDialog, {
     "S3 Endpoint": `https://s3-${runId}.example.test`,
     Bucket: `roamlog-${runId}`,

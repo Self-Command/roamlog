@@ -49,6 +49,7 @@ function MultiSelectField({ field, value, error, onChange }: ProviderCatalogFiel
         {(field.options ?? []).map((option) => (
           <label key={option.value} className="flex items-center gap-2 text-xs text-body">
             <Checkbox
+              aria-label={option.label}
               checked={selected.includes(option.value)}
               onCheckedChange={(checked) => toggle(option.value, checked === true)}
             />
