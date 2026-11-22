@@ -10,6 +10,7 @@ import { registerAiPaths } from "./openapi/paths-ai";
 import { registerAuthPaths } from "./openapi/paths-auth";
 import { registerContentPaths } from "./openapi/paths-content";
 import { registerHealthPaths } from "./openapi/paths-health";
+import { registerInsightsPaths } from "./openapi/paths-insights";
 import { registerMediaPaths } from "./openapi/paths-media";
 import { registerMoneyPaths } from "./openapi/paths-money";
 import { registerPlacePaths } from "./openapi/paths-places";
@@ -40,6 +41,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
   registerPlacePaths(registry);
   registerAiPaths(registry);
   registerMoneyPaths(registry);
+  registerInsightsPaths(registry);
   registerSharingPaths(registry);
   registerAdminPaths(registry);
   registerSettingsPaths(registry);
@@ -86,6 +88,10 @@ export function buildOpenApiDocument(): OpenApiDocument {
         description: "Integer-minor-unit expense records and participant splits.",
       },
       { name: "Budget", description: "Multi-currency budget summaries and settle-up suggestions." },
+      {
+        name: "Insights",
+        description: "Workspace-scoped travel insights and expense CSV export.",
+      },
       { name: "Packing", description: "Packing checklists and bulk updates." },
       {
         name: "Share Links",

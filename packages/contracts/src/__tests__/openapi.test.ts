@@ -61,6 +61,8 @@ describe("OpenAPI document", () => {
       "/v1/places/search",
       "/v1/trips/{tripId}/expenses",
       "/v1/trips/{tripId}/budget/summary",
+      "/v1/workspaces/{workspaceId}/insights",
+      "/v1/workspaces/{workspaceId}/insights/expenses.csv",
       "/v1/trips/{tripId}/packing",
       "/v1/trips/{tripId}/share-links",
       "/v1/public/trips/{token}",
@@ -90,8 +92,8 @@ describe("OpenAPI document", () => {
     // collapse into 7 path items (GET/POST share `/conversations`, GET/PATCH/
     // DELETE share `/{conversationId}`, GET/DELETE share `/{messages}`) and the
     // stream endpoint adds 1 more: 105 + 8 = 113 unique paths, 144 + 12 = 156
-    // operations.
-    expect(paths.length).toBe(113);
+    // operations. Insights adds 2 unique paths and 2 operations.
+    expect(paths.length).toBe(115);
 
     const operations = Object.values(doc.paths).reduce(
       (count, pathItem) =>
@@ -227,6 +229,50 @@ describe("OpenAPI document", () => {
       $ref: "#/components/schemas/AdminAuditCsvResponse",
     });
     expect(doc.components.schemas.AdminAuditCsvResponse).toMatchObject({ type: "string" });
+  });
+
+  it("publishes the insights aggregate and expense CSV contracts", () => {
+    const doc = document();
+    const insights = doc.paths["/v1/workspaces/{workspaceId}/insights"]?.get as {
+      parameters?: Array<{ name: string; in: string; required?: boolean }>;
+      responses?: Record<
+        string,
+        { content?: Record<string, { schema?: Record<string, unknown> }> }
+      >;
+    };
+    const csv = doc.paths["/v1/workspaces/{workspaceId}/insights/expenses.csv"]?.get as {
+      parameters?: Array<{ name: string; in: string; required?: boolean }>;
+      responses?: Record<
+        string,
+        { content?: Record<string, { schema?: Record<string, unknown> }> }
+      >;
+    };
+
+    expect(insights).toBeDefined();
+    expect(insights.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "workspaceId", in: "path" }),
+        expect.objectContaining({ name: "month", in: "query" }),
+      ]),
+    );
+    expect(insights.parameters?.find((parameter) => parameter.name === "month")?.required).not.toBe(
+      true,
+    );
+    expect(insights.responses?.["200"]?.content?.["application/json"]?.schema).toEqual({
+      $ref: "#/components/schemas/WorkspaceInsights",
+    });
+    expect(doc.components.schemas.InsightsQuery).toBeDefined();
+
+    expect(csv).toBeDefined();
+    expect(csv.parameters).toHaveLength(1);
+    expect(csv.parameters?.[0]).toMatchObject({ name: "workspaceId", in: "path" });
+    expect(csv.responses?.["200"]?.content).toHaveProperty("text/csv");
+    expect(csv.responses?.["200"]?.content?.["text/csv"]?.schema).toEqual({ type: "string" });
+
+    for (const code of ["400", "401", "403", "404", "429", "500"]) {
+      expect(insights.responses?.[code], `insights error ${code}`).toBeDefined();
+      expect(csv.responses?.[code], `CSV error ${code}`).toBeDefined();
+    }
   });
 
   it("declares every path parameter and keeps operation ids unique", () => {

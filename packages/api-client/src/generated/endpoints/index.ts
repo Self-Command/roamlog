@@ -6,6 +6,7 @@ export * from "./comments/comments";
 export * from "./expenses/expenses";
 export * from "./exports/exports";
 export * from "./health/health";
+export * from "./insights/insights";
 export * from "./invitations/invitations";
 export * from "./itinerary/itinerary";
 export * from "./journal/journal";

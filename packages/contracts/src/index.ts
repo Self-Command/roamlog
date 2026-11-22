@@ -5,4 +5,5 @@ export * from "./common/problem-details";
 export * from "./permissions";
 export * from "./entities";
 export * from "./api";
+export * from "./api/insights";
 export * from "./events/realtime";

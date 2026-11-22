@@ -77,6 +77,10 @@
       "description": "Multi-currency budget summaries and settle-up suggestions."
     },
     {
+      "name": "Insights",
+      "description": "Workspace-scoped travel insights and expense CSV export."
+    },
+    {
       "name": "Packing",
       "description": "Packing checklists and bulk updates."
     },
@@ -9322,6 +9326,454 @@
         "type": "string",
         "minLength": 8,
         "maxLength": 128
+      },
+      "InsightsAnnualTripsPoint": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "string",
+            "pattern": "^\\d{4}$",
+            "description": "Calendar year in YYYY form."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "year",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsBudgetRow": {
+        "type": "object",
+        "properties": {
+          "tripId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "tripTitle": {
+            "type": "string",
+            "minLength": 1
+          },
+          "destination": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$",
+            "description": "ISO 4217 uppercase currency code."
+          },
+          "budgetAmountMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Non-negative integer amount in the currency's minor unit."
+          },
+          "spentAmountMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Non-negative integer amount in the currency's minor unit."
+          },
+          "hasOtherCurrencySpend": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tripId",
+          "tripTitle",
+          "destination",
+          "currency",
+          "budgetAmountMinor",
+          "spentAmountMinor",
+          "hasOtherCurrencySpend"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsCategoryTotal": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "transport",
+              "stay",
+              "food",
+              "activity",
+              "shopping",
+              "other"
+            ]
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Non-negative integer amount in the currency's minor unit."
+          }
+        },
+        "required": [
+          "category",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsCurrencyTotal": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$",
+            "description": "ISO 4217 uppercase currency code."
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Non-negative integer amount in the currency's minor unit."
+          }
+        },
+        "required": [
+          "currency",
+          "amountMinor"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsHeatmapMonth": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "Calendar month in YYYY-MM form."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "key",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsHeatmapRow": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "string",
+            "pattern": "^\\d{4}$",
+            "description": "Calendar year in YYYY form."
+          },
+          "months": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "description": "Calendar month in YYYY-MM form."
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "key",
+                "count"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 12,
+            "maxItems": 12
+          }
+        },
+        "required": [
+          "year",
+          "months"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsHighestBudget": {
+        "type": "object",
+        "properties": {
+          "tripId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "budgetAmountMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Non-negative integer amount in the currency's minor unit."
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 3,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$",
+            "description": "ISO 4217 uppercase currency code."
+          }
+        },
+        "required": [
+          "tripId",
+          "title",
+          "budgetAmountMinor",
+          "currency"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsLongestTrip": {
+        "type": "object",
+        "properties": {
+          "tripId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "durationDays": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "tripId",
+          "title",
+          "durationDays"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsMonthKey": {
+        "type": "string",
+        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+        "description": "Calendar month in YYYY-MM form."
+      },
+      "InsightsMonthlySpendPoint": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "Calendar month in YYYY-MM form."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Non-negative integer amount in the currency's minor unit."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "amountMinor"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsMostVisitedCountry": {
+        "type": "object",
+        "properties": {
+          "countryCode": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "tripCount": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "countryCode",
+          "tripCount"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsQuery": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "Calendar month in YYYY-MM form."
+          }
+        },
+        "additionalProperties": false
+      },
+      "InsightsRecords": {
+        "type": "object",
+        "properties": {
+          "longestTrip": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "tripId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Sortable UUIDv7 identifier."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "durationDays": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "tripId",
+              "title",
+              "durationDays"
+            ],
+            "additionalProperties": false
+          },
+          "highestBudget": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "tripId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Sortable UUIDv7 identifier."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "budgetAmountMinor": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Non-negative integer amount in the currency's minor unit."
+              },
+              "currency": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 3,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$",
+                "description": "ISO 4217 uppercase currency code."
+              }
+            },
+            "required": [
+              "tripId",
+              "title",
+              "budgetAmountMinor",
+              "currency"
+            ],
+            "additionalProperties": false
+          },
+          "mostVisitedCountry": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "countryCode": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2,
+                "pattern": "^[A-Z]{2}$"
+              },
+              "tripCount": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "countryCode",
+              "tripCount"
+            ],
+            "additionalProperties": false
+          },
+          "lastEntryDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+          }
+        },
+        "required": [
+          "longestTrip",
+          "highestBudget",
+          "mostVisitedCountry",
+          "lastEntryDate"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsStats": {
+        "type": "object",
+        "properties": {
+          "tripCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "countries": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cities": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "years": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^\\d{4}$",
+              "description": "Calendar year in YYYY form."
+            }
+          }
+        },
+        "required": [
+          "tripCount",
+          "totalDays",
+          "countries",
+          "cities",
+          "years"
+        ],
+        "additionalProperties": false
+      },
+      "InsightsYear": {
+        "type": "string",
+        "pattern": "^\\d{4}$",
+        "description": "Calendar year in YYYY form."
       },
       "Invitation": {
         "type": "object",
@@ -20758,6 +21210,401 @@
             "description": "Whitelisted sort expression: createdAt:asc|desc."
           }
         }
+      },
+      "WorkspaceInsights": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sortable UUIDv7 identifier."
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$",
+            "description": "ISO 4217 uppercase currency code."
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "Calendar month in YYYY-MM form."
+          },
+          "stats": {
+            "type": "object",
+            "properties": {
+              "tripCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "totalDays": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "countries": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cities": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "years": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^\\d{4}$",
+                  "description": "Calendar year in YYYY form."
+                }
+              }
+            },
+            "required": [
+              "tripCount",
+              "totalDays",
+              "countries",
+              "cities",
+              "years"
+            ],
+            "additionalProperties": false
+          },
+          "annualTrips": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "year": {
+                  "type": "string",
+                  "pattern": "^\\d{4}$",
+                  "description": "Calendar year in YYYY form."
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "year",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "monthlySpend": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "description": "Calendar month in YYYY-MM form."
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 8
+                },
+                "amountMinor": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Non-negative integer amount in the currency's minor unit."
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "amountMinor"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 12,
+            "maxItems": 12
+          },
+          "categoryTotals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "transport",
+                    "stay",
+                    "food",
+                    "activity",
+                    "shopping",
+                    "other"
+                  ]
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Non-negative integer amount in the currency's minor unit."
+                }
+              },
+              "required": [
+                "category",
+                "total"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "budgetRows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tripId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Sortable UUIDv7 identifier."
+                },
+                "tripTitle": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "destination": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "currency": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3,
+                  "pattern": "^[A-Z]{3}$",
+                  "description": "ISO 4217 uppercase currency code."
+                },
+                "budgetAmountMinor": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Non-negative integer amount in the currency's minor unit."
+                },
+                "spentAmountMinor": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Non-negative integer amount in the currency's minor unit."
+                },
+                "hasOtherCurrencySpend": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "tripId",
+                "tripTitle",
+                "destination",
+                "currency",
+                "budgetAmountMinor",
+                "spentAmountMinor",
+                "hasOtherCurrencySpend"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 6
+          },
+          "heatmap": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "year": {
+                  "type": "string",
+                  "pattern": "^\\d{4}$",
+                  "description": "Calendar year in YYYY form."
+                },
+                "months": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                        "description": "Calendar month in YYYY-MM form."
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "count"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 12,
+                  "maxItems": 12
+                }
+              },
+              "required": [
+                "year",
+                "months"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "records": {
+            "type": "object",
+            "properties": {
+              "longestTrip": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "tripId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Sortable UUIDv7 identifier."
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "durationDays": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "tripId",
+                  "title",
+                  "durationDays"
+                ],
+                "additionalProperties": false
+              },
+              "highestBudget": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "tripId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Sortable UUIDv7 identifier."
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "budgetAmountMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Non-negative integer amount in the currency's minor unit."
+                  },
+                  "currency": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "pattern": "^[A-Z]{3}$",
+                    "description": "ISO 4217 uppercase currency code."
+                  }
+                },
+                "required": [
+                  "tripId",
+                  "title",
+                  "budgetAmountMinor",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              "mostVisitedCountry": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "countryCode": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "tripCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "countryCode",
+                  "tripCount"
+                ],
+                "additionalProperties": false
+              },
+              "lastEntryDate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date",
+                "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+              }
+            },
+            "required": [
+              "longestTrip",
+              "highestBudget",
+              "mostVisitedCountry",
+              "lastEntryDate"
+            ],
+            "additionalProperties": false
+          },
+          "currencyTotals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currency": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3,
+                  "pattern": "^[A-Z]{3}$",
+                  "description": "ISO 4217 uppercase currency code."
+                },
+                "amountMinor": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Non-negative integer amount in the currency's minor unit."
+                }
+              },
+              "required": [
+                "currency",
+                "amountMinor"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "expenseCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currencyExpenseCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "workspaceId",
+          "currency",
+          "month",
+          "stats",
+          "annualTrips",
+          "monthlySpend",
+          "categoryTotals",
+          "budgetRows",
+          "heatmap",
+          "records",
+          "currencyTotals",
+          "expenseCount",
+          "currencyExpenseCount"
+        ],
+        "additionalProperties": false
       },
       "WorkspaceListResponse": {
         "type": "array",
@@ -34826,6 +35673,207 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BulkPackingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspaceId}/insights": {
+      "get": {
+        "operationId": "getWorkspaceInsights",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Get workspace travel insights",
+        "description": "Returns the aggregated travel, spending, budget, heatmap, and record data for a Workspace.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "description": "Calendar month in YYYY-MM form."
+            },
+            "required": false,
+            "description": "Calendar month in YYYY-MM form.",
+            "name": "month",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceInsights"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspaceId}/insights/expenses.csv": {
+      "get": {
+        "operationId": "exportWorkspaceInsightsExpenses",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Export workspace expenses as CSV",
+        "description": "Returns a UTF-8 CSV attachment with columns: 日期,旅行,分类,备注,金额,币种.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "UTF-8 CSV attachment. Columns: 日期,旅行,分类,备注,金额,币种.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
