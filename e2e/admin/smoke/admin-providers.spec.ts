@@ -302,7 +302,9 @@ test("map providers coexist, reorder, and expose strict priority mode", async ()
   await expect(orderList).toBeVisible();
   await page.getByRole("button", { name: `${tencent}下移`, exact: true }).click();
   await page.getByRole("button", { name: "保存顺序", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "优先级顺序已保存" })).toBeVisible({
+  await expect(
+    page.getByRole("status").filter({ hasText: "优先级顺序已保存" }).first(),
+  ).toBeVisible({
     timeout: 30_000,
   });
 
@@ -383,6 +385,7 @@ test("AI provider discovers models without auto-selecting, saves masked key, and
     .getByRole("button", { name: `测试 ${label}`, exact: true })
     .first()
     .click();
+  await page.getByRole("button", { name: "测试连接", exact: true }).click();
   await expect(
     page.getByRole("status").filter({ hasText: /连接正常|测试通过|healthy/i }),
   ).toBeVisible({ timeout: 30_000 });
@@ -522,7 +525,7 @@ test("secret reveal is explicit and never survives a reload", async () => {
   await dialog.getByRole("button", { name: "取消", exact: true }).click();
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
-  await expect(page.content()).not.toContain(key);
+  await expect(await page.content()).not.toContain(key);
   await expect(page.getByTestId("provider-table").getByText(/••••/).first()).toBeVisible();
 });
 
