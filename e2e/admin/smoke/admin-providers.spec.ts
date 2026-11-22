@@ -373,11 +373,11 @@ test("AI provider discovers models without auto-selecting, saves masked key, and
 
   await saveProvider(dialog);
   await waitForDialogClosed(dialog);
-  await expect(page.getByText(label, { exact: true }).first()).toBeVisible({
+  await expect(page.getByTestId("provider-table").getByText(label, { exact: true })).toBeVisible({
     timeout: 30_000,
   });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
+  await expect(page.getByTestId("provider-table").getByText(label, { exact: true })).toBeVisible();
   await expect(page.getByText(/••••/).first()).toBeVisible();
   await expect(await page.content()).not.toContain(`stub-key-${runId}`);
 
