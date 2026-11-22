@@ -246,7 +246,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /app/.next/cache
+      - /app/.next/cache:rw,noexec,nosuid,size=128m,uid=10001,gid=10001,mode=0775
+      - /app/.next/server/route-cache:rw,noexec,nosuid,size=128m,uid=10001,gid=10001,mode=0775
     stop_grace_period: 30s
     networks:
       - edge
@@ -278,7 +279,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /app/.next/cache
+      - /app/.next/cache:rw,noexec,nosuid,size=128m,uid=10001,gid=10001,mode=0775
+      - /app/.next/server/route-cache:rw,noexec,nosuid,size=128m,uid=10001,gid=10001,mode=0775
     stop_grace_period: 30s
     networks:
       - edge
