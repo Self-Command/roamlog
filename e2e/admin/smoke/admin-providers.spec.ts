@@ -335,7 +335,7 @@ test("map providers coexist, reorder, and expose strict priority mode", async ()
   });
   expect(policy.status).toBe(200);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByText("严格优先级回退", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "严格优先级回退", exact: true })).toBeVisible();
 
   evidence.savedGroups.placesPolicy = policy.body;
   await shot(page, "providers-map-1440.png");
@@ -416,7 +416,7 @@ test("mail and storage enforce one active provider", async () => {
   await saveProvider(mailDialog);
   await waitForDialogClosed(mailDialog);
   evidence.providerLabels.push(mailA);
-  await expect(page.getByText(mailA, { exact: true }).first()).toBeVisible({
+  await expect(page.getByTestId("provider-table").getByText(mailA, { exact: true })).toBeVisible({
     timeout: 30_000,
   });
 
@@ -464,9 +464,11 @@ test("mail and storage enforce one active provider", async () => {
   await saveProvider(storageDialog);
   await waitForDialogClosed(storageDialog);
   evidence.providerLabels.push(storageA);
-  await expect(page.getByText(storageA, { exact: true }).first()).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.getByTestId("provider-table").getByText(storageA, { exact: true })).toBeVisible(
+    {
+      timeout: 30_000,
+    },
+  );
 
   const storageConflictDialog = await openAddProvider(page);
   await storageConflictDialog.getByLabel("名称", { exact: false }).fill(storageB);
