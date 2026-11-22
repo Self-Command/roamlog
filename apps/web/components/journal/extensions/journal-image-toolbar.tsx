@@ -100,9 +100,9 @@ export function JournalImageToolbar({
   const settingsWasOpenRef = useRef(false);
 
   /**
-   * Radix closes the portal first; the Tiptap NodeView can remount the toolbar
-   * on the next frame. Resolve the live trigger from the document after both
-   * frames instead of focusing a ref that may already be detached.
+   * Radix closes the portal first; the Tiptap NodeView and the parent editor
+   * dialog can both restore focus afterwards. Resolve the live trigger from
+   * the document for a few frames instead of focusing one ref once.
    *
    * This mirrors the Gallery NodeView's delayed focus restoration
    * (`journal-gallery-node-view.tsx`) and intentionally does not cancel the
@@ -110,17 +110,26 @@ export function JournalImageToolbar({
    */
   function restoreSettingsFocus(): void {
     onRestoreSelection();
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        const liveTrigger =
-          settingsTriggerRef.current?.isConnected === true
-            ? settingsTriggerRef.current
-            : document.querySelector<HTMLButtonElement>(
-                'button[data-journal-image-settings-trigger="true"]',
-              );
-        liveTrigger?.focus();
-      });
-    });
+    let remainingFrames = 12;
+    let stableFrames = 0;
+
+    const focusLiveTrigger = () => {
+      const liveTrigger =
+        settingsTriggerRef.current?.isConnected === true
+          ? settingsTriggerRef.current
+          : document.querySelector<HTMLButtonElement>(
+              'button[data-journal-image-settings-trigger="true"]',
+            );
+      liveTrigger?.focus();
+      stableFrames =
+        liveTrigger !== null && document.activeElement === liveTrigger ? stableFrames + 1 : 0;
+      remainingFrames -= 1;
+      if (remainingFrames > 0 && stableFrames < 4) {
+        window.requestAnimationFrame(focusLiveTrigger);
+      }
+    };
+
+    window.requestAnimationFrame(focusLiveTrigger);
   }
 
   useEffect(() => {
