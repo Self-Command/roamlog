@@ -213,6 +213,65 @@ jobs:
             --workspace-slug='roamlog-crew' \
             --role=admin
 
+      - name: Provision journal-layout workspace
+        # The journal layout specs exercise the owner and read-only flows in a
+        # dedicated workspace, so seed one after the shared smoke account has
+        # been created. This is CI-only test data; no product code is copied.
+        run: |
+          cat > apps/api/ci-provision-journal-layout.ts <<'TS'
+          import { createPrismaClient } from "@roamlog/db";
+
+          void (async () => {
+            const prisma = createPrismaClient();
+            try {
+              const owner = await prisma.user.findUniqueOrThrow({
+                where: { email: "verify@roamlog.test" },
+              });
+              const workspace = await prisma.workspace.upsert({
+                where: { slug: "verify-crew" },
+                update: { ownerId: owner.id },
+                create: {
+                  name: "Verify Crew",
+                  slug: "verify-crew",
+                  ownerId: owner.id,
+                  plan: "team",
+                  settings: {},
+                },
+              });
+              await prisma.workspaceMember.upsert({
+                where: {
+                  workspaceId_userId: {
+                    workspaceId: workspace.id,
+                    userId: owner.id,
+                  },
+                },
+                update: { role: "owner", status: "active" },
+                create: {
+                  workspaceId: workspace.id,
+                  userId: owner.id,
+                  role: "owner",
+                  status: "active",
+                },
+              });
+              console.log(JSON.stringify({ workspaceId: workspace.id, slug: workspace.slug }));
+            } finally {
+              await prisma.$disconnect();
+            }
+          })();
+          TS
+          pnpm --filter @roamlog/api exec tsx ci-provision-journal-layout.ts
+          rm apps/api/ci-provision-journal-layout.ts
+
+      - name: Provision journal-layout viewer
+        run: |
+          pnpm --filter @roamlog/api exec tsx ../../e2e/support/provision-smoke-accounts.ts \
+            --action=create-member \
+            --email='e2e-stops-viewer@roamlog.test' \
+            --password='Roamlog-Stops-Aa1!' \
+            --name='StopsViewer' \
+            --workspace-slug='verify-crew' \
+            --role=viewer
+
       - name: E2E browser smoke
         env:
           E2E_SKIP_ADMIN_SERVER: "1"
@@ -231,6 +290,56 @@ jobs:
           E2E_START_API: "1"
         run: pnpm exec playwright test e2e/web/stops-place-search.spec.ts --project=web
 
+      - name: E2E share map
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm exec playwright test e2e/web/share-map.spec.ts --project=web
+
+      - name: E2E share media
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm exec playwright test e2e/web/share-media.spec.ts --project=web
+
+      - name: E2E journal layout
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm exec playwright test e2e/web/journal-layout.spec.ts --project=web
+
+      - name: E2E journal gallery upload
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+          E2E_SMOKE_WORKSPACE_SLUG: verify-crew
+        run: pnpm exec playwright test e2e/web/journal-gallery-upload.spec.ts --project=web
+
+      - name: E2E journal share password
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm exec playwright test e2e/web/journal-share-password.spec.ts --project=web
+
+      - name: E2E journal layout security
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm exec playwright test e2e/web/journal-layout-security.spec.ts --project=web
+
+      - name: E2E journal layout accessibility
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+        run: pnpm exec playwright test e2e/web/journal-layout-a11y.spec.ts --project=web
+
+      - name: E2E journal gallery drag
+        env:
+          E2E_SKIP_ADMIN_SERVER: "1"
+          E2E_START_API: "1"
+          E2E_SMOKE_WORKSPACE_SLUG: verify-crew
+        run: pnpm exec playwright test e2e/web/journal-gallery-drag.spec.ts --project=web
+
       - name: E2E admin 2FA settings
         env:
           E2E_SKIP_WEB_SERVER: "1"
@@ -243,3 +352,60 @@ jobs:
           E2E_SKIP_ADMIN_SERVER: "1"
           E2E_START_API: "1"
         run: pnpm e2e:api
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-artifacts-${{ github.run_attempt }}
+          path: |
+            test-results
+            playwright-report
+            .audit/journal-layout/*.png
+            .audit/journal-layout/*.json
+            .audit/journal-layout/a11y-*
+            .audit/journal-layout/security-e2e-*
+            .audit/journal-layout/gallery-drag-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+  dependency-audit:
+    name: Dependency audit (high+)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .audit/security
+          pnpm audit --audit-level high --json | tee .audit/security/pnpm-audit.json
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-${{ github.run_attempt }}
+          path: .audit/security/pnpm-audit.json
+          if-no-files-found: warn
+          retention-days: 7
