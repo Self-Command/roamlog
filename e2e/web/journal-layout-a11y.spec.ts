@@ -318,7 +318,11 @@ test("keeps the format toolbar and image settings keyboard accessible", async ({
   await expect(form.getByLabel("替代文本")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(form).not.toBeVisible();
-  await expect(settings).toBeFocused({ timeout: 5_000 });
+  // Radix closes the portal on one frame and the NodeView restores its toolbar
+  // on the next. Wait for the trigger to be mounted again before asserting
+  // focus; otherwise a loaded CI runner can observe the gap as "not focused".
+  await expect(settings).toBeVisible({ timeout: 10_000 });
+  await expect(settings).toBeFocused({ timeout: 10_000 });
 });
 
 test("navigates columns and activates the column toolbar with the keyboard", async ({ page }) => {
