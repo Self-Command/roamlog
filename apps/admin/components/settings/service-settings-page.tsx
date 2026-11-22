@@ -18,7 +18,15 @@ export function ServiceSettingsPage({ service }: { service: ServicePageKey }) {
   const { session } = useAdminSession();
 
   if (page.group !== "media") {
-    return <ProviderGroupPage group={page.group} role={session.role} api={providerSettingsApi} />;
+    return (
+      <section
+        data-settings-group={page.group}
+        aria-label={`${page.title} 设置`}
+        className="space-y-6"
+      >
+        <ProviderGroupPage group={page.group} role={session.role} api={providerSettingsApi} />
+      </section>
+    );
   }
 
   return (

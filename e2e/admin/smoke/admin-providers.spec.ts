@@ -395,6 +395,9 @@ test("mail and storage enforce one active provider", async () => {
   await saveProvider(mailDialog);
   await waitForDialogClosed(mailDialog);
   evidence.providerLabels.push(mailA);
+  await expect(page.getByText(mailA, { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
 
   const mailConflictDialog = await openAddProvider(page);
   await mailConflictDialog.getByLabel("名称", { exact: true }).fill(mailB);
@@ -403,17 +406,26 @@ test("mail and storage enforce one active provider", async () => {
     发件地址: `Roamlog <no-reply+${runId}@example.test>`,
   });
   await mailConflictDialog.getByLabel("Resend API Key", { exact: true }).fill(`re_${runId}_b`);
+  await expect(mailConflictDialog.getByRole("note").filter({ hasText: mailA })).toBeVisible({
+    timeout: 30_000,
+  });
+  const mailEnabled = mailConflictDialog.getByRole("switch", { name: "启用服务商" });
+  await expect(mailEnabled).not.toBeChecked();
+  await mailEnabled.click();
+  await expect(mailEnabled).toBeChecked();
   await saveProvider(mailConflictDialog);
-  await expect(mailConflictDialog.getByRole("alert")).toContainText(
-    /PROVIDER_ACTIVE_CONFLICT|active|单实例|已启用/i,
-    { timeout: 30_000 },
-  );
+  const mailActiveConflict = page.getByRole("dialog", {
+    name: "服务商启用冲突",
+    exact: true,
+  });
+  await expect(mailActiveConflict).toBeVisible({ timeout: 30_000 });
+  await expect(mailActiveConflict).toContainText(/只允许一个启用的(?:服务商|实例)/);
+  await mailActiveConflict.getByRole("button", { name: "保留草稿", exact: true }).click();
+  await expect(mailActiveConflict).toBeHidden();
   await mailConflictDialog.getByRole("button", { name: "取消", exact: true }).click();
-  const discard = mailConflictDialog.getByRole("button", { name: "放弃修改", exact: true });
-  if ((await discard.count()) > 0) {
-    await discard.click();
-  }
-  evidence.providerLabels.push(mailB);
+  await mailConflictDialog.getByRole("button", { name: "放弃修改", exact: true }).click();
+  await waitForDialogClosed(mailConflictDialog);
+  await expect(page.getByText(mailB, { exact: true })).toHaveCount(0);
 
   await page.goto(`${ADMIN_URL}/admin/services/storage`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "存储服务", exact: true })).toBeVisible({
@@ -433,6 +445,9 @@ test("mail and storage enforce one active provider", async () => {
   await saveProvider(storageDialog);
   await waitForDialogClosed(storageDialog);
   evidence.providerLabels.push(storageA);
+  await expect(page.getByText(storageA, { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
 
   const storageConflictDialog = await openAddProvider(page);
   await storageConflictDialog.getByLabel("名称", { exact: true }).fill(storageB);
@@ -445,21 +460,29 @@ test("mail and storage enforce one active provider", async () => {
   });
   await storageConflictDialog.getByLabel("Access Key", { exact: true }).fill(`access-${runId}`);
   await storageConflictDialog.getByLabel("Secret Key", { exact: true }).fill(`secret-${runId}`);
+  await expect(storageConflictDialog.getByRole("note").filter({ hasText: storageA })).toBeVisible({
+    timeout: 30_000,
+  });
+  const storageEnabled = storageConflictDialog.getByRole("switch", {
+    name: "启用服务商",
+  });
+  await expect(storageEnabled).not.toBeChecked();
+  await storageEnabled.click();
+  await expect(storageEnabled).toBeChecked();
   await saveProvider(storageConflictDialog);
-  await expect(storageConflictDialog.getByRole("alert")).toContainText(
-    /PROVIDER_ACTIVE_CONFLICT|active|单实例|已启用/i,
-    { timeout: 30_000 },
-  );
-  await storageConflictDialog.getByRole("button", { name: "取消", exact: true }).click();
-  const storageDiscard = storageConflictDialog.getByRole("button", {
-    name: "放弃修改",
+  const storageActiveConflict = page.getByRole("dialog", {
+    name: "服务商启用冲突",
     exact: true,
   });
-  if ((await storageDiscard.count()) > 0) {
-    await storageDiscard.click();
-  }
-  evidence.providerLabels.push(storageB);
+  await expect(storageActiveConflict).toBeVisible({ timeout: 30_000 });
+  await expect(storageActiveConflict).toContainText(/只允许一个启用的(?:服务商|实例)/);
   await shot(page, "providers-active-conflict-1440.png");
+  await storageActiveConflict.getByRole("button", { name: "保留草稿", exact: true }).click();
+  await expect(storageActiveConflict).toBeHidden();
+  await storageConflictDialog.getByRole("button", { name: "取消", exact: true }).click();
+  await storageConflictDialog.getByRole("button", { name: "放弃修改", exact: true }).click();
+  await waitForDialogClosed(storageConflictDialog);
+  await expect(page.getByText(storageB, { exact: true })).toHaveCount(0);
 });
 
 test("secret reveal is explicit and never survives a reload", async () => {
