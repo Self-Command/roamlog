@@ -252,6 +252,10 @@ test.beforeAll(async ({ browser }) => {
   await loginAsSuperAdmin(page);
 });
 
+test.beforeEach(async () => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+});
+
 test.afterEach(async () => {
   if (!page) {
     return;
