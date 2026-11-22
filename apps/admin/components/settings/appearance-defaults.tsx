@@ -262,7 +262,7 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
   const resolvedPreviewMode: "light" | "dark" = draft.mode === "dark" ? "dark" : "light";
 
   return (
-    <div className="space-y-6">
+    <section data-settings-group="theme" aria-label="外观与字体 设置" className="space-y-6">
       <AdminPageHeader
         eyebrow="平台 / 系统设置 / 外观"
         title="外观与字体"
@@ -559,6 +559,6 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
           外观默认值有未保存修改；切换页面会先确认。
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }

@@ -37,7 +37,7 @@ const ADMIN_SETTINGS_URL = `${ADMIN_URL}${ADMIN_SETTINGS_PATH}`;
 const SYSTEM_SECTIONS = [
   { group: "general", label: "通用" },
   { group: "seo", label: "SEO" },
-  { group: "theme", label: "主题" },
+  { group: "theme", label: "外观与字体" },
   { group: "limits", label: "限制" },
 ] as const;
 
@@ -188,15 +188,19 @@ test.describe("admin settings information architecture", () => {
       ),
     ).toEqual(SYSTEM_SECTIONS.map((section) => section.group));
 
+    const tabs = page.getByRole("tablist", { name: "系统设置分组" });
     for (const section of SYSTEM_SECTIONS) {
+      await tabs.getByRole("tab", { name: section.label, exact: true }).click();
       const rendered = page.locator(`main section[data-settings-group="${section.group}"]`);
+      await expect(rendered).toBeVisible();
       await expect(rendered).toHaveAttribute("aria-label", `${section.label} 设置`);
       await expect(
-        rendered.getByRole("heading", { level: 2, name: section.label, exact: true }),
+        rendered.getByRole("heading", { name: section.label, exact: true }).first(),
       ).toBeVisible();
     }
 
     await expect(page.getByRole("navigation", { name: "设置分组" })).toHaveCount(0);
+    await tabs.getByRole("tab", { name: "通用", exact: true }).click();
     // The settings labels are localized end-to-end; the retired English label
     // must not survive in the general group.
     await expect(page.getByLabel("站点标题", { exact: true })).toBeVisible();

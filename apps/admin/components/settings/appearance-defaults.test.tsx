@@ -155,6 +155,10 @@ describe("AppearanceDefaults", () => {
     render(<AppearanceDefaults role="super_admin" api={fake.api} />);
 
     expect(await screen.findByRole("heading", { name: "外观与字体" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "外观与字体 设置" })).toHaveAttribute(
+      "data-settings-group",
+      "theme",
+    );
     const modeGroup = screen.getByRole("radiogroup", { name: "默认外观" });
     expect(within(modeGroup).getAllByRole("radio")).toHaveLength(3);
     expect(within(modeGroup).getByRole("radio", { name: "跟随系统" })).toHaveAttribute(
