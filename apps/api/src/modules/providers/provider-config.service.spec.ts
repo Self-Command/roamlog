@@ -533,6 +533,9 @@ describe("ProviderConfigService", () => {
       action: "admin.provider.reordered",
       metadata: { providerIds: [second.id, first.id] },
     });
+    expect(ctx.audits.at(-1)?.targetId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
   });
 
   it("soft deletes a provider and leaves an empty group behind", async () => {
@@ -567,6 +570,10 @@ describe("ProviderConfigService", () => {
       cooldownSeconds: 45,
       version: 2,
     });
+    expect(ctx.audits.at(-1)).toMatchObject({ action: "admin.provider.policy_updated" });
+    expect(ctx.audits.at(-1)?.targetId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
 
     await expect(
       ctx.service.patchPolicy(ACTOR, "ai", {

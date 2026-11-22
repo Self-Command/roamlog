@@ -15,6 +15,7 @@ import {
 import { Prisma } from "@roamlog/db";
 
 import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
+import { uuidV7FromString } from "../admin/admin-ids.js";
 import { AuditService } from "../audit/audit.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import {
@@ -93,6 +94,10 @@ const GROUP_DEFAULTS: Readonly<
 
 function groupLabel(group: ProviderGroup): string {
   return providerCatalogResponse().groups.find((entry) => entry.group === group)?.label ?? group;
+}
+
+function groupAuditTarget(group: ProviderGroup): string {
+  return uuidV7FromString(`provider-group:${group}`);
 }
 
 function allowedRoutingModes(group: ProviderGroup): readonly ProviderRoutingMode[] {
@@ -301,7 +306,7 @@ export class ProviderConfigService {
           actorType: "admin",
           action: "admin.provider.policy_updated",
           targetType: "provider_group",
-          targetId: group,
+          targetId: groupAuditTarget(group),
           ip: actor.ip ?? undefined,
           userAgent: actor.userAgent ?? undefined,
           metadata: {
@@ -621,7 +626,7 @@ export class ProviderConfigService {
           actorType: "admin",
           action: "admin.provider.reordered",
           targetType: "provider_group",
-          targetId: group,
+          targetId: groupAuditTarget(group),
           ip: actor.ip ?? undefined,
           userAgent: actor.userAgent ?? undefined,
           metadata: {
