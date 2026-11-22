@@ -8,6 +8,49 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
+let nextAnimationFrameId = 1;
+const animationFrameTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+const requestAnimationFrameStub = (callback: FrameRequestCallback): number => {
+  const id = nextAnimationFrameId++;
+  const timer = setTimeout(() => {
+    animationFrameTimers.delete(id);
+    callback(performance.now());
+  }, 16);
+  animationFrameTimers.set(id, timer);
+  return id;
+};
+
+const cancelAnimationFrameStub = (id: number): void => {
+  const timer = animationFrameTimers.get(id);
+  if (timer === undefined) {
+    return;
+  }
+  clearTimeout(timer);
+  animationFrameTimers.delete(id);
+};
+
+function installAnimationFrameStubs(target: object): void {
+  // Preact snapshots `typeof requestAnimationFrame` at module load and pairs it
+  // with the global `cancelAnimationFrame`. jsdom can expose one without the
+  // other, which leaves Uppy's delayed Dashboard callbacks throwing after a test.
+  Object.defineProperty(target, "requestAnimationFrame", {
+    configurable: true,
+    writable: true,
+    value: requestAnimationFrameStub,
+  });
+  Object.defineProperty(target, "cancelAnimationFrame", {
+    configurable: true,
+    writable: true,
+    value: cancelAnimationFrameStub,
+  });
+}
+
+installAnimationFrameStubs(globalThis);
+if (typeof window !== "undefined" && window !== globalThis) {
+  installAnimationFrameStubs(window);
+}
+
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
@@ -51,5 +94,10 @@ for (const prototype of [
 
 afterEach(() => {
   cleanup();
+  for (const timer of animationFrameTimers.values()) {
+    clearTimeout(timer);
+  }
+  animationFrameTimers.clear();
+  nextAnimationFrameId = 1;
   window.localStorage.clear();
 });
