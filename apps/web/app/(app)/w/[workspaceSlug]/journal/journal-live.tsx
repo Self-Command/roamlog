@@ -1,13 +1,7 @@
 "use client";
 
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  PageHeader,
-  Select,
-  Skeleton,
-} from "@roamlog/ui";
+import { Button, EmptyState, ErrorState, PageHeader, Select, Skeleton } from "@roamlog/ui";
+import dynamic from "next/dynamic";
 import {
   Bookmark,
   BookmarkCheck,
@@ -15,18 +9,21 @@ import {
   Heart,
   MessageCircle,
   NotebookPen,
+  RefreshCcw,
   Search,
 } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import {
+  Component,
+  useDeferredValue,
+  useMemo,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useDataAdapter } from "@/lib/data-provider";
-import {
-  gradientFor,
-  moodColors,
-  moodLabels,
-  shortDate,
-} from "@/lib/demo-format";
+import { gradientFor, moodColors, moodLabels, shortDate } from "@/lib/demo-format";
 import {
   useCommentsQuery,
   useCreateCommentMutation,
@@ -38,8 +35,92 @@ import {
   useWorkspaceBySlug,
 } from "@/lib/query";
 
-import { JournalEditorSheet } from "@/components/journal/journal-editor-sheet";
 import { createApiJournalRepository } from "@/components/journal/journal-repository";
+
+const LazyJournalEditorSheet = dynamic(
+  () =>
+    import("@/components/journal/journal-editor-sheet").then((module) => module.JournalEditorSheet),
+  {
+    ssr: false,
+    loading: () => <JournalEditorChunkLoading />,
+  },
+);
+
+export function JournalEditorChunkLoading() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto border-l border-hairline-strong bg-canvas p-6 sm:p-8"
+    >
+      <p className="type-eyebrow">JOURNAL EDITOR</p>
+      <h2 className="mt-2 font-serif text-2xl text-ink">正在准备日志编辑器…</h2>
+      <p className="mt-2 text-sm leading-6 text-muted">
+        首次打开会加载排版与图片工具，之后会从缓存恢复。
+      </p>
+      <div className="mt-6 space-y-3">
+        <Skeleton className="h-10 w-full rounded-control" />
+        <Skeleton className="h-10 w-full rounded-control" />
+        <Skeleton className="h-56 w-full rounded-card" />
+      </div>
+    </div>
+  );
+}
+
+export function JournalEditorChunkError() {
+  return (
+    <div
+      role="alert"
+      className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto border-l border-hairline-strong bg-canvas p-6 sm:p-8"
+    >
+      <p className="type-eyebrow">JOURNAL EDITOR</p>
+      <h2 className="mt-2 font-serif text-2xl text-ink">编辑器加载失败</h2>
+      <p className="mt-2 text-sm leading-6 text-muted">
+        网络可能中断，或新版本刚刚发布。刷新页面后重试即可。
+      </p>
+      <Button
+        type="button"
+        variant="primary"
+        className="mt-5"
+        onClick={() => window.location.reload()}
+      >
+        <RefreshCcw aria-hidden="true" />
+        重新加载
+      </Button>
+    </div>
+  );
+}
+
+interface JournalEditorChunkBoundaryProps {
+  children: ReactNode;
+}
+
+interface JournalEditorChunkBoundaryState {
+  failed: boolean;
+}
+
+class JournalEditorChunkBoundary extends Component<
+  JournalEditorChunkBoundaryProps,
+  JournalEditorChunkBoundaryState
+> {
+  override state: JournalEditorChunkBoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): JournalEditorChunkBoundaryState {
+    return { failed: true };
+  }
+
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Journal editor chunk failed to load", error, info.componentStack);
+    }
+  }
+
+  override render(): ReactNode {
+    if (this.state.failed) return <JournalEditorChunkError />;
+    return this.props.children;
+  }
+}
 
 export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
   const { workspace, workspacesQuery } = useWorkspaceBySlug(workspaceSlug);
@@ -64,6 +145,7 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [editorRequested, setEditorRequested] = useState(false);
 
   const trips = tripsQuery.data?.items ?? [];
   const members = membersQuery.data?.items ?? [];
@@ -135,6 +217,7 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
               type="button"
               variant="primary"
               onClick={() => {
+                setEditorRequested(true);
                 setComposeOpen(true);
               }}
               disabled={trips.length === 0}
@@ -197,7 +280,10 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
               >
                 <button
                   type="button"
-                  onClick={() => setSelectedId(entry.id)}
+                  onClick={() => {
+                    setEditorRequested(true);
+                    setSelectedId(entry.id);
+                  }}
                   className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
                 >
                   <div
@@ -222,7 +308,9 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
                     <h2 className="mt-2 font-serif text-2xl leading-tight tracking-[-0.025em] text-ink">
                       {entry.title}
                     </h2>
-                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted">{entry.excerpt}</p>
+                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted">
+                      {entry.excerpt}
+                    </p>
                   </div>
                 </button>
                 <div className="mt-auto flex items-center justify-between border-t border-hairline px-4 py-2.5">
@@ -262,35 +350,43 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
         </div>
       )}
 
-      <JournalEditorSheet
-        entry={selectedEntry}
-        open={selectedEntry !== null}
-        repository={repository}
-        canEdit={canEdit}
-        canComment
-        members={members}
-        currentUserId={meQuery.data?.id}
-        comments={commentsQuery.data?.items ?? []}
-        commentsLoading={commentsQuery.isLoading}
-        onSubmitComment={handleComment}
-        onEntrySaved={handleEntrySaved}
-        onOpenChange={(open) => {
-          if (!open) setSelectedId(null);
-        }}
-      />
+      {editorRequested && selectedEntry ? (
+        <JournalEditorChunkBoundary>
+          <LazyJournalEditorSheet
+            entry={selectedEntry}
+            open
+            repository={repository}
+            canEdit={canEdit}
+            canComment
+            members={members}
+            currentUserId={meQuery.data?.id}
+            comments={commentsQuery.data?.items ?? []}
+            commentsLoading={commentsQuery.isLoading}
+            onSubmitComment={handleComment}
+            onEntrySaved={handleEntrySaved}
+            onOpenChange={(open) => {
+              if (!open) setSelectedId(null);
+            }}
+          />
+        </JournalEditorChunkBoundary>
+      ) : null}
 
-      <JournalEditorSheet
-        open={composeOpen}
-        onOpenChange={setComposeOpen}
-        repository={repository}
-        trips={trips}
-        initialTripId={trips[0]?.id}
-        canEdit={canEdit}
-        canComment={false}
-        members={members}
-        currentUserId={meQuery.data?.id}
-        onEntrySaved={handleEntrySaved}
-      />
+      {editorRequested && composeOpen ? (
+        <JournalEditorChunkBoundary>
+          <LazyJournalEditorSheet
+            open
+            onOpenChange={setComposeOpen}
+            repository={repository}
+            trips={trips}
+            initialTripId={trips[0]?.id}
+            canEdit={canEdit}
+            canComment={false}
+            members={members}
+            currentUserId={meQuery.data?.id}
+            onEntrySaved={handleEntrySaved}
+          />
+        </JournalEditorChunkBoundary>
+      ) : null}
     </div>
   );
 }

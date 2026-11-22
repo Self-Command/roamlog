@@ -1,0 +1,478 @@
+/*
+ * Shared journal body layout.
+ *
+ * The HTML contract is deliberately limited to data-* attributes:
+ * - figure[data-type="image"][data-align]
+ * - div[data-type="gallery"][data-columns] > figure[data-type="gallery-item"]
+ * - div[data-type="columns"][data-columns] > div[data-type="column"]
+ *
+ * Ported from Emdash's Image/Gallery renderers
+ * (emdash-cms/emdash@732867e9836efbd9fa9cf01f4fd086949b1bb392,
+ * packages/core/src/components/Gallery.astro:177-240, Image.astro, and
+ * packages/admin/src/components/editor/ImageNode.tsx:245-300; MIT) and the
+ * column layout from reactjs-tiptap-editor
+ * (hunghg255/reactjs-tiptap-editor@496b84967ef58b85465edb1c4eae517de11fba73,
+ * src/styles/columns.scss; MIT). Roamlog adapts the upstream tokens,
+ * breakpoints and data-* contract.
+ */
+
+.journal-layout {
+  max-width: 42rem;
+  color: var(--body);
+  font-size: 0.9375rem;
+  line-height: 1.82;
+  overflow-wrap: break-word;
+}
+
+.journal-layout > :first-child {
+  margin-top: 0;
+}
+
+.journal-layout > :last-child {
+  margin-bottom: 0;
+}
+
+.journal-layout :is(h2, h3, h4) {
+  clear: both;
+  color: var(--ink);
+  font-family: var(--roamlog-font-serif);
+  font-weight: 400;
+  text-wrap: balance;
+  scroll-margin-top: 2rem;
+}
+
+.journal-layout h2 {
+  margin: 2.25rem 0 0.75rem;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.journal-layout h3 {
+  margin: 1.85rem 0 0.6rem;
+  font-size: 1.375rem;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
+}
+
+.journal-layout h4 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+.journal-layout p {
+  margin: 0.8rem 0;
+  text-wrap: pretty;
+}
+
+.journal-layout strong,
+.journal-layout b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.journal-layout em,
+.journal-layout i {
+  font-style: italic;
+}
+
+.journal-layout s,
+.journal-layout del {
+  color: var(--stone);
+}
+
+.journal-layout :is(ul, ol) {
+  margin: 0.8rem 0;
+  padding-left: 1.45rem;
+}
+
+.journal-layout li {
+  margin: 0.28rem 0;
+  padding-left: 0.12rem;
+}
+
+.journal-layout li > p {
+  margin: 0.18rem 0;
+}
+
+.journal-layout :is(ul, ol) :is(ul, ol) {
+  margin: 0.3rem 0;
+}
+
+.journal-layout blockquote {
+  clear: both;
+  margin: 1.4rem 0;
+  padding: 0.15rem 0 0.15rem 1rem;
+  border-left: 2px solid var(--hairline-strong);
+  color: var(--muted);
+}
+
+.journal-layout blockquote > :first-child {
+  margin-top: 0;
+}
+
+.journal-layout blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.journal-layout a {
+  color: var(--accent-blue);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+  overflow-wrap: anywhere;
+}
+
+.journal-layout a:hover {
+  color: var(--ink);
+}
+
+.journal-layout :not(pre) > code {
+  padding: 0.14em 0.36em;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--roamlog-font-mono);
+  font-size: 0.86em;
+}
+
+.journal-layout pre {
+  margin: 1.3rem 0;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--roamlog-radius-control);
+  background: var(--surface-deep);
+  color: var(--body);
+  font-family: var(--roamlog-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.journal-layout pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.journal-layout hr {
+  clear: both;
+  height: 0;
+  margin: 2rem 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.journal-layout table {
+  display: block;
+  clear: both;
+  width: 100%;
+  max-width: 100%;
+  margin: 1.35rem 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.journal-layout .tableWrapper {
+  margin: 1.35rem 0;
+  overflow-x: auto;
+}
+
+.journal-layout .tableWrapper > table {
+  display: table;
+  margin: 0;
+}
+
+.journal-layout .selectedCell {
+  background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
+}
+
+.journal-layout :is(th, td) {
+  padding: 0.62rem 0.75rem;
+  border: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+.journal-layout th {
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.journal-layout td {
+  color: var(--body);
+}
+
+.journal-layout figure {
+  max-width: 100%;
+}
+
+.journal-layout figure[data-type="image"] {
+  width: fit-content;
+  margin: 1.5rem 0;
+}
+
+.journal-layout figure[data-type="image"] img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--roamlog-radius-control);
+  background: linear-gradient(135deg, var(--surface-2), var(--surface-1)), var(--surface-1);
+  color: var(--muted);
+  font-family: var(--roamlog-font-sans);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.journal-layout figure[data-type="image"][data-align="center"] {
+  margin-inline: auto;
+  text-align: center;
+}
+
+.journal-layout figure[data-type="image"][data-align="left"],
+.journal-layout figure[data-type="image"][data-align="right"] {
+  width: min(50%, 360px);
+  margin-block: 0.35rem 1rem;
+}
+
+.journal-layout figure[data-type="image"][data-align="left"] {
+  float: left;
+  margin-inline: 0 1.5rem;
+}
+
+.journal-layout figure[data-type="image"][data-align="right"] {
+  float: right;
+  margin-inline: 1.5rem 0;
+}
+
+.journal-layout figcaption {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-family: var(--roamlog-font-sans);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.journal-layout
+  :is(h2, h3, blockquote, table, hr, div[data-type="gallery"], div[data-type="columns"]) {
+  clear: both;
+}
+
+.journal-layout div[data-type="gallery"] {
+  align-items: start;
+  gap: 8px;
+  margin: 1.5rem 0;
+}
+
+.journal-layout div[data-type="gallery"]:not([data-node-view-wrapper]) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.journal-layout div[data-type="gallery"][data-columns="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.journal-layout div[data-type="gallery"][data-columns="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.journal-layout div[data-type="gallery"][data-columns="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.journal-layout div[data-type="gallery"][data-columns="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.journal-layout div[data-type="gallery"][data-columns="5"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.journal-layout div[data-type="gallery"][data-columns="6"] {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.journal-layout div[data-type="gallery"] > figure[data-type="gallery-item"] {
+  min-width: 0;
+  margin: 0;
+}
+
+.journal-layout div[data-type="gallery"] figure[data-type="gallery-item"] img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  object-fit: cover;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  background: linear-gradient(135deg, var(--surface-2), var(--surface-1)), var(--surface-1);
+  color: var(--muted);
+}
+
+.journal-layout div[data-type="gallery"] figure[data-type="gallery-item"] figcaption {
+  margin-top: 0.35rem;
+  overflow-wrap: anywhere;
+  color: var(--stone);
+  font-family: var(--roamlog-font-mono);
+  font-size: 0.625rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.journal-layout div[data-type="columns"] {
+  align-items: flex-start;
+  gap: 16px;
+  margin: 1.5rem 0;
+}
+
+.journal-layout div[data-type="columns"]:not([data-node-view-wrapper]) {
+  display: flex;
+}
+
+.journal-layout div[data-type="columns"] div[data-type="column"] {
+  min-width: 0;
+}
+
+.journal-layout
+  div[data-type="columns"]:not([data-node-view-wrapper])
+  > div[data-type="column"] {
+  flex: 1 1 0;
+}
+
+.journal-layout
+  div[data-type="columns"]:not([data-node-view-wrapper])
+  > div[data-type="column"]
+  > :first-child {
+  margin-top: 0;
+}
+
+.journal-layout
+  div[data-type="columns"]:not([data-node-view-wrapper])
+  > div[data-type="column"]
+  > :last-child {
+  margin-bottom: 0;
+}
+
+.journal-layout ul[data-type="taskList"] {
+  margin: 0.8rem 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.journal-layout li[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+  padding-left: 0;
+}
+
+.journal-layout li[data-type="taskItem"] > label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.journal-layout li[data-type="taskItem"] > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.journal-layout li[data-type="taskItem"] p {
+  margin: 0;
+}
+
+.journal-layout li[data-type="taskItem"] input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent-blue);
+}
+
+.journal-layout li[data-type="taskItem"][data-checked="true"] > div {
+  color: var(--stone);
+  text-decoration-line: line-through;
+}
+
+.journal-layout ::selection {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .journal-layout {
+    font-size: 0.9375rem;
+    line-height: 1.78;
+  }
+
+  .journal-layout h2 {
+    font-size: 1.55rem;
+  }
+
+  .journal-layout h3 {
+    font-size: 1.3rem;
+  }
+
+  .journal-layout figure[data-type="image"][data-align="left"],
+  .journal-layout figure[data-type="image"][data-align="right"] {
+    float: none;
+    width: 100%;
+    max-width: 100%;
+    margin: 1.5rem 0;
+  }
+
+  .journal-layout figure[data-type="image"] img {
+    width: auto;
+  }
+
+  .journal-layout div[data-type="gallery"]:not([data-columns="1"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .journal-layout div[data-type="gallery"][data-columns="1"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .journal-layout table {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .journal-layout div[data-type="columns"]:not([data-node-view-wrapper]) {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .journal-layout
+    div[data-type="columns"]:not([data-node-view-wrapper])
+    > div[data-type="column"] {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .journal-layout
+    div[data-type="columns"]:not([data-node-view-wrapper])
+    > div[data-type="column"]
+    + div[data-type="column"] {
+    padding-top: 1rem;
+    border-top: 1px solid var(--hairline);
+  }
+}

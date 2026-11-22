@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import TaskItem from "@tiptap/extension-task-item";
@@ -12,6 +11,7 @@ import {
   Bold,
   Code2,
   Columns3,
+  Grid3X3,
   Heading2,
   ImagePlus,
   Italic,
@@ -38,17 +38,24 @@ import { Button, Input } from "@roamlog/ui";
 
 import { COVER_ACCEPT_ATTRIBUTE, type CoverMediaClient } from "@/lib/api/media";
 import { rewriteBlockMessage, rewriteBlockReason } from "@/lib/ai/selection";
-import {
-  AIHighlight,
-  stripAIHighlight,
-  stripAIHighlightHtml,
-} from "@/lib/editor/ai-highlight";
+import { AIHighlight, stripAIHighlight, stripAIHighlightHtml } from "@/lib/editor/ai-highlight";
 
 import GenerativeMenuSwitch from "./ai/generative-menu-switch";
 import {
-  journalImageUploadErrorMessage,
-  uploadJournalImage,
-} from "./journal-image-upload";
+  JournalColumnsBubble,
+  JournalColumnsInsertMenu,
+} from "./extensions/journal-columns-bubble";
+import { JournalColumn, JournalColumns } from "./extensions/journal-columns";
+import {
+  GALLERY_DEFAULT_COLUMNS,
+  galleryImageAttrsFromUpload,
+  JournalGallery,
+  JournalGalleryImage,
+  type JournalGalleryUploadImage,
+} from "./extensions/journal-gallery";
+import { JournalImage } from "./extensions/journal-image";
+import { journalImageUploadErrorMessage, uploadJournalImage } from "./journal-image-upload";
+import "./journal-layout.css";
 
 /** Props of the AI entries; `workspaceId` scopes every request. */
 export interface JournalAiEntry {
@@ -142,15 +149,70 @@ export function JournalEditor({
   const lastEmittedRef = useRef<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [galleryUploadingCount, setGalleryUploadingCount] = useState<number | null>(null);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const imageUploadAbortRef = useRef<AbortController | null>(null);
+  const galleryUploadAbortRef = useRef<AbortController | null>(null);
+  const uploadContextRef = useRef({ workspaceId, tripId, imageUploadClient });
+  uploadContextRef.current = { workspaceId, tripId, imageUploadClient };
 
   useEffect(() => {
     return () => {
       imageUploadAbortRef.current?.abort();
       imageUploadAbortRef.current = null;
+      galleryUploadAbortRef.current?.abort();
+      galleryUploadAbortRef.current = null;
     };
   }, []);
+
+  async function uploadGalleryImages(
+    files: File[],
+    signal: AbortSignal,
+  ): Promise<JournalGalleryUploadImage[]> {
+    const uploads: JournalGalleryUploadImage[] = [];
+
+    for (const file of files) {
+      if (signal.aborted) {
+        throw new DOMException("图片上传已取消。", "AbortError");
+      }
+
+      uploads.push(await uploadJournalImageForEditor(file, signal));
+    }
+
+    return uploads;
+  }
+
+  async function uploadJournalImageForEditor(
+    file: File,
+    signal: AbortSignal,
+  ): Promise<JournalGalleryUploadImage> {
+    const context = uploadContextRef.current;
+    if (!context.workspaceId) {
+      throw new Error("无法确定所属工作区，暂时不能上传图片。");
+    }
+
+    const media = await uploadJournalImage({
+      workspaceId: context.workspaceId,
+      tripId: context.tripId,
+      file,
+      signal,
+      client: context.imageUploadClient,
+    });
+
+    if (!media.url) {
+      throw new Error("图片已上传，但服务器没有返回可访问的地址。");
+    }
+
+    return {
+      src: media.url,
+      mediaId: media.id,
+      alt: file.name,
+      width: media.width,
+      height: media.height,
+    };
+  }
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -168,7 +230,17 @@ export function JournalEditor({
       }),
       // Journal images are uploaded media URLs; base64 placeholders are not a
       // valid image source anymore (the old fake-image button used one).
-      Image.configure({ inline: false, allowBase64: false }),
+      JournalImage.configure({
+        inline: false,
+        allowBase64: false,
+        uploadImage: uploadJournalImageForEditor,
+      }),
+      // Gallery images must be registered before the gallery container so its
+      // `galleryImage+` content expression resolves against this schema.
+      JournalGalleryImage,
+      JournalGallery.configure({ uploadImages: uploadGalleryImages }),
+      JournalColumn,
+      JournalColumns,
       Placeholder.configure({ placeholder }),
       // Ported from https://tiptap.dev/docs/editor/extensions/nodes/table (+ /table-row, /table-header, /table-cell).
       Table.configure({ resizable: false, allowTableNodeSelection: true }),
@@ -189,8 +261,7 @@ export function JournalEditor({
     ],
     editorProps: {
       attributes: {
-        class:
-          "journal-prose min-h-56 px-4 py-4 text-[14px] leading-7 text-body outline-none",
+        class: "journal-layout journal-prose min-h-56 px-4 py-4 outline-none",
         "aria-label": ariaLabel,
       },
     },
@@ -212,13 +283,19 @@ export function JournalEditor({
         text: current.getText(),
       });
     },
+    onDestroy: () => {
+      imageUploadAbortRef.current?.abort();
+      galleryUploadAbortRef.current?.abort();
+    },
   });
 
   // Baseline for "did the document really change": the editor's own JSON, not the
   // `contentJson` prop, because parsing the prop fills in default attributes.
   useEffect(() => {
     if (!editor) return;
-    lastEmittedRef.current = JSON.stringify(stripAIHighlight(editor.getJSON() as { type?: string }));
+    lastEmittedRef.current = JSON.stringify(
+      stripAIHighlight(editor.getJSON() as { type?: string }),
+    );
   }, [editor]);
 
   function applyLink() {
@@ -227,12 +304,7 @@ export function JournalEditor({
     if (!href) {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
     } else {
-      editor
-        .chain()
-        .focus()
-        .extendMarkRange("link")
-        .setLink({ href })
-        .run();
+      editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
     }
     setLinkUrl("");
     setLinkOpen(false);
@@ -267,7 +339,10 @@ export function JournalEditor({
       editor
         .chain()
         .focus()
-        .insertContent({ type: "image", attrs: { src, alt: file.name } })
+        .insertContent({
+          type: "image",
+          attrs: { src, alt: file.name, mediaId: media.id },
+        })
         .run();
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -277,6 +352,53 @@ export function JournalEditor({
         imageUploadAbortRef.current = null;
       }
       setImageUploading(false);
+    }
+  }
+
+  async function handleGalleryFiles(files: File[]) {
+    if (!editor || files.length === 0) return;
+    if (!workspaceId) {
+      setGalleryError("无法确定所属工作区，暂时不能上传图片。");
+      return;
+    }
+
+    galleryUploadAbortRef.current?.abort();
+    const controller = new AbortController();
+    galleryUploadAbortRef.current = controller;
+    setGalleryError(null);
+    setGalleryUploadingCount(files.length);
+
+    try {
+      const uploads = await uploadGalleryImages(files, controller.signal);
+      if (controller.signal.aborted || editor.isDestroyed) return;
+
+      const images = uploads.map((upload) => {
+        const attrs = galleryImageAttrsFromUpload(upload);
+        if (!attrs) {
+          throw new Error("图片上传结果不完整，请重试。");
+        }
+        return attrs;
+      });
+
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "gallery",
+          attrs: { columns: GALLERY_DEFAULT_COLUMNS },
+          content: images.map((attrs) => ({ type: "galleryImage", attrs })),
+        })
+        .run();
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setGalleryError(journalImageUploadErrorMessage(error));
+    } finally {
+      if (galleryUploadAbortRef.current === controller) {
+        galleryUploadAbortRef.current = null;
+      }
+      if (!controller.signal.aborted) {
+        setGalleryUploadingCount(null);
+      }
     }
   }
 
@@ -291,11 +413,7 @@ export function JournalEditor({
   const selectedText =
     editor.state.selection.empty || readOnly
       ? ""
-      : editor.state.doc.textBetween(
-          editor.state.selection.from,
-          editor.state.selection.to,
-          "\n",
-        );
+      : editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to, "\n");
   const aiBlockReason = aiRewrite
     ? rewriteBlockReason({
         text: selectedText,
@@ -304,7 +422,6 @@ export function JournalEditor({
       })
     : "read_only";
   const aiBlockMessage = rewriteBlockMessage(aiBlockReason);
-
 
   return (
     <div className={className}>
@@ -431,6 +548,30 @@ export function JournalEditor({
             <Table2 aria-hidden="true" className="size-4" />
           </ToolbarButton>
           <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
+          <JournalColumnsInsertMenu editor={editor} />
+          <ToolbarButton
+            label={
+              galleryUploadingCount === null
+                ? "插入图库"
+                : `正在上传 ${galleryUploadingCount} 张图片…`
+            }
+            disabled={galleryUploadingCount !== null}
+            onClick={() => {
+              if (!workspaceId) {
+                setGalleryError("无法确定所属工作区，暂时不能上传图片。");
+                return;
+              }
+              setGalleryError(null);
+              galleryInputRef.current?.click();
+            }}
+          >
+            {galleryUploadingCount !== null ? (
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            ) : (
+              <Grid3X3 aria-hidden="true" className="size-4" />
+            )}
+          </ToolbarButton>
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
           <ToolbarButton
             label="添加链接"
             pressed={editor.isActive("link")}
@@ -475,6 +616,20 @@ export function JournalEditor({
               if (file) void handleImageFile(file);
             }}
           />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            multiple
+            accept={COVER_ACCEPT_ATTRIBUTE}
+            className="hidden"
+            aria-label="选择图库图片"
+            tabIndex={-1}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = "";
+              if (files.length > 0) void handleGalleryFiles(files);
+            }}
+          />
           <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
           <ToolbarButton
             label="撤销"
@@ -513,16 +668,26 @@ export function JournalEditor({
         </div>
       )}
 
-      {imageUploading || imageError ? (
+      {imageUploading || imageError || galleryUploadingCount !== null || galleryError ? (
         <div className="border-b border-hairline px-3 py-2 text-xs">
           {imageUploading ? (
             <p role="status" className="text-muted">
               正在上传图片…
             </p>
           ) : null}
+          {galleryUploadingCount !== null ? (
+            <p role="status" className="text-muted">
+              正在上传 {galleryUploadingCount} 张图片…
+            </p>
+          ) : null}
           {imageError ? (
             <p role="alert" className="text-accent-red">
               {imageError}
+            </p>
+          ) : null}
+          {galleryError ? (
+            <p role="alert" className="text-accent-red">
+              {galleryError}
             </p>
           ) : null}
         </div>
@@ -565,9 +730,11 @@ export function JournalEditor({
         />
       ) : null}
 
+      {!readOnly ? <JournalColumnsBubble editor={editor} /> : null}
+
       <EditorContent
         editor={editor}
-        className="[&_.journal-prose]:relative [&_.journal-prose]:outline-none [&_.journal-prose_p.is-editor-empty:first-child::before]:pointer-events-none [&_.journal-prose_p.is-editor-empty:first-child::before]:float-left [&_.journal-prose_p.is-editor-empty:first-child::before]:h-0 [&_.journal-prose_p.is-editor-empty:first-child::before]:text-stone [&_.journal-prose_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.journal-prose_h2]:mt-5 [&_.journal-prose_h2]:font-serif [&_.journal-prose_h2]:text-2xl [&_.journal-prose_h2]:tracking-[-0.02em] [&_.journal-prose_h2]:text-ink [&_.journal-prose_h3]:mt-4 [&_.journal-prose_h3]:font-serif [&_.journal-prose_h3]:text-xl [&_.journal-prose_h3]:text-ink [&_.journal-prose_p]:my-2 [&_.journal-prose_ul]:my-2 [&_.journal-prose_ul]:list-disc [&_.journal-prose_ul]:pl-5 [&_.journal-prose_table]:my-3 [&_.journal-prose_table]:w-full [&_.journal-prose_table]:table-fixed [&_.journal-prose_table]:overflow-hidden [&_.journal-prose_table]:rounded-control [&_.journal-prose_table]:border [&_.journal-prose_table]:border-hairline-strong [&_.journal-prose_th]:border [&_.journal-prose_th]:border-hairline [&_.journal-prose_th]:bg-surface-2 [&_.journal-prose_th]:px-3 [&_.journal-prose_th]:py-2 [&_.journal-prose_th]:text-left [&_.journal-prose_th]:align-top [&_.journal-prose_th]:text-[13px] [&_.journal-prose_th]:font-medium [&_.journal-prose_th]:text-ink [&_.journal-prose_td]:border [&_.journal-prose_td]:border-hairline [&_.journal-prose_td]:px-3 [&_.journal-prose_td]:py-2 [&_.journal-prose_td]:align-top [&_.journal-prose_td]:text-body [&_.journal-prose_.selectedCell]:bg-accent-blue\/10 [&_.journal-prose_.tableWrapper]:my-3 [&_.journal-prose_.tableWrapper]:overflow-x-auto [&_.journal-prose_ul[data-type=taskList]]:my-2 [&_.journal-prose_ul[data-type=taskList]]:list-none [&_.journal-prose_ul[data-type=taskList]]:pl-0 [&_.journal-prose_li[data-checked]]:my-1 [&_.journal-prose_li[data-checked]]:flex [&_.journal-prose_li[data-checked]]:items-start [&_.journal-prose_li[data-checked]]:gap-2 [&_.journal-prose_li[data-type=taskItem]>label]:mt-[3px] [&_.journal-prose_li[data-type=taskItem]>label]:flex [&_.journal-prose_li[data-type=taskItem]>label]:shrink-0 [&_.journal-prose_li[data-type=taskItem]>label]:items-center [&_.journal-prose_li[data-type=taskItem]>div]:min-w-0 [&_.journal-prose_li[data-type=taskItem]>div]:flex-1 [&_.journal-prose_li[data-type=taskItem]_p]:my-0 [&_.journal-prose_li[data-type=taskItem]_input[type=checkbox]]:size-[15px] [&_.journal-prose_li[data-type=taskItem]_input[type=checkbox]]:cursor-pointer [&_.journal-prose_li[data-type=taskItem]_input[type=checkbox]]:accent-accent-blue [&_.journal-prose_li[data-checked=true]>div]:text-stone [&_.journal-prose_li[data-checked=true]>div]:line-through [&_.journal-prose_ol]:my-2 [&_.journal-prose_ol]:list-decimal [&_.journal-prose_ol]:pl-5 [&_.journal-prose_blockquote]:my-3 [&_.journal-prose_blockquote]:border-l-2 [&_.journal-prose_blockquote]:border-hairline-strong [&_.journal-prose_blockquote]:pl-4 [&_.journal-prose_blockquote]:text-muted [&_.journal-prose_pre]:my-3 [&_.journal-prose_pre]:overflow-x-auto [&_.journal-prose_pre]:rounded-control [&_.journal-prose_pre]:border [&_.journal-prose_pre]:border-hairline [&_.journal-prose_pre]:bg-black/40 [&_.journal-prose_pre]:p-3 [&_.journal-prose_pre]:font-mono [&_.journal-prose_pre]:text-xs [&_.journal-prose_a]:text-accent-blue [&_.journal-prose_a]:underline [&_.journal-prose_img]:my-3 [&_.journal-prose_img]:max-w-full [&_.journal-prose_img]:rounded-control [&_.journal-prose_img]:border [&_.journal-prose_img]:border-hairline"
+        className="[&_.journal-prose]:relative [&_.journal-prose]:outline-none [&_.journal-prose_p.is-editor-empty:first-child::before]:pointer-events-none [&_.journal-prose_p.is-editor-empty:first-child::before]:float-left [&_.journal-prose_p.is-editor-empty:first-child::before]:h-0 [&_.journal-prose_p.is-editor-empty:first-child::before]:text-stone [&_.journal-prose_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
       />
     </div>
   );

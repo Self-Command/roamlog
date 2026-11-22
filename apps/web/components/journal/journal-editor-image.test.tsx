@@ -16,6 +16,27 @@ const doc = {
   content: [{ type: "paragraph", content: [{ type: "text", text: "今天" }] }],
 };
 
+const imageDoc = {
+  type: "doc",
+  content: [
+    {
+      type: "image",
+      attrs: {
+        src: "https://media.example.test/old-photo.png",
+        alt: "旧照片",
+        title: "旧标题",
+        caption: "旧图注",
+        alignment: "left",
+        displayWidth: 320,
+        displayHeight: 200,
+        linkHref: "https://example.test/journal",
+        linkBlank: false,
+        mediaId: null,
+      },
+    },
+  ],
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -150,8 +171,22 @@ describe("JournalEditor image upload", () => {
     expect(completeCall?.[1]).toMatchObject({ method: "POST" });
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    const lastChange = onChange.mock.calls.at(-1)?.[0] as { contentHtml: string } | undefined;
+    const lastChange = onChange.mock.calls.at(-1)?.[0] as
+      | {
+          contentHtml: string;
+          contentJson: {
+            content?: {
+              type: string;
+              attrs?: Record<string, unknown>;
+            }[];
+          };
+        }
+      | undefined;
     expect(lastChange?.contentHtml).toContain(`src="${SIGNED_URL.replaceAll("&", "&amp;")}"`);
+    expect(lastChange?.contentHtml).toContain(`data-media-id="${MEDIA_ID}"`);
+    expect(
+      lastChange?.contentJson.content?.find((node) => node.type === "image")?.attrs?.mediaId,
+    ).toBe(MEDIA_ID);
     expect(lastChange?.contentHtml).not.toContain("data:image");
     expect(lastChange?.contentHtml).not.toContain("IMAGE PLACEHOLDER");
   });
@@ -159,10 +194,7 @@ describe("JournalEditor image upload", () => {
   it("shows a readable error and inserts no placeholder when the upload fails", async () => {
     const onChange = vi.fn();
     const fetchMock = vi.fn(async () =>
-      jsonResponse(
-        { status: 500, code: "INTERNAL_ERROR", title: "Internal Server Error" },
-        500,
-      ),
+      jsonResponse({ status: 500, code: "INTERNAL_ERROR", title: "Internal Server Error" }, 500),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -191,5 +223,75 @@ describe("JournalEditor image upload", () => {
       .map((call) => (call[0] as { contentHtml?: string }).contentHtml ?? "")
       .join("");
     expect(changedHtml).not.toContain("<img");
+  });
+
+  it("replaces an existing image through the editor upload pipeline", async () => {
+    const onChange = vi.fn();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/media/presign")) return jsonResponse(presignResponse());
+      if (url.endsWith("/complete")) return jsonResponse(mediaRecord());
+      if (url.includes(`/v1/media/${MEDIA_ID}`)) return jsonResponse(mediaRead());
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const realClient = createCoverMediaClient();
+    const imageUploadClient = {
+      ...realClient,
+      putObject: vi.fn(async () => undefined),
+    };
+    const { container } = render(
+      <JournalEditor
+        contentJson={imageDoc}
+        onChange={onChange}
+        workspaceId={WORKSPACE_ID}
+        tripId={TRIP_ID}
+        imageUploadClient={imageUploadClient}
+      />,
+    );
+
+    await screen.findByRole("toolbar", { name: "日志格式工具栏" });
+    const image = container.querySelector<HTMLImageElement>('figure[data-type="image"] img');
+    expect(image).not.toBeNull();
+    fireEvent.click(image as HTMLImageElement);
+    await screen.findByRole("button", { name: "替换图片" });
+
+    const replaceInput = container.querySelector<HTMLInputElement>(
+      'input[aria-label="选择替换图片"]',
+    );
+    expect(replaceInput).not.toBeNull();
+    vi.spyOn(replaceInput as HTMLInputElement, "click").mockImplementation(() => {
+      fireEvent.change(replaceInput as HTMLInputElement, {
+        target: { files: [uploadedFile()] },
+      });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "替换图片" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(`img[src="${SIGNED_URL}"]`)).not.toBeNull();
+    });
+
+    const lastChange = onChange.mock.calls.at(-1)?.[0] as
+      | {
+          contentJson: {
+            content?: Array<{ type: string; attrs?: Record<string, unknown> }>;
+          };
+          contentHtml: string;
+        }
+      | undefined;
+    const replacedImage = lastChange?.contentJson.content?.find((node) => node.type === "image");
+    expect(replacedImage?.attrs).toMatchObject({
+      src: SIGNED_URL,
+      mediaId: MEDIA_ID,
+      alt: "photo.png",
+      caption: null,
+      title: null,
+      alignment: "left",
+      linkHref: "https://example.test/journal",
+    });
+    expect(lastChange?.contentHtml).toContain(`data-media-id="${MEDIA_ID}"`);
+    expect(lastChange?.contentHtml).not.toContain("旧图注");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

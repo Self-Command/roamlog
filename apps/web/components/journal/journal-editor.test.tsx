@@ -35,11 +35,12 @@ describe("JournalEditor", () => {
     expect(screen.getByRole("button", { name: "插入图片" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "任务列表" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "插入表格" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "插入多栏" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "上方插入行" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "右侧插入列" })).toBeDisabled();
-    expect(screen.getByRole("textbox", { name: "日志正文" })).toHaveTextContent(
-      "在哲学之道走到天黑。",
-    );
+    const body = screen.getByRole("textbox", { name: "日志正文" });
+    expect(body).toHaveClass("journal-layout", "journal-prose");
+    expect(body).toHaveTextContent("在哲学之道走到天黑。");
   });
 
   it("inserts a table through the toolbar and keeps the JSON in sync", async () => {
