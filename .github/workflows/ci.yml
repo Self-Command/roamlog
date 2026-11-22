@@ -197,6 +197,23 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Start media worker for upload E2E
+        run: |
+          pnpm --filter @roamlog/worker start > /tmp/roamlog-worker.log 2>&1 &
+          echo $! > /tmp/roamlog-worker.pid
+          for _ in $(seq 1 30); do
+            if grep -q '"event":"worker.ready"' /tmp/roamlog-worker.log; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/roamlog-worker.pid)" 2>/dev/null; then
+              cat /tmp/roamlog-worker.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/roamlog-worker.log
+          exit 1
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -371,6 +388,16 @@ jobs:
             .audit/journal-layout/gallery-drag-*
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Stop media worker
+        if: always()
+        run: |
+          if [ -f /tmp/roamlog-worker.pid ]; then
+            kill "$(cat /tmp/roamlog-worker.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/roamlog-worker.log ]; then
+            tail -n 100 /tmp/roamlog-worker.log
+          fi
 
   dependency-audit:
     name: Dependency audit (high+)
