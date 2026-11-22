@@ -281,7 +281,7 @@ function http() {
   if (!app) {
     throw new Error("Provider e2e app is not initialized.");
   }
-  return request(app.getHttpServer()).set("x-test-auth", "yes");
+  return request.agent(app.getHttpServer()).set("x-test-auth", "yes");
 }
 
 async function getGroup(
