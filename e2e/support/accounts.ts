@@ -20,7 +20,7 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 
 import { currentTotp } from "../live-support/fixture";
 
@@ -82,6 +82,12 @@ interface ProvisionedUser {
 }
 
 function runProvisionScript(args: readonly string[]): ProvisionedUser {
+  const quoteShellArg = (value: string): string =>
+    process.platform === "win32"
+      ? /[\s"]/u.test(value)
+        ? `"${value.replaceAll('"', '""')}"`
+        : value
+      : `'${value.replaceAll("'", `'\\''`)}'`;
   const command = [
     "pnpm",
     "--filter",
@@ -90,18 +96,16 @@ function runProvisionScript(args: readonly string[]): ProvisionedUser {
     "tsx",
     "../../e2e/support/provision-smoke-accounts.ts",
     ...args,
-  ].join(" ");
+  ]
+    .map(quoteShellArg)
+    .join(" ");
 
-  const output = execFileSync(
-    process.platform === "win32" ? "cmd.exe" : "/bin/sh",
-    process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-c", command],
-    {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: { ...process.env, DATABASE_URL: SMOKE_DATABASE_URL },
-      stdio: "pipe",
-    },
-  );
+  const output = execSync(command, {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: { ...process.env, DATABASE_URL: SMOKE_DATABASE_URL },
+    stdio: "pipe",
+  });
 
   const line = output
     .split(/\r?\n/u)
