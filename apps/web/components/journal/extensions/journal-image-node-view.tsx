@@ -197,7 +197,10 @@ export function JournalImageNodeView({
     setPreviewOpen(false);
     const trigger = previewTriggerRef.current;
     previewTriggerRef.current = null;
-    queueMicrotask(() => trigger?.focus());
+    // The lightbox restores focus in its own close effect. Wait one task so
+    // that restoration cannot steal focus back from the toolbar button that
+    // opened the viewer.
+    window.setTimeout(() => trigger?.focus(), 0);
   }
 
   function handleFigureClick(event: MouseEvent<HTMLElement>): void {

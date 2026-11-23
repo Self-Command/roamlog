@@ -1,12 +1,19 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { demoTrips, demoUser, demoWorkspaces } from "@/test/fixtures";
+import { renderWithQuery } from "@/test/query-harness";
 import type { WorkspaceMemberWithUser } from "@roamlog/contracts";
 import { Button } from "@roamlog/ui";
 
 import { AppShellView } from "./app-shell-view";
 import { initialsFor } from "./topbar-utils";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
 
 const workspaceFixture = demoWorkspaces[0];
 
@@ -59,7 +66,7 @@ function renderShell(
     pathname?: string;
   } = {},
 ) {
-  return render(
+  return renderWithQuery(
     <AppShellView
       currentUser={demoUser}
       workspaces={demoWorkspaces}
@@ -140,7 +147,7 @@ describe("Web top bar truthfulness", () => {
   });
 
   it("hides the member strip until real workspace members are provided", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithQuery(
       <AppShellView
         currentUser={demoUser}
         workspaces={demoWorkspaces}

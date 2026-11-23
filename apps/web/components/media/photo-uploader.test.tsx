@@ -8,6 +8,12 @@ import { renderWithQuery } from "@/test/query-harness";
 
 import { PhotoUploader } from "./photo-uploader";
 
+vi.mock("./photo-upload-panel", () => ({
+  default: () => (
+    <div className="uppy-Dashboard" data-ready="true" data-testid="photo-upload-dashboard" />
+  ),
+}));
+
 const { LIMITS } = vi.hoisted(() => ({
   LIMITS: {
     maxFilesPerBatch: 20,
