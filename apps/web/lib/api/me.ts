@@ -3,11 +3,7 @@ import {
   listMySessions as listMySessionsRequest,
   revokeMySession as revokeMySessionRequest,
 } from "@roamlog/api-client";
-import {
-  SessionListResponseSchema,
-  type MediaRead,
-  type Session,
-} from "@roamlog/contracts";
+import { SessionListResponseSchema, type MediaRead, type Session } from "@roamlog/contracts";
 
 import { ApiError } from "./errors";
 import { createCoverMediaClient, type CoverMediaClient } from "./media";
@@ -45,13 +41,7 @@ const COMPLETED_PROGRESS = 92;
 const PROCESSING_PROGRESS = 96;
 
 export type AvatarUploadPhase =
-  | "idle"
-  | "validating"
-  | "presigning"
-  | "uploading"
-  | "completing"
-  | "processing"
-  | "done";
+  "idle" | "validating" | "presigning" | "uploading" | "completing" | "processing" | "done";
 
 export interface AvatarUploadFailure {
   code: "VALIDATION" | "PRESIGN" | "UPLOAD" | "COMPLETE" | "PROCESSING" | "ABORTED";
@@ -217,16 +207,30 @@ export async function uploadAvatar(options: UploadAvatarOptions): Promise<Avatar
 export const MY_SESSIONS_QUERY_KEY = ["v1", "me", "sessions"] as const;
 
 export async function listMySessions(options?: { signal?: AbortSignal }): Promise<Session[]> {
-  return unwrap(
-    await listMySessionsRequest(options),
-    SessionListResponseSchema,
-    "/v1/me/sessions",
-  );
+  return unwrap(await listMySessionsRequest(options), SessionListResponseSchema, "/v1/me/sessions");
 }
 
 /** `DELETE /v1/me/sessions/:id` — revokes exactly one device. */
 export async function revokeMySession(sessionId: string): Promise<void> {
   unwrapMessage(await revokeMySessionRequest(sessionId), `/v1/me/sessions/${sessionId}`);
+}
+
+/**
+ * Associates this browser's HttpOnly device id with the current session.
+ * The API generates the id on first use and refreshes the cookie's lifetime.
+ */
+export async function ensureDeviceIdentity(): Promise<void> {
+  const response = await fetch("/v1/me/device", {
+    method: "POST",
+    credentials: "include",
+    headers: { accept: "application/json" },
+  });
+  // SessionBootstrap may run on public auth pages; an anonymous request is
+  // expected and must not surface as an application error.
+  if (response.status === 401) return;
+  if (!response.ok) {
+    throw new Error(`Unable to associate this device (HTTP ${response.status}).`);
+  }
 }
 
 /**
@@ -237,10 +241,7 @@ export async function revokeMySession(sessionId: string): Promise<void> {
  * instead of pretending the deletion happened.
  */
 export async function deleteMyAccount(): Promise<void> {
-  unwrapMessage(
-    await deleteMyAccountRequest({ confirmation: "DELETE" }),
-    "/v1/me",
-  );
+  unwrapMessage(await deleteMyAccountRequest({ confirmation: "DELETE" }), "/v1/me");
 }
 
 /**

@@ -17,6 +17,8 @@ import { AiConversationController } from "./ai-conversation.controller.js";
 import { AiConversationService } from "./ai-conversation.service.js";
 import { AiController } from "./ai.controller.js";
 import { AiExecuteService } from "./ai-execute.service.js";
+import { AiMessageVoteController } from "./ai-message-vote.controller.js";
+import { AiMessageVoteService } from "./ai-message-vote.service.js";
 import { AiPlanService } from "./ai-plan.service.js";
 import { AiProviderRouter } from "./ai-provider-router.service.js";
 import { AiQuotaService } from "./ai-quota.service.js";
@@ -43,10 +45,16 @@ import { AiToolbox } from "./ai-tools.js";
     // of a second upload stack; the planner only needs the read path.
     MediaModule,
   ],
-  controllers: [AiController, AiConversationController, AiRewriteController],
+  controllers: [
+    AiController,
+    AiConversationController,
+    AiMessageVoteController,
+    AiRewriteController,
+  ],
   providers: [
     AiSettingsResolver,
     AiConversationService,
+    AiMessageVoteService,
     // A token, not a snapshot: every request resolves `ai.*` from the settings
     // service (DB > env > default) before the adapter and the quota are used.
     { provide: AI_SETTINGS_SOURCE, useExisting: AiSettingsResolver },

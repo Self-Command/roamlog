@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { AccessControlModule } from "../../common/guards/access-control.module.js";
+import { AppConfigModule } from "../../config/app-config.module.js";
 import { AuditModule } from "../audit/audit.module.js";
 import { MediaUrlModule } from "../media/media-url.module.js";
 import { SettingsModule } from "../settings/settings.module.js";
@@ -11,7 +12,14 @@ import { UsersController } from "./users.controller.js";
 import { UsersService } from "./users.service.js";
 
 @Module({
-  imports: [AccessControlModule, AuditModule, WorkspacesModule, MediaUrlModule, SettingsModule],
+  imports: [
+    AppConfigModule,
+    AccessControlModule,
+    AuditModule,
+    WorkspacesModule,
+    MediaUrlModule,
+    SettingsModule,
+  ],
   controllers: [UsersController, AppearanceController],
   providers: [UsersService, AppearanceService],
   exports: [UsersService],

@@ -507,6 +507,7 @@ export class AiPlanService {
       conversationId: conversation.id,
       userMessageId: appended.messageId,
       assistantMessageId,
+      streamId: stream.streamId,
       provider: { protocol: settings.protocol, model: settings.model },
     });
 
@@ -541,6 +542,7 @@ export class AiPlanService {
               conversationId: conversation.id,
               userMessageId: appended.messageId,
               assistantMessageId,
+              streamId: stream.streamId,
               history,
               attachmentParts,
               images,
@@ -634,6 +636,8 @@ export class AiPlanService {
       const settings = selectedSettings;
       const finishReason = outcome.plannedCalls.length > 0 ? "tool-calls" : "stop";
       const usage = aiUsage(outcome.usage);
+      const persistedAssistantMessageId =
+        (await this.runs.boundAssistantMessage(stream.streamId)) ?? assistantMessageId;
       const planPayload: AiPlanPayload = {
         runId: outcome.runId,
         message: outcome.message,
@@ -652,7 +656,7 @@ export class AiPlanService {
         workspaceId: membership.workspaceId,
         conversationId: conversation.id,
         streamId: stream.streamId,
-        clientId: assistantMessageId,
+        clientId: persistedAssistantMessageId,
         content,
         status: { type: "complete", reason: finishReason },
         modelContext: outcome.modelContext,
@@ -694,17 +698,19 @@ export class AiPlanService {
       );
       yield {
         type: "done",
-        messageId: assistantMessageId,
+        messageId: persistedAssistantMessageId,
         finishReason,
         ...(usage.inputTokens !== undefined || usage.outputTokens !== undefined ? { usage } : {}),
       };
     } catch (error) {
       if (error instanceof AiAbortedError || options.signal?.aborted) {
+        const persistedAssistantMessageId =
+          (await this.runs.boundAssistantMessage(stream.streamId)) ?? assistantMessageId;
         await this.finishSafely({
           workspaceId: membership.workspaceId,
           conversationId: conversation.id,
           streamId: stream.streamId,
-          clientId: assistantMessageId,
+          clientId: persistedAssistantMessageId,
           content: text.length > 0 ? [{ type: "text", text }] : [],
           status: { type: "incomplete", reason: "cancelled" },
           metadata: {
@@ -732,13 +738,15 @@ export class AiPlanService {
       }
 
       const providerFailoverActive = candidates !== null && this.providerRouter !== undefined;
+      const persistedAssistantMessageId =
+        (await this.runs.boundAssistantMessage(stream.streamId)) ?? assistantMessageId;
       if (providerFailoverActive && !committed) {
         const mapped = toStreamError(error);
         await this.finishSafely({
           workspaceId: membership.workspaceId,
           conversationId: conversation.id,
           streamId: stream.streamId,
-          clientId: assistantMessageId,
+          clientId: persistedAssistantMessageId,
           content: [],
           status: {
             type: "incomplete",
@@ -791,7 +799,7 @@ export class AiPlanService {
         workspaceId: membership.workspaceId,
         conversationId: conversation.id,
         streamId: stream.streamId,
-        clientId: assistantMessageId,
+        clientId: persistedAssistantMessageId,
         content: text.length > 0 ? [{ type: "text", text }] : [],
         status: {
           type: "incomplete",
@@ -833,7 +841,7 @@ export class AiPlanService {
       // §1.3.3: `error` is always followed by exactly one `done`.
       yield {
         type: "done",
-        messageId: assistantMessageId,
+        messageId: persistedAssistantMessageId,
         finishReason: "error",
       };
     }
@@ -855,6 +863,7 @@ export class AiPlanService {
     readonly conversationId: string;
     readonly userMessageId: string;
     readonly assistantMessageId: string;
+    readonly streamId: string;
     readonly history: readonly AiConversationMessage[];
     readonly attachmentParts: readonly AiAttachmentPart[];
     readonly images: readonly AiImagePart[];
@@ -878,6 +887,7 @@ export class AiPlanService {
       conversationId: input.conversationId,
       userMessageId: input.userMessageId,
       assistantMessageId: input.assistantMessageId,
+      streamId: input.streamId,
       provider: { protocol: settings.protocol, model: settings.model },
     };
 

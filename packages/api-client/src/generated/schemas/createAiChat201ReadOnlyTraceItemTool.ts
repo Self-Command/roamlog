@@ -36,4 +36,8 @@ export const CreateAiChat201ReadOnlyTraceItemTool = {
   participantsadd: "participants.add",
   participantsremove: "participants.remove",
   participantsrole: "participants.role",
+  artifactscreate: "artifacts.create",
+  artifactsupdate: "artifacts.update",
+  artifactsedit: "artifacts.edit",
+  artifactssuggest: "artifacts.suggest",
 } as const;

@@ -44,6 +44,10 @@ const TOOL_LABELS: Readonly<Record<AiToolName, string>> = {
   "participants.add": "添加同行人",
   "participants.remove": "移除同行人",
   "participants.role": "调整同行人角色",
+  "artifacts.create": "创建旅行文档",
+  "artifacts.update": "重写旅行文档",
+  "artifacts.edit": "精确修改旅行文档",
+  "artifacts.suggest": "生成旅行文档建议",
 };
 
 const PACKING_CATEGORIES: Readonly<Record<string, string>> = {
@@ -83,6 +87,7 @@ const PLAN_BUCKET_TITLES: Readonly<Record<PlanBucket, string>> = {
   expenses: "开销",
   entries: "日志",
   participants: "同行人",
+  documents: "旅行文档",
   orphan: "无法归属",
 };
 

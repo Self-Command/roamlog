@@ -18887,6 +18887,14 @@
               "null"
             ],
             "maxLength": 500
+          },
+          "deviceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 16,
+            "maxLength": 64
           }
         },
         "required": [
@@ -18895,7 +18903,8 @@
           "expiresAt",
           "createdAt",
           "ip",
-          "userAgent"
+          "userAgent",
+          "deviceId"
         ],
         "additionalProperties": false
       },
@@ -18937,6 +18946,14 @@
                 "null"
               ],
               "maxLength": 500
+            },
+            "deviceId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 16,
+              "maxLength": 64
             }
           },
           "required": [
@@ -18945,7 +18962,8 @@
             "expiresAt",
             "createdAt",
             "ip",
-            "userAgent"
+            "userAgent",
+            "deviceId"
           ],
           "additionalProperties": false
         }
@@ -26070,6 +26088,87 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SessionListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/device": {
+      "post": {
+        "operationId": "registerCurrentDevice",
+        "tags": [
+          "Me"
+        ],
+        "summary": "Associate this browser with the current session",
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }
@@ -36064,7 +36163,11 @@
                               "entries.update",
                               "participants.add",
                               "participants.remove",
-                              "participants.role"
+                              "participants.role",
+                              "artifacts.create",
+                              "artifacts.update",
+                              "artifacts.edit",
+                              "artifacts.suggest"
                             ]
                           },
                           "args": {
@@ -36113,7 +36216,11 @@
                               "entries.update",
                               "participants.add",
                               "participants.remove",
-                              "participants.role"
+                              "participants.role",
+                              "artifacts.create",
+                              "artifacts.update",
+                              "artifacts.edit",
+                              "artifacts.suggest"
                             ]
                           },
                           "args": {
@@ -36283,7 +36390,7 @@
           "AI"
         ],
         "summary": "Stream one AI chat turn as Server-Sent Events",
-        "description": "Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: \"error\"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.",
+        "description": "Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, streamId?, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: \"error\"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.",
         "parameters": [
           {
             "schema": {
@@ -36535,6 +36642,341 @@
         }
       }
     },
+    "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/stream/status": {
+      "get": {
+        "operationId": "getAiStreamStatus",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Check whether a conversation has a resumable AI stream",
+        "description": "Returns `{ active, streamId? }`. Active requires both the durable `AiStream` row and the Redis resumable-stream sentinel; a stale database row reports false so the browser never creates an empty assistant message.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "conversationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "streamId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    }
+                  },
+                  "required": [
+                    "active"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/stream": {
+      "get": {
+        "operationId": "resumeAiStream",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Resume an active AI SSE stream",
+        "description": "Replays the resumable producer from the beginning. Clients de-duplicate by SSE frame id. `assistantMessageId` binds the producer's eventual persistence to the assistant-ui message allocated by `resumeRun`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "conversationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "assistantMessageId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resumed Server-Sent Events stream.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No resumable producer is active."
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot access this conversation.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/stream/cancel": {
+      "post": {
+        "operationId": "cancelAiStream",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Explicitly stop an active AI stream",
+        "description": "Only user-initiated Stop calls this endpoint. A browser network drop must not: the producer keeps running so a refresh can resume it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "conversationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "streamId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Sortable UUIDv7 identifier."
+                  }
+                },
+                "required": [
+                  "streamId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cancelled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "cancelled"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspaceId}/ai/runs/{runId}/execute": {
       "post": {
         "operationId": "executeAiRun",
@@ -36617,7 +37059,11 @@
                             "entries.update",
                             "participants.add",
                             "participants.remove",
-                            "participants.role"
+                            "participants.role",
+                            "artifacts.create",
+                            "artifacts.update",
+                            "artifacts.edit",
+                            "artifacts.suggest"
                           ]
                         },
                         "args": {
@@ -36690,7 +37136,11 @@
                               "entries.update",
                               "participants.add",
                               "participants.remove",
-                              "participants.role"
+                              "participants.role",
+                              "artifacts.create",
+                              "artifacts.update",
+                              "artifacts.edit",
+                              "artifacts.suggest"
                             ]
                           },
                           "ok": {
@@ -36703,6 +37153,36 @@
                             ],
                             "format": "uuid",
                             "description": "Sortable UUIDv7 identifier."
+                          },
+                          "artifact": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "description": "Sortable UUIDv7 identifier."
+                              },
+                              "title": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "text",
+                                  "code",
+                                  "sheet",
+                                  "image"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "kind"
+                            ],
+                            "additionalProperties": false
                           },
                           "error": {
                             "type": [
@@ -37144,6 +37624,109 @@
                   "required": [
                     "items",
                     "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAllAiConversations",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Delete all AI conversations for the current user in a Workspace",
+        "description": "Soft-deletes every non-deleted conversation owned by the current user in this Workspace, including archived conversations, in one database operation. This ports `DELETE /api/history` from vercel/chatbot; other Workspace members are unaffected.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deletedCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "deletedCount"
                   ],
                   "additionalProperties": false
                 }

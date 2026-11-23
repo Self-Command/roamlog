@@ -18,6 +18,7 @@ import {
   AiConversationError,
   archiveConversation,
   createConversation,
+  deleteAllConversations,
   deleteConversation,
   deleteConversationMessages,
   generateConversationTitle,
@@ -87,6 +88,8 @@ export interface ConversationSyncController {
 export type RemoteConversationThreadListAdapter = RemoteThreadListAdapter &
   Required<Pick<RemoteThreadListAdapter, "unarchive">> & {
     readonly sync: ConversationSyncController;
+    /** Soft-deletes every conversation owned by this user in the workspace. */
+    deleteAll(): Promise<void>;
   };
 
 class ConversationSyncStore implements ConversationSyncController {
@@ -349,6 +352,33 @@ class ConversationGateway {
     });
   }
 
+  /**
+   * Port of vercel/chatbot `components/chat/app-sidebar.tsx` "Delete all":
+   * the upstream action is a single `DELETE /api/history`
+   * (`app/(chat)/api/history/route.ts`). Roamlog uses the Workspace-scoped
+   * equivalent, so the server soft-deletes all of this user's conversations in
+   * one database operation instead of the UI looping over pages.
+   */
+  async deleteAll(): Promise<void> {
+    this.sync.update({ phase: "loading", listError: null });
+    try {
+      await deleteAllConversations(this.workspaceId);
+      this.lastSuccessfulPut.clear();
+      this.pendingUpserts.clear();
+      this.pendingDeletes.clear();
+      this.sync.update({
+        phase: "ready",
+        listError: null,
+        writeError: null,
+        threadCount: 0,
+        pendingWrites: 0,
+      });
+    } catch (error) {
+      this.sync.update({ phase: "error", listError: errorText(error) });
+      throw error;
+    }
+  }
+
   async generateTitle(remoteId: string): Promise<ReadableStream<unknown>> {
     try {
       const { title } = await generateConversationTitle(this.workspaceId, remoteId);
@@ -573,6 +603,8 @@ export function createRemoteThreadListAdapter(
     unarchive: (remoteId) => gateway.unarchive(remoteId),
 
     delete: (remoteId) => gateway.delete(remoteId),
+
+    deleteAll: () => gateway.deleteAll(),
 
     async generateTitle(remoteId, _messages) {
       return gateway.generateTitle(remoteId) as unknown as Awaited<

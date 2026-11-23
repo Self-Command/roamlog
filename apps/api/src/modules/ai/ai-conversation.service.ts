@@ -12,6 +12,7 @@ import {
 import { Prisma } from "@roamlog/db";
 import type {
   AiConversation,
+  AiConversationBulkDeleteResponse,
   AiConversationListQuery,
   AiConversationListResponse,
   AiConversationMessagesResponse,
@@ -364,6 +365,47 @@ export class AiConversationService implements AiConversationServiceContract {
     });
   }
 
+  /**
+   * The stream a refreshed browser may attach to.
+   *
+   * `AiStream` is the durable lifecycle row; the actual replay buffer lives in
+   * `resumable-stream`'s Redis sentinel. Keeping this read owner-scoped means a
+   * conversation id from another user can never be used to probe live runs.
+   */
+  async findRecoverableStream(
+    userId: string,
+    workspaceId: string,
+    conversationId: string,
+  ): Promise<{ streamId: string } | null> {
+    await this.requireConversation(workspaceId, conversationId, userId);
+    const stream = await this.prisma.client.aiStream.findFirst({
+      where: { conversationId, status: "active" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { id: true },
+    });
+    return stream ? { streamId: stream.id } : null;
+  }
+
+  /** Tenant-scoped lookup used by the explicit stop endpoint. */
+  async findStream(
+    userId: string,
+    workspaceId: string,
+    conversationId: string,
+    streamId: string,
+  ): Promise<{ streamId: string; status: "active" | "completed" | "aborted" | "failed" } | null> {
+    await this.requireConversation(workspaceId, conversationId, userId);
+    const stream = await this.prisma.client.aiStream.findFirst({
+      where: { id: streamId, conversationId },
+      select: { id: true, status: true },
+    });
+    return stream
+      ? {
+          streamId: stream.id,
+          status: stream.status as "active" | "completed" | "aborted" | "failed",
+        }
+      : null;
+  }
+
   async finishAssistantMessage(input: {
     workspaceId: string;
     conversationId: string;
@@ -459,7 +501,10 @@ export class AiConversationService implements AiConversationServiceContract {
 
     const turns = buildTurns(rows);
     const selected = turns.slice(Math.max(0, turns.length - maxTurns));
-    while (selected.length > 1 && serializedLength(selected.flatMap((turn) => turn.messages)) > maxChars) {
+    while (
+      selected.length > 1 &&
+      serializedLength(selected.flatMap((turn) => turn.messages)) > maxChars
+    ) {
       selected.shift();
     }
 
@@ -521,8 +566,7 @@ export class AiConversationService implements AiConversationServiceContract {
     const last = visible.at(-1);
     return {
       items: visible.map((row) => presentConversation(row as ConversationRow)),
-      nextCursor:
-        hasMore && last ? encodeConversationCursor(last as ConversationRow) : null,
+      nextCursor: hasMore && last ? encodeConversationCursor(last as ConversationRow) : null,
     };
   }
 
@@ -583,6 +627,14 @@ export class AiConversationService implements AiConversationServiceContract {
       throw conversationNotFound();
     }
     return { message: "Conversation deleted." };
+  }
+
+  async removeAll(userId: string, workspaceId: string): Promise<AiConversationBulkDeleteResponse> {
+    const deleted = await this.prisma.client.aiConversation.updateMany({
+      where: { workspaceId, userId, deletedAt: null },
+      data: { deletedAt: this.clock() },
+    });
+    return { deletedCount: deleted.count };
   }
 
   async listMessages(
@@ -743,11 +795,18 @@ export class AiConversationService implements AiConversationServiceContract {
     const adapter = this.adapterFactory(settings);
     if (!settings.configured || !adapter) {
       this.logger.warn(
-        { event: "ai.not_configured", protocol: settings.protocol, configured: settings.configured },
+        {
+          event: "ai.not_configured",
+          protocol: settings.protocol,
+          configured: settings.configured,
+        },
         "ai.not_configured",
       );
       throw new HttpException(
-        { code: "AI_NOT_CONFIGURED", message: "AI title generation is not configured on this server." },
+        {
+          code: "AI_NOT_CONFIGURED",
+          message: "AI title generation is not configured on this server.",
+        },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
@@ -1240,9 +1299,7 @@ function extractFacts(rows: MessageRow[]): Record<string, unknown> {
           if (result.name === "trips.create" && entityId) {
             lastCreatedTripId = entityId;
             lastCreatedTripTitle =
-              stringValue(payload.title) ??
-              stringValue(payload.name) ??
-              lastCreatedTripTitle;
+              stringValue(payload.title) ?? stringValue(payload.name) ?? lastCreatedTripTitle;
           }
           if (entityId && result.name.startsWith("trips.")) {
             lastTouched.add(entityId);

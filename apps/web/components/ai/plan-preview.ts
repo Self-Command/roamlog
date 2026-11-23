@@ -29,6 +29,7 @@ export type PlanBucket =
   | "expenses"
   | "entries"
   | "participants"
+  | "documents"
   | "orphan";
 
 /** `id → human label`, the additive `plan.subjects` field from the contract. */
@@ -162,6 +163,10 @@ const BUCKET: Readonly<Record<AiToolName, PlanBucket | null>> = {
   "participants.add": "participants",
   "participants.remove": "participants",
   "participants.role": "participants",
+  "artifacts.create": "documents",
+  "artifacts.update": "documents",
+  "artifacts.edit": "documents",
+  "artifacts.suggest": "documents",
 };
 
 const ACTION: Readonly<Record<AiToolName, PlanAction>> = {
@@ -191,6 +196,10 @@ const ACTION: Readonly<Record<AiToolName, PlanAction>> = {
   "participants.add": "add",
   "participants.remove": "remove",
   "participants.role": "change",
+  "artifacts.create": "add",
+  "artifacts.update": "change",
+  "artifacts.edit": "change",
+  "artifacts.suggest": "change",
 };
 
 /** The argument that names the object each tool acts on. */
@@ -220,6 +229,7 @@ const GROUP_ORDER: readonly PlanBucket[] = [
   "expenses",
   "entries",
   "participants",
+  "documents",
   "orphan",
 ];
 

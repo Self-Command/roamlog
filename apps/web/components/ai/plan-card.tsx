@@ -15,6 +15,7 @@ import {
   Map as MapIcon,
   MapPin,
   NotebookPen,
+  FileText,
   Receipt,
   Users,
   Wallet,
@@ -23,6 +24,7 @@ import { createContext, useContext, useEffect, useId, useMemo, useState } from "
 
 import { createAiIdempotencyKey } from "@/lib/api/ai";
 
+import { useOptionalAiArtifact } from "./artifacts/artifact-context";
 import { cn } from "./cn";
 import {
   describePlanWarning,
@@ -143,6 +145,7 @@ const BUCKET_ICONS: Readonly<Record<PlanBucket, typeof MapPin>> = {
   expenses: Receipt,
   entries: NotebookPen,
   participants: Users,
+  documents: FileText,
   orphan: AlertTriangle,
 };
 
@@ -600,6 +603,7 @@ export function ExecutionResultCard({
   result,
 }: ToolCallMessagePartProps<Record<string, unknown>, ExecuteToolResult>) {
   const { workspaceSlug } = useWorkspaceChat();
+  const artifacts = useOptionalAiArtifact();
   if (!result) return null;
 
   if (result.status === "failed") {
@@ -659,6 +663,11 @@ export function ExecutionResultCard({
             item.ok && item.entityId && call?.tool === "trips.create"
               ? `/w/${workspaceSlug}/trips/${item.entityId}`
               : null;
+          const artifact = (
+            item as AiToolResult & {
+              artifact?: { id: string; title?: string; kind?: string };
+            }
+          ).artifact;
 
           return (
             <li key={`${item.tool}-${index}`} className="flex items-start gap-3 px-4 py-3">
@@ -682,6 +691,16 @@ export function ExecutionResultCard({
                   查看
                   <ArrowUpRight aria-hidden="true" className="size-3" />
                 </a>
+              ) : null}
+              {artifact && artifacts ? (
+                <button
+                  className="inline-flex shrink-0 items-center gap-1 text-xs text-ink underline decoration-hairline-strong underline-offset-2"
+                  onClick={() => void artifacts.openArtifact(artifact)}
+                  type="button"
+                >
+                  <FileText aria-hidden="true" className="size-3" />
+                  打开文档
+                </button>
               ) : null}
             </li>
           );

@@ -205,6 +205,8 @@ export function runStoreStub(): {
   isConsumed: ReturnType<typeof vi.fn>;
   consume: ReturnType<typeof vi.fn>;
   loadConsumed: ReturnType<typeof vi.fn>;
+  boundAssistantMessage: ReturnType<typeof vi.fn>;
+  bindAssistantMessage: ReturnType<typeof vi.fn>;
 } {
   const runs = new Map<string, unknown>();
   return {
@@ -216,6 +218,8 @@ export function runStoreStub(): {
     isConsumed: vi.fn().mockResolvedValue(false),
     consume: vi.fn(),
     loadConsumed: vi.fn(),
+    boundAssistantMessage: vi.fn().mockResolvedValue(undefined),
+    bindAssistantMessage: vi.fn().mockResolvedValue(undefined),
   };
 }
 

@@ -4,16 +4,22 @@ import type {
   AiStreamEvent,
   AiToolCall,
 } from "@roamlog/contracts";
-import type { ChatModelAdapter, ChatModelRunResult } from "@assistant-ui/react";
+import type {
+  ChatModelAdapter,
+  ChatModelRunOptions,
+  ChatModelRunResult,
+} from "@assistant-ui/react";
 
 import {
   aiFailureKind,
+  cancelAiStream,
   createAiIdempotencyKey,
   createAiPlan,
   executeAiRun,
+  resumeAiPlanStream,
   streamAiPlan,
   toAiRequestError,
-  type AiStreamEventPayload,
+  type AiStreamRecord,
 } from "@/lib/api/ai";
 
 import { executionFailureCopy, planFailureCopy } from "./copy";
@@ -50,6 +56,22 @@ import { attachmentsFromMessage } from "./media-attachment-adapter";
 
 export const PLAN_TOOL_NAME = "roamlog.plan";
 export const EXECUTE_TOOL_NAME = "roamlog.execute";
+
+/**
+ * `pagehide` fires for refresh, tab close and bfcache. The runtime's unmount
+ * cleanup also calls `cancelRun()`, so without this marker a refresh would
+ * issue the explicit-stop endpoint and defeat auto-resume. A user pressing
+ * Stop (no pagehide) still cancels the server producer.
+ */
+let pageIsUnloading = false;
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    pageIsUnloading = true;
+  });
+  window.addEventListener("pageshow", () => {
+    pageIsUnloading = false;
+  });
+}
 
 type PlanEvent = Extract<AiStreamEvent, { type: "plan" }>;
 
@@ -88,9 +110,7 @@ export interface FailedExecutionResult {
   retryable: boolean;
 }
 
-export type ExecuteToolResult =
-  | ExecutedPlanResult
-  | FailedExecutionResult;
+export type ExecuteToolResult = ExecutedPlanResult | FailedExecutionResult;
 
 export type PlanToolResult = ConfirmedPlanResult | ExecuteToolResult;
 
@@ -230,15 +250,9 @@ function toMillis(value: string): number {
   return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
-function appendFailureCopy(
-  content: Content,
-  title: string,
-  description: string,
-): Content {
+function appendFailureCopy(content: Content, title: string, description: string): Content {
   const copy = `${title}\n\n${description}`;
-  const hasText = content.some(
-    (part) => part.type === "text" && part.text.trim().length > 0,
-  );
+  const hasText = content.some((part) => part.type === "text" && part.text.trim().length > 0);
   return appendTextDelta(content, hasText ? `\n\n${copy}` : copy);
 }
 
@@ -248,7 +262,9 @@ interface PlanPartLike {
   result?: unknown;
 }
 
-function planConfirmationFrom(message: { content: readonly unknown[] }): ConfirmedPlanResult | null {
+function planConfirmationFrom(message: {
+  content: readonly unknown[];
+}): ConfirmedPlanResult | null {
   for (const raw of message.content) {
     const part = raw as PlanPartLike;
     if (part.type !== "tool-call" || part.toolName !== PLAN_TOOL_NAME) continue;
@@ -258,9 +274,7 @@ function planConfirmationFrom(message: { content: readonly unknown[] }): Confirm
   return null;
 }
 
-export function userText(message: {
-  content: readonly unknown[] | string;
-}): string {
+export function userText(message: { content: readonly unknown[] | string }): string {
   if (typeof message.content === "string") return message.content.trim();
 
   return message.content
@@ -299,11 +313,7 @@ export function createAiChatModelAdapter({
       // rather than in `messages` (which stops at the parent user message).
       const inFlight = unstable_getMessage?.();
       const assistant =
-        inFlight?.role === "assistant"
-          ? inFlight
-          : last?.role === "assistant"
-            ? last
-            : undefined;
+        inFlight?.role === "assistant" ? inFlight : last?.role === "assistant" ? last : undefined;
       if (assistant) {
         const confirmed = planConfirmationFrom(assistant);
         if (confirmed) {
@@ -311,15 +321,20 @@ export function createAiChatModelAdapter({
             yield {
               content: [
                 textPart(planFailureCopy("forbidden").title),
-                toolPart(EXECUTE_TOOL_NAME, `${confirmed.runId}-denied`, {}, {
-                  result: {
-                    status: "failed",
-                    calls: confirmed.calls,
-                    ...planFailureCopy("forbidden"),
-                    retryable: false,
-                  } satisfies FailedExecutionResult,
-                  isError: true,
-                }),
+                toolPart(
+                  EXECUTE_TOOL_NAME,
+                  `${confirmed.runId}-denied`,
+                  {},
+                  {
+                    result: {
+                      status: "failed",
+                      calls: confirmed.calls,
+                      ...planFailureCopy("forbidden"),
+                      retryable: false,
+                    } satisfies FailedExecutionResult,
+                    isError: true,
+                  },
+                ),
               ],
               status: { type: "complete", reason: "stop" },
             };
@@ -405,29 +420,83 @@ export function createAiChatModelAdapter({
       let doneEvent: Extract<AiStreamEvent, { type: "done" }> | undefined;
       /** True after a progress frame was surfaced to the UI. */
       let progressShown = false;
+      let streamId: string | undefined;
+      let lastEventId = 0;
+      const conversationId = unstable_threadId;
+
+      /**
+       * The transport-level reconnect port of upstream `use-auto-resume`.
+       *
+       * A dropped HTTP body does not mean the server stopped: the
+       * `resumable-stream` producer continues and buffers. We ask the GET
+       * endpoint for that buffer, skip already-applied ids, and continue
+       * yielding into the same assistant-ui message. This is the only way to
+       * avoid duplicating text or creating a second reply.
+       */
+      const records = (async function* (): AsyncGenerator<AiStreamRecord, void, void> {
+        let attempt = 0;
+        let resuming = false;
+        for (;;) {
+          try {
+            if (!resuming) {
+              let localEventId = 0;
+              for await (const event of streamAiPlan(
+                workspaceId,
+                {
+                  message: prompt,
+                  // `useLocalRuntime` seeds this with
+                  // `threadListItem.remoteId`, i.e. the persisted conversation
+                  // id, so follow-up turns keep context.
+                  ...(conversationId ? { conversationId } : {}),
+                  ...(request?.id ? { clientMessageId: request.id } : {}),
+                  ...(unstable_assistantMessageId
+                    ? { assistantMessageId: unstable_assistantMessageId }
+                    : {}),
+                  ...(selection.model === undefined ? {} : { model: selection.model }),
+                  ...(selection.reasoningEffort === undefined
+                    ? {}
+                    : { reasoningEffort: selection.reasoningEffort }),
+                  ...(attachments.length > 0 ? { attachments } : {}),
+                },
+                abortSignal,
+              )) {
+                localEventId += 1;
+                lastEventId = localEventId;
+                if (event.type === "meta" && event.streamId) {
+                  streamId = event.streamId;
+                }
+                yield { event, eventId: localEventId };
+              }
+              return;
+            }
+
+            for await (const record of resumeAiPlanStream(
+              workspaceId,
+              conversationId ?? "",
+              unstable_assistantMessageId,
+              abortSignal,
+            )) {
+              if (record.eventId <= lastEventId) continue;
+              lastEventId = record.eventId;
+              if (record.event.type === "meta" && record.event.streamId) {
+                streamId = record.event.streamId;
+              }
+              yield record;
+            }
+            return;
+          } catch (error) {
+            if (abortSignal.aborted) return;
+            if (!streamId || !conversationId || attempt >= 2) throw error;
+            attempt += 1;
+            resuming = true;
+            await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 250 : 750));
+          }
+        }
+      })();
 
       try {
-        const stream = streamAiPlan(
-          workspaceId,
-          {
-            message: prompt,
-            // `useLocalRuntime` seeds this with `threadListItem.remoteId`, i.e.
-            // the persisted conversation id, so follow-up turns keep context.
-            ...(unstable_threadId ? { conversationId: unstable_threadId } : {}),
-            ...(request?.id ? { clientMessageId: request.id } : {}),
-            ...(unstable_assistantMessageId
-              ? { assistantMessageId: unstable_assistantMessageId }
-              : {}),
-            ...(selection.model === undefined ? {} : { model: selection.model }),
-            ...(selection.reasoningEffort === undefined
-              ? {}
-              : { reasoningEffort: selection.reasoningEffort }),
-            ...(attachments.length > 0 ? { attachments } : {}),
-          },
-          abortSignal,
-        );
-
-        for await (const event of stream as AsyncGenerator<AiStreamEventPayload>) {
+        for await (const record of records) {
+          const event = record.event;
           switch (event.type) {
             case "progress":
               // Status only: never append the label to the answer. A preamble
@@ -492,9 +561,7 @@ export function createAiChatModelAdapter({
                 const completedAt = toMillis(event.finishedAt);
                 return {
                   ...part,
-                  ...(event.result !== undefined
-                    ? { result: event.result as never }
-                    : {}),
+                  ...(event.result !== undefined ? { result: event.result as never } : {}),
                   ...(event.status === "error" ? { isError: true } : {}),
                   timing: {
                     startedAt: part.timing?.startedAt ?? completedAt - event.durationMs,
@@ -528,7 +595,12 @@ export function createAiChatModelAdapter({
           }
         }
       } catch (error) {
-        if (abortSignal.aborted) return;
+        if (abortSignal.aborted) {
+          if (!pageIsUnloading && streamId && conversationId) {
+            void cancelAiStream(workspaceId, conversationId, streamId).catch(() => undefined);
+          }
+          return;
+        }
 
         const failure = toAiRequestError(error);
         if (failure.status === 404 || failure.status === 405) {
@@ -557,15 +629,31 @@ export function createAiChatModelAdapter({
         // a pre-flight failure has no text and keeps the old single bubble.
         yield {
           content: appendFailureCopy(content, copy.title, copy.description),
-          status: content.length > 0
-            ? { type: "incomplete", reason: "error" }
-            : { type: "complete", reason: "stop" },
+          status:
+            content.length > 0
+              ? { type: "incomplete", reason: "error" }
+              : { type: "complete", reason: "stop" },
           ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
         };
         return;
       }
 
-      if (abortSignal.aborted) return;
+      if (abortSignal.aborted) {
+        if (!pageIsUnloading && streamId && conversationId) {
+          void cancelAiStream(workspaceId, conversationId, streamId).catch(() => undefined);
+        }
+        return;
+      }
+
+      if (!doneEvent) {
+        const copy = planFailureCopy("network");
+        yield {
+          content: appendFailureCopy(content, copy.title, copy.description),
+          status: { type: "incomplete", reason: "error" },
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+        };
+        return;
+      }
 
       const finishReason = doneEvent?.finishReason ?? (errorEvent ? "error" : "stop");
 
@@ -625,5 +713,203 @@ export function createAiChatModelAdapter({
       }
       return;
     },
+  };
+}
+
+/**
+ * Assistant-ui `resumeRun` stream for a page reload.
+ *
+ * Upstream `use-auto-resume.ts` calls `resumeStream()` when the last persisted
+ * message is a user turn. `useLocalRuntime` has no transport-level resume hook,
+ * so the equivalent is `ThreadRuntime.resumeRun({ stream })`: this generator
+ * attaches to the existing server producer and rebuilds the assistant message
+ * from its replay buffer. The server binds the final persisted `clientId` to
+ * the new runtime message id before the producer finishes.
+ */
+export function createAiResumeStream({
+  workspaceId,
+  conversationId,
+}: {
+  workspaceId: string;
+  conversationId: string;
+}): (options: ChatModelRunOptions) => AsyncGenerator<ChatModelRunResult, void, void> {
+  return async function* resume(options) {
+    let content: Content = [];
+    let planEvent: PlanEvent | undefined;
+    let errorEvent: Extract<AiStreamEvent, { type: "error" }> | undefined;
+    let doneEvent: Extract<AiStreamEvent, { type: "done" }> | undefined;
+    let progressShown = false;
+    let streamId: string | undefined;
+
+    try {
+      const records = resumeAiPlanStream(
+        workspaceId,
+        conversationId,
+        options.unstable_assistantMessageId,
+        options.abortSignal,
+      );
+      for await (const record of records) {
+        const event = record.event;
+        if (event.type === "meta") {
+          streamId = event.streamId;
+          continue;
+        }
+        switch (event.type) {
+          case "progress":
+            progressShown = true;
+            yield {
+              content: [...content],
+              status: { type: "running" },
+              metadata: { custom: { progress: event } },
+            };
+            break;
+          case "text.delta":
+            content = appendTextDelta(content, event.delta);
+            yield { content: [...content], status: { type: "running" } };
+            break;
+          case "tool.start":
+            content = upsertToolPart(
+              content,
+              toolPart(event.name, event.toolCallId, event.args, {
+                timing: { startedAt: toMillis(event.startedAt) },
+                providerMetadata: {
+                  roamlog: {
+                    name: event.name,
+                    ...(event.stepId ? { stepId: event.stepId } : {}),
+                    ...(event.parentToolCallId ? { parentToolCallId: event.parentToolCallId } : {}),
+                  },
+                },
+              }),
+            );
+            yield { content: [...content], status: { type: "running" } };
+            break;
+          case "tool.progress":
+            content = updateToolPart(content, event.toolCallId, (part) => ({
+              ...part,
+              providerMetadata: withRoamlogMetadata(part, {
+                ...(event.label ? { progressLabel: event.label } : {}),
+                ...(event.percent !== undefined ? { percent: event.percent } : {}),
+              }),
+            }));
+            yield { content: [...content], status: { type: "running" } };
+            break;
+          case "tool.end":
+            content = updateToolPart(content, event.toolCallId, (part) => {
+              const completedAt = toMillis(event.finishedAt);
+              return {
+                ...part,
+                ...(event.result !== undefined ? { result: event.result as never } : {}),
+                ...(event.status === "error" ? { isError: true } : {}),
+                timing: {
+                  startedAt: part.timing?.startedAt ?? completedAt - event.durationMs,
+                  completedAt,
+                },
+                providerMetadata: withRoamlogMetadata(part, {
+                  state: event.status,
+                  durationMs: event.durationMs,
+                  ...(event.error
+                    ? { errorMessage: `${event.error.code}: ${event.error.message}` }
+                    : {}),
+                }),
+              };
+            });
+            yield { content: [...content], status: { type: "running" } };
+            break;
+          case "plan":
+            planEvent = event;
+            break;
+          case "error":
+            errorEvent = event;
+            break;
+          case "done":
+            doneEvent = event;
+            break;
+          default:
+            break;
+        }
+      }
+    } catch (error) {
+      if (options.abortSignal.aborted) {
+        if (!pageIsUnloading && streamId) {
+          void cancelAiStream(workspaceId, conversationId, streamId).catch(() => undefined);
+        }
+        return;
+      }
+      const copy = planFailureCopy(toAiRequestError(error).kind);
+      yield {
+        content: appendFailureCopy(content, copy.title, copy.description),
+        status: { type: "incomplete", reason: "error" },
+        ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+      };
+      return;
+    }
+
+    if (options.abortSignal.aborted) {
+      if (!pageIsUnloading && streamId) {
+        void cancelAiStream(workspaceId, conversationId, streamId).catch(() => undefined);
+      }
+      return;
+    }
+
+    if (!doneEvent) {
+      const copy = planFailureCopy("network");
+      yield {
+        content: appendFailureCopy(content, copy.title, copy.description),
+        status: { type: "incomplete", reason: "error" },
+        ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+      };
+      return;
+    }
+
+    const finishReason = doneEvent.finishReason;
+    if (finishReason === "aborted" || errorEvent?.code === "AI_ABORTED") {
+      yield {
+        content: [...content],
+        status: { type: "incomplete", reason: "cancelled" },
+        ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+      };
+      return;
+    }
+    if (errorEvent || finishReason === "error") {
+      const copy = planFailureCopy(
+        errorEvent ? aiFailureKind(200, errorEvent.code) : "invalid_response",
+      );
+      yield {
+        content: appendFailureCopy(content, copy.title, copy.description),
+        status: { type: "incomplete", reason: "error" },
+        ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+      };
+      return;
+    }
+    if (planEvent) {
+      if (!content.some((part) => part.type === "text" && part.text.trim().length > 0)) {
+        content = appendTextDelta(content, planEvent.message);
+      }
+      content = [
+        ...content,
+        toolPart(PLAN_TOOL_NAME, `plan-${planEvent.runId}`, { plan: planEvent }),
+      ];
+      yield {
+        content: [...content],
+        status: { type: "requires-action", reason: "tool-calls" },
+        ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+      };
+      return;
+    }
+    if (finishReason === "length") {
+      yield {
+        content: [...content],
+        status: { type: "incomplete", reason: "length" },
+        ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+      };
+      return;
+    }
+    if (progressShown) {
+      yield {
+        content: [...content],
+        status: { type: "complete", reason: "stop" },
+        metadata: { custom: { progress: undefined } },
+      };
+    }
   };
 }

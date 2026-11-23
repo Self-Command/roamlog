@@ -23,20 +23,25 @@ import type {
 
 import type {
   ArchiveAiConversation200,
+  CancelAiStream200,
+  CancelAiStreamBody,
   CreateAiChat201,
   CreateAiChatBody,
   CreateAiConversation201,
   CreateAiConversationBody,
   DeleteAiConversationMessagesBody,
+  DeleteAllAiConversations200,
   ExecuteAiRun201,
   ExecuteAiRunBody,
   GenerateAiConversationTitle200,
   GetAiConversation200,
+  GetAiStreamStatus200,
   ListAiConversationMessages200,
   ListAiConversations200,
   ListAiConversationsParams,
   MessageResponse,
   ProblemDetails,
+  ResumeAiStreamParams,
   RewriteAiSelection200,
   RewriteAiSelectionBody,
   StreamAiChatBody,
@@ -278,7 +283,7 @@ export const getStreamAiChatUrl = (workspaceId: string) => {
 };
 
 /**
- * Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: "error"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.
+ * Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, streamId?, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: "error"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.
  * @summary Stream one AI chat turn as Server-Sent Events
  */
 export const streamAiChat = async (
@@ -348,7 +353,7 @@ export type StreamAiChatMutationError = ProblemDetails;
 export type StreamAiChatMutationVariables = { workspaceId: string; data: StreamAiChatBody };
 
 /**
- * Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: "error"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.
+ * Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, streamId?, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: "error"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.
  * @summary Stream one AI chat turn as Server-Sent Events
  */
 export const useStreamAiChat = <TError = ProblemDetails, TContext = unknown>(
@@ -369,6 +374,583 @@ export const useStreamAiChat = <TError = ProblemDetails, TContext = unknown>(
   TContext
 > => {
   return useMutation(getStreamAiChatMutationOptions(options), queryClient);
+};
+export type getAiStreamStatusResponse200 = {
+  data: GetAiStreamStatus200;
+  status: 200;
+};
+
+export type getAiStreamStatusResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type getAiStreamStatusResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type getAiStreamStatusResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type getAiStreamStatusResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type getAiStreamStatusResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type getAiStreamStatusResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getAiStreamStatusResponseSuccess = getAiStreamStatusResponse200 & {
+  headers: Headers;
+};
+export type getAiStreamStatusResponseError = (
+  | getAiStreamStatusResponse400
+  | getAiStreamStatusResponse401
+  | getAiStreamStatusResponse403
+  | getAiStreamStatusResponse404
+  | getAiStreamStatusResponse429
+  | getAiStreamStatusResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAiStreamStatusResponse =
+  getAiStreamStatusResponseSuccess | getAiStreamStatusResponseError;
+
+export const getGetAiStreamStatusUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/stream/status`;
+};
+
+/**
+ * Returns `{ active, streamId? }`. Active requires both the durable `AiStream` row and the Redis resumable-stream sentinel; a stale database row reports false so the browser never creates an empty assistant message.
+ * @summary Check whether a conversation has a resumable AI stream
+ */
+export const getAiStreamStatus = async (
+  workspaceId: string,
+  conversationId: string,
+  options?: RequestInit,
+): Promise<getAiStreamStatusResponse> => {
+  const res = await fetch(getGetAiStreamStatusUrl(workspaceId, conversationId), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAiStreamStatusResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getAiStreamStatusResponse;
+};
+
+export const getGetAiStreamStatusQueryKey = (workspaceId: string, conversationId: string) => {
+  return [
+    `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/stream/status`,
+  ] as const;
+};
+
+export const getGetAiStreamStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAiStreamStatus>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiStreamStatus>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAiStreamStatusQueryKey(workspaceId, conversationId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiStreamStatus>>> = ({ signal }) =>
+    getAiStreamStatus(workspaceId, conversationId, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled:
+      workspaceId !== null &&
+      workspaceId !== undefined &&
+      conversationId !== null &&
+      conversationId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getAiStreamStatus>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetAiStreamStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAiStreamStatus>>
+>;
+export type GetAiStreamStatusQueryError = ProblemDetails;
+
+/**
+ * Returns `{ active, streamId? }`. Active requires both the durable `AiStream` row and the Redis resumable-stream sentinel; a stale database row reports false so the browser never creates an empty assistant message.
+ * @summary Check whether a conversation has a resumable AI stream
+ */
+export function useGetAiStreamStatus<
+  TData = Awaited<ReturnType<typeof getAiStreamStatus>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiStreamStatus>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAiStreamStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getAiStreamStatus>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns `{ active, streamId? }`. Active requires both the durable `AiStream` row and the Redis resumable-stream sentinel; a stale database row reports false so the browser never creates an empty assistant message.
+ * @summary Check whether a conversation has a resumable AI stream
+ */
+export function useGetAiStreamStatus<
+  TData = Awaited<ReturnType<typeof getAiStreamStatus>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiStreamStatus>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAiStreamStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getAiStreamStatus>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns `{ active, streamId? }`. Active requires both the durable `AiStream` row and the Redis resumable-stream sentinel; a stale database row reports false so the browser never creates an empty assistant message.
+ * @summary Check whether a conversation has a resumable AI stream
+ */
+export function useGetAiStreamStatus<
+  TData = Awaited<ReturnType<typeof getAiStreamStatus>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiStreamStatus>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Returns `{ active, streamId? }`. Active requires both the durable `AiStream` row and the Redis resumable-stream sentinel; a stale database row reports false so the browser never creates an empty assistant message.
+ * @summary Check whether a conversation has a resumable AI stream
+ */
+export function useGetAiStreamStatus<
+  TData = Awaited<ReturnType<typeof getAiStreamStatus>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAiStreamStatus>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetAiStreamStatusQueryOptions(workspaceId, conversationId, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type resumeAiStreamResponse200 = {
+  data: string;
+  status: 200;
+};
+
+export type resumeAiStreamResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type resumeAiStreamResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type resumeAiStreamResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type resumeAiStreamResponseSuccess = (
+  resumeAiStreamResponse200 | resumeAiStreamResponse204
+) & {
+  headers: Headers;
+};
+export type resumeAiStreamResponseError = (
+  resumeAiStreamResponse401 | resumeAiStreamResponse403
+) & {
+  headers: Headers;
+};
+
+export type resumeAiStreamResponse = resumeAiStreamResponseSuccess | resumeAiStreamResponseError;
+
+export const getResumeAiStreamUrl = (
+  workspaceId: string,
+  conversationId: string,
+  params?: ResumeAiStreamParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/stream?${stringifiedParams}`
+    : `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/stream`;
+};
+
+/**
+ * Replays the resumable producer from the beginning. Clients de-duplicate by SSE frame id. `assistantMessageId` binds the producer's eventual persistence to the assistant-ui message allocated by `resumeRun`.
+ * @summary Resume an active AI SSE stream
+ */
+export const resumeAiStream = async (
+  workspaceId: string,
+  conversationId: string,
+  params?: ResumeAiStreamParams,
+  options?: RequestInit,
+): Promise<resumeAiStreamResponse> => {
+  const res = await fetch(getResumeAiStreamUrl(workspaceId, conversationId, params), {
+    ...options,
+    method: "GET",
+  });
+
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resumeAiStreamResponse["data"] = body
+    ? contentType.includes("json")
+      ? JSON.parse(body)
+      : body
+    : {};
+  return { data, status: res.status, headers: res.headers } as resumeAiStreamResponse;
+};
+
+export const getResumeAiStreamQueryKey = (
+  workspaceId: string,
+  conversationId: string,
+  params?: ResumeAiStreamParams,
+) => {
+  return [
+    `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/stream`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getResumeAiStreamQueryOptions = <
+  TData = Awaited<ReturnType<typeof resumeAiStream>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  params?: ResumeAiStreamParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof resumeAiStream>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getResumeAiStreamQueryKey(workspaceId, conversationId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof resumeAiStream>>> = ({ signal }) =>
+    resumeAiStream(workspaceId, conversationId, params, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled:
+      workspaceId !== null &&
+      workspaceId !== undefined &&
+      conversationId !== null &&
+      conversationId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof resumeAiStream>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type ResumeAiStreamQueryResult = NonNullable<Awaited<ReturnType<typeof resumeAiStream>>>;
+export type ResumeAiStreamQueryError = ProblemDetails;
+
+/**
+ * Replays the resumable producer from the beginning. Clients de-duplicate by SSE frame id. `assistantMessageId` binds the producer's eventual persistence to the assistant-ui message allocated by `resumeRun`.
+ * @summary Resume an active AI SSE stream
+ */
+export function useResumeAiStream<
+  TData = Awaited<ReturnType<typeof resumeAiStream>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  params: undefined | ResumeAiStreamParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof resumeAiStream>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof resumeAiStream>>,
+          TError,
+          Awaited<ReturnType<typeof resumeAiStream>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Replays the resumable producer from the beginning. Clients de-duplicate by SSE frame id. `assistantMessageId` binds the producer's eventual persistence to the assistant-ui message allocated by `resumeRun`.
+ * @summary Resume an active AI SSE stream
+ */
+export function useResumeAiStream<
+  TData = Awaited<ReturnType<typeof resumeAiStream>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  params?: ResumeAiStreamParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof resumeAiStream>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof resumeAiStream>>,
+          TError,
+          Awaited<ReturnType<typeof resumeAiStream>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Replays the resumable producer from the beginning. Clients de-duplicate by SSE frame id. `assistantMessageId` binds the producer's eventual persistence to the assistant-ui message allocated by `resumeRun`.
+ * @summary Resume an active AI SSE stream
+ */
+export function useResumeAiStream<
+  TData = Awaited<ReturnType<typeof resumeAiStream>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  params?: ResumeAiStreamParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof resumeAiStream>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Replays the resumable producer from the beginning. Clients de-duplicate by SSE frame id. `assistantMessageId` binds the producer's eventual persistence to the assistant-ui message allocated by `resumeRun`.
+ * @summary Resume an active AI SSE stream
+ */
+export function useResumeAiStream<
+  TData = Awaited<ReturnType<typeof resumeAiStream>>,
+  TError = ProblemDetails,
+>(
+  workspaceId: string,
+  conversationId: string,
+  params?: ResumeAiStreamParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof resumeAiStream>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getResumeAiStreamQueryOptions(workspaceId, conversationId, params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type cancelAiStreamResponse200 = {
+  data: CancelAiStream200;
+  status: 200;
+};
+
+export type cancelAiStreamResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type cancelAiStreamResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type cancelAiStreamResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type cancelAiStreamResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type cancelAiStreamResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type cancelAiStreamResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type cancelAiStreamResponseSuccess = cancelAiStreamResponse200 & {
+  headers: Headers;
+};
+export type cancelAiStreamResponseError = (
+  | cancelAiStreamResponse400
+  | cancelAiStreamResponse401
+  | cancelAiStreamResponse403
+  | cancelAiStreamResponse404
+  | cancelAiStreamResponse429
+  | cancelAiStreamResponse500
+) & {
+  headers: Headers;
+};
+
+export type cancelAiStreamResponse = cancelAiStreamResponseSuccess | cancelAiStreamResponseError;
+
+export const getCancelAiStreamUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/stream/cancel`;
+};
+
+/**
+ * Only user-initiated Stop calls this endpoint. A browser network drop must not: the producer keeps running so a refresh can resume it.
+ * @summary Explicitly stop an active AI stream
+ */
+export const cancelAiStream = async (
+  workspaceId: string,
+  conversationId: string,
+  cancelAiStreamBody: CancelAiStreamBody,
+  options?: RequestInit,
+): Promise<cancelAiStreamResponse> => {
+  const res = await fetch(getCancelAiStreamUrl(workspaceId, conversationId), {
+    ...options,
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(cancelAiStreamBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelAiStreamResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as cancelAiStreamResponse;
+};
+
+export const getCancelAiStreamMutationKey = () => ["cancelAiStream"] as const;
+
+export const getCancelAiStreamMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelAiStream>>,
+    TError,
+    CancelAiStreamMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelAiStream>>,
+  TError,
+  CancelAiStreamMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCancelAiStreamMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelAiStream>>,
+    CancelAiStreamMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId, data } = props ?? {};
+
+    return cancelAiStream(workspaceId, conversationId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelAiStreamMutationResult = NonNullable<Awaited<ReturnType<typeof cancelAiStream>>>;
+export type CancelAiStreamMutationBody = CancelAiStreamBody;
+export type CancelAiStreamMutationError = ProblemDetails;
+export type CancelAiStreamMutationVariables = {
+  workspaceId: string;
+  conversationId: string;
+  data: CancelAiStreamBody;
+};
+
+/**
+ * Only user-initiated Stop calls this endpoint. A browser network drop must not: the producer keeps running so a refresh can resume it.
+ * @summary Explicitly stop an active AI stream
+ */
+export const useCancelAiStream = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof cancelAiStream>>,
+      TError,
+      CancelAiStreamMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof cancelAiStream>>,
+  TError,
+  CancelAiStreamMutationVariables,
+  TContext
+> => {
+  return useMutation(getCancelAiStreamMutationOptions(options), queryClient);
 };
 export type executeAiRunResponse201 = {
   data: ExecuteAiRun201;
@@ -897,6 +1479,149 @@ export function useListAiConversations<
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+export type deleteAllAiConversationsResponse200 = {
+  data: DeleteAllAiConversations200;
+  status: 200;
+};
+
+export type deleteAllAiConversationsResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type deleteAllAiConversationsResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type deleteAllAiConversationsResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type deleteAllAiConversationsResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type deleteAllAiConversationsResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type deleteAllAiConversationsResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type deleteAllAiConversationsResponseSuccess = deleteAllAiConversationsResponse200 & {
+  headers: Headers;
+};
+export type deleteAllAiConversationsResponseError = (
+  | deleteAllAiConversationsResponse400
+  | deleteAllAiConversationsResponse401
+  | deleteAllAiConversationsResponse403
+  | deleteAllAiConversationsResponse404
+  | deleteAllAiConversationsResponse429
+  | deleteAllAiConversationsResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteAllAiConversationsResponse =
+  deleteAllAiConversationsResponseSuccess | deleteAllAiConversationsResponseError;
+
+export const getDeleteAllAiConversationsUrl = (workspaceId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations`;
+};
+
+/**
+ * Soft-deletes every non-deleted conversation owned by the current user in this Workspace, including archived conversations, in one database operation. This ports `DELETE /api/history` from vercel/chatbot; other Workspace members are unaffected.
+ * @summary Delete all AI conversations for the current user in a Workspace
+ */
+export const deleteAllAiConversations = async (
+  workspaceId: string,
+  options?: RequestInit,
+): Promise<deleteAllAiConversationsResponse> => {
+  const res = await fetch(getDeleteAllAiConversationsUrl(workspaceId), {
+    ...options,
+    method: "DELETE",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAllAiConversationsResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as deleteAllAiConversationsResponse;
+};
+
+export const getDeleteAllAiConversationsMutationKey = () => ["deleteAllAiConversations"] as const;
+
+export const getDeleteAllAiConversationsMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAllAiConversations>>,
+    TError,
+    DeleteAllAiConversationsMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAllAiConversations>>,
+  TError,
+  DeleteAllAiConversationsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteAllAiConversationsMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAllAiConversations>>,
+    DeleteAllAiConversationsMutationVariables
+  > = (props) => {
+    const { workspaceId } = props ?? {};
+
+    return deleteAllAiConversations(workspaceId, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAllAiConversationsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAllAiConversations>>
+>;
+
+export type DeleteAllAiConversationsMutationError = ProblemDetails;
+export type DeleteAllAiConversationsMutationVariables = { workspaceId: string };
+
+/**
+ * Soft-deletes every non-deleted conversation owned by the current user in this Workspace, including archived conversations, in one database operation. This ports `DELETE /api/history` from vercel/chatbot; other Workspace members are unaffected.
+ * @summary Delete all AI conversations for the current user in a Workspace
+ */
+export const useDeleteAllAiConversations = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteAllAiConversations>>,
+      TError,
+      DeleteAllAiConversationsMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAllAiConversations>>,
+  TError,
+  DeleteAllAiConversationsMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteAllAiConversationsMutationOptions(options), queryClient);
+};
 export type createAiConversationResponse201 = {
   data: CreateAiConversation201;
   status: 201;

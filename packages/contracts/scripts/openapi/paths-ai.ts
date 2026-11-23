@@ -63,11 +63,11 @@ export function registerAiPaths(registry: OpenAPIRegistry): void {
       "Runs the model tool loop and returns a v1 SSE stream. " +
       "Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. " +
       "The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: " +
-      "`meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, provider {protocol,model}), " +
+      "`meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, streamId?, provider {protocol,model}), " +
       "`text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), " +
       "`usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and " +
       "`done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). " +
-      "`done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: \"error\"`. " +
+      '`done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: "error"`. ' +
       "Heartbeats are SSE comment frames (`: hb <ISO8601>`). " +
       "Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.",
     request: {
@@ -102,6 +102,55 @@ export function registerAiPaths(registry: OpenAPIRegistry): void {
         "AI_NOT_CONFIGURED: the Workspace AI provider is not configured or unavailable.",
       ),
     },
+  });
+
+  registerOperation(registry, {
+    method: "get",
+    path: "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/stream/status",
+    operationId: "getAiStreamStatus",
+    tag: "AI",
+    summary: "Check whether a conversation has a resumable AI stream",
+    description:
+      "Returns `{ active, streamId? }`. Active requires both the durable `AiStream` row and the Redis resumable-stream sentinel; a stale database row reports false so the browser never creates an empty assistant message.",
+    params: AiConversationParamsSchema,
+    response: c.AiStreamStatusResponseSchema,
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/stream",
+    operationId: "resumeAiStream",
+    tags: ["AI"],
+    summary: "Resume an active AI SSE stream",
+    description:
+      "Replays the resumable producer from the beginning. Clients de-duplicate by SSE frame id. `assistantMessageId` binds the producer's eventual persistence to the assistant-ui message allocated by `resumeRun`.",
+    request: {
+      params: resolveRegisteredSchema(AiConversationParamsSchema),
+      query: resolveRegisteredSchema(c.ResumeAiStreamQuerySchema),
+    },
+    responses: {
+      200: {
+        description: "Resumed Server-Sent Events stream.",
+        content: { "text/event-stream": { schema: { type: "string" } } },
+      },
+      204: { description: "No resumable producer is active." },
+      401: problemResponse("Authentication is required."),
+      403: problemResponse("The caller cannot access this conversation."),
+    },
+  });
+
+  registerOperation(registry, {
+    method: "post",
+    path: "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/stream/cancel",
+    operationId: "cancelAiStream",
+    tag: "AI",
+    summary: "Explicitly stop an active AI stream",
+    description:
+      "Only user-initiated Stop calls this endpoint. A browser network drop must not: the producer keeps running so a refresh can resume it.",
+    params: AiConversationParamsSchema,
+    body: c.CancelAiStreamRequestSchema,
+    response: c.CancelAiStreamResponseSchema,
+    status: 200,
   });
 
   registerOperation(registry, {
@@ -158,6 +207,21 @@ export function registerAiPaths(registry: OpenAPIRegistry): void {
     params: c.WorkspaceParamsSchema,
     query: c.AiConversationListQuerySchema,
     response: c.AiConversationListResponseSchema,
+  });
+
+  registerOperation(registry, {
+    method: "delete",
+    path: "/v1/workspaces/{workspaceId}/ai/conversations",
+    operationId: "deleteAllAiConversations",
+    tag: "AI",
+    summary: "Delete all AI conversations for the current user in a Workspace",
+    description:
+      "Soft-deletes every non-deleted conversation owned by the current user in this Workspace, " +
+      "including archived conversations, in one database operation. " +
+      "This ports `DELETE /api/history` from vercel/chatbot; other Workspace members are unaffected.",
+    params: c.WorkspaceParamsSchema,
+    response: c.AiConversationBulkDeleteResponseSchema,
+    status: 200,
   });
 
   registerOperation(registry, {

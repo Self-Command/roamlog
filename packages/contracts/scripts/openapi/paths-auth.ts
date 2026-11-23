@@ -139,6 +139,15 @@ export function registerAuthPaths(registry: OpenAPIRegistry): void {
     response: c.SessionListResponseSchema,
   });
   registerOperation(registry, {
+    method: "post",
+    path: "/v1/me/device",
+    operationId: "registerCurrentDevice",
+    tag: "Me",
+    summary: "Associate this browser with the current session",
+    status: 200,
+    response: c.MessageResponseSchema,
+  });
+  registerOperation(registry, {
     method: "delete",
     path: "/v1/me/sessions/{id}",
     operationId: "revokeMySession",

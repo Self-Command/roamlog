@@ -10,6 +10,7 @@ import {
   type AiToolError,
   type AiToolName,
   type Place,
+  type AiArtifactReference,
 } from "@roamlog/contracts";
 import { z } from "zod";
 
@@ -23,6 +24,7 @@ import { PlacesService } from "../places/places.service.js";
 import { StopsService } from "../trips/stops.service.js";
 import { TripsService } from "../trips/trips.service.js";
 import type { AiToolSpec } from "./adapters/adapter.js";
+import { AiArtifactService } from "./ai-artifact.service.js";
 
 /** A place the model may reference by id. Coordinates never come from the model. */
 export interface AiPlaceCandidate {
@@ -62,6 +64,7 @@ export interface AiToolOutcome {
   readonly ok: boolean;
   readonly payload: unknown;
   readonly entityId?: string | null;
+  readonly artifact?: AiArtifactReference;
   readonly error?: AiToolError;
 }
 
@@ -445,6 +448,28 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
   "participants.role": z
     .object({ tripId: uuid, memberId: uuid, role: z.enum(["viewer", "editor"]) })
     .strict(),
+  "artifacts.create": z
+    .object({
+      title: nonEmpty(160),
+      kind: z.enum(["text", "code", "sheet"]),
+      brief: z.string().max(4000).optional(),
+    })
+    .strict(),
+  "artifacts.update": z
+    .object({
+      artifactId: uuid,
+      description: nonEmpty(4000),
+    })
+    .strict(),
+  "artifacts.edit": z
+    .object({
+      artifactId: uuid,
+      oldString: nonEmpty(2000),
+      newString: z.string().max(2000),
+      replaceAll: z.boolean().optional(),
+    })
+    .strict(),
+  "artifacts.suggest": z.object({ artifactId: uuid }).strict(),
 };
 
 export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
@@ -1001,10 +1026,77 @@ export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "artifacts.create",
+    description:
+      "Create a travel document artifact (text, code, or sheet) from the user's request. WRITES DATA and opens the artifact panel after confirmation.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", maxLength: 160 },
+        kind: { type: "string", enum: ["text", "code", "sheet"] },
+        brief: { type: "string", maxLength: 4000 },
+      },
+      required: ["title", "kind"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "artifacts.update",
+    description:
+      "Rewrite an existing travel document artifact from a natural-language instruction. WRITES DATA.",
+    parameters: {
+      type: "object",
+      properties: {
+        artifactId: { type: "string", description: "Artifact UUID." },
+        description: { type: "string", maxLength: 4000 },
+      },
+      required: ["artifactId", "description"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "artifacts.edit",
+    description:
+      "Apply an exact string replacement to an existing artifact. WRITES DATA. oldString must already exist.",
+    parameters: {
+      type: "object",
+      properties: {
+        artifactId: { type: "string", description: "Artifact UUID." },
+        oldString: { type: "string", maxLength: 2000 },
+        newString: { type: "string", maxLength: 2000 },
+        replaceAll: { type: "boolean" },
+      },
+      required: ["artifactId", "oldString", "newString"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "artifacts.suggest",
+    description:
+      "Generate up to five concrete edit suggestions for an existing artifact. Read-only, no side effects.",
+    parameters: {
+      type: "object",
+      properties: { artifactId: { type: "string", description: "Artifact UUID." } },
+      required: ["artifactId"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 function invalid(message: string): AiToolOutcome {
   return { ok: false, payload: { error: "INVALID_ARGUMENTS" }, error: { code: "INVALID_ARGUMENTS", message } };
+}
+
+function serviceUnavailable(name: string): AiToolOutcome {
+  return {
+    ok: false,
+    payload: { error: "AI_TOOL_SERVICE_UNAVAILABLE" },
+    error: {
+      code: "AI_TOOL_SERVICE_UNAVAILABLE",
+      message: `The ${name} service is unavailable.`,
+    },
+  };
 }
 
 function issueMessage(error: z.ZodError): string {
@@ -1149,6 +1241,8 @@ export class AiToolbox {
     // imports both modules in production, so DI always supplies them there.
     @Optional() @Inject(ExpensesService) private readonly expenses?: ExpensesService,
     @Optional() @Inject(EntriesService) private readonly entries?: EntriesService,
+    @Optional() @Inject(AiArtifactService)
+    private readonly artifactService?: AiArtifactService,
   ) {}
 
   definitions(): AiToolSpec[] {
@@ -1463,6 +1557,78 @@ export class AiToolbox {
         return this.removeParticipant(parsed.data as Record<string, unknown>, context);
       case "participants.role":
         return this.updateParticipantRole(parsed.data as Record<string, unknown>, context);
+      case "artifacts.create": {
+        if (!this.artifactService) return serviceUnavailable("artifacts");
+        const created = await this.artifactService.createGenerated(
+          context.actor,
+          context.membership,
+          parsed.data as { title: string; kind: "text" | "code" | "sheet"; brief?: string },
+        );
+        return {
+          ok: true,
+          entityId: created.id,
+          artifact: { id: created.id, title: created.title, kind: created.kind },
+          payload: { artifactId: created.id, title: created.title, kind: created.kind },
+        };
+      }
+      case "artifacts.update": {
+        if (!this.artifactService) return serviceUnavailable("artifacts");
+        const artifactArgs = parsed.data as { artifactId: string; description: string };
+        const updated = await this.artifactService.updateGenerated(
+          context.actor,
+          context.membership,
+          artifactArgs.artifactId,
+          artifactArgs.description,
+        );
+        return {
+          ok: true,
+          entityId: updated.id,
+          artifact: { id: updated.id, title: updated.title, kind: updated.kind },
+          payload: { artifactId: updated.id, title: updated.title, kind: updated.kind },
+        };
+      }
+      case "artifacts.edit": {
+        if (!this.artifactService) return serviceUnavailable("artifacts");
+        const artifactArgs = parsed.data as {
+          artifactId: string;
+          oldString: string;
+          newString: string;
+          replaceAll?: boolean;
+        };
+        const edited = await this.artifactService.editExact(
+          context.actor,
+          context.membership,
+          artifactArgs.artifactId,
+          {
+            oldString: artifactArgs.oldString,
+            newString: artifactArgs.newString,
+            ...(artifactArgs.replaceAll === undefined
+              ? {}
+              : { replaceAll: artifactArgs.replaceAll }),
+          },
+        );
+        return {
+          ok: true,
+          entityId: edited.id,
+          artifact: { id: edited.id, title: edited.title, kind: edited.kind },
+          payload: { artifactId: edited.id, title: edited.title, kind: edited.kind },
+        };
+      }
+      case "artifacts.suggest": {
+        if (!this.artifactService) return serviceUnavailable("artifacts");
+        const artifactArgs = parsed.data as { artifactId: string };
+        const result = await this.artifactService.generateSuggestions(
+          context.actor,
+          context.membership,
+          artifactArgs.artifactId,
+        );
+        return {
+          ok: true,
+          entityId: artifactArgs.artifactId,
+          artifact: undefined,
+          payload: { artifactId: artifactArgs.artifactId, suggestions: result.suggestions },
+        };
+      }
     }
   }
 

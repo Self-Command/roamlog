@@ -73,6 +73,8 @@ export const SessionSchema = z
     createdAt: IsoTimestampSchema,
     ip: z.string().max(64).nullable(),
     userAgent: z.string().max(500).nullable(),
+    /** Stable browser identity; null for sessions created before 0018. */
+    deviceId: z.string().min(16).max(64).nullable(),
   })
   .strict();
 export type Session = z.infer<typeof SessionSchema>;
@@ -81,8 +83,7 @@ export const SessionListResponseSchema = z.array(SessionSchema);
 export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;
 
 export const CreateAccountExportRequestSchema = CreateExportRequestSchema.refine(
-  (value) =>
-    value.scope === "account" && (value.tripId === null || value.tripId === undefined),
+  (value) => value.scope === "account" && (value.tripId === null || value.tripId === undefined),
   { message: "Account exports must use scope=account without a tripId." },
 );
 export type CreateAccountExportRequest = z.infer<typeof CreateAccountExportRequestSchema>;

@@ -4,7 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { MediaUrlService } from "../../media/media-url.service.js";
 import type { PinoLoggerService } from "../../observability/pino-logger.service.js";
 import { UsersService } from "../users.service.js";
-import { NOW, USER_OWNER_ID, makeActor, makeUserRecord } from "../../../../test/identity-fixtures.js";
+import {
+  NOW,
+  USER_OWNER_ID,
+  makeActor,
+  makeUserRecord,
+} from "../../../../test/identity-fixtures.js";
 
 const AVATAR_MEDIA_ID = "01942f30-1200-7000-8000-000000000901";
 const SIGNED_AVATAR_URL = `http://127.0.0.1:9000/roamlog-local/01942f30-1200-7000-8000-0000000000aa/2026/11/${AVATAR_MEDIA_ID}/thumb.webp?X-Amz-Date=20261120T000000Z&X-Amz-Expires=900`;
@@ -22,6 +27,8 @@ describe("UsersService", () => {
         },
         session: {
           findMany: vi.fn(),
+          findFirst: vi.fn(),
+          updateMany: vi.fn(),
         },
         workspace: {
           count: vi.fn(),
@@ -41,9 +48,12 @@ describe("UsersService", () => {
     };
     const audit = { record: vi.fn().mockResolvedValue({ id: "audit" }) };
     const mediaUrls = {
-      sign: vi
-        .fn()
-        .mockResolvedValue({ url: SIGNED_AVATAR_URL, thumbUrl: SIGNED_AVATAR_URL, motionUrl: null, expiresAt: "2026-11-20T00:15:00.000Z" }),
+      sign: vi.fn().mockResolvedValue({
+        url: SIGNED_AVATAR_URL,
+        thumbUrl: SIGNED_AVATAR_URL,
+        motionUrl: null,
+        expiresAt: "2026-11-20T00:15:00.000Z",
+      }),
     };
     const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() };
     const service = new UsersService(
@@ -75,6 +85,7 @@ describe("UsersService", () => {
         createdAt: NOW,
         ipAddress: "127.0.0.1",
         userAgent: "vitest",
+        deviceId: null,
       },
     ]);
 
@@ -85,6 +96,33 @@ describe("UsersService", () => {
       select: Record<string, boolean>;
     };
     expect(query.select).not.toHaveProperty("token");
+  });
+
+  it("associates a stable device id only with the caller's session", async () => {
+    const { prisma, service } = setup();
+    const sessionId = "01942f30-1200-7000-8000-000000000401";
+    const deviceId = "01942f30-1200-7000-8000-0000000004d1";
+    prisma.client.session.findFirst.mockResolvedValue({
+      id: sessionId,
+      deviceId: null,
+    });
+    prisma.client.session.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.associateDevice(makeActor(), sessionId, deviceId);
+
+    expect(prisma.client.session.updateMany).toHaveBeenCalledWith({
+      where: { id: sessionId, userId: USER_OWNER_ID },
+      data: { deviceId },
+    });
+  });
+
+  it("rejects a malformed device id", async () => {
+    const { prisma, service } = setup();
+
+    await expect(
+      service.associateDevice(makeActor(), "01942f30-1200-7000-8000-000000000401", "not-a-device"),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.client.session.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects account deletion while the user owns an active Workspace", async () => {
@@ -142,8 +180,8 @@ describe("UsersService", () => {
           .mockResolvedValue(makeUserRecord(USER_OWNER_ID, { image: AVATAR_MEDIA_ID })),
       },
     };
-    prisma.client.$transaction.mockImplementation(
-      async (callback: (value: unknown) => unknown) => callback(tx),
+    prisma.client.$transaction.mockImplementation(async (callback: (value: unknown) => unknown) =>
+      callback(tx),
     );
 
     const updated = await service.updateMe(makeActor(), { image: SIGNED_AVATAR_URL });
@@ -193,8 +231,8 @@ describe("UsersService", () => {
         update: vi.fn().mockResolvedValue(makeUserRecord(USER_OWNER_ID, { image: external })),
       },
     };
-    prisma.client.$transaction.mockImplementation(
-      async (callback: (value: unknown) => unknown) => callback(tx),
+    prisma.client.$transaction.mockImplementation(async (callback: (value: unknown) => unknown) =>
+      callback(tx),
     );
 
     await service.updateMe(makeActor(), { image: external });
@@ -209,8 +247,9 @@ describe("UsersService", () => {
       uploaderId: "01942f30-1200-7000-8000-0000000009ff",
     });
 
-    await expect(service.updateMe(makeActor(), { image: SIGNED_AVATAR_URL })).rejects
-      .toBeInstanceOf(BadRequestException);
+    await expect(
+      service.updateMe(makeActor(), { image: SIGNED_AVATAR_URL }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("degrades to initials instead of failing the profile when signing breaks", async () => {

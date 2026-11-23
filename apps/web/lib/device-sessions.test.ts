@@ -10,14 +10,16 @@ const SAFARI_IPHONE =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1";
 
 function session(overrides: Partial<Session> & Pick<Session, "id">): Session {
+  const { id, ...rest } = overrides;
   return {
-    id: overrides.id,
+    id,
     userId: "01a00000-0000-7000-8000-000000000001",
     expiresAt: "2026-12-01T00:00:00.000Z",
     createdAt: "2026-11-23T00:00:00.000Z",
     ip: "203.0.113.10",
     userAgent: CHROME_WINDOWS,
-    ...overrides,
+    deviceId: null,
+    ...rest,
   };
 }
 
@@ -91,5 +93,48 @@ describe("device sessions", () => {
 
     expect(grouped).toHaveLength(2);
     expect(grouped.every((device) => device.profile.label === "未知设备")).toBe(true);
+  });
+
+  it("groups sessions with the same stable device id even across UA updates", () => {
+    const deviceId = "01a00000-0000-7000-8000-0000000000d1";
+    const grouped = groupSessionsByDevice(
+      [
+        session({
+          id: "01a00000-0000-7000-8000-000000000031",
+          deviceId,
+          userAgent: CHROME_WINDOWS,
+        }),
+        session({
+          id: "01a00000-0000-7000-8000-000000000032",
+          deviceId,
+          userAgent: SAFARI_IPHONE,
+          createdAt: "2026-11-24T00:00:00.000Z",
+        }),
+      ],
+      null,
+    );
+
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]?.id).toBe(`device:${deviceId}`);
+    expect(grouped[0]?.sessionCount).toBe(2);
+  });
+
+  it("keeps identical browsers separate when their stable device ids differ", () => {
+    const grouped = groupSessionsByDevice(
+      [
+        session({
+          id: "01a00000-0000-7000-8000-000000000041",
+          deviceId: "01a00000-0000-7000-8000-0000000000d2",
+        }),
+        session({
+          id: "01a00000-0000-7000-8000-000000000042",
+          deviceId: "01a00000-0000-7000-8000-0000000000d3",
+        }),
+      ],
+      null,
+    );
+
+    expect(grouped).toHaveLength(2);
+    expect(grouped.every((device) => device.id.startsWith("device:"))).toBe(true);
   });
 });

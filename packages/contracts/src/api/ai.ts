@@ -68,6 +68,10 @@ export const AI_TOOL_NAMES = [
   "participants.add",
   "participants.remove",
   "participants.role",
+  "artifacts.create",
+  "artifacts.update",
+  "artifacts.edit",
+  "artifacts.suggest",
 ] as const;
 export const AiToolNameSchema = z.enum(AI_TOOL_NAMES);
 export type AiToolName = z.infer<typeof AiToolNameSchema>;
@@ -396,11 +400,34 @@ export const AiToolErrorSchema = z
   .strict();
 export type AiToolError = z.infer<typeof AiToolErrorSchema>;
 
+/**
+ * Artifact kinds supported by the AI artifact panel.
+ *
+ * Port of vercel/chatbot `components/chat/artifact.tsx:32-41` plus the
+ * `artifacts/*` definitions. Upstream's create-document tool only creates
+ * text/code/sheet; image artifacts are opened from an existing media id.
+ */
+export const AI_ARTIFACT_KINDS = ["text", "code", "sheet", "image"] as const;
+export const AiArtifactKindSchema = z.enum(AI_ARTIFACT_KINDS);
+export type AiArtifactKind = z.infer<typeof AiArtifactKindSchema>;
+
+/** Small artifact reference returned by an AI tool result. */
+export const AiArtifactReferenceSchema = z
+  .object({
+    id: UuidV7Schema,
+    title: z.string().min(1).max(160),
+    kind: AiArtifactKindSchema,
+  })
+  .strict();
+export type AiArtifactReference = z.infer<typeof AiArtifactReferenceSchema>;
+
 export const AiToolResultSchema = z
   .object({
     tool: AiToolNameSchema,
     ok: z.boolean(),
     entityId: UuidV7Schema.nullable().optional(),
+    /** Present for `artifacts.*` so the client can open the panel. */
+    artifact: AiArtifactReferenceSchema.optional(),
     error: AiToolErrorSchema.nullable().optional(),
   })
   .strict();
@@ -627,10 +654,56 @@ export const AiStreamMetaEventSchema = z
     conversationId: UuidV7Schema,
     userMessageId: z.string().min(1).max(128),
     assistantMessageId: z.string().min(1).max(128),
+    /**
+     * Durable stream handle. It was added after the v1 meta frame shipped, so
+     * it is optional for wire compatibility with already-running clients; the
+     * current server always sets it.
+     */
+    streamId: UuidV7Schema.optional(),
     provider: AiProviderSchema,
   })
   .strict();
 export type AiStreamMetaEvent = z.infer<typeof AiStreamMetaEventSchema>;
+
+/**
+ * Probe used before `ThreadRuntime.resumeRun`. A refresh has no SSE buffer in
+ * memory, so the client must first learn whether the server still owns an
+ * active resumable stream for this conversation.
+ */
+export const AiStreamStatusResponseSchema = z
+  .object({
+    active: z.boolean(),
+    streamId: UuidV7Schema.optional(),
+  })
+  .strict();
+export type AiStreamStatusResponse = z.infer<typeof AiStreamStatusResponseSchema>;
+
+/** Explicit user stop. A network drop must never call this endpoint. */
+export const CancelAiStreamRequestSchema = z
+  .object({
+    streamId: UuidV7Schema,
+  })
+  .strict();
+export type CancelAiStreamRequest = z.infer<typeof CancelAiStreamRequestSchema>;
+
+export const CancelAiStreamResponseSchema = z
+  .object({
+    cancelled: z.boolean(),
+  })
+  .strict();
+export type CancelAiStreamResponse = z.infer<typeof CancelAiStreamResponseSchema>;
+
+/**
+ * Query for the resumable GET endpoint. `assistantMessageId` is supplied by
+ * assistant-ui after `resumeRun` allocates its replacement message; the server
+ * binds the still-running producer's final persistence to that id.
+ */
+export const ResumeAiStreamQuerySchema = z
+  .object({
+    assistantMessageId: z.string().min(1).max(128).optional(),
+  })
+  .strict();
+export type ResumeAiStreamQuery = z.infer<typeof ResumeAiStreamQuerySchema>;
 
 /** One upstream text delta per event (small coalescing windows are allowed). */
 export const AiStreamTextDeltaEventSchema = z
@@ -820,6 +893,20 @@ export const AiConversationListResponseSchema = z
   .strict();
 export type AiConversationListResponse = z.infer<typeof AiConversationListResponseSchema>;
 
+/**
+ * Result of the upstream `DELETE /api/history` action
+ * (`vercel/chatbot@app/(chat)/api/history/route.ts`): the number of rows the
+ * server soft-deleted in one transaction-like operation.
+ */
+export const AiConversationBulkDeleteResponseSchema = z
+  .object({
+    deletedCount: z.number().int().nonnegative(),
+  })
+  .strict();
+export type AiConversationBulkDeleteResponse = z.infer<
+  typeof AiConversationBulkDeleteResponseSchema
+>;
+
 export const CreateAiConversationRequestSchema = z
   .object({
     /** Optional initial title; the server derives a placeholder when omitted. */
@@ -880,6 +967,169 @@ export const AiConversationMessagesResponseSchema = z
   })
   .strict();
 export type AiConversationMessagesResponse = z.infer<typeof AiConversationMessagesResponseSchema>;
+
+/** One assistant-message vote. Ported from vercel/chatbot's `Vote_v2`. */
+export const AiMessageVoteSchema = z
+  .object({
+    messageId: z.string().min(1).max(128),
+    isUpvoted: z.boolean(),
+  })
+  .strict();
+export type AiMessageVote = z.infer<typeof AiMessageVoteSchema>;
+
+export const AiMessageVotesResponseSchema = z.array(AiMessageVoteSchema);
+export type AiMessageVotesResponse = z.infer<typeof AiMessageVotesResponseSchema>;
+
+export const SetAiMessageVoteRequestSchema = z
+  .object({
+    type: z.enum(["up", "down"]),
+  })
+  .strict();
+export type SetAiMessageVoteRequest = z.infer<typeof SetAiMessageVoteRequestSchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Artifact / Document DTOs                                                   */
+/* -------------------------------------------------------------------------- */
+
+export const AI_ARTIFACT_CONTENT_MAX_CHARS = 1_000_000;
+export const AI_ARTIFACT_TITLE_MAX_CHARS = 160;
+
+const AiArtifactFieldsSchema = z.object({
+  id: UuidV7Schema,
+  workspaceId: UuidV7Schema,
+  userId: UuidV7Schema,
+  conversationId: UuidV7Schema.nullable(),
+  title: z.string().min(1).max(AI_ARTIFACT_TITLE_MAX_CHARS),
+  kind: AiArtifactKindSchema,
+  content: z.string().max(AI_ARTIFACT_CONTENT_MAX_CHARS),
+  mediaId: UuidV7Schema.nullable(),
+  version: z.number().int().positive(),
+  createdAt: IsoTimestampSchema,
+  updatedAt: IsoTimestampSchema,
+});
+
+/**
+ * One artifact. Ported from vercel/chatbot `Document` / `Document_v2`
+ * (`lib/db/schema.ts`), with the Roamlog additions `workspaceId`, media-backed
+ * image content and optimistic `version`.
+ */
+export const AiArtifactSchema = AiArtifactFieldsSchema.strict();
+export type AiArtifact = z.infer<typeof AiArtifactSchema>;
+
+/** List projection: content is intentionally omitted, one row can be large. */
+export const AiArtifactSummarySchema = AiArtifactFieldsSchema.omit({
+  content: true,
+  userId: true,
+  workspaceId: true,
+}).strict();
+export type AiArtifactSummary = z.infer<typeof AiArtifactSummarySchema>;
+
+export const AiArtifactVersionSchema = z
+  .object({
+    id: UuidV7Schema,
+    artifactId: UuidV7Schema,
+    version: z.number().int().positive(),
+    content: z.string().max(AI_ARTIFACT_CONTENT_MAX_CHARS),
+    createdAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AiArtifactVersion = z.infer<typeof AiArtifactVersionSchema>;
+
+export const AiArtifactSuggestionSchema = z
+  .object({
+    id: UuidV7Schema,
+    artifactId: UuidV7Schema,
+    description: z.string().min(1).max(600),
+    originalText: z.string().min(1).max(20_000),
+    suggestedText: z.string().min(1).max(20_000),
+    isResolved: z.boolean(),
+    createdAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AiArtifactSuggestion = z.infer<typeof AiArtifactSuggestionSchema>;
+
+export const AiArtifactListQuerySchema = z.object({
+  conversationId: UuidV7Schema.optional(),
+  cursor: z.string().min(1).max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export type AiArtifactListQuery = z.infer<typeof AiArtifactListQuerySchema>;
+
+export const AiArtifactListResponseSchema = z
+  .object({
+    items: z.array(AiArtifactSummarySchema),
+    nextCursor: z.string().nullable(),
+  })
+  .strict();
+export type AiArtifactListResponse = z.infer<typeof AiArtifactListResponseSchema>;
+
+export const CreateAiArtifactRequestSchema = z
+  .object({
+    conversationId: UuidV7Schema.optional(),
+    title: z.string().trim().min(1).max(AI_ARTIFACT_TITLE_MAX_CHARS),
+    kind: AiArtifactKindSchema,
+    content: z.string().max(AI_ARTIFACT_CONTENT_MAX_CHARS).optional(),
+    mediaId: UuidV7Schema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.kind === "image" && !value.mediaId && !value.content) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mediaId"],
+        message: "An image artifact requires an existing media asset.",
+      });
+    }
+    if (value.kind !== "image" && value.mediaId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mediaId"],
+        message: "Only an image artifact can reference a media asset.",
+      });
+    }
+  });
+export type CreateAiArtifactRequest = z.infer<typeof CreateAiArtifactRequestSchema>;
+
+export const UpdateAiArtifactRequestSchema = z
+  .object({
+    /** Required optimistic-lock token; the server rejects a stale writer. */
+    version: z.number().int().positive(),
+    title: z.string().trim().min(1).max(AI_ARTIFACT_TITLE_MAX_CHARS).optional(),
+    content: z.string().max(AI_ARTIFACT_CONTENT_MAX_CHARS).optional(),
+    mediaId: UuidV7Schema.nullable().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.title !== undefined ||
+      value.content !== undefined ||
+      value.mediaId !== undefined,
+    { message: "At least one artifact field must change.", path: ["content"] },
+  );
+export type UpdateAiArtifactRequest = z.infer<typeof UpdateAiArtifactRequestSchema>;
+
+export const AiArtifactVersionsResponseSchema = z
+  .object({
+    versions: z.array(AiArtifactVersionSchema),
+  })
+  .strict();
+export type AiArtifactVersionsResponse = z.infer<typeof AiArtifactVersionsResponseSchema>;
+
+export const AiArtifactSuggestionsResponseSchema = z
+  .object({
+    suggestions: z.array(AiArtifactSuggestionSchema),
+  })
+  .strict();
+export type AiArtifactSuggestionsResponse = z.infer<typeof AiArtifactSuggestionsResponseSchema>;
+
+export const SetAiArtifactSuggestionRequestSchema = z
+  .object({
+    isResolved: z.boolean(),
+  })
+  .strict();
+export type SetAiArtifactSuggestionRequest = z.infer<
+  typeof SetAiArtifactSuggestionRequestSchema
+>;
 
 /** Idempotent append/update keyed by the assistant-ui message id (`clientId`). */
 export const UpsertAiMessageRequestSchema = z

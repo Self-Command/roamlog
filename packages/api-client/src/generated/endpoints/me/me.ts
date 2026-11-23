@@ -2046,6 +2046,136 @@ export function useListMySessions<
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+export type registerCurrentDeviceResponse200 = {
+  data: MessageResponse;
+  status: 200;
+};
+
+export type registerCurrentDeviceResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type registerCurrentDeviceResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type registerCurrentDeviceResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type registerCurrentDeviceResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type registerCurrentDeviceResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type registerCurrentDeviceResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type registerCurrentDeviceResponseSuccess = registerCurrentDeviceResponse200 & {
+  headers: Headers;
+};
+export type registerCurrentDeviceResponseError = (
+  | registerCurrentDeviceResponse400
+  | registerCurrentDeviceResponse401
+  | registerCurrentDeviceResponse403
+  | registerCurrentDeviceResponse404
+  | registerCurrentDeviceResponse429
+  | registerCurrentDeviceResponse500
+) & {
+  headers: Headers;
+};
+
+export type registerCurrentDeviceResponse =
+  registerCurrentDeviceResponseSuccess | registerCurrentDeviceResponseError;
+
+export const getRegisterCurrentDeviceUrl = () => {
+  return `/v1/me/device`;
+};
+
+/**
+ * @summary Associate this browser with the current session
+ */
+export const registerCurrentDevice = async (
+  options?: RequestInit,
+): Promise<registerCurrentDeviceResponse> => {
+  const res = await fetch(getRegisterCurrentDeviceUrl(), {
+    ...options,
+    method: "POST",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerCurrentDeviceResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as registerCurrentDeviceResponse;
+};
+
+export const getRegisterCurrentDeviceMutationKey = () => ["registerCurrentDevice"] as const;
+
+export const getRegisterCurrentDeviceMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerCurrentDevice>>,
+    TError,
+    void,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerCurrentDevice>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = getRegisterCurrentDeviceMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerCurrentDevice>>,
+    void
+  > = () => {
+    return registerCurrentDevice(fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegisterCurrentDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof registerCurrentDevice>>
+>;
+
+export type RegisterCurrentDeviceMutationError = ProblemDetails;
+
+/** @summary Associate this browser with the current session */
+export const useRegisterCurrentDevice = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof registerCurrentDevice>>,
+      TError,
+      void,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<Awaited<ReturnType<typeof registerCurrentDevice>>, TError, void, TContext> => {
+  return useMutation(getRegisterCurrentDeviceMutationOptions(options), queryClient);
+};
 export type revokeMySessionResponse200 = {
   data: MessageResponse;
   status: 200;

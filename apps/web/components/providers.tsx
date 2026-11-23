@@ -2,9 +2,10 @@
 
 import { TooltipProvider } from "@roamlog/ui";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { isUnauthorized } from "@/lib/api";
+import { ensureDeviceIdentity } from "@/lib/api/me";
 import { DataProvider } from "@/lib/data-provider";
 import { useSessionQuery } from "@/lib/query";
 import { FontPairingLoader } from "./appearance/font-pairing-loader";
@@ -51,7 +52,11 @@ export function Providers({ children }: ProvidersProps) {
 }
 
 function SessionBootstrap() {
-  useSessionQuery();
+  const session = useSessionQuery();
+  useEffect(() => {
+    if (!session.isSuccess) return;
+    void ensureDeviceIdentity().catch(() => undefined);
+  }, [session.isSuccess]);
   return null;
 }
 

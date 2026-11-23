@@ -105,8 +105,9 @@ describe("OpenAPI document", () => {
     // DELETE share `/{conversationId}`, GET/DELETE share `/{messages}`) and the
     // stream endpoint adds 1 more: 105 + 8 = 113 unique paths, 144 + 12 = 156
     // operations. Insights adds 2 unique paths and 2 operations. The user
-    // appearance endpoint adds one more path.
-    expect(paths.length).toBe(128);
+    // appearance and device endpoints add two more paths; resumable AI stream
+    // status/replay/cancel add three.
+    expect(paths.length).toBe(132);
 
     const operations = Object.values(doc.paths).reduce(
       (count, pathItem) =>

@@ -3,6 +3,7 @@ import {
   AiChatResponseSchema,
   AiRunExecuteResponseSchema,
   AiStreamEventSchema,
+  AiStreamStatusResponseSchema,
   type AiAttachment,
   type AiChatModelsResponse,
   type AiChatResponse,
@@ -11,6 +12,7 @@ import {
   type AiReasoningEffort,
   type AiRunExecuteResponse,
   type AiStreamEvent,
+  type AiStreamStatusResponse,
   type AiToolCall,
 } from "@roamlog/contracts";
 
@@ -152,9 +154,9 @@ export function createAiIdempotencyKey(): string {
 }
 
 interface SchemaLike<T> {
-  safeParse(value: unknown):
-    | { success: true; data: T }
-    | { success: false; error: { issues: Array<{ message: string }> } };
+  safeParse(
+    value: unknown,
+  ): { success: true; data: T } | { success: false; error: { issues: Array<{ message: string }> } };
 }
 
 async function postJson<T>(path: string, body: unknown, schema: SchemaLike<T>): Promise<T> {
@@ -272,10 +274,7 @@ export interface AiPlanResult extends AiChatResponse {
 }
 
 /** Plans a trip. Read-only tools only — this must never write product data. */
-export async function createAiPlan(
-  workspaceId: string,
-  input: AiPlanInput,
-): Promise<AiPlanResult> {
+export async function createAiPlan(workspaceId: string, input: AiPlanInput): Promise<AiPlanResult> {
   const body: AiPlanInput = { message: input.message };
   if (input.hints) body.hints = input.hints;
 
@@ -341,10 +340,7 @@ export interface AiToolEndEvent {
   durationMs: number;
 }
 
-export type AiToolStreamEvent =
-  | AiToolStartEvent
-  | AiToolProgressEvent
-  | AiToolEndEvent;
+export type AiToolStreamEvent = AiToolStartEvent | AiToolProgressEvent | AiToolEndEvent;
 
 export type AiStreamEventPayload = AiStreamEvent | AiToolStreamEvent;
 
@@ -397,9 +393,7 @@ export function parseToolStreamEvent(payload: unknown): AiToolStreamEvent | null
     case "tool.end": {
       if (
         typeof payload.toolCallId !== "string" ||
-        (payload.status !== "ok" &&
-          payload.status !== "error" &&
-          payload.status !== "cancelled") ||
+        (payload.status !== "ok" && payload.status !== "error" && payload.status !== "cancelled") ||
         typeof payload.finishedAt !== "string" ||
         typeof payload.durationMs !== "number" ||
         !Number.isFinite(payload.durationMs)
@@ -535,11 +529,7 @@ function eventFromFrame(frame: ParsedSseFrame, frameIndex: number): AiStreamEven
   );
 }
 
-function markDone(
-  event: AiStreamEventPayload,
-  frameIndex: number,
-  doneSeen: boolean,
-): boolean {
+function markDone(event: AiStreamEventPayload, frameIndex: number, doneSeen: boolean): boolean {
   if (doneSeen) {
     throw streamProtocolError(`The AI stream frame ${frameIndex} arrived after done.`);
   }
@@ -559,11 +549,114 @@ function markDone(
  * HTTP body read and ends the generator normally — a deliberate cancellation
  * is not an error.
  */
-export async function* streamAiPlan(
+export interface AiStreamRecord {
+  readonly event: AiStreamEventPayload;
+  /** Original SSE frame id. Resume replays from the start and skips <= this. */
+  readonly eventId: number;
+}
+
+function frameEventId(frame: ParsedSseFrame, fallback: number): number {
+  const parsed = frame.id ? Number.parseInt(frame.id, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+/**
+ * Shared reader for POST-created and GET-resumed SSE responses.
+ *
+ * The resumable producer replays its whole buffer, so `afterEventId` is the
+ * client's de-duplication cursor. The skipped frames still count toward
+ * protocol ordering, in particular a `done` frame must remain terminal even
+ * when its id is below the cursor.
+ */
+async function* readAiEventStream(
+  response: Response,
+  path: string,
+  signal: AbortSignal | undefined,
+  afterEventId = 0,
+): AsyncGenerator<AiStreamRecord, void, void> {
+  const contentType = response.headers.get("content-type");
+  if (contentType && !contentType.toLowerCase().includes("text/event-stream")) {
+    throw streamProtocolError(
+      `The AI stream response for ${path} was not text/event-stream (got ${contentType}).`,
+    );
+  }
+  if (!response.body) {
+    throw streamProtocolError(`The AI stream response for ${path} had no body.`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let frameIndex = 0;
+  let doneSeen = false;
+
+  const onAbort = (): void => {
+    void reader.cancel().catch(() => undefined);
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  const emit = function* (frame: ParsedSseFrame): Generator<AiStreamRecord, void, void> {
+    frameIndex += 1;
+    const event = eventFromFrame(frame, frameIndex);
+    doneSeen = markDone(event, frameIndex, doneSeen);
+    const eventId = frameEventId(frame, frameIndex);
+    if (eventId > afterEventId) yield { event, eventId };
+  };
+
+  try {
+    while (true) {
+      if (signal?.aborted) return;
+
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch (cause) {
+        if (signal?.aborted) return;
+        throw toAiRequestError(cause);
+      }
+
+      if (chunk.done) break;
+      if (chunk.value) {
+        // `{stream:true}` keeps split multi-byte UTF-8 (Chinese text) intact
+        // across chunk boundaries.
+        buffer += decoder.decode(chunk.value, { stream: true });
+      }
+
+      while (true) {
+        const taken = takeFrame(buffer);
+        if (!taken) break;
+        buffer = taken.rest;
+        const frame = parseSseFrame(taken.frame);
+        if (!frame) continue;
+        yield* emit(frame);
+      }
+    }
+
+    buffer += decoder.decode();
+
+    // A server may flush the final frame without a trailing blank line; the
+    // trailing bytes are still a complete frame and must not be dropped.
+    if (buffer.trim().length > 0) {
+      const frame = parseSseFrame(buffer);
+      if (frame) yield* emit(frame);
+    }
+
+    if (signal?.aborted) return;
+    if (!doneSeen) {
+      throw streamProtocolError("The AI stream ended before the done event.");
+    }
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
+/** Streams one planning turn from `POST /ai/chat/stream` with frame ids. */
+export async function* streamAiPlanRecords(
   workspaceId: string,
   input: AiStreamPlanInput,
   options?: AiStreamPlanOptions,
-): AsyncGenerator<AiStreamEventPayload, void, void> {
+): AsyncGenerator<AiStreamRecord, void, void> {
   const signal = resolveAbortSignal(options);
   if (signal?.aborted) return;
 
@@ -608,82 +701,122 @@ export async function* streamAiPlan(
     throw toAiRequestError(errorFromResponse(response.status, payload, path));
   }
 
-  const contentType = response.headers.get("content-type");
-  if (contentType && !contentType.toLowerCase().includes("text/event-stream")) {
-    throw streamProtocolError(
-      `The AI stream response for ${path} was not text/event-stream (got ${contentType}).`,
+  yield* readAiEventStream(response, path, signal);
+}
+
+/** Backwards-compatible event-only view used by callers that do not resume. */
+export async function* streamAiPlan(
+  workspaceId: string,
+  input: AiStreamPlanInput,
+  options?: AiStreamPlanOptions,
+): AsyncGenerator<AiStreamEventPayload, void, void> {
+  for await (const record of streamAiPlanRecords(workspaceId, input, options)) {
+    yield record.event;
+  }
+}
+
+/**
+ * Reattaches to the server producer created by `streamAiPlanRecords`.
+ *
+ * Port of vercel/chatbot `hooks/use-auto-resume.ts` and the resumable GET
+ * semantics in `app/(chat)/api/chat/[id]/stream/route.ts` (the pinned upstream
+ * route is a stub at this commit, so the request shape follows the
+ * `resumable-stream` README linked from that route's imports).
+ */
+export async function* resumeAiPlanStream(
+  workspaceId: string,
+  conversationId: string,
+  assistantMessageId: string | undefined,
+  options?: AiStreamPlanOptions,
+): AsyncGenerator<AiStreamRecord, void, void> {
+  const signal = resolveAbortSignal(options);
+  if (signal?.aborted) return;
+
+  const query = new URLSearchParams();
+  if (assistantMessageId) query.set("assistantMessageId", assistantMessageId);
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  const path = `/v1/workspaces/${encodeURIComponent(workspaceId)}/ai/conversations/${encodeURIComponent(conversationId)}/stream${suffix}`;
+
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      credentials: "include",
+      headers: { accept: "text/event-stream" },
+      ...(signal ? { signal } : {}),
+    });
+  } catch (cause) {
+    if (signal?.aborted) return;
+    throw toAiRequestError(cause);
+  }
+
+  if (response.status === 204) return;
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    let payload: unknown = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+    }
+    throw toAiRequestError(errorFromResponse(response.status, payload, path));
+  }
+
+  yield* readAiEventStream(response, path, signal);
+}
+
+export async function fetchAiStreamStatus(
+  workspaceId: string,
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<AiStreamStatusResponse> {
+  const path = `/v1/workspaces/${encodeURIComponent(workspaceId)}/ai/conversations/${encodeURIComponent(conversationId)}/stream/status`;
+  const response = await fetch(path, {
+    credentials: "include",
+    signal,
+  }).catch((cause: unknown) => {
+    throw toAiRequestError(cause);
+  });
+  const text = await response.text().catch(() => "");
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
+  }
+  if (!response.ok) {
+    throw toAiRequestError(errorFromResponse(response.status, payload, path));
+  }
+  const parsed = AiStreamStatusResponseSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new AiRequestError(
+      response.status,
+      "AI stream status did not match the contract.",
+      "INVALID_RESPONSE",
+      "invalid_response",
     );
   }
-  if (!response.body) {
-    throw streamProtocolError(`The AI stream response for ${path} had no body.`);
-  }
+  return parsed.data;
+}
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let frameIndex = 0;
-  let doneSeen = false;
-
-  const onAbort = (): void => {
-    void reader.cancel().catch(() => undefined);
-  };
-  signal?.addEventListener("abort", onAbort, { once: true });
-
-  try {
-    while (true) {
-      if (signal?.aborted) return;
-
-      let chunk: ReadableStreamReadResult<Uint8Array>;
-      try {
-        chunk = await reader.read();
-      } catch (cause) {
-        if (signal?.aborted) return;
-        throw toAiRequestError(cause);
-      }
-
-      if (chunk.done) break;
-      if (chunk.value) {
-        // `{stream:true}` keeps split multi-byte UTF-8 (Chinese text) intact
-        // across chunk boundaries.
-        buffer += decoder.decode(chunk.value, { stream: true });
-      }
-
-      while (true) {
-        const taken = takeFrame(buffer);
-        if (!taken) break;
-        buffer = taken.rest;
-        const frame = parseSseFrame(taken.frame);
-        if (!frame) continue;
-
-        frameIndex += 1;
-        const event = eventFromFrame(frame, frameIndex);
-        doneSeen = markDone(event, frameIndex, doneSeen);
-        yield event;
-      }
-    }
-
-    buffer += decoder.decode();
-
-    // A server may flush the final frame without a trailing blank line; the
-    // trailing bytes are still a complete frame and must not be dropped.
-    if (buffer.trim().length > 0) {
-      const frame = parseSseFrame(buffer);
-      if (frame) {
-        frameIndex += 1;
-        const event = eventFromFrame(frame, frameIndex);
-        doneSeen = markDone(event, frameIndex, doneSeen);
-        yield event;
-      }
-    }
-
-    if (signal?.aborted) return;
-    if (!doneSeen) {
-      throw streamProtocolError("The AI stream ended before the done event.");
-    }
-  } finally {
-    signal?.removeEventListener("abort", onAbort);
-    await reader.cancel().catch(() => undefined);
-  }
+export async function cancelAiStream(
+  workspaceId: string,
+  conversationId: string,
+  streamId: string,
+): Promise<boolean> {
+  const path = `/v1/workspaces/${encodeURIComponent(workspaceId)}/ai/conversations/${encodeURIComponent(conversationId)}/stream/cancel`;
+  const response = await fetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ streamId }),
+  });
+  if (!response.ok) return false;
+  const payload = (await response.json().catch(() => null)) as { cancelled?: unknown } | null;
+  return payload?.cancelled === true;
 }
 
 export interface AiExecuteInput {

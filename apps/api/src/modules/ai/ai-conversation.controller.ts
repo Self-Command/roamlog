@@ -66,6 +66,15 @@ export class AiConversationController {
     );
   }
 
+  @Delete()
+  @RequirePermission("trip:create", "trip")
+  removeAll(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+  ) {
+    return this.conversations.removeAll(actor.user.id, membership.workspaceId);
+  }
+
   @Post()
   @RequirePermission("trip:create", "trip")
   async create(

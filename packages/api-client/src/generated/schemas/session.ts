@@ -25,4 +25,10 @@ export interface Session {
    * @nullable
    */
   userAgent: string | null;
+  /**
+   * @minLength 16
+   * @maxLength 64
+   * @nullable
+   */
+  deviceId: string | null;
 }

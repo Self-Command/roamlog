@@ -9,16 +9,26 @@ import {
   Optional,
   Param,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
 } from "@nestjs/common";
-import { AI_ERROR_CODES, AiChatRequestSchema, AiRunIdSchema } from "@roamlog/contracts";
+import {
+  AI_ERROR_CODES,
+  AiChatRequestSchema,
+  AiRunIdSchema,
+  CancelAiStreamRequestSchema,
+  ResumeAiStreamQuerySchema,
+  UuidV7Schema,
+} from "@roamlog/contracts";
 import type {
   AiChatModelsResponse,
   AiErrorCode,
   AiStreamErrorEvent,
   AiStreamEvent,
+  AiStreamStatusResponse,
+  CancelAiStreamResponse,
 } from "@roamlog/contracts";
 import type { Request, Response } from "express";
 
@@ -32,9 +42,11 @@ import { RolesGuard } from "../../common/guards/roles.guard.js";
 import { TenantGuard } from "../../common/guards/tenant.guard.js";
 import { parseRequest } from "../../common/services/request-validation.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
+import { AiConversationService } from "./ai-conversation.service.js";
 import { AiExecuteService } from "./ai-execute.service.js";
 import { AiPlanService } from "./ai-plan.service.js";
 import { AiRewriteService } from "./ai-rewrite.service.js";
+import { AiRunStore } from "./ai-run.store.js";
 
 /**
  * Optional injection token for the SSE heartbeat interval. Production uses the
@@ -61,6 +73,10 @@ export class AiController {
     @Inject(AiPlanService) private readonly planner: AiPlanService,
     @Inject(AiExecuteService) private readonly executor: AiExecuteService,
     @Inject(AiRewriteService) private readonly rewriter: AiRewriteService,
+    @Optional()
+    @Inject(AiConversationService)
+    private readonly conversations?: AiConversationService,
+    @Optional() @Inject(AiRunStore) private readonly runs?: AiRunStore,
     @Optional()
     @Inject(AI_SSE_HEARTBEAT_MS)
     private readonly heartbeatMs: number = DEFAULT_SSE_HEARTBEAT_MS,
@@ -118,9 +134,9 @@ export class AiController {
     // 400 JSON response, exactly like POST /chat.
     const parsed = parseRequest(AiChatRequestSchema, body);
 
-    const client = new AbortController();
+    const lifecycle = new AbortController();
     const stream = this.planner.streamChat(actor, membership, parsed, {
-      signal: client.signal,
+      signal: lifecycle.signal,
     });
 
     // Commit point: pull the first event before touching the response. Any
@@ -135,52 +151,85 @@ export class AiController {
       return;
     }
 
-    this.openSse(res);
-    const heartbeat = setInterval(() => {
-      if (!res.writableEnded && !res.destroyed) {
-        res.write(`: hb ${new Date().toISOString()}\n\n`);
+    const streamId = first.value.type === "meta" ? first.value.streamId : undefined;
+    let closed = false;
+    let resumable: ReadableStream<string> | null = null;
+    let directFrames: AsyncGenerator<string, void, void> | undefined;
+    // The producer itself watches the stop flag. This interval must outlive the
+    // original HTTP response so Stop still works after a refresh or when the
+    // stop request was handled by another API replica.
+    const cancelPoll = streamId
+      ? setInterval(() => {
+          if (!this.runs || lifecycle.signal.aborted) return;
+          void this.runs.isCancelRequested(streamId).then((cancelled) => {
+            if (cancelled) lifecycle.abort();
+          });
+        }, 500)
+      : undefined;
+    cancelPoll?.unref?.();
+    const cleanupProducer = (): void => {
+      if (cancelPoll) clearInterval(cancelPoll);
+      this.runs?.unregisterStreamController(streamId!);
+      void this.runs?.clearCancelRequest(streamId!);
+    };
+
+    if (streamId && this.runs) {
+      this.runs.registerStreamController(streamId, lifecycle);
+      const makeFrames = () => readableFromAsync(frameStream(first.value, stream, cleanupProducer));
+      try {
+        resumable = await this.runs.createResumableStream(streamId, makeFrames);
+      } catch {
+        // Redis is a durability layer, not a reason to make chat unavailable.
+        resumable = null;
       }
-    }, Math.max(1, this.heartbeatMs));
+      if (!resumable) {
+        directFrames = frameStream(first.value, stream, cleanupProducer);
+      }
+    } else {
+      directFrames = frameStream(first.value, stream);
+      if (cancelPoll) clearInterval(cancelPoll);
+    }
+
+    this.openSse(res);
+    const heartbeat = setInterval(
+      () => {
+        if (!res.writableEnded && !res.destroyed) {
+          res.write(`: hb ${new Date().toISOString()}\n\n`);
+        }
+      },
+      Math.max(1, this.heartbeatMs),
+    );
     heartbeat.unref?.();
 
     const onClose = (): void => {
-      // `close` also fires after our own `res.end()`; only a prematurely closed
-      // socket means the client is gone and the upstream work should stop.
-      if (!res.writableEnded) {
-        client.abort();
-      }
+      closed = true;
     };
     res.on("close", onClose);
     res.on("error", onClose);
 
-    let seq = 0;
-    let messageId = "";
-    if (first.value.type === "meta") {
-      messageId = first.value.assistantMessageId;
-    }
-
     try {
-      await writeSse(res, first.value, ++seq);
-      for await (const event of stream) {
-        if (event.type === "meta") {
-          messageId = event.assistantMessageId;
+      if (resumable) {
+        await pipeStringStream(resumable, res, () => closed);
+      } else if (directFrames) {
+        for await (const frame of directFrames) {
+          if (closed || res.writableEnded || res.destroyed) break;
+          if (!(await writeChunk(res, frame))) break;
         }
-        await writeSse(res, event, ++seq);
       }
     } catch (error) {
       // Safety net only: `streamChat` already converts post-flush failures into
-      // error+done. This covers a failure in `writeSse`/the generator itself.
-      if (!res.writableEnded && !res.destroyed && !client.signal.aborted) {
+      // error+done. This covers a failure in the framing/transport itself.
+      if (!res.writableEnded && !res.destroyed && !lifecycle.signal.aborted) {
         const mapped = toSseError(error);
-        await writeSse(res, mapped, ++seq);
+        await writeSse(res, mapped, 1);
         await writeSse(
           res,
           {
             type: "done",
-            messageId: messageId || "unknown",
+            messageId: "unknown",
             finishReason: "error",
           },
-          seq + 1,
+          2,
         );
       }
     } finally {
@@ -191,6 +240,137 @@ export class AiController {
         res.end();
       }
     }
+  }
+
+  /**
+   * Probe used by `useAutoResume` before calling assistant-ui `resumeRun`.
+   *
+   * The DB row proves the conversation existed; the Redis sentinel proves this
+   * process still has a replayable producer. A stale DB row must answer
+   * `active: false`, otherwise the browser appends a blank assistant message
+   * and has nothing to stream into it.
+   */
+  @Get("conversations/:conversationId/stream/status")
+  @RequirePermission("trip:create", "trip")
+  async streamStatus(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("conversationId") conversationId: string,
+  ): Promise<AiStreamStatusResponse> {
+    if (!this.conversations || !this.runs) return { active: false };
+    const parsedId = parseRequest(UuidV7Schema, conversationId);
+    const active = await this.conversations.findRecoverableStream(
+      actor.user.id,
+      membership.workspaceId,
+      parsedId,
+    );
+    if (!active) return { active: false };
+    const available = await this.runs.hasResumableStream(active.streamId);
+    return available ? { active: true, streamId: active.streamId } : { active: false };
+  }
+
+  /**
+   * `GET .../ai/conversations/:conversationId/stream` — reconnect to the SSE
+   * producer buffered by `resumable-stream`.
+   *
+   * The client filters already-seen event ids, so replaying from the beginning
+   * is intentional: it also makes a fresh page load reconstruct the full
+   * assistant message without a second write path.
+   */
+  @Get("conversations/:conversationId/stream")
+  @RequirePermission("trip:create", "trip")
+  async resumeStream(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("conversationId") conversationId: string,
+    @Query() query: unknown,
+    @Res({ passthrough: false }) res: Response,
+  ): Promise<void> {
+    if (!this.conversations || !this.runs) {
+      res.status(HttpStatus.NO_CONTENT).end();
+      return;
+    }
+    const parsedConversationId = parseRequest(UuidV7Schema, conversationId);
+    const parsedQuery = parseRequest(ResumeAiStreamQuerySchema, query);
+    const active = await this.conversations.findRecoverableStream(
+      actor.user.id,
+      membership.workspaceId,
+      parsedConversationId,
+    );
+    if (!active) {
+      res.status(HttpStatus.NO_CONTENT).end();
+      return;
+    }
+
+    if (parsedQuery.assistantMessageId) {
+      await this.runs.bindAssistantMessage(active.streamId, parsedQuery.assistantMessageId);
+    }
+
+    let stream: ReadableStream<string> | null | undefined;
+    try {
+      stream = await this.runs.resumeResumableStream(active.streamId);
+    } catch {
+      stream = undefined;
+    }
+    if (!stream) {
+      res.status(HttpStatus.NO_CONTENT).end();
+      return;
+    }
+
+    this.openSse(res);
+    let closed = false;
+    const onClose = (): void => {
+      closed = true;
+    };
+    res.on("close", onClose);
+    res.on("error", onClose);
+    const heartbeat = setInterval(
+      () => {
+        if (!res.writableEnded && !res.destroyed) {
+          res.write(`: hb ${new Date().toISOString()}\n\n`);
+        }
+      },
+      Math.max(1, this.heartbeatMs),
+    );
+    heartbeat.unref?.();
+
+    try {
+      await pipeStringStream(stream, res, () => closed);
+    } finally {
+      clearInterval(heartbeat);
+      res.off("close", onClose);
+      res.off("error", onClose);
+      if (!res.writableEnded && !res.destroyed) res.end();
+    }
+  }
+
+  /**
+   * Explicit user stop. A browser network disconnect deliberately does not
+   * call this route: the producer keeps running so a refresh can resume it.
+   */
+  @Post("conversations/:conversationId/stream/cancel")
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission("trip:create", "trip")
+  async cancelStream(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("conversationId") conversationId: string,
+    @Body() body: unknown,
+  ): Promise<CancelAiStreamResponse> {
+    if (!this.conversations || !this.runs) return { cancelled: false };
+    const parsedConversationId = parseRequest(UuidV7Schema, conversationId);
+    const input = parseRequest(CancelAiStreamRequestSchema, body);
+    const stream = await this.conversations.findStream(
+      actor.user.id,
+      membership.workspaceId,
+      parsedConversationId,
+      input.streamId,
+    );
+    if (!stream || stream.status !== "active") return { cancelled: false };
+
+    await this.runs.requestCancel(input.streamId);
+    this.runs.cancelStream(input.streamId);
+    return { cancelled: true };
   }
 
   @Post("rewrite")
@@ -245,7 +425,92 @@ async function writeSse(res: Response, event: AiStreamEvent, seq: number): Promi
   if (res.writableEnded || res.destroyed) {
     return false;
   }
-  const frame = `id: ${String(seq).padStart(6, "0")}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+  return writeChunk(res, formatSseFrame(event, seq));
+}
+
+function formatSseFrame(event: AiStreamEvent, seq: number): string {
+  return `id: ${String(seq).padStart(6, "0")}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+}
+
+/**
+ * Streams already-consumed first event + the rest of the planner generator as
+ * raw SSE frames. This exact frame sequence is what `resumable-stream` buffers
+ * and replays, including the terminal `done` frame.
+ */
+async function* frameStream(
+  first: AiStreamEvent,
+  rest: AsyncGenerator<AiStreamEvent, void, void>,
+  onDone?: () => void,
+): AsyncGenerator<string, void, void> {
+  let seq = 0;
+  try {
+    yield formatSseFrame(first, ++seq);
+    for await (const event of rest) {
+      yield formatSseFrame(event, ++seq);
+    }
+  } finally {
+    onDone?.();
+  }
+}
+
+/**
+ * Adapts the async frame generator to `resumable-stream`'s ReadableStream API.
+ *
+ * The important detail is `cancel()`: it stops forwarding chunks to the
+ * disconnected HTTP consumer but deliberately keeps draining the generator so
+ * the provider and persistence complete for a later resume.
+ */
+function readableFromAsync(source: AsyncGenerator<string, void, void>): ReadableStream<string> {
+  let cancelled = false;
+  return new ReadableStream<string>({
+    async start(controller) {
+      try {
+        for await (const chunk of source) {
+          if (cancelled) continue;
+          try {
+            controller.enqueue(chunk);
+          } catch {
+            cancelled = true;
+          }
+        }
+        if (!cancelled) {
+          try {
+            controller.close();
+          } catch {
+            // The consumer disconnected after the final read.
+          }
+        }
+      } catch (error) {
+        if (!cancelled) controller.error(error);
+      }
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+}
+
+async function pipeStringStream(
+  stream: ReadableStream<string>,
+  res: Response,
+  isClosed: () => boolean,
+): Promise<void> {
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done || isClosed()) break;
+      if (value && !(await writeChunk(res, value))) break;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
+async function writeChunk(res: Response, frame: string): Promise<boolean> {
+  if (res.writableEnded || res.destroyed) {
+    return false;
+  }
   if (res.write(frame)) {
     return true;
   }

@@ -273,6 +273,41 @@ integration("AI conversation persistence on real PostgreSQL", () => {
     expect(page.items.map((item) => item.id)).not.toContain(conversation.id);
   });
 
+  it("removeAll soft-deletes every owner conversation in one workspace and is idempotent", async () => {
+    const service = makeService();
+    const regular = await createConversation();
+    const archived = await createConversation();
+    await requiredClient().aiConversation.update({
+      where: { id: archived.id },
+      data: { status: "archived" },
+    });
+    const peer = await createConversation(USER.sameWorkspacePeer);
+    const foreign = await createConversation(USER.foreign, WORKSPACE.other);
+
+    await expect(service.removeAll(USER.owner, WORKSPACE.home)).resolves.toEqual({
+      deletedCount: 2,
+    });
+    await expect(service.removeAll(USER.owner, WORKSPACE.home)).resolves.toEqual({
+      deletedCount: 0,
+    });
+
+    const rows = await requiredClient().aiConversation.findMany({
+      where: { id: { in: [regular.id, archived.id, peer.id, foreign.id] } },
+      orderBy: { id: "asc" },
+      select: { id: true, deletedAt: true },
+    });
+    const deletedAt = new Map(rows.map((row) => [row.id, row.deletedAt]));
+    expect(deletedAt.get(regular.id)).not.toBeNull();
+    expect(deletedAt.get(archived.id)).not.toBeNull();
+    expect(deletedAt.get(peer.id)).toBeNull();
+    expect(deletedAt.get(foreign.id)).toBeNull();
+
+    const page = await service.list(USER.owner, WORKSPACE.home, { limit: 30 });
+    expect(page.items.map((item) => item.id)).not.toEqual(
+      expect.arrayContaining([regular.id, archived.id]),
+    );
+  });
+
   it("makes appendUserMessage idempotent by (conversationId, clientId)", async () => {
     const service = makeService();
     const conversation = await createConversation();

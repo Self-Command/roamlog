@@ -10,6 +10,7 @@ import {
   SessionParamsSchema,
   SessionSchema,
   UpdateMeRequestSchema,
+  UuidV7Schema,
   type MyWorkspacesResponse,
   type Session,
   type SessionListResponse,
@@ -195,6 +196,7 @@ export class UsersService {
         createdAt: true,
         ipAddress: true,
         userAgent: true,
+        deviceId: true,
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
@@ -206,8 +208,46 @@ export class UsersService {
         createdAt: session.createdAt.toISOString(),
         ip: session.ipAddress,
         userAgent: session.userAgent,
+        deviceId: session.deviceId,
       }),
     );
+  }
+
+  async associateDevice(
+    actor: AuthenticatedActor,
+    sessionId: string,
+    deviceId: string,
+  ): Promise<{ message: string }> {
+    if (!UuidV7Schema.safeParse(deviceId).success) {
+      throw new BadRequestException({
+        code: "DEVICE_ID_INVALID",
+        message: "A valid device identifier is required.",
+      });
+    }
+    const session = await this.prisma.client.session.findFirst({
+      where: { id: sessionId, userId: actor.user.id },
+      select: { id: true, deviceId: true },
+    });
+    if (!session) {
+      throw new NotFoundException({
+        code: "SESSION_NOT_FOUND",
+        message: "Session not found.",
+      });
+    }
+    if (session.deviceId === deviceId) {
+      return { message: "Device associated." };
+    }
+    const updated = await this.prisma.client.session.updateMany({
+      where: { id: sessionId, userId: actor.user.id },
+      data: { deviceId },
+    });
+    if (updated.count !== 1) {
+      throw new NotFoundException({
+        code: "SESSION_NOT_FOUND",
+        message: "Session not found.",
+      });
+    }
+    return { message: "Device associated." };
   }
 
   async revokeSession(actor: AuthenticatedActor, sessionId: string): Promise<{ message: string }> {

@@ -1,11 +1,13 @@
 import {
   AiConversationListResponseSchema,
   AiConversationMessagesResponseSchema,
+  AiConversationBulkDeleteResponseSchema,
   AiConversationSchema,
   AiConversationTitleResponseSchema,
   AiThreadMessageSchema,
   MessageResponseSchema,
   type AiConversation,
+  type AiConversationBulkDeleteResponse,
   type AiConversationListResponse,
   type AiConversationMessagesResponse,
   type AiConversationTitleResponse,
@@ -14,6 +16,7 @@ import {
 import {
   archiveAiConversation as archiveAiConversationRequest,
   createAiConversation as createAiConversationRequest,
+  deleteAllAiConversations as deleteAllAiConversationsRequest,
   deleteAiConversation as deleteAiConversationRequest,
   deleteAiConversationMessages as deleteAiConversationMessagesRequest,
   generateAiConversationTitle as generateAiConversationTitleRequest,
@@ -108,7 +111,12 @@ function toConversationError(error: unknown): AiConversationError {
       return new AiConversationError(status, code, "AI 会话服务暂时不可用，请稍后重试。", true);
     }
     if (status === 0) {
-      return new AiConversationError(status, code, "无法连接 AI 会话服务，请检查网络后重试。", true);
+      return new AiConversationError(
+        status,
+        code,
+        "无法连接 AI 会话服务，请检查网络后重试。",
+        true,
+      );
     }
     return new AiConversationError(status, code, "AI 会话操作失败，请刷新后重试。", false);
   }
@@ -135,7 +143,11 @@ export async function listConversations(
 ): Promise<AiConversationListResponse> {
   const path = conversationPath(workspaceId);
   return run(async () =>
-    unwrap(await listAiConversationsRequest(workspaceId, params), AiConversationListResponseSchema, path),
+    unwrap(
+      await listAiConversationsRequest(workspaceId, params),
+      AiConversationListResponseSchema,
+      path,
+    ),
   );
 }
 
@@ -146,6 +158,19 @@ export async function createConversation(
   const path = conversationPath(workspaceId);
   return run(async () =>
     unwrap(await createAiConversationRequest(workspaceId, input), AiConversationSchema, path),
+  );
+}
+
+export async function deleteAllConversations(
+  workspaceId: string,
+): Promise<AiConversationBulkDeleteResponse> {
+  const path = conversationPath(workspaceId);
+  return run(async () =>
+    unwrap(
+      await deleteAllAiConversationsRequest(workspaceId),
+      AiConversationBulkDeleteResponseSchema,
+      path,
+    ),
   );
 }
 
@@ -181,7 +206,11 @@ export async function deleteConversation(
 ): Promise<void> {
   const path = conversationPath(workspaceId, `/${conversationId}`);
   await run(async () => {
-    unwrap(await deleteAiConversationRequest(workspaceId, conversationId), MessageResponseSchema, path);
+    unwrap(
+      await deleteAiConversationRequest(workspaceId, conversationId),
+      MessageResponseSchema,
+      path,
+    );
   });
 }
 
@@ -191,7 +220,11 @@ export async function archiveConversation(
 ): Promise<AiConversation> {
   const path = conversationPath(workspaceId, `/${conversationId}/archive`);
   return run(async () =>
-    unwrap(await archiveAiConversationRequest(workspaceId, conversationId), AiConversationSchema, path),
+    unwrap(
+      await archiveAiConversationRequest(workspaceId, conversationId),
+      AiConversationSchema,
+      path,
+    ),
   );
 }
 

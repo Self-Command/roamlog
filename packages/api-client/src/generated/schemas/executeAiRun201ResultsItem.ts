@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { ExecuteAiRun201ResultsItemArtifact } from "./executeAiRun201ResultsItemArtifact";
 import type { ExecuteAiRun201ResultsItemError } from "./executeAiRun201ResultsItemError";
 import type { ExecuteAiRun201ResultsItemTool } from "./executeAiRun201ResultsItemTool";
 
@@ -16,6 +17,7 @@ export type ExecuteAiRun201ResultsItem = {
    * @nullable
    */
   entityId?: string | null;
+  artifact?: ExecuteAiRun201ResultsItemArtifact;
   /** @nullable */
   error?: ExecuteAiRun201ResultsItemError;
 };

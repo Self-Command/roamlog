@@ -32,7 +32,7 @@
  *    the Vercel AI Gateway catalog.
  */
 
-import type { AiChatModelsResponse, AiReasoningEffort } from "@roamlog/contracts";
+import type { AiReasoningEffort } from "@roamlog/contracts";
 import { AI_REASONING_EFFORTS } from "@roamlog/contracts";
 import {
   Button,
@@ -44,11 +44,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@roamlog/ui";
-import { Brain, ChevronDown, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Brain, ChevronDown } from "lucide-react";
 
-import { fetchAiModels } from "../../lib/api/ai";
 import { aiChatSelectionStore, useAiChatSelection } from "./chat-selection";
+import { useAiChatModels } from "./model-selector";
+
+export { ModelSelectorCompact, useAiChatModels } from "./model-selector";
 
 /**
  * i18n for upstream's five values. The *values* are the contract's (which are
@@ -62,103 +63,13 @@ const REASONING_LABELS: Record<AiReasoningEffort, string> = {
   high: "高",
 };
 
-/** Shared, once-per-workspace model list (the selector and the page both use it). */
-export function useAiChatModels(workspaceId: string): {
-  models: AiChatModelsResponse | null;
-  error: boolean;
-} {
-  const [models, setModels] = useState<AiChatModelsResponse | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchAiModels(workspaceId)
-      .then((response) => {
-        if (!cancelled) setModels(response);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId]);
-
-  return { models, error };
-}
-
-export function ModelSelectorCompact({ workspaceId }: { workspaceId: string }) {
-  const { models } = useAiChatModels(workspaceId);
-  const selection = useAiChatSelection(workspaceId);
-  const store = aiChatSelectionStore(workspaceId);
-
-  const currentId = selection.model ?? models?.defaultModel;
-  const current = models?.models.find((model) => model.id === currentId) ?? models?.models[0];
-  const label = current?.name ?? (models ? models.defaultModel : "模型");
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="选择模型"
-          className="h-7 max-w-[200px] gap-1.5 px-2 text-xs font-normal text-muted"
-          data-testid="model-selector"
-        >
-          {models ? null : <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />}
-          <span className="truncate" data-testid="model-selector-current">
-            {label}
-          </span>
-          <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="max-h-72 overflow-y-auto">
-        <DropdownMenuLabel className="type-meta px-2.5 py-1 text-stone">
-          模型（由管理员配置）
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={current?.id ?? currentId ?? ""}
-          onValueChange={(id) => store.set({ ...selection, model: id })}
-        >
-          {(models?.models ?? []).map((model) => (
-            <DropdownMenuRadioItem
-              key={model.id}
-              value={model.id}
-              data-testid={`model-option-${model.id}`}
-              className="flex-col items-start gap-0"
-            >
-              <span className="text-sm text-ink">{model.name}</span>
-              <span className="type-meta text-stone">
-                {[
-                  model.provider,
-                  model.vision ? "支持图片" : "不支持图片",
-                  model.reasoning ? "支持思考" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-        {models && models.models.length === 0 ? (
-          <p className="px-2.5 py-2 text-xs text-muted">管理员还没有配置模型。</p>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 export function ReasoningSelectorCompact({ workspaceId }: { workspaceId: string }) {
   const { models } = useAiChatModels(workspaceId);
   const selection = useAiChatSelection(workspaceId);
   const store = aiChatSelectionStore(workspaceId);
   const supported = models?.reasoningSupported ?? true;
   const currentLabel =
-    selection.reasoningEffort === undefined
-      ? "默认"
-      : REASONING_LABELS[selection.reasoningEffort];
+    selection.reasoningEffort === undefined ? "默认" : REASONING_LABELS[selection.reasoningEffort];
 
   return (
     <DropdownMenu>
@@ -181,9 +92,7 @@ export function ReasoningSelectorCompact({ workspaceId }: { workspaceId: string 
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top">
-        <DropdownMenuLabel className="type-meta px-2.5 py-1 text-stone">
-          思考深度
-        </DropdownMenuLabel>
+        <DropdownMenuLabel className="type-meta px-2.5 py-1 text-stone">思考深度</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={selection.reasoningEffort ?? "default"}
           onValueChange={(value) => {

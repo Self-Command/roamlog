@@ -9,11 +9,13 @@ import {
 } from "@assistant-ui/react";
 import { Button } from "@roamlog/ui";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PLAN_TOOL_NAME, createAiChatModelAdapter } from "./chat-model-adapter";
 import { createMediaAttachmentAdapter } from "./media-attachment-adapter";
 import { WorkspaceChatProvider } from "./plan-card";
+import { AiArtifactProvider } from "./artifacts/artifact-context";
+import { ArtifactPanel } from "./artifacts/artifact-panel";
 import {
   createRemoteThreadListAdapter,
   useConversationSync,
@@ -21,6 +23,10 @@ import {
 } from "./thread-list-adapter";
 import { AiThreadList } from "./thread-list";
 import { ChatThread } from "./thread";
+import { useAutoResume } from "./use-auto-resume";
+
+const SIDEBAR_COOKIE_NAME = "sidebar_state";
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 
 /**
  * The single-column conversation shell for `/w/{slug}/ai`.
@@ -41,6 +47,45 @@ export interface AiChatProps {
   workspaceId: string;
   workspaceSlug: string;
   role: WorkspaceRole;
+  initialConversationId?: string | undefined;
+}
+
+function conversationIdFromLocation(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const value = new URL(window.location.href).searchParams.get("conversation");
+  return value?.trim() ? value : undefined;
+}
+
+function updateConversationUrl(threadId: string | undefined, mode: "push" | "replace"): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  const current = url.searchParams.get("conversation") ?? undefined;
+  if (current === threadId) return;
+  if (threadId) url.searchParams.set("conversation", threadId);
+  else url.searchParams.delete("conversation");
+  const target = `${url.pathname}${url.search}${url.hash}`;
+  if (mode === "push") window.history.pushState({}, "", target);
+  else window.history.replaceState({}, "", target);
+}
+
+function readSidebarOpenCookie(): boolean | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${SIDEBAR_COOKIE_NAME}=`;
+  const value = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix))
+    ?.slice(prefix.length);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+function persistSidebarOpen(open: boolean): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${SIDEBAR_COOKIE_NAME}=${String(open)}; path=/; max-age=${String(
+    SIDEBAR_COOKIE_MAX_AGE,
+  )}`;
 }
 
 /**
@@ -137,7 +182,18 @@ function RuntimeConversationSyncStatus({
   return <ConversationSyncStatus adapter={adapter} variant={variant} onRetry={retry} />;
 }
 
-export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
+function AutoResumeThread({
+  workspaceId,
+  conversationId,
+}: {
+  workspaceId: string;
+  conversationId: string | null;
+}) {
+  useAutoResume({ workspaceId, conversationId });
+  return null;
+}
+
+export function AiChat({ workspaceId, workspaceSlug, role, initialConversationId }: AiChatProps) {
   const canWrite = role === "owner" || role === "admin" || role === "editor";
 
   const chatModel = useMemo(
@@ -154,6 +210,76 @@ export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
     () => createMediaAttachmentAdapter({ workspaceId }),
     [workspaceId],
   );
+  const [conversationId, setConversationId] = useState(initialConversationId);
+  const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setConversationId(initialConversationId);
+  }, [initialConversationId]);
+
+  useEffect(() => {
+    const persisted = readSidebarOpenCookie();
+    if (persisted !== null) setCollapsed(!persisted);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(max-width: 1023px)");
+    const update = () => setIsMobile(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile) setDrawerOpen(false);
+  }, [isMobile]);
+
+  useEffect(() => {
+    const handlePopState = () => setConversationId(conversationIdFromLocation());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    if (isMobile) {
+      setDrawerOpen((open) => !open);
+      return;
+    }
+    setCollapsed((current) => {
+      const next = !current;
+      persistSidebarOpen(!next);
+      return next;
+    });
+  }, [isMobile]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "b" || !(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      toggleSidebar();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleSidebar]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDrawerOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [drawerOpen]);
+
+  const handleThreadIdChange = useCallback((threadId: string | undefined) => {
+    setConversationId(threadId);
+    updateConversationUrl(threadId, threadId ? "push" : "replace");
+  }, []);
+
+  const handleDeleteAll = useCallback(() => threadListAdapter.deleteAll(), [threadListAdapter]);
 
   const runtimeHook = useCallback(
     () =>
@@ -167,19 +293,17 @@ export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
   const runtime = useRemoteThreadListRuntime({
     adapter: threadListAdapter,
     runtimeHook,
+    threadId: conversationId,
+    onThreadIdChange: handleThreadIdChange,
   });
 
-  const [collapsed, setCollapsed] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const context = useMemo(
-    () => ({ workspaceSlug, canWrite }),
-    [workspaceSlug, canWrite],
-  );
+  const context = useMemo(() => ({ workspaceSlug, canWrite }), [workspaceSlug, canWrite]);
 
   return (
-    <WorkspaceChatProvider value={context}>
-      <AssistantRuntimeProvider runtime={runtime}>
+    <AiArtifactProvider workspaceId={workspaceId}>
+      <WorkspaceChatProvider value={context}>
+        <AssistantRuntimeProvider runtime={runtime}>
+        <AutoResumeThread workspaceId={workspaceId} conversationId={conversationId ?? null} />
         <div className="flex h-[calc(100dvh-15rem)] min-h-[560px] overflow-hidden rounded-card border border-hairline-strong bg-surface-0">
           {collapsed ? null : (
             <aside
@@ -189,7 +313,7 @@ export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
               <div className="flex h-full min-h-0 flex-col">
                 <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="sidebar" />
                 <div className="min-h-0 flex-1">
-                  <AiThreadList />
+                  <AiThreadList adapter={threadListAdapter} />
                 </div>
               </div>
             </aside>
@@ -207,7 +331,10 @@ export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
                 <div className="flex h-full min-h-0 flex-col">
                   <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="sidebar" />
                   <div className="min-h-0 flex-1">
-                    <AiThreadList onClose={() => setDrawerOpen(false)} />
+                    <AiThreadList
+                      adapter={threadListAdapter}
+                      onClose={() => setDrawerOpen(false)}
+                    />
                   </div>
                 </div>
               </div>
@@ -221,7 +348,8 @@ export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
                 variant="ghost"
                 size="sm"
                 aria-label={collapsed ? "展开会话列表" : "收起会话列表"}
-                onClick={() => setCollapsed((value) => !value)}
+                aria-expanded={!collapsed}
+                onClick={toggleSidebar}
               >
                 {collapsed ? (
                   <PanelLeftOpen aria-hidden="true" className="size-4" />
@@ -235,11 +363,17 @@ export function AiChat({ workspaceId, workspaceSlug, role }: AiChatProps) {
             <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="banner" />
 
             <div className="min-h-0 flex-1">
-              <ChatThread workspaceId={workspaceId} onOpenSidebar={() => setDrawerOpen(true)} />
+              <ChatThread
+                workspaceId={workspaceId}
+                onDeleteAll={handleDeleteAll}
+                onOpenSidebar={() => setDrawerOpen(true)}
+              />
             </div>
           </div>
+          <ArtifactPanel />
         </div>
-      </AssistantRuntimeProvider>
-    </WorkspaceChatProvider>
+        </AssistantRuntimeProvider>
+      </WorkspaceChatProvider>
+    </AiArtifactProvider>
   );
 }

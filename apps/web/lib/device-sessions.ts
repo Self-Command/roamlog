@@ -7,10 +7,9 @@ import type { Session } from "@roamlog/contracts";
  * OS, current-session badge and a per-row revoke action:
  * https://github.com/appwrite/console/blob/843f17e6e0ebe1f6c6ef01efa1ec96ae9bb2f85c/src/routes/(console)/account/sessions/+page.svelte#L82-L151
  *
- * Better Auth persists only the raw user agent and IP. Roamlog therefore uses
- * Bowser (MIT, https://github.com/bowser-js/bowser) to preserve the same
- * browser / OS / device information, and groups sessions by that detected
- * device fingerprint so repeated logins on one device are shown once.
+ * Roamlog persists a stable HttpOnly device id on the session. Sessions created
+ * before that column existed still use Bowser (MIT,
+ * https://github.com/bowser-js/bowser) as a legacy UA-fingerprint fallback.
  */
 
 export type DeviceKind = "desktop" | "mobile" | "tablet" | "tv" | "console" | "unknown";
@@ -145,7 +144,12 @@ export function groupSessionsByDevice(
 
   for (const session of sessions) {
     const profile = parseDeviceProfile(session.userAgent);
-    const key = profile.fingerprint ?? `unknown:${session.id}`;
+    const stableDeviceId = session.deviceId?.trim() ?? "";
+    const key = stableDeviceId
+      ? `device:${stableDeviceId}`
+      : profile.fingerprint
+        ? `legacy:${profile.fingerprint}`
+        : `unknown:${session.id}`;
     const existing = groups.get(key);
     if (existing) {
       existing.sessions.push(session);

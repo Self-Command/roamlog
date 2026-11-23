@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 
 import { Inject, Injectable } from "@nestjs/common";
+import type { OnModuleDestroy } from "@nestjs/common";
 import type { AiToolCall } from "@roamlog/contracts";
+import type Redis from "ioredis";
+import {
+  createResumableStreamContext,
+  type ResumableStreamContext,
+} from "resumable-stream/ioredis";
 
 import { generateUuidV7 } from "../auth/uuid.js";
 import { RedisService } from "../redis/redis.service.js";
@@ -11,6 +17,10 @@ import type { AiPlaceCandidate } from "./ai-tools.js";
 export const AI_RUN_TTL_SECONDS = 15 * 60;
 const RUN_KEY_PREFIX = "ai:run:";
 const CONSUMED_KEY_PREFIX = "ai:run:consumed:";
+const STREAM_ASSISTANT_KEY_PREFIX = "ai:stream:assistant:";
+const STREAM_CANCEL_KEY_PREFIX = "ai:stream:cancel:";
+const RESUMABLE_STREAM_TTL_SECONDS = 24 * 60 * 60;
+const RESUMABLE_STREAM_PREFIX = "roamlog-ai";
 
 export interface StoredAiRun {
   readonly runId: string;
@@ -64,11 +74,20 @@ function consumedKey(runId: string): string {
  * and namespaced by workspace, so a run id is useless outside its workspace.
  */
 @Injectable()
-export class AiRunStore {
+export class AiRunStore implements OnModuleDestroy {
+  private resumableContext?: ResumableStreamContext;
+  private streamPublisher?: Redis;
+  private streamSubscriber?: Redis;
+  private readonly streamControllers = new Map<string, AbortController>();
+
   constructor(@Inject(RedisService) private readonly redis: RedisService) {}
 
   async save(run: StoredAiRun): Promise<void> {
-    await this.redis.set(runKey(run.workspaceId, run.runId), JSON.stringify(run), AI_RUN_TTL_SECONDS);
+    await this.redis.set(
+      runKey(run.workspaceId, run.runId),
+      JSON.stringify(run),
+      AI_RUN_TTL_SECONDS,
+    );
   }
 
   async load(workspaceId: string, runId: string): Promise<StoredAiRun | undefined> {
@@ -109,4 +128,135 @@ export class AiRunStore {
       return undefined;
     }
   }
+
+  /**
+   * Creates the resumable producer for one SSE turn.
+   *
+   * Source: vercel/chatbot `app/(chat)/api/chat/route.ts:55-63` and
+   * `consumeSseStream` at L385-400 @ a8989b522fa3672a2ae52f053105e40993b36ca1,
+   * which call `resumable-stream`'s `createNewResumableStream`. The library
+   * keeps the producer alive even after the first HTTP consumer disconnects;
+   * a second consumer asks the producer to replay its in-memory chunk buffer
+   * through Redis pub/sub.
+   *
+   * Roamlog passes duplicated ioredis clients because the shared RedisService
+   * client is also used for normal commands, and a client in subscriber mode
+   * cannot issue them.
+   */
+  createResumableStream(
+    streamId: string,
+    makeStream: () => ReadableStream<string>,
+  ): Promise<ReadableStream<string> | null> {
+    return this.resumable().createNewResumableStream(streamId, makeStream);
+  }
+
+  /**
+   * Attaches a replacement client to an already-running producer.
+   *
+   * `undefined` means no producer exists (process restarted or the sentinel
+   * expired); `null` means the producer finished normally. The HTTP layer maps
+   * those to "not resumable" rather than keeping the browser spinning.
+   */
+  resumeResumableStream(streamId: string): Promise<ReadableStream<string> | null | undefined> {
+    return this.resumable().resumeExistingStream(streamId);
+  }
+
+  async hasResumableStream(streamId: string): Promise<boolean> {
+    try {
+      return (await this.resumable().hasExistingStream(streamId)) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  registerStreamController(streamId: string, controller: AbortController): void {
+    this.streamControllers.set(streamId, controller);
+  }
+
+  unregisterStreamController(streamId: string): void {
+    this.streamControllers.delete(streamId);
+  }
+
+  /** Explicit stop only. A browser disconnect must never call this. */
+  cancelStream(streamId: string): boolean {
+    const controller = this.streamControllers.get(streamId);
+    if (!controller) return false;
+    controller.abort();
+    this.streamControllers.delete(streamId);
+    return true;
+  }
+
+  /**
+   * Cross-instance stop flag. The API instance that owns the producer polls
+   * this key, so a stop request handled by another replica still reaches it.
+   */
+  async requestCancel(streamId: string): Promise<void> {
+    await this.redis.set(streamCancelKey(streamId), "1", 60);
+  }
+
+  async isCancelRequested(streamId: string): Promise<boolean> {
+    return (await this.redis.get(streamCancelKey(streamId))) !== null;
+  }
+
+  async clearCancelRequest(streamId: string): Promise<void> {
+    await this.redis.delete(streamCancelKey(streamId));
+  }
+
+  /**
+   * Binds the final assistant message to the runtime id allocated by
+   * `ThreadRuntime.resumeRun`. A refreshed browser receives a new assistant-ui
+   * message id; the still-running producer must persist under that id instead
+   * of the id from the original request, or history gains a duplicate row.
+   */
+  async bindAssistantMessage(streamId: string, clientId: string): Promise<void> {
+    await this.redis.set(streamAssistantKey(streamId), clientId, RESUMABLE_STREAM_TTL_SECONDS);
+  }
+
+  async boundAssistantMessage(streamId: string): Promise<string | undefined> {
+    return (await this.redis.get(streamAssistantKey(streamId))) ?? undefined;
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    for (const client of [this.streamPublisher, this.streamSubscriber]) {
+      if (!client) continue;
+      try {
+        if (client.status === "ready") await client.quit();
+        else client.disconnect();
+      } catch {
+        client.disconnect();
+      }
+    }
+    this.streamPublisher = undefined;
+    this.streamSubscriber = undefined;
+    this.resumableContext = undefined;
+    this.streamControllers.clear();
+  }
+
+  private resumable(): ResumableStreamContext {
+    if (this.resumableContext) return this.resumableContext;
+
+    const publisher = this.redis.client.duplicate();
+    const subscriber = this.redis.client.duplicate();
+    this.streamPublisher = publisher;
+    this.streamSubscriber = subscriber;
+    this.resumableContext = createResumableStreamContext({
+      keyPrefix: RESUMABLE_STREAM_PREFIX,
+      // Nest owns the process; keep the completion promise alive without
+      // blocking the request that created the producer.
+      waitUntil: (promise) => {
+        void promise.catch(() => undefined);
+      },
+      publisher,
+      subscriber,
+    });
+    return this.resumableContext;
+  }
+}
+
+function streamAssistantKey(streamId: string): string {
+  return `${STREAM_ASSISTANT_KEY_PREFIX}${createHash("sha256").update(streamId).digest("hex")}`;
+}
+
+function streamCancelKey(streamId: string): string {
+  return `${STREAM_CANCEL_KEY_PREFIX}${createHash("sha256").update(streamId).digest("hex")}`;
 }

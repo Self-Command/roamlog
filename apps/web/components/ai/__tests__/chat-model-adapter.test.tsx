@@ -4,10 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { streamAiPlan } from "@/lib/api/ai";
 
-import {
-  PLAN_TOOL_NAME,
-  createAiChatModelAdapter,
-} from "../chat-model-adapter";
+import { PLAN_TOOL_NAME, createAiChatModelAdapter } from "../chat-model-adapter";
 
 /**
  * Streaming branch coverage for the assistant-ui adapter.
@@ -37,15 +34,29 @@ function sseFrame(event: AiStreamEvent, id: number): string {
   return `id: ${String(id).padStart(6, "0")}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-function metaEvent(): AiStreamEvent {
+function metaEvent(streamId?: string): AiStreamEvent {
   return {
     type: "meta",
     v: 1,
     conversationId: CONVERSATION_ID,
     userMessageId: "u1",
     assistantMessageId: "a1",
+    ...(streamId ? { streamId } : {}),
     provider: { protocol: "openai-chat", model: "auto/test" },
   };
+}
+
+function erroringResponse(chunks: string[]): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      setTimeout(() => controller.error(new Error("network dropped")), 0);
+    },
+  });
+  return new Response(body, {
+    status: 200,
+    headers: { "content-type": "text/event-stream; charset=utf-8" },
+  });
 }
 
 function streamResponse(chunks: Uint8Array[], status = 200): Response {
@@ -83,12 +94,14 @@ interface PartLike {
 async function collectAdapter(
   messages: readonly unknown[],
   threadId?: string,
+  assistantMessageId?: string,
 ): Promise<ChatModelRunResult[]> {
   const adapter = createAiChatModelAdapter({ workspaceId: WORKSPACE_ID, canWrite: true });
   const stream = adapter.run({
     messages,
     abortSignal: new AbortController().signal,
     ...(threadId ? { unstable_threadId: threadId } : {}),
+    ...(assistantMessageId ? { unstable_assistantMessageId: assistantMessageId } : {}),
   } as never) as AsyncGenerator<ChatModelRunResult, void, void>;
 
   const chunks: ChatModelRunResult[] = [];
@@ -143,12 +156,7 @@ describe("streamAiPlan SSE parsing", () => {
 
     const events = await collectStream(streamAiPlan(WORKSPACE_ID, { message: "去京都" }));
 
-    expect(events.map((event) => event.type)).toEqual([
-      "meta",
-      "text.delta",
-      "text.delta",
-      "done",
-    ]);
+    expect(events.map((event) => event.type)).toEqual(["meta", "text.delta", "text.delta", "done"]);
     expect(events[1]).toEqual({ type: "text.delta", delta: "京都的" });
     expect(events[2]).toEqual({ type: "text.delta", delta: "古寺" });
   });
@@ -224,6 +232,36 @@ describe("streamAiPlan SSE parsing", () => {
 });
 
 describe("chat model adapter streaming", () => {
+  it("resumes the same message after a dropped body and de-duplicates replayed events", async () => {
+    const streamId = "018f0a00-0000-7000-8000-0000000000dd";
+    fetchMock
+      .mockResolvedValueOnce(
+        erroringResponse([
+          sseFrame(metaEvent(streamId), 1),
+          sseFrame({ type: "text.delta", delta: "你" }, 2),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        responseFrom(
+          [
+            sseFrame(metaEvent(streamId), 1),
+            sseFrame({ type: "text.delta", delta: "你" }, 2),
+            sseFrame({ type: "text.delta", delta: "好" }, 3),
+            sseFrame({ type: "done", messageId: "a1", finishReason: "stop" }, 4),
+          ].join(""),
+        ),
+      );
+
+    const chunks = await collectAdapter([USER_MESSAGE], CONVERSATION_ID, "a1");
+
+    expect(textOf(chunks[chunks.length - 1])).toBe("你好");
+    expect(chunks.some((chunk) => chunk.status?.type === "incomplete")).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      `/ai/conversations/${CONVERSATION_ID}/stream?assistantMessageId=`,
+    );
+  });
+
   it("yields one snapshot per text.delta and keeps the accumulated text", async () => {
     const body = [
       sseFrame(metaEvent(), 1),
@@ -238,11 +276,7 @@ describe("chat model adapter streaming", () => {
     const chunks = await collectAdapter([USER_MESSAGE]);
 
     expect(chunks).toHaveLength(3);
-    expect(chunks.map((chunk) => textOf(chunk))).toEqual([
-      "创建",
-      "创建京都",
-      "创建京都行程",
-    ]);
+    expect(chunks.map((chunk) => textOf(chunk))).toEqual(["创建", "创建京都", "创建京都行程"]);
     expect(textOf(chunks[chunks.length - 1])).toBe("创建京都行程");
   });
 
@@ -337,9 +371,8 @@ describe("chat model adapter streaming", () => {
     // `plan` is terminal for the status line: it must not keep showing
     // "正在思考…" once the plan card is on screen.
     expect(final?.metadata?.custom?.progress).toBeUndefined();
-    const tool = (final?.content ?? []).find(
-      (part) => part.type === "tool-call",
-    ) as PartLike | undefined;
+    const tool = (final?.content ?? []).find((part) => part.type === "tool-call") as
+      PartLike | undefined;
     expect(tool?.toolName).toBe(PLAN_TOOL_NAME);
     expect(tool?.args?.plan?.plannedCalls).toEqual([PLAN_CALL]);
 

@@ -12,7 +12,13 @@ import { AiChat } from "./ai-chat";
  * The page itself stays a server component; only this boundary is client-side,
  * exactly like the other live workspace surfaces.
  */
-export function AiAssistant({ workspaceSlug }: { workspaceSlug: string }) {
+export function AiAssistant({
+  workspaceSlug,
+  initialConversationId,
+}: {
+  workspaceSlug: string;
+  initialConversationId?: string | undefined;
+}) {
   const { workspace, workspacesQuery } = useWorkspaceBySlug(workspaceSlug);
 
   return (
@@ -41,6 +47,7 @@ export function AiAssistant({ workspaceSlug }: { workspaceSlug: string }) {
           workspaceId={workspace.id}
           workspaceSlug={workspaceSlug}
           role={workspace.role}
+          {...(initialConversationId ? { initialConversationId } : {})}
         />
       )}
     </div>

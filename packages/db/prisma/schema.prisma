@@ -197,59 +197,71 @@ enum AiStreamStatus {
   failed
 }
 
+/// Artifact kinds from vercel/chatbot's artifact definitions. Text/code/sheet
+/// are created by the AI document tools; image references an uploaded media row.
+enum AiArtifactKind {
+  text
+  code
+  sheet
+  image
+}
+
 model User {
-  id                String                   @id @default(uuid(7)) @db.Uuid
-  email             String                   @unique
-  emailVerified     Boolean                  @default(false)
-  twoFactorEnabled  Boolean                  @default(false)
-  name              String
-  image             String?
-  platformRole      PlatformRole             @default(user)
-  status            UserStatus               @default(active)
-  locale            String                   @default("zh-CN")
-  timezone          String                   @default("Asia/Shanghai")
-  lastActiveAt      DateTime?                @db.Timestamptz(3)
-  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime                 @updatedAt @db.Timestamptz(3)
-  deletedAt         DateTime?                @db.Timestamptz(3)
-  sessions          Session[]
-  accounts          Account[]
-  twoFactors        TwoFactor[]
-  ownedWorkspaces   Workspace[]              @relation("WorkspaceOwner")
-  memberships       WorkspaceMember[]
-  workspaceInvites  WorkspaceMember[]        @relation("WorkspaceMemberInviter")
-  invitationsSent   Invitation[]             @relation("InvitationSender")
-  tripsCreated      Trip[]                   @relation("TripCreator")
-  tripsUpdated      Trip[]                   @relation("TripUpdater")
-  tripParticipants  TripParticipant[]
-  stopsCreated      Stop[]                   @relation("StopCreator")
-  stopsUpdated      Stop[]                   @relation("StopUpdater")
-  entriesCreated    JournalEntry[]           @relation("EntryCreator")
-  entriesUpdated    JournalEntry[]           @relation("EntryUpdater")
-  revisions         EntryRevision[]          @relation("RevisionEditor")
-  itineraryCreated  ItineraryItem[]          @relation("ItineraryCreator")
-  itineraryUpdated  ItineraryItem[]          @relation("ItineraryUpdater")
-  itineraryAssigned ItineraryItem[]          @relation("ItineraryAssignee")
-  comments          Comment[]                @relation("CommentAuthor")
-  commentsResolved  Comment[]                @relation("CommentResolver")
-  commentMentions   CommentMention[]
-  activities        Activity[]               @relation("ActivityActor")
-  media             Media[]
-  expensesPaid      Expense[]                @relation("ExpensePayer")
-  expensesCreated   Expense[]                @relation("ExpenseCreator")
-  expenseShares     ExpenseParticipant[]
-  packingCreated    PackingItem[]            @relation("PackingCreator")
-  packingUpdated    PackingItem[]            @relation("PackingUpdater")
-  packingAssigned   PackingItem[]            @relation("PackingAssignee")
-  shareLinksCreated ShareLink[]
-  notifications     Notification[]           @relation("NotificationRecipient")
-  notificationsSent Notification[]           @relation("NotificationActor")
-  preferences       NotificationPreference[]
-  auditActor        AuditLog[]               @relation("AuditActor")
-  featureFlags      FeatureFlag[]            @relation("FeatureFlagUpdater")
-  emails            EmailLog[]
-  exports           Export[]
-  aiConversations   AiConversation[]
+  id                   String                    @id @default(uuid(7)) @db.Uuid
+  email                String                    @unique
+  emailVerified        Boolean                   @default(false)
+  twoFactorEnabled     Boolean                   @default(false)
+  name                 String
+  image                String?
+  platformRole         PlatformRole              @default(user)
+  status               UserStatus                @default(active)
+  locale               String                    @default("zh-CN")
+  timezone             String                    @default("Asia/Shanghai")
+  lastActiveAt         DateTime?                 @db.Timestamptz(3)
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
+  deletedAt            DateTime?                 @db.Timestamptz(3)
+  sessions             Session[]
+  accounts             Account[]
+  twoFactors           TwoFactor[]
+  ownedWorkspaces      Workspace[]               @relation("WorkspaceOwner")
+  memberships          WorkspaceMember[]
+  workspaceInvites     WorkspaceMember[]         @relation("WorkspaceMemberInviter")
+  invitationsSent      Invitation[]              @relation("InvitationSender")
+  tripsCreated         Trip[]                    @relation("TripCreator")
+  tripsUpdated         Trip[]                    @relation("TripUpdater")
+  tripParticipants     TripParticipant[]
+  stopsCreated         Stop[]                    @relation("StopCreator")
+  stopsUpdated         Stop[]                    @relation("StopUpdater")
+  entriesCreated       JournalEntry[]            @relation("EntryCreator")
+  entriesUpdated       JournalEntry[]            @relation("EntryUpdater")
+  revisions            EntryRevision[]           @relation("RevisionEditor")
+  itineraryCreated     ItineraryItem[]           @relation("ItineraryCreator")
+  itineraryUpdated     ItineraryItem[]           @relation("ItineraryUpdater")
+  itineraryAssigned    ItineraryItem[]           @relation("ItineraryAssignee")
+  comments             Comment[]                 @relation("CommentAuthor")
+  commentsResolved     Comment[]                 @relation("CommentResolver")
+  commentMentions      CommentMention[]
+  activities           Activity[]                @relation("ActivityActor")
+  media                Media[]
+  expensesPaid         Expense[]                 @relation("ExpensePayer")
+  expensesCreated      Expense[]                 @relation("ExpenseCreator")
+  expenseShares        ExpenseParticipant[]
+  packingCreated       PackingItem[]             @relation("PackingCreator")
+  packingUpdated       PackingItem[]             @relation("PackingUpdater")
+  packingAssigned      PackingItem[]             @relation("PackingAssignee")
+  shareLinksCreated    ShareLink[]
+  notifications        Notification[]            @relation("NotificationRecipient")
+  notificationsSent    Notification[]            @relation("NotificationActor")
+  preferences          NotificationPreference[]
+  auditActor           AuditLog[]                @relation("AuditActor")
+  featureFlags         FeatureFlag[]             @relation("FeatureFlagUpdater")
+  emails               EmailLog[]
+  exports              Export[]
+  aiConversations      AiConversation[]
+  aiMessageVotes       AiMessageVote[]
+  aiArtifacts          AiArtifact[]              @relation("AiArtifactCreator")
+  aiArtifactVersions   AiArtifactVersion[]       @relation("AiArtifactVersionCreator")
   appearancePreference UserAppearancePreference?
 
   @@index([platformRole, status])
@@ -275,6 +287,9 @@ model Session {
   token     String   @unique
   ipAddress String?
   userAgent String?
+  /// Stable browser identifier from the HttpOnly `roamlog.device_id` cookie.
+  /// Legacy sessions created before this column are grouped by UA fingerprint.
+  deviceId  String?
   userId    String   @db.Uuid
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -282,6 +297,7 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([userId, deviceId])
 }
 
 model Account {
@@ -371,6 +387,7 @@ model Workspace {
   auditLogs           AuditLog[]
   exports             Export[]
   aiConversations     AiConversation[]
+  aiArtifacts         AiArtifact[]
 
   @@index([ownerId])
   @@index([status, createdAt])
@@ -414,70 +431,70 @@ model Invitation {
 }
 
 model Trip {
-  id                String            @id @default(uuid(7)) @db.Uuid
-  workspaceId       String            @db.Uuid
-  title             String
-  summary           String            @default("")
-  status            TripStatus        @default(planning)
-  startDate         DateTime          @db.Date
-  endDate           DateTime          @db.Date
-  coverMediaId      String?           @db.Uuid
-  origin            String
-  originLat         Float?
-  originLng         Float?
-  originCountryCode String?           @db.Char(2)
-  originAddress     String?           @db.VarChar(400)
-  originBbox        Json?             @db.JsonB
-  timeZone          String?
+  id                     String            @id @default(uuid(7)) @db.Uuid
+  workspaceId            String            @db.Uuid
+  title                  String
+  summary                String            @default("")
+  status                 TripStatus        @default(planning)
+  startDate              DateTime          @db.Date
+  endDate                DateTime          @db.Date
+  coverMediaId           String?           @db.Uuid
+  origin                 String
+  originLat              Float?
+  originLng              Float?
+  originCountryCode      String?           @db.Char(2)
+  originAddress          String?           @db.VarChar(400)
+  originBbox             Json?             @db.JsonB
+  timeZone               String?
   /// @deprecated Structured destinations live in `TripDestination` since 0010;
   /// this names-only array is kept for older clients and is mirrored by the API
   /// on every structured write. Read paths prefer `destinationsV2`.
-  destinations      String[]          @default([])
-  countryCodes      String[]          @default([])
-  tags              String[]          @default([])
-  guestNames        String[]          @default([])
-  budgetAmountMinor Int?
-  budgetCurrency    String?
-  visibility        TripVisibility    @default(workspace)
+  destinations           String[]          @default([])
+  countryCodes           String[]          @default([])
+  tags                   String[]          @default([])
+  guestNames             String[]          @default([])
+  budgetAmountMinor      Int?
+  budgetCurrency         String?
+  visibility             TripVisibility    @default(workspace)
   /// Owner switch for the public share page. `true` (the default) matches the
   /// product decision that a shared trip shows exact photo locations, so a share
   /// created without touching it keeps today's behaviour. Enforced in the share
   /// *presenter*: when `false` the public payload omits `lat`/`lng` entirely,
   /// rather than shipping them for the page to hide.
-  showExactPhotoLocation Boolean       @default(true)
-  favorite          Boolean           @default(false)
-  version           Int               @default(1)
-  createdById       String            @db.Uuid
-  updatedById       String            @db.Uuid
-  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
-  deletedAt         DateTime?         @db.Timestamptz(3)
+  showExactPhotoLocation Boolean           @default(true)
+  favorite               Boolean           @default(false)
+  version                Int               @default(1)
+  createdById            String            @db.Uuid
+  updatedById            String            @db.Uuid
+  createdAt              DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime          @updatedAt @db.Timestamptz(3)
+  deletedAt              DateTime?         @db.Timestamptz(3)
   /// Admin takedown. Kept apart from `deletedAt` (author delete) so the
   /// moderation trail survives; visibility uses both columns.
-  moderatedAt       DateTime?         @db.Timestamptz(3)
-  moderatedById     String?           @db.Uuid
-  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  coverMedia        Media?            @relation("TripCover", fields: [coverMediaId], references: [id], onDelete: SetNull)
-  createdBy         User              @relation("TripCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy         User              @relation("TripUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
-  participants      TripParticipant[]
+  moderatedAt            DateTime?         @db.Timestamptz(3)
+  moderatedById          String?           @db.Uuid
+  workspace              Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  coverMedia             Media?            @relation("TripCover", fields: [coverMediaId], references: [id], onDelete: SetNull)
+  createdBy              User              @relation("TripCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy              User              @relation("TripUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  participants           TripParticipant[]
   /// Explicit audiences for the `custom` visibility tier (0012). Read by both
   /// `resolveTripAccess` and the SQL parity filter.
-  accessGrants      TripAccessGrant[]
-  stops             Stop[]
+  accessGrants           TripAccessGrant[]
+  stops                  Stop[]
   /// Structured destinations, ordered by `order`; soft-deleted rows stay for
   /// history and are filtered out by readers.
-  destinationsV2    TripDestination[]
-  entries           JournalEntry[]
-  itineraryItems    ItineraryItem[]
-  comments          Comment[]
-  activities        Activity[]
-  media             Media[]
-  expenses          Expense[]
-  packingItems      PackingItem[]
-  shareLinks        ShareLink[]
-  notifications     Notification[]
-  exports           Export[]
+  destinationsV2         TripDestination[]
+  entries                JournalEntry[]
+  itineraryItems         ItineraryItem[]
+  comments               Comment[]
+  activities             Activity[]
+  media                  Media[]
+  expenses               Expense[]
+  packingItems           PackingItem[]
+  shareLinks             ShareLink[]
+  notifications          Notification[]
+  exports                Export[]
 
   @@index([workspaceId, status, startDate])
   @@index([workspaceId, createdAt])
@@ -544,13 +561,13 @@ model TripParticipant {
 /// uniqueness pairs only bite on non-NULL values, so a trip can hold many user
 /// grants and many workspace grants at once.
 model TripAccessGrant {
-  id          String    @id @default(uuid(7)) @db.Uuid
-  tripId      String    @db.Uuid
-  workspaceId String?   @db.Uuid
-  userId      String?   @db.Uuid
-  grantedById String    @db.Uuid
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid(7)) @db.Uuid
+  tripId      String   @db.Uuid
+  workspaceId String?  @db.Uuid
+  userId      String?  @db.Uuid
+  grantedById String   @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
   @@unique([tripId, workspaceId])
   @@unique([tripId, userId])
@@ -591,36 +608,36 @@ model Stop {
 }
 
 model JournalEntry {
-  id          String          @id @default(uuid(7)) @db.Uuid
-  tripId      String          @db.Uuid
-  workspaceId String          @db.Uuid
-  title       String
-  date        DateTime        @db.Date
-  location    String
-  lat         Float?
-  lng         Float?
-  mood        Mood?
-  weather     Weather?
-  contentJson Json            @db.JsonB
-  contentHtml String
-  excerpt     String
-  tags        String[]        @default([])
-  favorite    Boolean         @default(false)
-  version     Int             @default(1)
-  createdById String          @db.Uuid
-  updatedById String          @db.Uuid
-  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
-  deletedAt   DateTime?       @db.Timestamptz(3)
+  id            String          @id @default(uuid(7)) @db.Uuid
+  tripId        String          @db.Uuid
+  workspaceId   String          @db.Uuid
+  title         String
+  date          DateTime        @db.Date
+  location      String
+  lat           Float?
+  lng           Float?
+  mood          Mood?
+  weather       Weather?
+  contentJson   Json            @db.JsonB
+  contentHtml   String
+  excerpt       String
+  tags          String[]        @default([])
+  favorite      Boolean         @default(false)
+  version       Int             @default(1)
+  createdById   String          @db.Uuid
+  updatedById   String          @db.Uuid
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
+  deletedAt     DateTime?       @db.Timestamptz(3)
   /// Admin takedown; `deletedAt` remains the author's own delete.
-  moderatedAt DateTime?       @db.Timestamptz(3)
-  moderatedById String?       @db.Uuid
-  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  trip        Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  createdBy   User            @relation("EntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy   User            @relation("EntryUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
-  revisions   EntryRevision[]
-  media       EntryMedia[]
+  moderatedAt   DateTime?       @db.Timestamptz(3)
+  moderatedById String?         @db.Uuid
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip          Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdBy     User            @relation("EntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy     User            @relation("EntryUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  revisions     EntryRevision[]
+  media         EntryMedia[]
 
   @@index([workspaceId, date])
   @@index([tripId, date])
@@ -693,29 +710,29 @@ model ItineraryItem {
 }
 
 model Comment {
-  id           String            @id @default(uuid(7)) @db.Uuid
-  workspaceId  String            @db.Uuid
-  tripId       String            @db.Uuid
-  targetType   CommentTargetType
-  targetId     String            @db.Uuid
-  parentId     String?           @db.Uuid
-  authorId     String            @db.Uuid
-  body         String
-  resolvedAt   DateTime?         @db.Timestamptz(3)
-  resolvedById String?           @db.Uuid
-  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
-  deletedAt    DateTime?         @db.Timestamptz(3)
+  id            String            @id @default(uuid(7)) @db.Uuid
+  workspaceId   String            @db.Uuid
+  tripId        String            @db.Uuid
+  targetType    CommentTargetType
+  targetId      String            @db.Uuid
+  parentId      String?           @db.Uuid
+  authorId      String            @db.Uuid
+  body          String
+  resolvedAt    DateTime?         @db.Timestamptz(3)
+  resolvedById  String?           @db.Uuid
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
+  deletedAt     DateTime?         @db.Timestamptz(3)
   /// Admin takedown; `deletedAt` remains the author's own delete.
-  moderatedAt  DateTime?         @db.Timestamptz(3)
-  moderatedById String?          @db.Uuid
-  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  trip         Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  parent       Comment?          @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
-  replies      Comment[]         @relation("CommentThread")
-  author       User              @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  resolvedBy   User?             @relation("CommentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
-  mentions     CommentMention[]
+  moderatedAt   DateTime?         @db.Timestamptz(3)
+  moderatedById String?           @db.Uuid
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip          Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  parent        Comment?          @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       Comment[]         @relation("CommentThread")
+  author        User              @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  resolvedBy    User?             @relation("CommentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  mentions      CommentMention[]
 
   @@index([workspaceId, targetType, targetId, createdAt])
   @@index([tripId, createdAt])
@@ -777,11 +794,11 @@ model Media {
   /// the `exifr` tag names (`Make`, `FNumber`, `DateTimeOriginal`, …). `null`
   /// means "nothing readable" — the uploader never invents a value, and history
   /// is not backfilled because the original file is gone.
-  exif            Json?         @db.JsonB
+  exif            Json?        @db.JsonB
   /// Denormalized GPS pair (WGS-84), lifted out of `exif` so map queries never
   /// have to parse the JSON blob. `null` when the photo carries no GPS.
-  lat            Float?
-  lng            Float?
+  lat             Float?
+  lng             Float?
   createdAt       DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
   deletedAt       DateTime?    @db.Timestamptz(3)
@@ -816,20 +833,20 @@ model Media {
 /// byte size and duration. Motion rows are additive: a plain image simply has
 /// no `MediaMotion` row.
 model MediaMotion {
-  id           String    @id @db.Uuid
+  id         String    @id @db.Uuid
   /// One motion asset per media row; the unique constraint is the 1:1.
-  mediaId      String    @unique @db.Uuid
-  storageKey   String
-  thumbKey     String?
+  mediaId    String    @unique @db.Uuid
+  storageKey String
+  thumbKey   String?
   /// `video/quicktime` (iOS) or `video/mp4` (transcoded / Android).
-  mimeType     String
-  sizeBytes    Int
-  durationMs   Int?
-  width        Int?
-  height       Int?
-  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
-  deletedAt    DateTime? @db.Timestamptz(3)
-  media        Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  mimeType   String
+  sizeBytes  Int
+  durationMs Int?
+  width      Int?
+  height     Int?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  deletedAt  DateTime? @db.Timestamptz(3)
+  media      Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
   @@map("MediaMotion")
 }
@@ -1170,11 +1187,11 @@ model Export {
 /// differs from the code default; deleting the row restores the code default.
 model PlatformRoleOverride {
   role        PlatformRole
-  action      String   @db.VarChar(80)
-  granted     Boolean  @default(true)
-  updatedById String?  @db.Uuid
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  action      String       @db.VarChar(80)
+  granted     Boolean      @default(true)
+  updatedById String?      @db.Uuid
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
 
   @@id([role, action])
   @@index([updatedById])
@@ -1239,6 +1256,8 @@ model AiConversation {
   user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages      AiMessage[]
   streams       AiStream[]
+  messageVotes  AiMessageVote[]
+  artifacts     AiArtifact[]
 
   @@index([workspaceId, userId, status, lastMessageAt])
   @@index([workspaceId, lastMessageAt])
@@ -1250,32 +1269,33 @@ model AiConversation {
 /// the single `content` JSONB column so history replay needs no conversion.
 /// `parentId` adds regeneration/editing branches on top of S2's `Message_v2`.
 model AiMessage {
-  id             String         @id @default(uuid(7)) @db.Uuid
-  conversationId String         @db.Uuid
+  id             String          @id @default(uuid(7)) @db.Uuid
+  conversationId String          @db.Uuid
   /// Branch parent; a regenerated/edited turn points back at the same user
   /// message. NULL marks a branch root.
-  parentId       String?        @db.Uuid
+  parentId       String?         @db.Uuid
   role           AiMessageRole
-  content        Json           @db.JsonB
+  content        Json            @db.JsonB
   /// assistant-ui `MessageStatus`:
   /// { type: "running" | "complete" | "incomplete" | "requires-action", ... }.
-  status         Json?          @db.JsonB
+  status         Json?           @db.JsonB
   /// Client-side assistant-ui message id (7-char nanoid), used for idempotent
   /// upserts and history replay mapping.
-  clientId       String?        @db.VarChar(64)
+  clientId       String?         @db.VarChar(64)
   /// Planned run id (`ai:run:*` in Redis), diagnostics only — not a foreign key.
-  runId          String?        @db.VarChar(32)
+  runId          String?         @db.VarChar(32)
   /// Normalised `AiConversationMessage[]` actually sent to the model for this
   /// turn (including real tool call/result and entityId).
-  modelContext   Json?          @db.JsonB
+  modelContext   Json?           @db.JsonB
   /// Non-rendered metadata: { provider, usage, timing, finishReason }.
-  metadata       Json?          @db.JsonB
-  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
-  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  parent         AiMessage?     @relation("AiMessageBranch", fields: [parentId], references: [id], onDelete: SetNull)
-  children       AiMessage[]    @relation("AiMessageBranch")
+  metadata       Json?           @db.JsonB
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+  conversation   AiConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent         AiMessage?      @relation("AiMessageBranch", fields: [parentId], references: [id], onDelete: SetNull)
+  children       AiMessage[]     @relation("AiMessageBranch")
   streams        AiStream[]
+  votes          AiMessageVote[]
 
   @@unique([conversationId, clientId])
   @@index([conversationId, createdAt])
@@ -1300,4 +1320,76 @@ model AiStream {
 
   @@index([conversationId, createdAt])
   @@index([status, createdAt])
+}
+
+/// Per-user feedback on an AI message. Ported from vercel/chatbot
+/// `Vote_v2` (lib/db/schema.ts:55-71) @ a8989b52 with Roamlog's user scope.
+model AiMessageVote {
+  messageId      String         @db.Uuid
+  userId         String         @db.Uuid
+  workspaceId    String         @db.Uuid
+  conversationId String         @db.Uuid
+  isUpvoted      Boolean
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  message        AiMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([conversationId, userId])
+  @@index([workspaceId, conversationId])
+}
+
+/// One AI-created document/artifact. Mirrors vercel/chatbot's `Document` but
+/// adds Workspace ownership, optimistic `version`, media-backed images and
+/// soft delete. Every content mutation also writes an `AiArtifactVersion`.
+model AiArtifact {
+  id             String                 @id @default(uuid(7)) @db.Uuid
+  workspaceId    String                 @db.Uuid
+  userId         String                 @db.Uuid
+  conversationId String?                @db.Uuid
+  title          String                 @db.VarChar(160)
+  kind           AiArtifactKind
+  content        String                 @db.Text
+  mediaId        String?                @db.Uuid
+  version        Int                    @default(1)
+  createdAt      DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime               @updatedAt @db.Timestamptz(3)
+  deletedAt      DateTime?              @db.Timestamptz(3)
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User                   @relation("AiArtifactCreator", fields: [userId], references: [id], onDelete: Cascade)
+  conversation   AiConversation?        @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  versions       AiArtifactVersion[]
+  suggestions    AiArtifactSuggestion[]
+
+  @@index([workspaceId, userId, updatedAt])
+  @@index([conversationId, updatedAt])
+}
+
+model AiArtifactVersion {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  artifactId  String     @db.Uuid
+  version     Int
+  content     String     @db.Text
+  createdById String     @db.Uuid
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  artifact    AiArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  createdBy   User       @relation("AiArtifactVersionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([artifactId, version])
+  @@index([artifactId, createdAt])
+}
+
+model AiArtifactSuggestion {
+  id            String     @id @default(uuid(7)) @db.Uuid
+  artifactId    String     @db.Uuid
+  description   String     @db.Text
+  originalText  String     @db.Text
+  suggestedText String     @db.Text
+  isResolved    Boolean    @default(false)
+  createdAt     DateTime   @default(now()) @db.Timestamptz(3)
+  artifact      AiArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+
+  @@index([artifactId, isResolved, createdAt])
 }

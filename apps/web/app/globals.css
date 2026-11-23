@@ -1,8 +1,10 @@
 @import "tailwindcss";
 @import "@roamlog/ui/tokens.css";
+@import "katex/dist/katex.min.css";
 
 @source "../components/**/*.{ts,tsx}";
 @source "../lib/**/*.{ts,tsx}";
+@source "../node_modules/streamdown/dist/index.js";
 
 @layer base {
   body {

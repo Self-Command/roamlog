@@ -73,15 +73,13 @@ export function AttachmentPreview({
   /** `composer` = the draft tile, `message` = a sent message tile (own test id). */
   variant?: "composer" | "message";
 }) {
-  const thumbTestId =
-    variant === "message" ? "message-attachment-thumb" : "input-attachment-thumb";
-  const metadata = readImageMetadata(
-    attachment.content?.[0]?.providerMetadata,
-  );
+  const thumbTestId = variant === "message" ? "message-attachment-thumb" : "input-attachment-thumb";
+  const metadata = readImageMetadata(attachment.content?.[0]?.providerMetadata);
   const localUrl = useLocalPreview(attachment);
   const url = uploadedUrl(attachment) ?? localUrl;
   const contentType = attachment.contentType ?? metadata?.mimeType ?? "";
   const isImage = contentType.startsWith("image");
+  const failed = attachment.status.type === "incomplete" || attachment.status.type === "error";
 
   return (
     <div
@@ -118,6 +116,16 @@ export function AttachmentPreview({
             className="size-5 animate-spin rounded-full border-2 border-ink/25 border-t-ink"
           />
           <span className="sr-only">正在上传</span>
+        </div>
+      ) : null}
+
+      {failed ? (
+        <div
+          className="absolute inset-x-0 bottom-0 bg-accent-red/85 px-1.5 py-1 text-center text-[9px] leading-3 text-white"
+          data-testid="input-attachment-error"
+          role="status"
+        >
+          上传失败
         </div>
       ) : null}
 
