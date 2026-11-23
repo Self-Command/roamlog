@@ -17,7 +17,18 @@ import {
   Skeleton,
 } from "@roamlog/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Link2, LogOut, Mail, ShieldCheck, Smartphone, TriangleAlert } from "lucide-react";
+import {
+  KeyRound,
+  Link2,
+  LogOut,
+  Mail,
+  Monitor,
+  ShieldCheck,
+  Smartphone,
+  Tablet,
+  TriangleAlert,
+  Tv,
+} from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent, type ReactNode } from "react";
 
@@ -31,6 +42,7 @@ import {
   verifyCurrentPassword,
 } from "@/lib/api/auth";
 import { isApiError } from "@/lib/api";
+import { groupSessionsByDevice, type DeviceKind } from "@/lib/device-sessions";
 import {
   MY_SESSIONS_QUERY_KEY,
   deleteMyAccount,
@@ -63,43 +75,19 @@ function Notice({ tone, children }: { tone: "ok" | "error"; children: ReactNode 
   );
 }
 
-/**
- * Human label for a stored user agent.
- *
- * Better Auth saves the raw header, which is the only device identity the API
- * exposes. Order matters: Chrome's UA also contains `Safari/` and Android's
- * contains `Linux`, so the narrower checks run first.
- */
-export function describeDevice(userAgent: string | null): string {
-  if (!userAgent?.trim()) return "未知设备";
-  const ua = userAgent;
-  const browser = /Edg\//i.test(ua)
-    ? "Edge"
-    : /OPR\/|Opera/i.test(ua)
-      ? "Opera"
-      : /Firefox\//i.test(ua)
-        ? "Firefox"
-        : /Chrome\/|CriOS/i.test(ua)
-          ? "Chrome"
-          : /Safari\//i.test(ua)
-            ? "Safari"
-            : /curl\//i.test(ua)
-              ? "命令行客户端"
-              : /node/i.test(ua)
-                ? "脚本客户端"
-                : "浏览器";
-  const platform = /Android/i.test(ua)
-    ? "Android"
-    : /iPhone|iPad|iPod/i.test(ua)
-      ? "iOS"
-      : /Windows/i.test(ua)
-        ? "Windows"
-        : /Mac OS X|Macintosh/i.test(ua)
-          ? "macOS"
-          : /Linux/i.test(ua)
-            ? "Linux"
-            : "未知系统";
-  return `${browser} · ${platform}`;
+function DeviceIcon({ kind }: { kind: DeviceKind }) {
+  switch (kind) {
+    case "mobile":
+      return <Smartphone aria-hidden="true" className="size-4" />;
+    case "tablet":
+      return <Tablet aria-hidden="true" className="size-4" />;
+    case "tv":
+      return <Tv aria-hidden="true" className="size-4" />;
+    case "desktop":
+      return <Monitor aria-hidden="true" className="size-4" />;
+    default:
+      return <Smartphone aria-hidden="true" className="size-4" />;
+  }
 }
 
 function formatMoment(value: string): string {
@@ -154,7 +142,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingOthers, setRevokingOthers] = useState(false);
   const [revokeAllOpen, setRevokeAllOpen] = useState(false);
-  const [sessionsExpanded, setSessionsExpanded] = useState(false);
+  const [devicesExpanded, setDevicesExpanded] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -200,13 +188,36 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
   });
 
   const revokeMutation = useMutation({
-    mutationFn: (id: string) => revokeMySession(id),
-    onMutate: (id: string) => setRevokingId(id),
-    onSuccess: (_data, id) => {
-      setDeviceNotice(
-        id === currentSessionId ? "当前设备已退出登录。" : "该设备已退出登录。",
+    mutationFn: async ({
+      sessionIds,
+    }: {
+      deviceId: string;
+      sessionIds: readonly string[];
+      isCurrent: boolean;
+    }) => {
+      const ordered = [...sessionIds].sort(
+        (left, right) => Number(left === currentSessionId) - Number(right === currentSessionId),
       );
+      for (const id of ordered) {
+        try {
+          await revokeMySession(id);
+        } catch (error) {
+          if (!(isApiError(error) && error.status === 404)) {
+            throw error;
+          }
+        }
+      }
+    },
+    onMutate: ({ deviceId }) => setRevokingId(deviceId),
+    onSuccess: (_data, { isCurrent }) => {
       setDeviceError(null);
+      if (isCurrent) {
+        setDeviceNotice("当前设备已退出登录。");
+        void signOut().catch(() => undefined);
+        window.location.assign("/login");
+        return;
+      }
+      setDeviceNotice("该设备上的所有登录会话已退出。");
     },
     onError: () => {
       setDeviceError("退出该设备失败，请稍后重试。");
@@ -251,9 +262,10 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
 
   const twoFactorEnabled = securitySessionQuery.data?.twoFactorEnabled === true;
   const sessions = sessionsQuery.data ?? [];
-  const visibleSessions = sessionsExpanded ? sessions : sessions.slice(0, SESSIONS_PAGE_SIZE);
-  const hiddenSessionCount = Math.max(0, sessions.length - visibleSessions.length);
-  const otherSessionCount = sessions.filter((session) => session.id !== currentSessionId).length;
+  const devices = groupSessionsByDevice(sessions, currentSessionId);
+  const visibleDevices = devicesExpanded ? devices : devices.slice(0, SESSIONS_PAGE_SIZE);
+  const hiddenDeviceCount = Math.max(0, devices.length - visibleDevices.length);
+  const otherDeviceCount = devices.filter((device) => !device.isCurrent).length;
 
   function requestPasswordChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -316,9 +328,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
 
       {confirm ? (
         <Dialog
-          open={
-            confirm.tone === "primary" ? emailConfirmOpen : passwordConfirmOpen
-          }
+          open={confirm.tone === "primary" ? emailConfirmOpen : passwordConfirmOpen}
           onOpenChange={(open) => {
             if (!open) {
               if (confirm.tone === "primary") setEmailConfirmOpen(false);
@@ -444,7 +454,12 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
             </div>
           ) : null}
 
-          <Button type="submit" variant="primary" className="mt-5" disabled={passwordMutation.isPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="mt-5"
+            disabled={passwordMutation.isPending}
+          >
             {passwordMutation.isPending ? "保存中…" : "修改密码"}
           </Button>
         </form>
@@ -522,11 +537,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={twoFactorEnabled ? "green" : "slate"}>
-              {securitySessionQuery.isLoading
-                ? "读取中"
-                : twoFactorEnabled
-                  ? "已开启"
-                  : "未开启"}
+              {securitySessionQuery.isLoading ? "读取中" : twoFactorEnabled ? "已开启" : "未开启"}
             </Badge>
             <Button type="button" variant="ghost" asChild>
               <Link href="/settings/security">
@@ -548,7 +559,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
               <p className="type-eyebrow">SESSIONS</p>
               <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">登录设备</h2>
               <p className="mt-2 text-xs leading-5 text-muted">
-                共 {sessions.length} 个设备会话；退出后该设备需要重新登录。
+                共 {devices.length} 台设备 · {sessions.length} 个有效会话；同一设备只显示一次。
               </p>
             </div>
           </div>
@@ -556,9 +567,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
             type="button"
             variant="danger"
             size="sm"
-            disabled={
-              revokingOthers || revokeOthersMutation.isPending || otherSessionCount === 0
-            }
+            disabled={revokingOthers || revokeOthersMutation.isPending || otherDeviceCount === 0}
             onClick={() => setRevokeAllOpen(true)}
           >
             <LogOut aria-hidden="true" />
@@ -600,70 +609,82 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
               }
             />
           </div>
-        ) : sessions.length === 0 ? (
+        ) : devices.length === 0 ? (
           <p className="mt-4 rounded-control border border-hairline bg-surface-1 px-3 py-6 text-center text-xs text-muted">
             没有仍在有效的设备会话。
           </p>
         ) : (
           <ul className="mt-4 divide-y divide-hairline">
-            {visibleSessions.map((session) => {
-              const isCurrent = session.id === currentSessionId;
-              return (
-                <li
-                  key={session.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
-                >
+            {visibleDevices.map((device) => (
+              <li
+                key={device.id}
+                aria-label={`设备：${device.profile.label}`}
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-control border border-hairline bg-surface-2 text-body">
+                    <DeviceIcon kind={device.profile.kind} />
+                  </span>
                   <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-sm text-ink">
-                      <span className="truncate">{describeDevice(session.userAgent)}</span>
-                      {isCurrent ? <Badge tone="blue">当前设备</Badge> : null}
+                    <p className="flex flex-wrap items-center gap-2 text-sm text-ink">
+                      <span className="truncate">{device.profile.label}</span>
+                      {device.isCurrent ? <Badge tone="blue">当前设备</Badge> : null}
+                      {device.sessionCount > 1 ? (
+                        <Badge tone="neutral">{device.sessionCount} 次登录</Badge>
+                      ) : null}
                     </p>
+                    <p className="mt-1 text-[11px] leading-5 text-muted">{device.profile.detail}</p>
                     <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
-                      {session.ip ?? "未知 IP"} · 登录于 {formatMoment(session.createdAt)} · 有效至{" "}
-                      {formatMoment(session.expiresAt)}
+                      {device.ip ?? "未知 IP"} · 最近登录 {formatMoment(device.loginAt)} · 有效至{" "}
+                      {formatMoment(device.expiresAt)}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={revokingId === session.id}
-                    onClick={() => {
-                      setDeviceNotice(null);
-                      setDeviceError(null);
-                      revokeMutation.mutate(session.id);
-                    }}
-                  >
-                    {revokingId === session.id
-                      ? "退出中…"
-                      : isCurrent
-                        ? "退出当前设备"
-                        : "退出此设备"}
-                  </Button>
-                </li>
-              );
-            })}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={revokingId === device.id}
+                  onClick={() => {
+                    setDeviceNotice(null);
+                    setDeviceError(null);
+                    revokeMutation.mutate({
+                      deviceId: device.id,
+                      sessionIds: device.sessionIds,
+                      isCurrent: device.isCurrent,
+                    });
+                  }}
+                >
+                  {revokingId === device.id
+                    ? "退出中…"
+                    : device.isCurrent
+                      ? "退出当前设备"
+                      : "退出此设备"}
+                </Button>
+              </li>
+            ))}
           </ul>
         )}
 
-        {hiddenSessionCount > 0 || sessionsExpanded ? (
+        {hiddenDeviceCount > 0 || devicesExpanded ? (
           <div className="mt-3 flex justify-center">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setSessionsExpanded((current) => !current)}
+              onClick={() => setDevicesExpanded((current) => !current)}
             >
-              {sessionsExpanded
-                ? "收起设备列表"
-                : `显示其余 ${hiddenSessionCount} 个设备`}
+              {devicesExpanded ? "收起设备列表" : `显示其余 ${hiddenDeviceCount} 台设备`}
             </Button>
           </div>
         ) : null}
 
         <Separator className="mt-4" />
         <p className="mt-4 flex items-start gap-2 text-[11px] leading-5 text-muted">
-          <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-yellow" />
+          <TriangleAlert
+            aria-hidden="true"
+            className="mt-0.5 size-3.5 shrink-0 text-accent-yellow"
+          />
           在公共电脑上使用后请退出登录；如果发现陌生设备，请先修改密码再退出该设备。
         </p>
       </section>
