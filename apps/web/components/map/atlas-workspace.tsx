@@ -11,24 +11,12 @@ import {
   Select,
   Skeleton,
 } from "@roamlog/ui";
-import {
-  ArrowUpRight,
-  Compass,
-  Globe2,
-  List,
-  Map as MapIcon,
-  MapPin,
-  Search,
-} from "lucide-react";
+import { ArrowUpRight, Compass, Globe2, List, Map as MapIcon, MapPin, Search } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  formatDateRange,
-  getTripStatusLabel,
-  getTripStatusTone,
-} from "@/lib/trip-presentation";
+import { formatDateRange, getTripStatusLabel, getTripStatusTone } from "@/lib/trip-presentation";
 
 import { useAtlasData } from "./atlas-data";
 import { AtlasMap, type AtlasPoint } from "./atlas-map";
@@ -45,9 +33,7 @@ const GlobeView = dynamic(() => import("./globe-view"), {
   ssr: false,
   loading: () => (
     <div role="status" className="flex min-h-80 items-center justify-center bg-black">
-      <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
-        LOADING GLOBE…
-      </p>
+      <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted">LOADING GLOBE…</p>
     </div>
   ),
 });
@@ -134,9 +120,10 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
   const filteredTrips = useMemo(
     () =>
       trips.filter((trip) => {
-        const text = `${trip.title} ${trip.destinations.join(" ")} ${trip.tags.join(" ")} ${trip.countryCodes
-          .map((code) => countryLabel(code))
-          .join(" ")}`.toLocaleLowerCase("zh-CN");
+        const text =
+          `${trip.title} ${trip.destinations.join(" ")} ${trip.tags.join(" ")} ${trip.countryCodes
+            .map((code) => countryLabel(code))
+            .join(" ")}`.toLocaleLowerCase("zh-CN");
         return (
           (!query.trim() || text.includes(query.trim().toLocaleLowerCase("zh-CN"))) &&
           (status === "all" || trip.status === status) &&
@@ -149,10 +136,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
   const groups = useMemo(() => {
     const map = new Map<string, Trip[]>();
     filteredTrips.forEach((trip) =>
-      map.set(trip.startDate.slice(0, 4), [
-        ...(map.get(trip.startDate.slice(0, 4)) ?? []),
-        trip,
-      ]),
+      map.set(trip.startDate.slice(0, 4), [...(map.get(trip.startDate.slice(0, 4)) ?? []), trip]),
     );
     return [...map.entries()].sort(([left], [right]) => right.localeCompare(left));
   }, [filteredTrips]);
@@ -260,20 +244,6 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
     </>
   );
 
-  if (trips.length === 0) {
-    return (
-      <div>
-        {header}
-        <EmptyState
-          className="mt-6"
-          icon={Globe2}
-          title="还没有旅行足迹"
-          description="创建旅行并添加带经纬度的停靠点后，这里会显示地图标记。"
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {header}
@@ -350,41 +320,41 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
                   地球视图加载失败，已回到平面地图。
                 </p>
               ) : null}
-              {points.length > 0 ? (
-                mapProjection === "globe" ? (
-                  <GlobeView
-                    points={points}
-                    photos={photos}
-                    showPhotos={showPhotos}
-                    focusPhotosToken={focusPhotosToken}
-                    onSelectPhotoGroup={setActivePhotoKey}
-                    onEnterMap={enterFlatMap}
-                    onError={() => {
-                      setGlobeFailed(true);
-                      setMapProjection("flat");
-                    }}
-                  />
-                ) : (
-                  <AtlasMap
-                    points={points}
-                    selectedTripId={selected?.id}
-                    onSelectTrip={setSelectedId}
-                    photos={photos}
-                    showPhotos={showPhotos}
-                    focusPhotosToken={focusPhotosToken}
-                    onSelectPhotoGroup={setActivePhotoKey}
-                  />
-                )
+              {mapProjection === "globe" ? (
+                <GlobeView
+                  points={points}
+                  photos={photos}
+                  showPhotos={showPhotos}
+                  focusPhotosToken={focusPhotosToken}
+                  onSelectPhotoGroup={setActivePhotoKey}
+                  onEnterMap={enterFlatMap}
+                  onError={() => {
+                    setGlobeFailed(true);
+                    setMapProjection("flat");
+                  }}
+                />
               ) : (
-                <div className="flex min-h-80 items-center justify-center p-6">
-                  <EmptyState
-                    className="w-full max-w-md px-4 py-10"
-                    icon={Globe2}
-                    title="还没有可显示的地图坐标"
-                    description="停靠点补齐经纬度后，这里会出现标记。"
-                  />
-                </div>
+                <AtlasMap
+                  points={points}
+                  selectedTripId={selected?.id}
+                  onSelectTrip={setSelectedId}
+                  photos={photos}
+                  showPhotos={showPhotos}
+                  focusPhotosToken={focusPhotosToken}
+                  onSelectPhotoGroup={setActivePhotoKey}
+                />
               )}
+              {points.length === 0 ? (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+                  <div className="max-w-md rounded-card border border-hairline-strong bg-canvas/90 px-5 py-4 text-center backdrop-blur-sm">
+                    <Globe2 aria-hidden="true" className="mx-auto size-5 text-muted" />
+                    <p className="mt-2 text-sm font-medium text-ink">还没有可显示的地图坐标</p>
+                    <p className="mt-1 text-[11px] leading-5 text-muted">
+                      地图已经就绪；停靠点补齐经纬度后会显示标记。
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="min-h-80 p-4">
@@ -615,9 +585,7 @@ export function AtlasWorkspace({ workspaceSlug }: { workspaceSlug: string }) {
           ) : null}
         </aside>
       </div>
-      <p className="text-[10px] leading-5 text-stone">
-        缺少坐标的停靠点不会显示在地图上。
-      </p>
+      <p className="text-[10px] leading-5 text-stone">缺少坐标的停靠点不会显示在地图上。</p>
     </div>
   );
 }

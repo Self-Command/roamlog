@@ -142,7 +142,7 @@ export function AppShellView({
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-hairline bg-black/80 px-4 backdrop-blur-xl sm:gap-3 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-hairline bg-canvas/80 px-4 backdrop-blur-xl sm:gap-3 sm:px-6 lg:px-8">
           <IconButton
             type="button"
             variant="outline"

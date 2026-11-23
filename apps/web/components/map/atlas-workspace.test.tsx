@@ -79,7 +79,7 @@ describe("AtlasWorkspace data truthfulness", () => {
     expect(screen.queryByText(/FIXTURE COORDINATES/)).not.toBeInTheDocument();
   });
 
-  it("shows an empty state without fixture markers when no stop has coordinates", async () => {
+  it("keeps the map rendered when no stop has coordinates", async () => {
     harness.adapter = createFakeAdapter({
       trips: trips(),
       stops: [
@@ -95,9 +95,19 @@ describe("AtlasWorkspace data truthfulness", () => {
     renderWithQuery(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
 
     expect(await screen.findByText("还没有可显示的地图坐标")).toBeInTheDocument();
+    expect(screen.getByTestId("world-map")).toBeInTheDocument();
     expect(screen.getByText(/另有 1 个停靠点缺少经纬度/)).toBeInTheDocument();
-    expect(screen.queryByTestId("world-map")).not.toBeInTheDocument();
     expect(screen.queryByText(/9 个国家/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the map rendered for a workspace with no trips", async () => {
+    harness.adapter = createFakeAdapter({ trips: [], stops: [] });
+
+    renderWithQuery(<AtlasWorkspace workspaceSlug="roamlog-crew" />);
+
+    expect(await screen.findByTestId("world-map")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "世界足迹" })).toBeInTheDocument();
+    expect(screen.getByText("还没有可显示的地图坐标")).toBeInTheDocument();
   });
 
   it("offers a flat/globe switch without leaving the map route", async () => {

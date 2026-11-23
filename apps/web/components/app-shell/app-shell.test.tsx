@@ -89,6 +89,14 @@ describe("Web application shell", () => {
     expect(container.querySelectorAll("button.bg-ink").length).toBeLessThanOrEqual(1);
   });
 
+  it("uses the active theme canvas for the sticky top bar", () => {
+    renderShell();
+
+    const header = screen.getByRole("banner");
+    expect(header.className).toContain("bg-canvas/80");
+    expect(header.className).not.toContain("bg-black");
+  });
+
   it("renders five accessible items in the mobile bottom navigation", () => {
     renderShell({ pathname: `/w/${currentWorkspace.slug}/trips` });
 
@@ -236,7 +244,10 @@ describe("Web top bar truthfulness", () => {
     });
 
     const header = screen.getByRole("banner");
-    const controls = [...within(header).getAllByRole("button"), ...within(header).getAllByRole("link")];
+    const controls = [
+      ...within(header).getAllByRole("button"),
+      ...within(header).getAllByRole("link"),
+    ];
 
     expect(controls.length).toBeGreaterThan(0);
 
