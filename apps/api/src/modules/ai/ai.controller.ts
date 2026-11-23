@@ -203,6 +203,10 @@ export class AiController {
 
     const onClose = (): void => {
       closed = true;
+      // A resumable producer keeps running so another tab can attach. The
+      // fallback stream has no replay buffer, so a disconnected browser must
+      // abort it and let the planner persist the cancelled terminal state.
+      if (!resumable) lifecycle.abort();
     };
     res.on("close", onClose);
     res.on("error", onClose);
@@ -212,14 +216,13 @@ export class AiController {
         await pipeStringStream(resumable, res, () => closed);
       } else if (directFrames) {
         for await (const frame of directFrames) {
-          // The producer already owns the conversation/message lifecycle. If
-          // Redis is temporarily unavailable, keep draining this fallback
-          // stream after the client disconnects so the run still reaches its
-          // terminal persistence path instead of leaving AiStream "active".
-          // `writeChunk` only writes while the socket is alive; a failed write
-          // must not cancel the remaining generator.
-          if (closed || res.writableEnded || res.destroyed) continue;
-          await writeChunk(res, frame);
+          // Without a resumable producer there is nobody left to consume this
+          // fallback stream after the browser disconnects. Close the generator
+          // so the planner aborts the upstream and persists
+          // assistant=incomplete/cancelled instead of writing into a dead
+          // socket or leaving AiStream active.
+          if (closed || res.writableEnded || res.destroyed) break;
+          if (!(await writeChunk(res, frame))) break;
         }
       }
     } catch (error) {
