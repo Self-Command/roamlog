@@ -18,6 +18,7 @@ import {
   textValue,
 } from "./http.js";
 import { parseSseStream, postSse } from "./sse.js";
+import { createToolNameCodec } from "./tool-name-codec.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 
@@ -37,6 +38,7 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
     if (!this.settings.baseUrl) {
       throw new Error("AI_BASE_URL is not configured");
     }
+    const toolNames = createToolNameCodec(input.tools);
 
     const payload = await postJson({
       url: `${this.settings.baseUrl}/messages`,
@@ -50,12 +52,12 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
         system: input.system,
         max_tokens: input.maxTokens,
         tools: input.tools.map((tool) => ({
-          name: tool.name,
+          name: toolNames.toWire(tool.name),
           description: tool.description,
           input_schema: tool.parameters,
         })),
         tool_choice: { type: "auto" },
-        messages: input.messages.map(toMessage),
+        messages: input.messages.map((message) => toMessage(message, toolNames.toWire)),
       },
     });
 
@@ -72,7 +74,7 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
         if (name) {
           toolCalls.push({
             id: textValue(item.id) ?? `toolu_${name}`,
-            name,
+            name: toolNames.toInternal(name),
             input: parseArguments(item.input),
           });
         }
@@ -103,6 +105,7 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
     if (!this.settings.baseUrl) {
       throw new Error("AI_BASE_URL is not configured");
     }
+    const toolNames = createToolNameCodec(input.tools);
 
     const response = await postSse(`${this.settings.baseUrl}/messages`, {
       headers: {
@@ -116,12 +119,12 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
         system: input.system,
         max_tokens: input.maxTokens,
         tools: input.tools.map((tool) => ({
-          name: tool.name,
+          name: toolNames.toWire(tool.name),
           description: tool.description,
           input_schema: tool.parameters,
         })),
         tool_choice: { type: "auto" },
-        messages: input.messages.map(toMessage),
+        messages: input.messages.map((message) => toMessage(message, toolNames.toWire)),
         stream: true,
       },
     });
@@ -165,7 +168,7 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
               const initialInput = asRecord(block.input);
               slots.set(index, {
                 id: textValue(block.id) ?? "",
-                name,
+                name: toolNames.toInternal(name),
                 argumentsJson:
                   initialInput && Object.keys(initialInput).length > 0
                     ? JSON.stringify(initialInput)
@@ -287,7 +290,10 @@ export function base64Payload(dataUrl: string): string {
   return dataUrl.startsWith("data:") && comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 }
 
-function toMessage(message: AiConversationMessage): Record<string, unknown> {
+function toMessage(
+  message: AiConversationMessage,
+  toWireName: (name: string) => string,
+): Record<string, unknown> {
   if (message.role === "user") {
     const images = message.images ?? [];
     if (images.length === 0) {
@@ -296,9 +302,7 @@ function toMessage(message: AiConversationMessage): Record<string, unknown> {
     return {
       role: "user",
       content: [
-        ...(message.content.trim().length > 0
-          ? [{ type: "text", text: message.content }]
-          : []),
+        ...(message.content.trim().length > 0 ? [{ type: "text", text: message.content }] : []),
         ...images.map((image) => ({
           type: "image",
           source: {
@@ -327,7 +331,7 @@ function toMessage(message: AiConversationMessage): Record<string, unknown> {
       ...message.toolCalls.map((call) => ({
         type: "tool_use",
         id: call.id,
-        name: call.name,
+        name: toWireName(call.name),
         input: call.input,
       })),
     ],

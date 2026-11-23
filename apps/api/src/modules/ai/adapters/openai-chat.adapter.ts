@@ -18,6 +18,7 @@ import {
   textValue,
 } from "./http.js";
 import { parseSseStream, postSse } from "./sse.js";
+import { createToolNameCodec, type ToolNameCodec } from "./tool-name-codec.js";
 
 /**
  * OpenAI Chat Completions adapter.
@@ -36,6 +37,7 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
     if (!this.settings.baseUrl) {
       throw new Error("AI_BASE_URL is not configured");
     }
+    const toolNames = createToolNameCodec(input.tools);
 
     const payload = await postJson({
       url: `${this.settings.baseUrl}/chat/completions`,
@@ -47,12 +49,12 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
         model: this.settings.model,
         messages: [
           { role: "system", content: input.system },
-          ...input.messages.flatMap(toMessages),
+          ...input.messages.flatMap((message) => toMessages(message, toolNames)),
         ],
         tools: input.tools.map((tool) => ({
           type: "function",
           function: {
-            name: tool.name,
+            name: toolNames.toWire(tool.name),
             description: tool.description,
             parameters: tool.parameters,
           },
@@ -79,7 +81,7 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
       return [
         {
           id: textValue(call.id) ?? `call_${name}`,
-          name,
+          name: toolNames.toInternal(name),
           input: parseArguments(fn.arguments),
         },
       ];
@@ -105,6 +107,7 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
     if (!this.settings.baseUrl) {
       throw new Error("AI_BASE_URL is not configured");
     }
+    const toolNames = createToolNameCodec(input.tools);
 
     const response = await postSse(`${this.settings.baseUrl}/chat/completions`, {
       headers: {
@@ -116,12 +119,12 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
         model: this.settings.model,
         messages: [
           { role: "system", content: input.system },
-          ...input.messages.flatMap(toMessages),
+          ...input.messages.flatMap((message) => toMessages(message, toolNames)),
         ],
         tools: input.tools.map((tool) => ({
           type: "function",
           function: {
-            name: tool.name,
+            name: toolNames.toWire(tool.name),
             description: tool.description,
             parameters: tool.parameters,
           },
@@ -178,7 +181,7 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
           const fn = asRecord(call?.function);
           const name = textValue(fn?.name);
           if (name) {
-            slot.name = name;
+            slot.name = toolNames.toInternal(name);
           }
           const fragment = textValue(fn?.arguments);
           if (fragment) {
@@ -231,9 +234,7 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
  * it is the absence of the parameter, not a value the wire format defines.
  * Nothing else is mapped or "improved" — the string goes through verbatim.
  */
-export function reasoningEffortField(
-  settings: AiSettings,
-): Record<string, string> {
+export function reasoningEffortField(settings: AiSettings): Record<string, string> {
   const effort = settings.reasoningEffort;
   return effort && effort !== "none" ? { reasoning_effort: effort } : {};
 }
@@ -287,7 +288,10 @@ function toToolCalls(
  * `data:` URL produced by `AiPlanService` from the media pipeline, so the
  * gateway never needs egress to Roamlog's object storage.
  */
-function toMessages(message: AiConversationMessage): Record<string, unknown>[] {
+function toMessages(
+  message: AiConversationMessage,
+  toolNames: ToolNameCodec,
+): Record<string, unknown>[] {
   if (message.role === "user") {
     const images = message.images ?? [];
     if (images.length === 0) {
@@ -297,9 +301,7 @@ function toMessages(message: AiConversationMessage): Record<string, unknown>[] {
       {
         role: "user",
         content: [
-          ...(message.content.trim().length > 0
-            ? [{ type: "text", text: message.content }]
-            : []),
+          ...(message.content.trim().length > 0 ? [{ type: "text", text: message.content }] : []),
           ...images.map((image) => ({
             type: "image_url",
             image_url: { url: image.dataUrl },
@@ -322,7 +324,7 @@ function toMessages(message: AiConversationMessage): Record<string, unknown>[] {
       tool_calls: message.toolCalls.map((call) => ({
         id: call.id,
         type: "function",
-        function: { name: call.name, arguments: JSON.stringify(call.input) },
+        function: { name: toolNames.toWire(call.name), arguments: JSON.stringify(call.input) },
       })),
     },
   ];

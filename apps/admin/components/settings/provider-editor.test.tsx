@@ -276,6 +276,7 @@ describe("ProviderEditor", () => {
       secrets: { apiKey: "sk-test" },
     });
     expect(input).not.toHaveProperty("patch");
+    expect(api.refreshModels).toHaveBeenCalledWith(PROVIDER_ID, 1);
     expect(onSaved).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(api.update).not.toHaveBeenCalled();
@@ -327,6 +328,7 @@ describe("ProviderEditor", () => {
         expectedVersion: 4,
       }),
     );
+    expect(api.refreshModels).toHaveBeenCalledWith(PROVIDER_ID, 5);
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 

@@ -484,6 +484,23 @@ export function ProviderEditor({
     };
   }
 
+  async function syncAiModelCatalog(providerId: string, expectedVersion: number): Promise<void> {
+    if (group !== "ai" || !adapter?.capabilities.includes("model_discovery")) {
+      return;
+    }
+    const hasUsableKey =
+      Boolean(selectedSecrets.apiKey?.trim()) || savedSecrets.get("apiKey")?.hasValue === true;
+    if (!hasUsableKey) {
+      return;
+    }
+    try {
+      await api.refreshModels(providerId, expectedVersion);
+    } catch {
+      // The provider is already saved. Reopening the editor exposes the
+      // manual "获取模型" retry if this best-effort catalog sync failed.
+    }
+  }
+
   async function save() {
     if (saving || probing) {
       return;
@@ -525,6 +542,7 @@ export function ProviderEditor({
             : {}),
         };
         const created = await api.create(input);
+        await syncAiModelCatalog(created.id, created.version);
         await onSaved(created);
         onOpenChange(false);
         return;
@@ -547,6 +565,7 @@ export function ProviderEditor({
         });
         expectedVersion += 1;
       }
+      await syncAiModelCatalog(provider.id, expectedVersion);
       await onSaved(updated);
       onOpenChange(false);
     } catch (error) {

@@ -18,6 +18,7 @@ import {
   textValue,
 } from "./http.js";
 import { parseSseStream, postSse } from "./sse.js";
+import { createToolNameCodec, type ToolNameCodec } from "./tool-name-codec.js";
 
 /**
  * OpenAI Responses API adapter.
@@ -35,6 +36,7 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
     if (!this.settings.baseUrl) {
       throw new Error("AI_BASE_URL is not configured");
     }
+    const toolNames = createToolNameCodec(input.tools);
 
     const payload = await postJson({
       url: `${this.settings.baseUrl}/responses`,
@@ -45,10 +47,10 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
       body: {
         model: this.settings.model,
         instructions: input.system,
-        input: input.messages.flatMap(toInputItems),
+        input: input.messages.flatMap((message) => toInputItems(message, toolNames)),
         tools: input.tools.map((tool) => ({
           type: "function",
-          name: tool.name,
+          name: toolNames.toWire(tool.name),
           description: tool.description,
           parameters: tool.parameters,
         })),
@@ -71,7 +73,7 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
         if (name) {
           toolCalls.push({
             id: textValue(item.call_id) ?? textValue(item.id) ?? `call_${name}`,
-            name,
+            name: toolNames.toInternal(name),
             input: parseArguments(item.arguments),
           });
         }
@@ -107,6 +109,7 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
     if (!this.settings.baseUrl) {
       throw new Error("AI_BASE_URL is not configured");
     }
+    const toolNames = createToolNameCodec(input.tools);
 
     const response = await postSse(`${this.settings.baseUrl}/responses`, {
       headers: {
@@ -117,10 +120,10 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
       body: {
         model: this.settings.model,
         instructions: input.system,
-        input: input.messages.flatMap(toInputItems),
+        input: input.messages.flatMap((message) => toInputItems(message, toolNames)),
         tools: input.tools.map((tool) => ({
           type: "function",
-          name: tool.name,
+          name: toolNames.toWire(tool.name),
           description: tool.description,
           parameters: tool.parameters,
         })),
@@ -165,7 +168,7 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
             if (name) {
               slots.set(index, {
                 id: textValue(item.call_id) ?? textValue(item.id) ?? "",
-                name,
+                name: toolNames.toInternal(name),
                 argumentsJson: textValue(item.arguments) ?? "",
               });
             }
@@ -285,7 +288,10 @@ export function reasoningField(settings: AiSettings): Record<string, unknown> {
   return effort && effort !== "none" ? { reasoning: { effort } } : {};
 }
 
-function toInputItems(message: AiConversationMessage): Record<string, unknown>[] {
+function toInputItems(
+  message: AiConversationMessage,
+  toolNames: ToolNameCodec,
+): Record<string, unknown>[] {
   if (message.role === "user") {
     const images = message.images ?? [];
     if (images.length === 0) {
@@ -322,7 +328,7 @@ function toInputItems(message: AiConversationMessage): Record<string, unknown>[]
     ...message.toolCalls.map((call) => ({
       type: "function_call",
       call_id: call.id,
-      name: call.name,
+      name: toolNames.toWire(call.name),
       arguments: JSON.stringify(call.input),
     })),
   ];
