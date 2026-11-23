@@ -83,7 +83,8 @@ describe("0009_media_motion migration", () => {
 
   it("keeps the Prisma model in step with the SQL", () => {
     expect(schema).toContain("model MediaMotion {");
-    expect(schema).toContain("mediaId      String    @unique @db.Uuid");
+    // Prisma formatter alignment is not part of the schema contract.
+    expect(schema).toMatch(/mediaId\s+String\s+@unique\s+@db\.Uuid/);
     expect(schema).toContain("motion          MediaMotion?");
     expect(schema).toContain('@@map("MediaMotion")');
   });
