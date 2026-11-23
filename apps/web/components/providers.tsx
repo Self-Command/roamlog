@@ -54,9 +54,12 @@ export function Providers({ children }: ProvidersProps) {
 function SessionBootstrap() {
   const session = useSessionQuery();
   useEffect(() => {
-    if (!session.isSuccess) return;
+    // Public auth pages legitimately finish the session query with `null`.
+    // Calling the device endpoint there produces a noisy 401 in the browser
+    // console even though it is intentionally ignored; wait for a real user.
+    if (!session.isSuccess || !session.data) return;
     void ensureDeviceIdentity().catch(() => undefined);
-  }, [session.isSuccess]);
+  }, [session.data, session.isSuccess]);
   return null;
 }
 
