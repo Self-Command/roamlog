@@ -16,7 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ChatStatus = "submitted" | "streaming" | "ready" | "error";
 
-export function useScrollToBottom() {
+export function useScrollToBottom({ autoScroll = true }: { autoScroll?: boolean } = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -84,7 +84,7 @@ export function useScrollToBottom() {
     }
 
     const scrollIfNeeded = () => {
-      if (isAtBottomRef.current && !isUserScrollingRef.current) {
+      if (autoScroll && isAtBottomRef.current && !isUserScrollingRef.current) {
         const settle = () => {
           if (typeof container.scrollTo === "function") {
             container.scrollTo({ behavior: "instant", top: container.scrollHeight });
@@ -120,7 +120,7 @@ export function useScrollToBottom() {
       mutationObserver.disconnect();
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [autoScroll]);
 
   function onViewportEnter() {
     setIsAtBottom(true);
@@ -149,7 +149,13 @@ export function useScrollToBottom() {
   };
 }
 
-export function useMessages({ status }: { status: ChatStatus }) {
+export function useMessages({
+  status,
+  autoScroll = true,
+}: {
+  status: ChatStatus;
+  autoScroll?: boolean;
+}) {
   const {
     containerRef,
     endRef,
@@ -158,7 +164,7 @@ export function useMessages({ status }: { status: ChatStatus }) {
     onViewportEnter,
     onViewportLeave,
     reset,
-  } = useScrollToBottom();
+  } = useScrollToBottom({ autoScroll });
 
   const [hasSentMessage, setHasSentMessage] = useState(false);
 

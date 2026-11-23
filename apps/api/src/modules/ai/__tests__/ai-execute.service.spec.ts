@@ -19,6 +19,8 @@ import {
 } from "./ai-fixtures.js";
 
 const RUN_ID = "a".repeat(32);
+const CONVERSATION_ID = "01942f30-1200-7000-8000-000000000009";
+const ARTIFACT_ID = "01942f30-1200-7000-8000-000000000301";
 
 function plannedRun(overrides: Record<string, unknown> = {}) {
   return {
@@ -76,6 +78,88 @@ async function expectHttp(promise: Promise<unknown>, status: number, code: strin
 }
 
 describe("AiExecuteService", () => {
+  it("passes the artifact reference and conversation id through to the result", async () => {
+    const calls = [
+      {
+        tool: "artifacts.create",
+        args: { title: "Kyoto guide", kind: "text", brief: "A slow route through Kyoto." },
+      },
+    ];
+    const artifact = { id: ARTIFACT_ID, title: "Kyoto guide", kind: "text" as const };
+    const execute = vi.fn().mockResolvedValue({
+      ok: true,
+      payload: { artifactId: ARTIFACT_ID },
+      entityId: ARTIFACT_ID,
+      artifact,
+    });
+    const runStore = {
+      load: vi.fn().mockResolvedValue(
+        plannedRun({ conversationId: CONVERSATION_ID, plannedCalls: calls }),
+      ),
+      isConsumed: vi.fn().mockResolvedValue(false),
+      consume: vi.fn().mockResolvedValue(undefined),
+    };
+    const audit = { record: vi.fn().mockResolvedValue({ id: "audit-1" }) };
+    const service = new AiExecuteService(
+      { execute } as never,
+      runStore as never,
+      {
+        run: vi.fn(async (_scope: string, _key: string, operation: () => unknown) => operation()),
+      } as never,
+      audit as never,
+    );
+
+    const response = await service.execute(
+      actorStub() as never,
+      membershipStub() as never,
+      RUN_ID,
+      { calls, idempotencyKey: "execute-artifact-1" },
+    );
+
+    expect(execute).toHaveBeenCalledWith(
+      calls[0],
+      expect.objectContaining({ conversationId: CONVERSATION_ID, runId: RUN_ID }),
+    );
+    expect(response.results).toEqual([
+      {
+        tool: "artifacts.create",
+        ok: true,
+        entityId: ARTIFACT_ID,
+        artifact,
+      },
+    ]);
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.not.objectContaining({ artifact: expect.anything() }),
+      }),
+    );
+  });
+
+  it("keeps a legacy run without conversationId executable", async () => {
+    const execute = vi.fn().mockResolvedValue({ ok: true, payload: {} });
+    const runStore = {
+      load: vi.fn().mockResolvedValue(plannedRun()),
+      isConsumed: vi.fn().mockResolvedValue(false),
+      consume: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = new AiExecuteService(
+      { execute } as never,
+      runStore as never,
+      {
+        run: vi.fn(async (_scope: string, _key: string, operation: () => unknown) => operation()),
+      } as never,
+      { record: vi.fn().mockResolvedValue({ id: "audit-1" }) } as never,
+    );
+
+    await service.execute(actorStub() as never, membershipStub() as never, RUN_ID, {
+      calls: [{ tool: "trips.create", args: { title: "Kyoto" } }],
+      idempotencyKey: "execute-legacy-1",
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0]?.[1]).not.toHaveProperty("conversationId");
+  });
+
   it("executes only the submitted subset and reports each call", async () => {
     const { service, mocks, runStore, audit } = harness(plannedRun());
 

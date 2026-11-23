@@ -13,7 +13,12 @@ import { ProvidersModule } from "../providers/providers.module.js";
 import { SettingsModule } from "../settings/settings.module.js";
 import { TripsModule } from "../trips/trips.module.js";
 import { AI_ADAPTER_FACTORY, createAiAdapter } from "./adapters/index.js";
-import { AiConversationController } from "./ai-conversation.controller.js";
+import { AiArtifactController } from "./ai-artifact.controller.js";
+import { AiArtifactService } from "./ai-artifact.service.js";
+import {
+  AiConversationController,
+  AiPublicConversationController,
+} from "./ai-conversation.controller.js";
 import { AiConversationService } from "./ai-conversation.service.js";
 import { AiController } from "./ai.controller.js";
 import { AiExecuteService } from "./ai-execute.service.js";
@@ -48,13 +53,16 @@ import { AiToolbox } from "./ai-tools.js";
   controllers: [
     AiController,
     AiConversationController,
+    AiPublicConversationController,
     AiMessageVoteController,
+    AiArtifactController,
     AiRewriteController,
   ],
   providers: [
     AiSettingsResolver,
     AiConversationService,
     AiMessageVoteService,
+    AiArtifactService,
     // A token, not a snapshot: every request resolves `ai.*` from the settings
     // service (DB > env > default) before the adapter and the quota are used.
     { provide: AI_SETTINGS_SOURCE, useExisting: AiSettingsResolver },

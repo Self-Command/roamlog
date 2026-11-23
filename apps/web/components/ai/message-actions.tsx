@@ -8,15 +8,16 @@
  * - Copy/edit/regenerate/feedback are wired to the assistant-ui action-bar
  *   primitives. The edit primitive opens `EditComposer`, whose submit path
  *   truncates the tail and regenerates through the thread runtime.
- * - Upstream's SWR vote mutation is replaced by the runtime feedback adapter;
- *   the buttons are present even when a host has not configured persistence.
+ * - Upstream's SWR vote cache becomes the chat shell's provider keyed by the
+ *   remote conversation id; every action bar shares that single prefetch and
+ *   writes go to the same persisted vote endpoint.
  * - Text/toast feedback is replaced by primitive state and Chinese aria-labels.
  */
 
 import { ActionBarPrimitive, useAuiState } from "@assistant-ui/react";
 import { Button } from "@roamlog/ui";
-import { Copy, Pencil, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
-import { memo, useState } from "react";
+import { Check, Copy, Pencil, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
+import { memo, useCallback, useState } from "react";
 
 import { useAiVoteContext } from "./ai-vote-context";
 import { cn } from "./cn";
@@ -33,23 +34,26 @@ export function PureMessageActions({ role, isLoading, onEdit }: MessageActionsPr
   const { workspaceId, conversationId, votes, setVote } = useAiVoteContext();
   const loading = isLoading ?? running;
   const canPersistVote =
-    role === "assistant" && Boolean(workspaceId && conversationId && messageId);
+    role === "assistant" && Boolean(messageId && workspaceId && conversationId);
   const isUpvoted = messageId ? votes.get(messageId) : undefined;
   const [voteSaving, setVoteSaving] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
 
-  async function castVote(type: "up" | "down"): Promise<void> {
-    if (!messageId || voteSaving) return;
-    setVoteSaving(true);
-    setVoteError(null);
-    try {
-      await setVote(messageId, type);
-    } catch (error) {
-      setVoteError(error instanceof Error ? error.message : "反馈保存失败，请重试。");
-    } finally {
-      setVoteSaving(false);
-    }
-  }
+  const castVote = useCallback(
+    async (type: "up" | "down"): Promise<void> => {
+      if (!messageId || voteSaving) return;
+      setVoteSaving(true);
+      setVoteError(null);
+      try {
+        await setVote(messageId, type);
+      } catch (error) {
+        setVoteError(error instanceof Error ? error.message : "反馈保存失败，请重试。");
+      } finally {
+        setVoteSaving(false);
+      }
+    },
+    [messageId, setVote, voteSaving],
+  );
 
   if (loading) return null;
 
@@ -90,16 +94,21 @@ export function PureMessageActions({ role, isLoading, onEdit }: MessageActionsPr
         )
       ) : null}
 
-      <ActionBarPrimitive.Copy asChild>
+      <ActionBarPrimitive.Copy asChild copiedDuration={2_000}>
         <Button
           type="button"
           variant="ghost"
           size="sm"
           aria-label="复制"
           title="复制"
-          className="size-8 px-0"
+          className="group/copy size-8 px-0 data-[copied=true]:text-accent-green"
+          data-testid="message-copy"
         >
-          <Copy aria-hidden="true" className="size-3.5" />
+          <Copy aria-hidden="true" className="size-3.5 group-data-[copied=true]/copy:hidden" />
+          <Check
+            aria-hidden="true"
+            className="hidden size-3.5 group-data-[copied=true]/copy:block"
+          />
         </Button>
       </ActionBarPrimitive.Copy>
 

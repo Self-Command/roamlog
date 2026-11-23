@@ -230,6 +230,10 @@ export function MultimodalInput({
 
   const handleInputChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = event.target.value;
+    // Upstream `useLocalStorage` writes the draft with the input event. Waiting
+    // for the follow-up effect loses the draft when a user refreshes immediately.
+    if (value) window.localStorage.setItem(DRAFT_STORAGE_KEY, value);
+    else window.localStorage.removeItem(DRAFT_STORAGE_KEY);
     if (value.startsWith("/") && !value.includes(" ")) {
       setSlashOpen(true);
       setSlashQuery(value.slice(1));
@@ -417,7 +421,7 @@ export function MultimodalInput({
             submitMode="enter"
           />
 
-          <div className="flex items-center gap-1 px-1">
+          <div className="flex flex-wrap items-center gap-1 px-1">
             <Button
               aria-label="添加图片附件"
               className="shrink-0"
@@ -436,20 +440,23 @@ export function MultimodalInput({
             <ReasoningSelectorCompact workspaceId={workspaceId} />
 
             <div className="ml-auto flex shrink-0 items-center gap-1.5">
-              <StopButton />
-              <ComposerPrimitive.Send asChild>
-                <Button
-                  aria-label="发送"
-                  className="shrink-0"
-                  data-testid="send-button"
-                  disabled={!canSend || uploading || failed}
-                  size="sm"
-                  type="button"
-                  variant="primary"
-                >
-                  <ArrowUp aria-hidden="true" className="size-4" />
-                </Button>
-              </ComposerPrimitive.Send>
+              {running ? (
+                <StopButton />
+              ) : (
+                <ComposerPrimitive.Send asChild>
+                  <Button
+                    aria-label="发送"
+                    className="shrink-0"
+                    data-testid="send-button"
+                    disabled={!canSend || uploading || failed}
+                    size="sm"
+                    type="button"
+                    variant="primary"
+                  >
+                    <ArrowUp aria-hidden="true" className="size-4" />
+                  </Button>
+                </ComposerPrimitive.Send>
+              )}
             </div>
           </div>
 

@@ -11,7 +11,7 @@ import {
   DialogTitle,
   Input,
 } from "@roamlog/ui";
-import { ArrowDown, PanelLeft } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AppearanceMode } from "@roamlog/contracts";
@@ -20,11 +20,13 @@ import { applyAppearanceToDocument, saveAppearance } from "@/lib/api/appearance"
 
 import { AiMotionStyles } from "./ai-motion";
 import { AiVoteProvider } from "./ai-vote-context";
+import { MobileChatHeader } from "./chat-header";
 import { AssistantMessage, ThinkingMessage, UserMessage } from "./message";
 import { EditComposer } from "./message-editor";
 import { MultimodalInput } from "./multimodal-input";
 import type { SlashCommandHandlers } from "./slash-commands";
 import { useMessages, type ChatStatus } from "./use-messages";
+import { shareUrlFromThreadCustom, visibilityFromThreadCustom } from "./visibility-selector";
 
 /**
  * Conversation surface. The message viewport is ported from vercel/chatbot
@@ -37,12 +39,12 @@ import { useMessages, type ChatStatus } from "./use-messages";
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center gap-6 py-10 text-center sm:py-16">
+    <div className="flex flex-col items-center gap-3 py-4 text-center sm:gap-6 sm:py-16">
       <div className="space-y-2">
         <h2 className="font-serif text-2xl leading-tight tracking-[-0.02em] text-ink sm:text-3xl">
           先计划，后写入
         </h2>
-        <p className="mx-auto max-w-md text-sm leading-6 text-muted">
+        <p className="mx-auto max-w-md text-xs leading-5 text-muted sm:text-sm sm:leading-6">
           用一句话描述目的地、时间和预算。助手只做只读搜索并列出准备执行的操作，你确认后才会写入工作区。
         </p>
         <p className="type-meta text-stone">输入 / 查看会话命令</p>
@@ -58,11 +60,26 @@ export interface ChatThreadProps {
   onDeleteAll?: () => Promise<void>;
 }
 
+/**
+ * assistant-ui keeps a local thread id and the persisted id on the matching
+ * list item. Vote/share APIs only accept the persisted id, so resolve it in one
+ * place. A new, unsaved thread has no remote id and therefore no vote store.
+ */
+export function remoteConversationIdFor(
+  threadItems: readonly { id: string; remoteId?: string | undefined }[],
+  mainThreadId: string | null | undefined,
+): string | null {
+  if (!mainThreadId) return null;
+  return threadItems.find((item) => item.id === mainThreadId)?.remoteId ?? null;
+}
+
 export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThreadProps) {
   const aui = useAui();
-  const conversationId = useAuiState((state) => state.threads.mainThreadId);
   const currentItem = useAuiState((state) =>
     state.threads.threadItems.find((item) => item.id === state.threads.mainThreadId),
+  );
+  const remoteConversationId = useAuiState((state) =>
+    remoteConversationIdFor(state.threads.threadItems, state.threads.mainThreadId),
   );
   const status: ChatStatus = useAuiState((state) =>
     state.thread.isRunning ? "streaming" : "ready",
@@ -70,7 +87,22 @@ export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThre
   const awaitingFirstToken = useAuiState(
     (state) => state.thread.isRunning && state.thread.messages.at(-1)?.role !== "assistant",
   );
-  const { containerRef, endRef, isAtBottom, scrollToBottom } = useMessages({ status });
+  const messageCount = useAuiState((state) => state.thread.messages.length);
+  const { containerRef, endRef, isAtBottom, scrollToBottom } = useMessages({
+    status,
+    autoScroll: messageCount > 0,
+  });
+
+  useEffect(() => {
+    if (messageCount !== 0) return;
+    const container = containerRef.current;
+    if (!container) return;
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({ top: 0, behavior: "instant" });
+    } else {
+      container.scrollTop = 0;
+    }
+  }, [containerRef, messageCount]);
 
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -196,22 +228,23 @@ export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThre
     }
   }, [aui, busy, onDeleteAll]);
 
+  const refreshThreads = useCallback(async () => {
+    await aui.threads.reload();
+  }, [aui]);
+
   return (
-    <AiVoteProvider workspaceId={workspaceId} conversationId={conversationId ?? null}>
+    <AiVoteProvider workspaceId={workspaceId} conversationId={remoteConversationId}>
       <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
         <AiMotionStyles />
-        <div className="flex items-center gap-2 border-b border-hairline px-3 py-2 lg:hidden">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="打开会话列表"
-            onClick={onOpenSidebar}
-          >
-            <PanelLeft aria-hidden="true" className="size-4" />
-          </Button>
-          <p className="type-meta truncate">AI 旅行助手</p>
-        </div>
+        <MobileChatHeader
+          conversationId={currentItem?.remoteId ?? null}
+          onOpenSidebar={onOpenSidebar}
+          onUpdated={refreshThreads}
+          shareUrl={shareUrlFromThreadCustom(currentItem?.custom)}
+          title={currentItem?.title?.trim() || "AI 旅行助手"}
+          visibility={visibilityFromThreadCustom(currentItem?.custom)}
+          workspaceId={workspaceId}
+        />
 
         <div className="relative min-h-0 flex-1">
           <ThreadPrimitive.Viewport

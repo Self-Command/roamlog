@@ -162,6 +162,15 @@ describe("MultimodalInput", () => {
     expect(window.localStorage.getItem("input")).toBeNull();
   });
 
+  it("writes the draft on the input event so an immediate refresh cannot lose it", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(screen.getByTestId("multimodal-input"), "刚刚输入的草稿");
+
+    expect(window.localStorage.getItem("input")).toBe("刚刚输入的草稿");
+  });
+
   it("moves through slash commands with arrow keys", async () => {
     const user = userEvent.setup();
     const newCommand = vi.fn();

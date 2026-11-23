@@ -212,8 +212,14 @@ export class AiController {
         await pipeStringStream(resumable, res, () => closed);
       } else if (directFrames) {
         for await (const frame of directFrames) {
-          if (closed || res.writableEnded || res.destroyed) break;
-          if (!(await writeChunk(res, frame))) break;
+          // The producer already owns the conversation/message lifecycle. If
+          // Redis is temporarily unavailable, keep draining this fallback
+          // stream after the client disconnects so the run still reaches its
+          // terminal persistence path instead of leaving AiStream "active".
+          // `writeChunk` only writes while the socket is alive; a failed write
+          // must not cancel the remaining generator.
+          if (closed || res.writableEnded || res.destroyed) continue;
+          await writeChunk(res, frame);
         }
       }
     } catch (error) {

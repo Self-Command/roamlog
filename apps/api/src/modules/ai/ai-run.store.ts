@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import type { OnModuleDestroy } from "@nestjs/common";
 import type { AiToolCall } from "@roamlog/contracts";
 import type Redis from "ioredis";
@@ -10,6 +10,7 @@ import {
 } from "resumable-stream/ioredis";
 
 import { generateUuidV7 } from "../auth/uuid.js";
+import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { RedisService } from "../redis/redis.service.js";
 import type { AiPlaceCandidate } from "./ai-tools.js";
 
@@ -21,11 +22,19 @@ const STREAM_ASSISTANT_KEY_PREFIX = "ai:stream:assistant:";
 const STREAM_CANCEL_KEY_PREFIX = "ai:stream:cancel:";
 const RESUMABLE_STREAM_TTL_SECONDS = 24 * 60 * 60;
 const RESUMABLE_STREAM_PREFIX = "roamlog-ai";
+/** Bounded retry for a transient Redis/pub-sub failure while setting sentinel. */
+export const AI_RESUME_PRODUCER_ATTEMPTS = 3;
+export const AI_RESUME_PRODUCER_RETRY_MS = 25;
 
 export interface StoredAiRun {
   readonly runId: string;
   readonly workspaceId: string;
   readonly userId: string;
+  /**
+   * The persisted conversation this plan belongs to. Optional so plans written
+   * before this field existed remain executable until their 15-minute TTL.
+   */
+  readonly conversationId?: string;
   readonly message: string;
   readonly plannedCalls: AiToolCall[];
   /** Places resolved in this run; the only ids a stop may reference. */
@@ -80,7 +89,10 @@ export class AiRunStore implements OnModuleDestroy {
   private streamSubscriber?: Redis;
   private readonly streamControllers = new Map<string, AbortController>();
 
-  constructor(@Inject(RedisService) private readonly redis: RedisService) {}
+  constructor(
+    @Inject(RedisService) private readonly redis: RedisService,
+    @Optional() @Inject(PinoLoggerService) private readonly logger?: PinoLoggerService,
+  ) {}
 
   async save(run: StoredAiRun): Promise<void> {
     await this.redis.set(
@@ -143,11 +155,55 @@ export class AiRunStore implements OnModuleDestroy {
    * client is also used for normal commands, and a client in subscriber mode
    * cannot issue them.
    */
-  createResumableStream(
+  async createResumableStream(
     streamId: string,
     makeStream: () => ReadableStream<string>,
   ): Promise<ReadableStream<string> | null> {
-    return this.resumable().createNewResumableStream(streamId, makeStream);
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= AI_RESUME_PRODUCER_ATTEMPTS; attempt += 1) {
+      try {
+        const stream = await this.resumable().createNewResumableStream(streamId, makeStream);
+        if (attempt > 1) {
+          this.logger?.log(
+            {
+              event: "ai.resume_producer_recovered",
+              streamId,
+              attempt,
+            },
+            "ai.resume_producer_recovered",
+          );
+        }
+        return stream;
+      } catch (error) {
+        lastError = error;
+        this.logger?.warn(
+          {
+            event: "ai.resume_producer_attempt_failed",
+            streamId,
+            attempt,
+            maxAttempts: AI_RESUME_PRODUCER_ATTEMPTS,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          },
+          "ai.resume_producer_attempt_failed",
+        );
+        if (attempt < AI_RESUME_PRODUCER_ATTEMPTS) {
+          await delay(AI_RESUME_PRODUCER_RETRY_MS * attempt);
+        }
+      }
+    }
+
+    this.logger?.error(
+      {
+        event: "ai.resume_producer_unavailable",
+        streamId,
+        attempts: AI_RESUME_PRODUCER_ATTEMPTS,
+        errorName: lastError instanceof Error ? lastError.name : "UnknownError",
+      },
+      "ai.resume_producer_unavailable",
+    );
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("The resumable AI stream could not be created.");
   }
 
   /**
@@ -251,6 +307,12 @@ export class AiRunStore implements OnModuleDestroy {
     });
     return this.resumableContext;
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function streamAssistantKey(streamId: string): string {

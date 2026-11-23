@@ -50,7 +50,6 @@ export function ArtifactCodeEditor({
     };
     // The view is intentionally created once; later content/editable changes
     // are applied through the effects below, matching the upstream editor.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

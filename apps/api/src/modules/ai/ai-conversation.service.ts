@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import {
   BadRequestException,
@@ -19,14 +19,22 @@ import type {
   AiConversationTitleResponse,
   AiThreadMessage,
   DeleteAiMessagesRequest,
+  PublicAiChatContentPart,
+  PublicAiChatMessage,
+  PublicAiChatResponse,
+  SetAiConversationVisibilityRequest,
   UpdateAiConversationRequest,
   UpsertAiMessageRequest,
 } from "@roamlog/contracts";
+import { PublicAiChatResponseSchema } from "@roamlog/contracts";
 
+import { AppConfigService } from "../../config/app-config.service.js";
 import { AI_ADAPTER_FACTORY, type AiAdapterFactory } from "./adapters/index.js";
 import { AiSettingsResolver, AI_CLOCK, type AiClock, type AiSettings } from "./ai.settings.js";
+import { MediaUrlService, type SignedMediaUrls } from "../media/media-url.service.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { generateUuidV7 } from "../auth/uuid.js";
 
 /**
  * Frozen public surface from `.audit/ai-port-spec.md` §2.7.
@@ -92,6 +100,9 @@ interface ConversationRow {
   title: string | null;
   titleSource: string;
   status: string;
+  visibility: string;
+  shareId: string | null;
+  shareRevision: number;
   lastMessageAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -123,6 +134,9 @@ const CONVERSATION_SELECT = {
   title: true,
   titleSource: true,
   status: true,
+  visibility: true,
+  shareId: true,
+  shareRevision: true,
   lastMessageAt: true,
   createdAt: true,
   updatedAt: true,
@@ -176,6 +190,12 @@ export class AiConversationService implements AiConversationServiceContract {
     @Inject(AI_ADAPTER_FACTORY) private readonly adapterFactory: AiAdapterFactory,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
     @Optional() @Inject(AI_CLOCK) private readonly clock: AiClock = () => new Date(),
+    @Optional()
+    @Inject(AppConfigService)
+    private readonly config?: AppConfigService,
+    @Optional()
+    @Inject(MediaUrlService)
+    private readonly mediaUrls?: MediaUrlService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -565,7 +585,7 @@ export class AiConversationService implements AiConversationServiceContract {
     const visible = hasMore ? rows.slice(0, limit) : rows;
     const last = visible.at(-1);
     return {
-      items: visible.map((row) => presentConversation(row as ConversationRow)),
+      items: visible.map((row) => this.presentConversation(row as ConversationRow)),
       nextCursor: hasMore && last ? encodeConversationCursor(last as ConversationRow) : null,
     };
   }
@@ -576,7 +596,7 @@ export class AiConversationService implements AiConversationServiceContract {
     conversationId: string,
   ): Promise<AiConversation> {
     const row = await this.requireConversation(workspaceId, conversationId, userId);
-    return presentConversation(row);
+    return this.presentConversation(row);
   }
 
   async rename(
@@ -589,6 +609,40 @@ export class AiConversationService implements AiConversationServiceContract {
     const updated = await this.prisma.client.aiConversation.updateMany({
       where: { id: conversationId, workspaceId, userId, deletedAt: null },
       data: { title: input.title, titleSource: "manual" },
+    });
+    if (updated.count === 0) {
+      throw conversationNotFound();
+    }
+    return this.fetch(userId, workspaceId, conversationId);
+  }
+
+  /**
+   * Port of vercel/chatbot's `updateChatVisibility`
+   * (`app/(chat)/actions.ts:38-58`, `lib/db/queries.ts:505-513`).
+   *
+   * Upstream stores the raw chat id in the public URL. Roamlog instead signs an
+   * opaque `shareId + shareRevision` token, so switching back to private
+   * invalidates every URL that was previously copied. Every transition bumps
+   * the revision; setting the same value is a no-op.
+   */
+  async setVisibility(
+    userId: string,
+    workspaceId: string,
+    conversationId: string,
+    input: SetAiConversationVisibilityRequest,
+  ): Promise<AiConversation> {
+    const current = await this.requireConversation(workspaceId, conversationId, userId);
+    if (current.visibility === input.visibility) {
+      return this.presentConversation(current);
+    }
+
+    const updated = await this.prisma.client.aiConversation.updateMany({
+      where: { id: conversationId, workspaceId, userId, deletedAt: null },
+      data: {
+        visibility: input.visibility,
+        shareRevision: { increment: 1 },
+        ...(input.visibility === "public" && !current.shareId ? { shareId: generateUuidV7() } : {}),
+      },
     });
     if (updated.count === 0) {
       throw conversationNotFound();
@@ -663,6 +717,81 @@ export class AiConversationService implements AiConversationServiceContract {
       headId: rows.at(-1)?.clientId ?? rows.at(-1)?.id ?? null,
       messages,
     };
+  }
+
+  /**
+   * Anonymous read for a public conversation. The token authenticates the
+   * share, not the user. A private conversation, a rotated revision or a
+   * deleted conversation all return the same 404 as an unknown token.
+   */
+  async readPublic(token: string): Promise<PublicAiChatResponse> {
+    const config = this.config;
+    const parsed = config ? parseAiConversationShareToken(token, config.betterAuthSecret) : null;
+    if (!parsed) {
+      throw conversationNotFound();
+    }
+
+    const row = (await this.prisma.client.aiConversation.findFirst({
+      where: {
+        shareId: parsed.shareId,
+        visibility: "public",
+        shareRevision: parsed.revision,
+        deletedAt: null,
+      },
+      select: CONVERSATION_SELECT,
+    })) as ConversationRow | null;
+    if (!row) {
+      throw conversationNotFound();
+    }
+
+    const rows = (await this.prisma.client.aiMessage.findMany({
+      where: { conversationId: row.id },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: MESSAGE_SELECT,
+    })) as MessageRow[];
+    const signedImages = await this.signPublicMessageImages(row.workspaceId, rows);
+    const messages = publicMessageChain(rows, signedImages);
+
+    return PublicAiChatResponseSchema.parse({
+      title: row.title,
+      createdAt: row.createdAt.toISOString(),
+      lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
+      messages,
+      isReadOnly: true,
+    });
+  }
+
+  /**
+   * Persisted message parts carry the signed URL from upload time. Public
+   * shares may be opened much later, so image parts are re-signed from the
+   * Workspace-scoped media row before they enter the response. A missing or
+   * deleted media row simply drops that image.
+   */
+  private async signPublicMessageImages(
+    workspaceId: string,
+    rows: readonly MessageRow[],
+  ): Promise<ReadonlyMap<string, SignedMediaUrls>> {
+    if (!this.mediaUrls) return new Map();
+    const ids = new Set<string>();
+    for (const row of rows) {
+      if (!Array.isArray(row.content)) continue;
+      for (const part of row.content) {
+        const mediaId = imageMediaId(part);
+        if (mediaId) ids.add(mediaId);
+      }
+    }
+    if (ids.size === 0) return new Map();
+
+    const records = await this.prisma.client.media.findMany({
+      where: {
+        id: { in: [...ids] },
+        workspaceId,
+        status: "ready",
+        deletedAt: null,
+      },
+      include: { motion: true },
+    });
+    return this.mediaUrls.signMany(records);
   }
 
   async upsertMessage(
@@ -900,6 +1029,28 @@ export class AiConversationService implements AiConversationServiceContract {
     return this.fetch(userId, workspaceId, conversationId);
   }
 
+  private presentConversation(row: ConversationRow): AiConversation {
+    return presentConversation(row, this.shareUrlFor(row));
+  }
+
+  private shareUrlFor(row: ConversationRow): string | null {
+    const config = this.config;
+    if (
+      row.visibility !== "public" ||
+      !row.shareId ||
+      !config ||
+      config.betterAuthSecret.length < 32
+    ) {
+      return null;
+    }
+    const token = createAiConversationShareToken(
+      row.shareId,
+      row.shareRevision,
+      config.betterAuthSecret,
+    );
+    return `${config.appUrl.replace(/\/$/, "")}/share/chat/${encodeURIComponent(token)}`;
+  }
+
   private async requireConversation(
     workspaceId: string,
     conversationId: string,
@@ -948,7 +1099,7 @@ export class AiConversationService implements AiConversationServiceContract {
 // Serialization / time / cursor helpers
 // ---------------------------------------------------------------------------
 
-function presentConversation(row: ConversationRow): AiConversation {
+function presentConversation(row: ConversationRow, shareUrl: string | null): AiConversation {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -956,6 +1107,8 @@ function presentConversation(row: ConversationRow): AiConversation {
     title: row.title,
     titleSource: row.titleSource as AiConversation["titleSource"],
     status: row.status as AiConversation["status"],
+    visibility: row.visibility as AiConversation["visibility"],
+    shareUrl,
     lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -972,6 +1125,168 @@ function presentMessage(row: MessageRow): AiThreadMessage {
     ...(row.status !== null && row.status !== undefined ? { status: row.status } : {}),
     ...(row.metadata !== null && row.metadata !== undefined ? { metadata: row.metadata } : {}),
   };
+}
+
+/**
+ * The public view follows the selected branch exactly like the authenticated
+ * thread history: start at the latest row and walk `parentId` to the root.
+ * Alternative edits/regenerations are not exposed.
+ */
+function publicMessageChain(
+  rows: readonly MessageRow[],
+  signedImages: ReadonlyMap<string, SignedMediaUrls>,
+): PublicAiChatMessage[] {
+  if (rows.length === 0) return [];
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  let current: MessageRow | undefined = rows.at(-1);
+  const chain: MessageRow[] = [];
+  const seen = new Set<string>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    chain.unshift(current);
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+
+  const messages: PublicAiChatMessage[] = [];
+  for (const row of chain) {
+    if (row.role !== "user" && row.role !== "assistant") continue;
+    const content = publicMessageContent(row.content, signedImages);
+    if (content.length === 0) continue;
+    messages.push({
+      id: row.id,
+      role: row.role,
+      content,
+      createdAt: row.createdAt.toISOString(),
+    });
+  }
+  return messages;
+}
+
+/** Keep only renderable text/image parts; drop tools, reasoning and metadata. */
+function publicMessageContent(
+  content: unknown,
+  signedImages: ReadonlyMap<string, SignedMediaUrls>,
+): PublicAiChatContentPart[] {
+  const rawParts: unknown[] =
+    typeof content === "string"
+      ? [{ type: "text", text: content }]
+      : Array.isArray(content)
+        ? content
+        : isRecord(content) && content.type === "text"
+          ? [content]
+          : [];
+
+  const parts: PublicAiChatContentPart[] = [];
+  for (const raw of rawParts) {
+    if (!isRecord(raw)) continue;
+    if (raw.type === "text" && typeof raw.text === "string" && raw.text.trim()) {
+      parts.push({ type: "text", text: raw.text.slice(0, 200_000) });
+      continue;
+    }
+    if (raw.type === "image" && typeof raw.image === "string" && isHttpUrl(raw.image)) {
+      const mediaId = imageMediaId(raw);
+      const signed = mediaId ? signedImages.get(mediaId) : undefined;
+      const image = signed?.url ?? signed?.thumbUrl ?? raw.image;
+      parts.push({
+        type: "image",
+        image,
+        ...(typeof raw.filename === "string" && raw.filename.trim()
+          ? { filename: raw.filename.slice(0, 200) }
+          : {}),
+      });
+    }
+  }
+  return parts;
+}
+
+/** Reads the stable media id from an assistant-ui image part. */
+function imageMediaId(value: unknown): string | null {
+  if (!isRecord(value) || value.type !== "image") return null;
+  if (isRecord(value.providerMetadata)) {
+    const roamlog = value.providerMetadata.roamlog;
+    if (isRecord(roamlog) && typeof roamlog.mediaId === "string") {
+      return roamlog.mediaId;
+    }
+  }
+  if (isRecord(value.metadata)) {
+    const roamlog = value.metadata.roamlog;
+    if (isRecord(roamlog) && typeof roamlog.mediaId === "string") {
+      return roamlog.mediaId;
+    }
+  }
+  return null;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+const AI_SHARE_TOKEN_PREFIX = "aic1";
+const AI_SHARE_TOKEN_CONTEXT = "roamlog:ai-share:";
+
+/**
+ * Browser-safe share token bound to an opaque share id and the current
+ * revocation revision. The secret never leaves the API and no bearer token is
+ * stored in the database.
+ */
+export function createAiConversationShareToken(
+  shareId: string,
+  revision: number,
+  secret: string,
+): string {
+  const payload = Buffer.from(JSON.stringify({ v: 1, s: shareId, r: revision }), "utf8").toString(
+    "base64url",
+  );
+  const signature = createHmac("sha256", secret)
+    .update(`${AI_SHARE_TOKEN_CONTEXT}${payload}`, "utf8")
+    .digest("base64url");
+  return `${AI_SHARE_TOKEN_PREFIX}.${payload}.${signature}`;
+}
+
+export function parseAiConversationShareToken(
+  token: string,
+  secret: string,
+): { shareId: string; revision: number } | null {
+  if (token.length < 32 || token.length > 256) return null;
+  const segments = token.split(".");
+  if (segments.length !== 3) return null;
+  const [prefix, payload, signature] = segments;
+  if (
+    prefix !== AI_SHARE_TOKEN_PREFIX ||
+    !payload ||
+    !signature ||
+    !/^[A-Za-z0-9_-]+$/u.test(payload) ||
+    !/^[A-Za-z0-9_-]+$/u.test(signature)
+  ) {
+    return null;
+  }
+  const expected = createHmac("sha256", secret)
+    .update(`${AI_SHARE_TOKEN_CONTEXT}${payload}`, "utf8")
+    .digest();
+  const actual = Buffer.from(signature, "base64url");
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as unknown;
+    if (!isRecord(parsed)) return null;
+    if (parsed.v !== 1 || typeof parsed.s !== "string") return null;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(parsed.s)) {
+      return null;
+    }
+    if (typeof parsed.r !== "number" || !Number.isSafeInteger(parsed.r) || parsed.r < 0) {
+      return null;
+    }
+    return { shareId: parsed.s, revision: parsed.r };
+  } catch {
+    return null;
+  }
 }
 
 function conversationNotFound(): NotFoundException {

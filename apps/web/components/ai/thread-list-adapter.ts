@@ -58,9 +58,7 @@ import {
 const LEGACY_LIST_PREFIX = "roamlog.ai.threads";
 const LEGACY_HISTORY_PREFIX = "roamlog.ai.history";
 
-type RemoteThreadListPageOptions = NonNullable<
-  Parameters<RemoteThreadListAdapter["list"]>[0]
->;
+type RemoteThreadListPageOptions = NonNullable<Parameters<RemoteThreadListAdapter["list"]>[0]>;
 type RemoteThreadListResponse = Awaited<ReturnType<RemoteThreadListAdapter["list"]>>;
 type RemoteThreadMetadata = RemoteThreadListResponse["threads"][number];
 
@@ -184,12 +182,22 @@ function toThreadMetadata(conversation: AiConversation): RemoteThreadMetadata {
     status: conversation.status,
     title: conversation.title ?? undefined,
     lastMessageAt: conversation.lastMessageAt ? new Date(conversation.lastMessageAt) : undefined,
+    custom: {
+      visibility: conversation.visibility,
+      shareUrl: conversation.shareUrl,
+    },
   };
 }
 
 function toThreadMessageLike(message: AiThreadMessage): ThreadMessageLike {
   return {
-    id: message.id,
+    // `message.id` is already mapped to the persisted client id by the API
+    // (`presentMessage`), but keep the fallback explicit here: every runtime
+    // write/delete uses this id as the server-side idempotency key. If the API
+    // ever returns a server UUID in `id`, using it would make an edited
+    // historical message append a new branch while silently leaving the old
+    // tail behind.
+    id: message.clientId ?? message.id,
     role: message.role,
     content: message.content as ThreadMessageLike["content"],
     createdAt: new Date(message.createdAt),
@@ -400,10 +408,7 @@ class ConversationGateway {
     }
   }
 
-  historyFor(
-    localId: string,
-    getRemoteId: () => string | undefined,
-  ): ThreadHistoryAdapter {
+  historyFor(localId: string, getRemoteId: () => string | undefined): ThreadHistoryAdapter {
     const cached = this.histories.get(localId);
     if (cached) return cached;
     const adapter = makeHistoryAdapter(this, localId, getRemoteId);
@@ -411,10 +416,7 @@ class ConversationGateway {
     return adapter;
   }
 
-  async upsertMessage(
-    conversationId: string,
-    item: ExportedMessageRepositoryItem,
-  ): Promise<void> {
+  async upsertMessage(conversationId: string, item: ExportedMessageRepositoryItem): Promise<void> {
     const clientId = item.message.id;
     if (!clientId) return;
 
@@ -480,12 +482,7 @@ class ConversationGateway {
       };
       if (entry.item.message.status !== undefined) body.status = entry.item.message.status;
       try {
-        await upsertConversationMessage(
-          this.workspaceId,
-          entry.conversationId,
-          clientId,
-          body,
-        );
+        await upsertConversationMessage(this.workspaceId, entry.conversationId, clientId, body);
         this.pendingUpserts.delete(clientId);
         this.lastSuccessfulPut.set(clientId, JSON.stringify(body));
       } catch (error) {

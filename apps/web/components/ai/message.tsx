@@ -228,7 +228,10 @@ export function WaitingText({ label }: { label?: string }) {
 
 export function UserMessage() {
   return (
-    <MessagePrimitive.Root className="group/message flex w-full justify-end">
+    <MessagePrimitive.Root
+      className="group/message flex w-full justify-end"
+      data-testid="message-user"
+    >
       <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-1">
         <div className="flex max-w-full flex-col items-end rounded-card border border-hairline-strong bg-surface-2 px-4 py-3">
           {/*

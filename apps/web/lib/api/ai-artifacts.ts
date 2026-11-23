@@ -23,6 +23,16 @@ interface SchemaLike<T> {
     | { success: false };
 }
 
+const ARTIFACT_ERROR_COPY: Readonly<Record<string, string>> = {
+  AI_ARTIFACT_NOT_FOUND: "文档不存在或已被删除。",
+  AI_ARTIFACT_VERSION_CONFLICT: "文档已在另一个窗口更新，请重新加载后再修改。",
+  AI_ARTIFACT_VERSION_NOT_FOUND: "这个历史版本不存在，请重新加载。",
+  AI_ARTIFACT_SUGGESTION_NOT_FOUND: "这条建议不存在或已被处理。",
+  AI_ARTIFACT_IMAGE_SOURCE_INVALID: "图片还没有准备好，请重新选择。",
+  AI_ARTIFACT_CONTENT_TOO_LARGE: "文档内容超出大小限制。",
+  AI_ARTIFACT_EMPTY: "文档内容为空，请先写入内容。",
+} as const;
+
 async function request<T>(
   path: string,
   schema: SchemaLike<T>,
@@ -39,10 +49,17 @@ async function request<T>(
     }
   }
   if (!response.ok) {
+    const code =
+      body && typeof body === "object" && "code" in body && typeof body.code === "string"
+        ? body.code
+        : null;
     const message =
-      body && typeof body === "object" && "message" in body && typeof body.message === "string"
+      (code ? ARTIFACT_ERROR_COPY[code] : undefined) ??
+      (body && typeof body === "object" && "message" in body && typeof body.message === "string"
         ? body.message
-        : `Artifact request failed with HTTP ${String(response.status)}.`;
+        : body && typeof body === "object" && "detail" in body && typeof body.detail === "string"
+          ? body.detail
+          : `文档请求失败（HTTP ${String(response.status)}），请重试。`);
     throw new Error(message);
   }
   const parsed = schema.safeParse(body);

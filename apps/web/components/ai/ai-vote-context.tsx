@@ -51,6 +51,9 @@ export function AiVoteProvider({
     }
 
     const controller = new AbortController();
+    // Do not expose the previous conversation's pressed state while the next
+    // fetch is in flight. A conversation switch always starts empty.
+    setVotes(new Map());
     setStatus("loading");
     void listAiMessageVotes(workspaceId, conversationId, controller.signal)
       .then((rows) => {

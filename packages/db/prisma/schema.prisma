@@ -180,6 +180,12 @@ enum AiConversationStatus {
   archived
 }
 
+/// Mirrors vercel/chatbot's `Chat.visibility` (`lib/db/schema.ts:35`).
+enum AiConversationVisibility {
+  private
+  public
+}
+
 /// assistant-ui `ThreadMessageLike` role; tool calls/results are parts inside
 /// assistant `content`, not separate roles. Mirrors S2 `Message_v2.role`.
 enum AiMessageRole {
@@ -1238,22 +1244,30 @@ model ModerationAction {
 /// Mirrors vercel/chatbot's `Chat` (lib/db/schema.ts L28-L40), with the
 /// Roamlog additions `status` and `deletedAt` for archiving/soft delete.
 model AiConversation {
-  id            String               @id @default(uuid(7)) @db.Uuid
-  workspaceId   String               @db.Uuid
-  userId        String               @db.Uuid
+  id            String                   @id @default(uuid(7)) @db.Uuid
+  workspaceId   String                   @db.Uuid
+  userId        String                   @db.Uuid
   /// First-user-message placeholder truncated to 24 chars; replaced once the
   /// model summary succeeds. NULL means the thread has no messages yet.
-  title         String?              @db.VarChar(120)
+  title         String?                  @db.VarChar(120)
   /// placeholder | model | manual. A `manual` title must not be overwritten by
   /// the background summariser.
-  titleSource   String               @default("placeholder") @db.VarChar(16)
-  status        AiConversationStatus @default(regular)
-  lastMessageAt DateTime?            @db.Timestamptz(3)
-  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime             @updatedAt @db.Timestamptz(3)
-  deletedAt     DateTime?            @db.Timestamptz(3)
-  workspace     Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleSource   String                   @default("placeholder") @db.VarChar(16)
+  status        AiConversationStatus     @default(regular)
+  visibility    AiConversationVisibility @default(private)
+  /// Opaque, non-conversation identifier used by the signed public URL. It is
+  /// allocated on the first public share and is never exposed as a storage
+  /// primary key.
+  shareId       String?                  @unique @db.Uuid
+  /// Incremented on every private/public transition. A signed token is valid
+  /// only for the current revision, which makes revocation immediate.
+  shareRevision Int                      @default(0)
+  lastMessageAt DateTime?                @db.Timestamptz(3)
+  createdAt     DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                 @updatedAt @db.Timestamptz(3)
+  deletedAt     DateTime?                @db.Timestamptz(3)
+  workspace     Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages      AiMessage[]
   streams       AiStream[]
   messageVotes  AiMessageVote[]

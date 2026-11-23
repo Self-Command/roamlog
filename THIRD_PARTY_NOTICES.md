@@ -32,3 +32,18 @@ Upstream projects:
 
 LXGW WenKai is intentionally not bundled in the first release because of its
 large package footprint.
+
+## Modified source ports
+
+### vercel/chatbot
+
+- Source: https://github.com/vercel/chatbot
+- Revision: `a8989b522fa3672a2ae52f053105e40993b36ca1`
+- License: Apache-2.0
+- Copied license notice: `LICENSES/vercel-chatbot-Apache-2.0.txt`
+- Modified areas: the AI conversation shell, message actions/editor, composer,
+  model selector, conversation history, resumable stream integration,
+  Artifact/Document panel and server-side artifact tools. Roamlog adaptations
+  replace Vercel AI SDK persistence/NextAuth/Vercel Blob with assistant-ui,
+  Better Auth, NestJS, Prisma and the Roamlog media pipeline. Each ported file
+  carries the upstream path, revision and a description of its local changes.

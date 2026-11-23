@@ -106,6 +106,7 @@ export class AiExecuteService {
       runId,
       candidates,
       createdTripIds: [] as string[],
+      ...(run.conversationId ? { conversationId: run.conversationId } : {}),
     };
     const results: AiToolResult[] = [];
 
@@ -142,6 +143,7 @@ export class AiExecuteService {
             tool: call.tool,
             ok: true,
             ...(outcome.entityId ? { entityId: outcome.entityId } : {}),
+            ...(outcome.artifact ? { artifact: outcome.artifact } : {}),
           }
         : {
             tool: call.tool,

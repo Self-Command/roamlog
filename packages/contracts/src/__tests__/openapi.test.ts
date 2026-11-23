@@ -63,6 +63,8 @@ describe("OpenAPI document", () => {
       "/v1/trips/{tripId}/budget/summary",
       "/v1/workspaces/{workspaceId}/insights",
       "/v1/workspaces/{workspaceId}/insights/expenses.csv",
+      "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/visibility",
+      "/v1/public/ai-chats/{token}",
       "/v1/trips/{tripId}/packing",
       "/v1/trips/{tripId}/share-links",
       "/v1/public/trips/{token}",
@@ -107,7 +109,7 @@ describe("OpenAPI document", () => {
     // operations. Insights adds 2 unique paths and 2 operations. The user
     // appearance and device endpoints add two more paths; resumable AI stream
     // status/replay/cancel add three.
-    expect(paths.length).toBe(132);
+    expect(paths.length).toBe(134);
 
     const operations = Object.values(doc.paths).reduce(
       (count, pathItem) =>
@@ -156,6 +158,10 @@ describe("OpenAPI document", () => {
       security?: unknown[];
     };
     expect(publicTrip.security).toEqual([]);
+    const publicChat = doc.paths["/v1/public/ai-chats/{token}"]?.get as {
+      security?: unknown[];
+    };
+    expect(publicChat.security).toEqual([]);
     const shareLink = doc.components.schemas.ShareLink;
     expect(shareLink).toBeDefined();
     expect(shareLink).not.toHaveProperty("properties.tokenHash");

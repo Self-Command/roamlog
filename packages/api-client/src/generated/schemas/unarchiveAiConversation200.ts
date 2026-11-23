@@ -7,6 +7,7 @@
  */
 import type { UnarchiveAiConversation200Status } from "./unarchiveAiConversation200Status";
 import type { UnarchiveAiConversation200TitleSource } from "./unarchiveAiConversation200TitleSource";
+import type { UnarchiveAiConversation200Visibility } from "./unarchiveAiConversation200Visibility";
 
 export type UnarchiveAiConversation200 = {
   /** Sortable UUIDv7 identifier. */
@@ -22,6 +23,12 @@ export type UnarchiveAiConversation200 = {
   title: string | null;
   titleSource: UnarchiveAiConversation200TitleSource;
   status: UnarchiveAiConversation200Status;
+  visibility: UnarchiveAiConversation200Visibility;
+  /**
+   * @maxLength 2048
+   * @nullable
+   */
+  shareUrl: string | null;
   /**
    * ISO 8601 timestamp with an explicit UTC offset.
    * @nullable

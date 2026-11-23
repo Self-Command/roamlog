@@ -2,6 +2,8 @@ import { HttpException } from "@nestjs/common";
 import { AiChatResponseSchema, type AiChatResponse, type AiStreamEvent } from "@roamlog/contracts";
 import { describe, expect, it, vi } from "vitest";
 
+import type { AiProtocolAdapter } from "../adapters/adapter.js";
+import type { AiProviderCandidate } from "../ai-provider-router.service.js";
 import { AiPlanService, systemPrompt } from "../ai-plan.service.js";
 import { formatDateOnly } from "../ai-dates.js";
 import { staticAiSettingsSource, type AiSettings } from "../ai.settings.js";
@@ -67,6 +69,42 @@ function toolTurn(
   text: string | null = null,
 ) {
   return { text, toolCalls: calls, usage: { inputTokens: 10, outputTokens: 5 } };
+}
+
+function providerCandidate(model: string, providerId: string): AiProviderCandidate {
+  return {
+    runtime: {
+      id: providerId,
+      adapter: "openai-chat",
+      preset: providerId,
+    },
+    settings: aiSettings({ model, allowedModels: [model] }),
+    model: {
+      modelId: model,
+      displayName: model,
+      ownedBy: providerId,
+      isDefault: true,
+      capabilities: {},
+    },
+  } as unknown as AiProviderCandidate;
+}
+
+function conversationMocks(): {
+  getOrCreate: ReturnType<typeof vi.fn>;
+  loadContext: ReturnType<typeof vi.fn>;
+  appendUserMessage: ReturnType<typeof vi.fn>;
+  startStream: ReturnType<typeof vi.fn>;
+  finishAssistantMessage: ReturnType<typeof vi.fn>;
+} {
+  return {
+    getOrCreate: vi.fn().mockResolvedValue({ id: "conversation-1", title: null }),
+    loadContext: vi.fn().mockResolvedValue({ messages: [], facts: {} }),
+    appendUserMessage: vi
+      .fn()
+      .mockResolvedValue({ messageId: "message-user-1", clientId: "client-1", created: true }),
+    startStream: vi.fn().mockResolvedValue({ streamId: "stream-1" }),
+    finishAssistantMessage: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 async function expectHttp(
@@ -209,7 +247,10 @@ describe("AiPlanService plan phase", () => {
   });
 
   it("returns 503 AI_NOT_CONFIGURED without calling the model", async () => {
-    const { service, adapter, tools } = harness([], aiSettings({ configured: false, baseUrl: null }));
+    const { service, adapter, tools } = harness(
+      [],
+      aiSettings({ configured: false, baseUrl: null }),
+    );
 
     await expectHttp(
       service.chat(actorStub(), membershipStub(), { message: "Kyoto" }),
@@ -302,9 +343,17 @@ describe("AiPlanService plan phase", () => {
   it("keeps the full write tool set out of the model's reachable execution", async () => {
     const { service, tools } = harness([
       toolTurn([
-        { id: "c1", name: "itinerary.addDay", input: { tripId: TRIP_ID, date: "2026-12-01", items: [{ title: "Temple" }] } },
+        {
+          id: "c1",
+          name: "itinerary.addDay",
+          input: { tripId: TRIP_ID, date: "2026-12-01", items: [{ title: "Temple" }] },
+        },
         { id: "c2", name: "packing.add", input: { tripId: TRIP_ID, name: "Passport" } },
-        { id: "c3", name: "budget.setSummary", input: { tripId: TRIP_ID, amountMinor: 800_000, currency: "CNY" } },
+        {
+          id: "c3",
+          name: "budget.setSummary",
+          input: { tripId: TRIP_ID, amountMinor: 800_000, currency: "CNY" },
+        },
       ]),
       { text: "Planned.", toolCalls: [] },
     ]);
@@ -429,12 +478,13 @@ describe("AiPlanService plan phase", () => {
       startStream: vi.fn().mockResolvedValue({ streamId: "stream-1" }),
       finishAssistantMessage: vi.fn().mockResolvedValue(undefined),
     };
+    const runStore = runStoreStub();
     const service = new AiPlanService(
       staticAiSettingsSource(settings),
       () => adapter,
       toolbox,
       quotaStub() as never,
-      runStoreStub() as never,
+      runStore as never,
       loggerStub() as never,
       fixedClock(),
       conversations as never,
@@ -470,6 +520,162 @@ describe("AiPlanService plan phase", () => {
     }
     expect(end.toolCallId).toBe(start.toolCallId);
     expect(end.durationMs).toBeGreaterThanOrEqual(0);
+    expect(runStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: "conversation-1" }),
+    );
+  });
+
+  it("commits meta before waiting for the provider's first token", async () => {
+    const settings = aiSettings();
+    const adapter = scriptedAdapter([{ text: "ok", toolCalls: [] }]);
+    const conversations = conversationMocks();
+    const candidate = providerCandidate("slow-model", "provider-slow");
+    let providerIteratorStarted = false;
+    const providerRouter = {
+      candidates: vi.fn().mockResolvedValue([candidate]),
+      streamWithFailover: vi.fn(async function* () {
+        providerIteratorStarted = true;
+        await new Promise(() => {});
+        yield null as never;
+      }),
+    };
+    const service = new AiPlanService(
+      staticAiSettingsSource(settings),
+      () => adapter,
+      new AiToolbox(
+        toolServiceMocks().places as never,
+        toolServiceMocks().trips as never,
+        toolServiceMocks().stops as never,
+        toolServiceMocks().itinerary as never,
+        toolServiceMocks().packing as never,
+      ),
+      quotaStub() as never,
+      runStoreStub() as never,
+      loggerStub() as never,
+      fixedClock(),
+      conversations as never,
+      undefined,
+      undefined,
+      providerRouter as never,
+    );
+
+    const iterator = service.streamChat(actorStub(), membershipStub(), { message: "Kyoto" });
+    const first = await Promise.race([
+      iterator.next(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("meta waited for the provider")), 250);
+      }),
+    ]);
+
+    expect(first.done).toBe(false);
+    expect(first.value).toMatchObject({
+      type: "meta",
+      conversationId: "conversation-1",
+      streamId: "stream-1",
+      provider: { protocol: "openai-chat", model: "slow-model" },
+    });
+    expect(conversations.startStream).toHaveBeenCalledWith({
+      workspaceId: expect.any(String),
+      conversationId: "conversation-1",
+      messageId: "message-user-1",
+    });
+    expect(providerIteratorStarted).toBe(false);
+    await iterator.return(undefined);
+  });
+
+  it("keeps failover after early meta and emits meta exactly once", async () => {
+    const settings = aiSettings();
+    const broken: AiProtocolAdapter = {
+      protocol: "openai-chat",
+      step: vi.fn().mockRejectedValue(new Error("temporary upstream failure")),
+    };
+    const good = scriptedAdapter([{ text: "Recovered.", toolCalls: [] }]);
+    const factory = vi.fn((candidateSettings: AiSettings) =>
+      candidateSettings.model === "broken-model" ? broken : good,
+    );
+    const conversations = conversationMocks();
+    const candidates = [
+      providerCandidate("broken-model", "provider-broken"),
+      providerCandidate("good-model", "provider-good"),
+    ];
+    const attemptEvents: string[] = [];
+    const providerRouter = {
+      candidates: vi.fn().mockResolvedValue(candidates),
+      streamWithFailover: vi.fn(async function* (
+        ordered: readonly AiProviderCandidate[],
+        attempt: (
+          candidate: AiProviderCandidate,
+          attemptNumber: number,
+        ) => AsyncGenerator<AiStreamEvent, unknown, void>,
+        isCommitted: (event: AiStreamEvent) => boolean,
+      ): AsyncGenerator<{ candidate: AiProviderCandidate; event: AiStreamEvent }, unknown, void> {
+        for (const [index, candidate] of ordered.entries()) {
+          const iterator = attempt(candidate, index + 1);
+          const buffered: AiStreamEvent[] = [];
+          let committed = false;
+          try {
+            for (;;) {
+              const next = await iterator.next();
+              if (next.done) {
+                if (!committed) {
+                  for (const event of buffered) yield { candidate, event };
+                }
+                return { candidate, outcome: next.value };
+              }
+              attemptEvents.push(`${candidate.runtime.id}:${next.value.type}`);
+              if (!committed && isCommitted(next.value)) {
+                committed = true;
+                for (const event of buffered) yield { candidate, event };
+                buffered.length = 0;
+              }
+              if (committed) yield { candidate, event: next.value };
+              else buffered.push(next.value);
+            }
+          } catch (error) {
+            if (committed || index === ordered.length - 1) throw error;
+          }
+        }
+        throw new Error("no provider succeeded");
+      }),
+    };
+    const service = new AiPlanService(
+      staticAiSettingsSource(settings),
+      factory,
+      new AiToolbox(
+        toolServiceMocks().places as never,
+        toolServiceMocks().trips as never,
+        toolServiceMocks().stops as never,
+        toolServiceMocks().itinerary as never,
+        toolServiceMocks().packing as never,
+      ),
+      quotaStub() as never,
+      runStoreStub() as never,
+      loggerStub() as never,
+      fixedClock(),
+      conversations as never,
+      undefined,
+      undefined,
+      providerRouter as never,
+    );
+
+    const events: AiStreamEvent[] = [];
+    for await (const event of service.streamChat(actorStub(), membershipStub(), {
+      message: "Kyoto",
+    })) {
+      events.push(event);
+    }
+
+    expect(events.filter((event) => event.type === "meta")).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "meta",
+      provider: { model: "broken-model" },
+    });
+    expect(events.at(-1)?.type).toBe("done");
+    expect(JSON.stringify(conversations.finishAssistantMessage.mock.calls)).toContain("Recovered.");
+    expect(attemptEvents).not.toContain("provider-broken:meta");
+    expect(attemptEvents).not.toContain("provider-good:meta");
+    expect(factory).toHaveBeenCalledWith(expect.objectContaining({ model: "broken-model" }));
+    expect(factory).toHaveBeenCalledWith(expect.objectContaining({ model: "good-model" }));
   });
 
   it("rejects a write call dated in the past and reports a PAST_DATE warning", async () => {

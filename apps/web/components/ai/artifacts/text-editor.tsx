@@ -108,7 +108,7 @@ export function ArtifactTextEditor({
       {editable ? (
         <div
           aria-label="文档格式工具栏"
-          className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-hairline bg-surface-0/95 px-2 py-1.5 backdrop-blur"
+          className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-hairline bg-surface-1/95 px-2 py-1.5 backdrop-blur"
           role="toolbar"
         >
           <ToolbarButton
@@ -197,7 +197,7 @@ export function ArtifactTextEditor({
           <ul className="space-y-2">
             {suggestions.map((suggestion) => (
               <li
-                className="rounded-control border border-hairline bg-surface-0 px-3 py-2"
+                className="rounded-control border border-hairline bg-surface-1 px-3 py-2"
                 key={suggestion.id}
               >
                 <p className="text-xs leading-5 text-body">{suggestion.description}</p>

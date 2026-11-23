@@ -856,6 +856,14 @@ export const AiConversationStatusSchema = z.enum(["regular", "archived"]);
 export type AiConversationStatus = z.infer<typeof AiConversationStatusSchema>;
 
 /**
+ * Conversation visibility, ported from vercel/chatbot's `Chat.visibility`
+ * (`lib/db/schema.ts:35`). Roamlog keeps the two upstream values but returns a
+ * signed public URL rather than exposing the conversation UUID as the link.
+ */
+export const AiConversationVisibilitySchema = z.enum(["private", "public"]);
+export type AiConversationVisibility = z.infer<typeof AiConversationVisibilitySchema>;
+
+/**
  * `placeholder` is the truncated first-message title, `model` a generated
  * summary and `manual` a user rename that background title generation must
  * never overwrite.
@@ -871,6 +879,12 @@ export const AiConversationSchema = z
     title: z.string().max(120).nullable(),
     titleSource: AiConversationTitleSourceSchema,
     status: AiConversationStatusSchema,
+    visibility: AiConversationVisibilitySchema,
+    /**
+     * Present only while `visibility === "public"`. The token is an opaque,
+     * signed share id; it never contains the conversation or Workspace UUID.
+     */
+    shareUrl: z.url().max(2048).nullable(),
     lastMessageAt: IsoTimestampSchema.nullable(),
     createdAt: IsoTimestampSchema,
     updatedAt: IsoTimestampSchema,
@@ -923,6 +937,16 @@ export const UpdateAiConversationRequestSchema = z
   .strict();
 export type UpdateAiConversationRequest = z.infer<typeof UpdateAiConversationRequestSchema>;
 
+/** Upstream `updateChatVisibility` action; optimistic version is not needed. */
+export const SetAiConversationVisibilityRequestSchema = z
+  .object({
+    visibility: AiConversationVisibilitySchema,
+  })
+  .strict();
+export type SetAiConversationVisibilityRequest = z.infer<
+  typeof SetAiConversationVisibilityRequestSchema
+>;
+
 /**
  * A required-but-open JSON value: `content` must be present, but its shape is
  * deliberately not enumerated here. The server stores an assistant-ui
@@ -967,6 +991,55 @@ export const AiConversationMessagesResponseSchema = z
   })
   .strict();
 export type AiConversationMessagesResponse = z.infer<typeof AiConversationMessagesResponseSchema>;
+
+/**
+ * The visible parts of one publicly shared conversation message.
+ *
+ * Only content that the upstream read-only chat can render is exposed: text
+ * and image parts. Tool calls/results, reasoning, provider metadata, run ids,
+ * client ids and user ids never enter the public projection.
+ */
+export const PublicAiChatTextPartSchema = z
+  .object({
+    type: z.literal("text"),
+    text: z.string().max(200_000),
+  })
+  .strict();
+
+export const PublicAiChatImagePartSchema = z
+  .object({
+    type: z.literal("image"),
+    image: z.url().max(2048),
+    filename: z.string().max(200).optional(),
+  })
+  .strict();
+
+export const PublicAiChatContentPartSchema = z.discriminatedUnion("type", [
+  PublicAiChatTextPartSchema,
+  PublicAiChatImagePartSchema,
+]);
+export type PublicAiChatContentPart = z.infer<typeof PublicAiChatContentPartSchema>;
+
+export const PublicAiChatMessageSchema = z
+  .object({
+    id: UuidV7Schema,
+    role: z.enum(["user", "assistant"]),
+    content: z.array(PublicAiChatContentPartSchema),
+    createdAt: IsoTimestampSchema,
+  })
+  .strict();
+export type PublicAiChatMessage = z.infer<typeof PublicAiChatMessageSchema>;
+
+export const PublicAiChatResponseSchema = z
+  .object({
+    title: z.string().max(120).nullable(),
+    createdAt: IsoTimestampSchema,
+    lastMessageAt: IsoTimestampSchema.nullable(),
+    messages: z.array(PublicAiChatMessageSchema),
+    isReadOnly: z.literal(true),
+  })
+  .strict();
+export type PublicAiChatResponse = z.infer<typeof PublicAiChatResponseSchema>;
 
 /** One assistant-message vote. Ported from vercel/chatbot's `Vote_v2`. */
 export const AiMessageVoteSchema = z
@@ -1101,9 +1174,7 @@ export const UpdateAiArtifactRequestSchema = z
   .strict()
   .refine(
     (value) =>
-      value.title !== undefined ||
-      value.content !== undefined ||
-      value.mediaId !== undefined,
+      value.title !== undefined || value.content !== undefined || value.mediaId !== undefined,
     { message: "At least one artifact field must change.", path: ["content"] },
   );
 export type UpdateAiArtifactRequest = z.infer<typeof UpdateAiArtifactRequestSchema>;
@@ -1127,9 +1198,7 @@ export const SetAiArtifactSuggestionRequestSchema = z
     isResolved: z.boolean(),
   })
   .strict();
-export type SetAiArtifactSuggestionRequest = z.infer<
-  typeof SetAiArtifactSuggestionRequestSchema
->;
+export type SetAiArtifactSuggestionRequest = z.infer<typeof SetAiArtifactSuggestionRequestSchema>;
 
 /** Idempotent append/update keyed by the assistant-ui message id (`clientId`). */
 export const UpsertAiMessageRequestSchema = z

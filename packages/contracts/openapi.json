@@ -37581,6 +37581,21 @@
                               "archived"
                             ]
                           },
+                          "visibility": {
+                            "type": "string",
+                            "enum": [
+                              "private",
+                              "public"
+                            ]
+                          },
+                          "shareUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 2048,
+                            "format": "uri"
+                          },
                           "lastMessageAt": {
                             "type": [
                               "string",
@@ -37607,6 +37622,8 @@
                           "title",
                           "titleSource",
                           "status",
+                          "visibility",
+                          "shareUrl",
                           "lastMessageAt",
                           "createdAt",
                           "updatedAt"
@@ -37878,6 +37895,21 @@
                         "archived"
                       ]
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "public"
+                      ]
+                    },
+                    "shareUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 2048,
+                      "format": "uri"
+                    },
                     "lastMessageAt": {
                       "type": [
                         "string",
@@ -37904,6 +37936,8 @@
                     "title",
                     "titleSource",
                     "status",
+                    "visibility",
+                    "shareUrl",
                     "lastMessageAt",
                     "createdAt",
                     "updatedAt"
@@ -38052,6 +38086,21 @@
                         "archived"
                       ]
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "public"
+                      ]
+                    },
+                    "shareUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 2048,
+                      "format": "uri"
+                    },
                     "lastMessageAt": {
                       "type": [
                         "string",
@@ -38078,6 +38127,8 @@
                     "title",
                     "titleSource",
                     "status",
+                    "visibility",
+                    "shareUrl",
                     "lastMessageAt",
                     "createdAt",
                     "updatedAt"
@@ -38246,6 +38297,21 @@
                         "archived"
                       ]
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "public"
+                      ]
+                    },
+                    "shareUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 2048,
+                      "format": "uri"
+                    },
                     "lastMessageAt": {
                       "type": [
                         "string",
@@ -38272,6 +38338,8 @@
                     "title",
                     "titleSource",
                     "status",
+                    "visibility",
+                    "shareUrl",
                     "lastMessageAt",
                     "createdAt",
                     "updatedAt"
@@ -38448,6 +38516,221 @@
         }
       }
     },
+    "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/visibility": {
+      "patch": {
+        "operationId": "setAiConversationVisibility",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Set an AI conversation's private/public visibility",
+        "description": "Ports vercel/chatbot's visibility action. Public conversations receive an opaque signed share URL; switching to private invalidates every previously issued URL. Only the owning user can change visibility.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "workspaceId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Sortable UUIDv7 identifier."
+            },
+            "required": true,
+            "description": "Sortable UUIDv7 identifier.",
+            "name": "conversationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "private",
+                      "public"
+                    ]
+                  }
+                },
+                "required": [
+                  "visibility"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "workspaceId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Sortable UUIDv7 identifier."
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "titleSource": {
+                      "type": "string",
+                      "enum": [
+                        "placeholder",
+                        "model",
+                        "manual"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "regular",
+                        "archived"
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "public"
+                      ]
+                    },
+                    "shareUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 2048,
+                      "format": "uri"
+                    },
+                    "lastMessageAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "workspaceId",
+                    "userId",
+                    "title",
+                    "titleSource",
+                    "status",
+                    "visibility",
+                    "shareUrl",
+                    "lastMessageAt",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not allowed to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/archive": {
       "post": {
         "operationId": "archiveAiConversation",
@@ -38524,6 +38807,21 @@
                         "archived"
                       ]
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "public"
+                      ]
+                    },
+                    "shareUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 2048,
+                      "format": "uri"
+                    },
                     "lastMessageAt": {
                       "type": [
                         "string",
@@ -38550,6 +38848,8 @@
                     "title",
                     "titleSource",
                     "status",
+                    "visibility",
+                    "shareUrl",
                     "lastMessageAt",
                     "createdAt",
                     "updatedAt"
@@ -38698,6 +38998,21 @@
                         "archived"
                       ]
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "public"
+                      ]
+                    },
+                    "shareUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 2048,
+                      "format": "uri"
+                    },
                     "lastMessageAt": {
                       "type": [
                         "string",
@@ -38724,6 +39039,8 @@
                     "title",
                     "titleSource",
                     "status",
+                    "visibility",
+                    "shareUrl",
                     "lastMessageAt",
                     "createdAt",
                     "updatedAt"
@@ -39398,6 +39715,211 @@
           },
           "500": {
             "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/ai-chats/{token}": {
+      "get": {
+        "operationId": "getPublicAiChat",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Read a publicly shared AI conversation",
+        "description": "Anonymous read-only projection of a public conversation. The opaque token is verified against the conversation's current share revision, so switching the conversation to private revokes every old URL immediately. Only text and image message parts are exposed.",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 256
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 120
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "lastMessageAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp with an explicit UTC offset."
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Sortable UUIDv7 identifier."
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "assistant"
+                            ]
+                          },
+                          "content": {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text"
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "maxLength": 200000
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "text"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "image"
+                                      ]
+                                    },
+                                    "image": {
+                                      "type": "string",
+                                      "maxLength": 2048,
+                                      "format": "uri"
+                                    },
+                                    "filename": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "image"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "ISO 8601 timestamp with an explicit UTC offset."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "role",
+                          "content",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "isReadOnly": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "createdAt",
+                    "lastMessageAt",
+                    "messages",
+                    "isReadOnly"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found in an accessible Workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The caller exceeded the rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required service is unavailable.",
             "content": {
               "application/json": {
                 "schema": {

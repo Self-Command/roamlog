@@ -17,6 +17,7 @@ import {
   AiConversationListQuerySchema,
   CreateAiConversationRequestSchema,
   DeleteAiMessagesRequestSchema,
+  SetAiConversationVisibilityRequestSchema,
   UpdateAiConversationRequestSchema,
   UpsertAiMessageRequestSchema,
   UuidV7Schema,
@@ -31,6 +32,7 @@ import {
 import { RequirePermission } from "../../common/guards/require-permission.decorator.js";
 import { RolesGuard } from "../../common/guards/roles.guard.js";
 import { TenantGuard } from "../../common/guards/tenant.guard.js";
+import { PublicShareRateLimitGuard } from "../../common/security/public-share-rate-limit.guard.js";
 import { parseRequest } from "../../common/services/request-validation.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { AiConversationService } from "./ai-conversation.service.js";
@@ -121,6 +123,22 @@ export class AiConversationController {
       membership.workspaceId,
       parseRequest(UuidV7Schema, conversationId),
       parseRequest(UpdateAiConversationRequestSchema, body),
+    );
+  }
+
+  @Patch(":conversationId/visibility")
+  @RequirePermission("trip:create", "trip")
+  setVisibility(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentWorkspaceMembership() membership: WorkspaceMembershipAccess,
+    @Param("conversationId") conversationId: string,
+    @Body() body: unknown,
+  ) {
+    return this.conversations.setVisibility(
+      actor.user.id,
+      membership.workspaceId,
+      parseRequest(UuidV7Schema, conversationId),
+      parseRequest(SetAiConversationVisibilityRequestSchema, body),
     );
   }
 
@@ -229,5 +247,23 @@ export class AiConversationController {
       membership.workspaceId,
       parseRequest(UuidV7Schema, conversationId),
     );
+  }
+}
+
+/**
+ * Anonymous read surface for a public conversation. It is registered apart
+ * from the tenant controller so no session cookie is required; the signed
+ * token is the only credential and every failure is the same 404.
+ */
+@Controller("public/ai-chats")
+@UseGuards(PublicShareRateLimitGuard)
+export class AiPublicConversationController {
+  constructor(
+    @Inject(AiConversationService) private readonly conversations: AiConversationService,
+  ) {}
+
+  @Get(":token")
+  read(@Param("token") token: string) {
+    return this.conversations.readPublic(token);
   }
 }

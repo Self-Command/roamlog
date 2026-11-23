@@ -261,6 +261,19 @@ export function registerAiPaths(registry: OpenAPIRegistry): void {
   });
 
   registerOperation(registry, {
+    method: "patch",
+    path: "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/visibility",
+    operationId: "setAiConversationVisibility",
+    tag: "AI",
+    summary: "Set an AI conversation's private/public visibility",
+    description:
+      "Ports vercel/chatbot's visibility action. Public conversations receive an opaque signed share URL; switching to private invalidates every previously issued URL. Only the owning user can change visibility.",
+    params: AiConversationParamsSchema,
+    body: c.SetAiConversationVisibilityRequestSchema,
+    response: c.AiConversationSchema,
+  });
+
+  registerOperation(registry, {
     method: "post",
     path: "/v1/workspaces/{workspaceId}/ai/conversations/{conversationId}/archive",
     operationId: "archiveAiConversation",
@@ -345,5 +358,18 @@ export function registerAiPaths(registry: OpenAPIRegistry): void {
     params: AiConversationParamsSchema,
     response: c.AiConversationTitleResponseSchema,
     status: 200,
+  });
+
+  registerOperation(registry, {
+    method: "get",
+    path: "/v1/public/ai-chats/{token}",
+    operationId: "getPublicAiChat",
+    tag: "AI",
+    summary: "Read a publicly shared AI conversation",
+    description:
+      "Anonymous read-only projection of a public conversation. The opaque token is verified against the conversation's current share revision, so switching the conversation to private revokes every old URL immediately. Only text and image message parts are exposed.",
+    params: z.object({ token: c.PublicShareTokenSchema }),
+    response: c.PublicAiChatResponseSchema,
+    public: true,
   });
 }

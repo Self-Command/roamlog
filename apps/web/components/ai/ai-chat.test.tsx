@@ -65,9 +65,7 @@ function makePlan(overrides: Partial<AiChatResponse> = {}): AiChatResponse {
   });
 }
 
-function makeExecution(
-  overrides: Partial<AiRunExecuteResponse> = {},
-): AiRunExecuteResponse {
+function makeExecution(overrides: Partial<AiRunExecuteResponse> = {}): AiRunExecuteResponse {
   return {
     results: [
       { tool: "trips.create", ok: true, entityId: TRIP_ID },
@@ -101,6 +99,8 @@ const REMOTE_CONVERSATION = {
   title: null,
   titleSource: "placeholder",
   status: "regular",
+  visibility: "private",
+  shareUrl: null,
   lastMessageAt: null,
   createdAt: "2026-11-20T08:00:00.000Z",
   updatedAt: "2026-11-20T08:00:00.000Z",
@@ -185,9 +185,7 @@ function mockStreamFailure(error: unknown): void {
 }
 
 function renderChat(role: "owner" | "editor" | "viewer" = "editor") {
-  return render(
-    <AiChat workspaceId={WORKSPACE_ID} workspaceSlug={WORKSPACE_SLUG} role={role} />,
-  );
+  return render(<AiChat workspaceId={WORKSPACE_ID} workspaceSlug={WORKSPACE_SLUG} role={role} />);
 }
 
 async function sendPrompt(user: ReturnType<typeof userEvent.setup>) {
@@ -298,9 +296,7 @@ describe("AiChat plan confirmation", () => {
     await sendPrompt(user);
 
     const card = await screen.findByLabelText("计划确认卡");
-    expect(
-      within(card).getByText(/计划日期早于今天，已忽略该调用/),
-    ).toBeInTheDocument();
+    expect(within(card).getByText(/计划日期早于今天，已忽略该调用/)).toBeInTheDocument();
     expect(within(card).getByText(/已搜索：Kyoto, Japan/)).toBeInTheDocument();
   });
 
@@ -366,9 +362,7 @@ describe("AiChat plan confirmation", () => {
 
     const card = await screen.findByLabelText("计划确认卡");
     await user.click(within(card).getByRole("checkbox", { name: /选择「行程」全部 1 项/ }));
-    await user.click(
-      within(card).getByRole("checkbox", { name: /选择「打包清单」全部 1 项/ }),
-    );
+    await user.click(within(card).getByRole("checkbox", { name: /选择「打包清单」全部 1 项/ }));
 
     expect(within(card).getByText(/已选 0 \/ 2/)).toBeInTheDocument();
     expect(within(card).getByText("至少选择 1 项才能执行。")).toBeInTheDocument();
@@ -383,9 +377,7 @@ describe("AiChat plan confirmation", () => {
     await sendPrompt(user);
 
     const card = await screen.findByLabelText("计划确认卡");
-    expect(within(card).getByTestId("plan-empty")).toHaveTextContent(
-      "这次没有需要写入的操作",
-    );
+    expect(within(card).getByTestId("plan-empty")).toHaveTextContent("这次没有需要写入的操作");
     expect(within(card).queryByTestId("plan-group")).not.toBeInTheDocument();
     expect(within(card).queryByTestId("plan-confirm")).not.toBeInTheDocument();
   });
@@ -431,9 +423,7 @@ describe("AiChat plan confirmation", () => {
     await user.click(confirm);
     expect(executeMock).not.toHaveBeenCalled();
     expect(within(card).getByText(/再次点击按钮会移除 1 项/)).toBeInTheDocument();
-    expect(within(card).getByTestId("plan-confirm")).toHaveTextContent(
-      "再次点击确认移除 1 项",
-    );
+    expect(within(card).getByTestId("plan-confirm")).toHaveTextContent("再次点击确认移除 1 项");
 
     await user.click(within(card).getByTestId("plan-confirm"));
     await waitFor(() => expect(executeMock).toHaveBeenCalledTimes(1));

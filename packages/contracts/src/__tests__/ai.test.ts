@@ -18,6 +18,7 @@ import {
   AiConversationListResponseSchema,
   AiConversationMessagesResponseSchema,
   AiConversationSchema,
+  PublicAiChatResponseSchema,
   AiRewriteRequestSchema,
   AiRewriteResponseSchema,
   AiRunExecuteRequestSchema,
@@ -28,6 +29,7 @@ import {
   AiToolCallSchema,
   AiToolResultSchema,
   CreateAiConversationRequestSchema,
+  SetAiConversationVisibilityRequestSchema,
   UpdateAiConversationRequestSchema,
   UpsertAiMessageRequestSchema,
   isReadOnlyAiTool,
@@ -68,18 +70,15 @@ describe("AI planning contracts", () => {
       "participants.add",
       "participants.remove",
       "participants.role",
+      "artifacts.create",
+      "artifacts.update",
+      "artifacts.edit",
+      "artifacts.suggest",
     ]);
     // The expanded surface includes edit/delete tools, but audience-ish and
     // privacy-ish capabilities must never appear as tool names: a model cannot
     // grant access, change visibility or flip the exact-photo privacy switch.
-    for (const forbidden of [
-      "permission",
-      "settings",
-      "visibility",
-      "share",
-      "grant",
-      "public",
-    ]) {
+    for (const forbidden of ["permission", "settings", "visibility", "share", "grant", "public"]) {
       expect(AI_TOOL_NAMES.some((name) => name.includes(forbidden))).toBe(false);
     }
     expect(isReadOnlyAiTool("places.search")).toBe(true);
@@ -261,16 +260,19 @@ describe("AI rewrite contracts", () => {
     expect(AiRewriteRequestSchema.safeParse(base).success).toBe(true);
     // A free-text instruction must never reach the model.
     expect(
-      AiRewriteRequestSchema.safeParse({ ...base, instruction: "rewrite it like Hemingway" }).success,
+      AiRewriteRequestSchema.safeParse({ ...base, instruction: "rewrite it like Hemingway" })
+        .success,
     ).toBe(false);
-    expect(
-      AiRewriteRequestSchema.safeParse({ ...base, instruction: "IMPROVE" }).success,
-    ).toBe(false);
+    expect(AiRewriteRequestSchema.safeParse({ ...base, instruction: "IMPROVE" }).success).toBe(
+      false,
+    );
     // The removed self-invented verbs are gone from the closed set.
     expect(AiRewriteRequestSchema.safeParse({ ...base, instruction: "tone_formal" }).success).toBe(
       false,
     );
-    expect(AiRewriteRequestSchema.safeParse({ ...base, instruction: "polish" }).success).toBe(false);
+    expect(AiRewriteRequestSchema.safeParse({ ...base, instruction: "polish" }).success).toBe(
+      false,
+    );
   });
 
   it("keeps undeclared instruction channels out of the body", () => {
@@ -329,9 +331,9 @@ describe("AI rewrite contracts", () => {
     expect(
       AiRewriteRequestSchema.safeParse({ ...base, selectionHash: "A".repeat(64) }).success,
     ).toBe(false);
-    expect(
-      AiRewriteRequestSchema.safeParse({ ...base, selectionHash: undefined }).success,
-    ).toBe(false);
+    expect(AiRewriteRequestSchema.safeParse({ ...base, selectionHash: undefined }).success).toBe(
+      false,
+    );
   });
 
   it("bounds both the selection and the wire payload", () => {
@@ -341,8 +343,10 @@ describe("AI rewrite contracts", () => {
         .success,
     ).toBe(true);
     expect(
-      AiRewriteRequestSchema.safeParse({ ...base, text: "字".repeat(AI_REWRITE_MAX_TEXT_CHARS + 1) })
-        .success,
+      AiRewriteRequestSchema.safeParse({
+        ...base,
+        text: "字".repeat(AI_REWRITE_MAX_TEXT_CHARS + 1),
+      }).success,
     ).toBe(false);
     // The domain ceiling is stricter than the wire cap; the service answers 422.
     expect(AI_REWRITE_MAX_INPUT_CHARS).toBeLessThan(AI_REWRITE_MAX_TEXT_CHARS);
@@ -412,8 +416,12 @@ describe("AI chat request compatibility", () => {
     expect(
       AiChatRequestSchema.safeParse({ message: "hi", conversationId: "not-a-uuid" }).success,
     ).toBe(false);
-    expect(AiChatRequestSchema.safeParse({ message: "hi", conversationId: 42 }).success).toBe(false);
-    expect(AiChatRequestSchema.safeParse({ message: "hi", clientMessageId: 42 }).success).toBe(false);
+    expect(AiChatRequestSchema.safeParse({ message: "hi", conversationId: 42 }).success).toBe(
+      false,
+    );
+    expect(AiChatRequestSchema.safeParse({ message: "hi", clientMessageId: 42 }).success).toBe(
+      false,
+    );
     expect(
       AiChatRequestSchema.safeParse({ message: "hi", clientMessageId: "x".repeat(65) }).success,
     ).toBe(false);
@@ -499,9 +507,9 @@ describe("AI stream event protocol v1", () => {
   });
 
   it("rejects an unknown event name", () => {
-    expect(
-      AiStreamEventSchema.safeParse({ type: "tool.result", runId: RUN_ID }).success,
-    ).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ type: "tool.result", runId: RUN_ID }).success).toBe(
+      false,
+    );
   });
 
   it("accepts the additive subjects map and rejects a malformed one", () => {
@@ -526,9 +534,9 @@ describe("AI stream event protocol v1", () => {
       }).success,
     ).toBe(true);
     // A subject is only ever `{ label }`, and the label is bounded.
-    expect(
-      AiStreamEventSchema.safeParse({ ...plan, subjects: { [TRIP_ID]: {} } }).success,
-    ).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...plan, subjects: { [TRIP_ID]: {} } }).success).toBe(
+      false,
+    );
     expect(
       AiStreamEventSchema.safeParse({
         ...plan,
@@ -598,7 +606,9 @@ describe("AI stream event protocol v1", () => {
       expect(AiStreamEventSchema.safeParse({ ...event, extra: true }).success).toBe(false);
     }
     expect(AiStreamEventSchema.safeParse({ ...start, args: [] }).success).toBe(false);
-    expect(AiStreamEventSchema.safeParse({ ...start, startedAt: "not-a-date" }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...start, startedAt: "not-a-date" }).success).toBe(
+      false,
+    );
     expect(AiStreamEventSchema.safeParse({ ...toolProgress, percent: 101 }).success).toBe(false);
     expect(AiStreamEventSchema.safeParse({ ...toolProgress, percent: 1.5 }).success).toBe(false);
     expect(AiStreamEventSchema.safeParse({ ...end, status: "timeout" }).success).toBe(false);
@@ -722,6 +732,8 @@ describe("AI conversation persistence DTOs", () => {
     title: "大理三日慢游",
     titleSource: "placeholder",
     status: "regular",
+    visibility: "private",
+    shareUrl: null,
     lastMessageAt: "2026-11-19T14:00:00+08:00",
     createdAt: "2026-11-19T13:00:00+08:00",
     updatedAt: "2026-11-19T14:00:00+08:00",
@@ -752,6 +764,8 @@ describe("AI conversation persistence DTOs", () => {
       "title",
       "titleSource",
       "status",
+      "visibility",
+      "shareUrl",
       "lastMessageAt",
       "createdAt",
       "updatedAt",
@@ -763,7 +777,9 @@ describe("AI conversation persistence DTOs", () => {
   });
 
   it("rejects unknown fields on conversation DTOs", () => {
-    expect(AiConversationSchema.safeParse({ ...conversation, deletedAt: null }).success).toBe(false);
+    expect(AiConversationSchema.safeParse({ ...conversation, deletedAt: null }).success).toBe(
+      false,
+    );
     expect(
       AiConversationListResponseSchema.safeParse({
         items: [conversation],
@@ -777,13 +793,51 @@ describe("AI conversation persistence DTOs", () => {
     expect(CreateAiConversationRequestSchema.safeParse({}).success).toBe(true);
     expect(CreateAiConversationRequestSchema.safeParse({ title: "新会话" }).success).toBe(true);
     expect(CreateAiConversationRequestSchema.safeParse({ title: "" }).success).toBe(false);
-    expect(CreateAiConversationRequestSchema.safeParse({ workspaceId: CONVERSATION_ID }).success).toBe(
-      false,
-    );
+    expect(
+      CreateAiConversationRequestSchema.safeParse({ workspaceId: CONVERSATION_ID }).success,
+    ).toBe(false);
 
     expect(UpdateAiConversationRequestSchema.safeParse({ title: "改名" }).success).toBe(true);
     expect(UpdateAiConversationRequestSchema.safeParse({}).success).toBe(false);
-    expect(UpdateAiConversationRequestSchema.safeParse({ title: "改名", status: "archived" }).success).toBe(
+    expect(
+      UpdateAiConversationRequestSchema.safeParse({ title: "改名", status: "archived" }).success,
+    ).toBe(false);
+    expect(
+      SetAiConversationVisibilityRequestSchema.safeParse({ visibility: "public" }).success,
+    ).toBe(true);
+    expect(
+      SetAiConversationVisibilityRequestSchema.safeParse({ visibility: "shared" }).success,
+    ).toBe(false);
+  });
+
+  it("keeps the public conversation projection strict and free of internal fields", () => {
+    const payload = {
+      title: "京都慢游",
+      createdAt: "2026-11-19T13:00:00+08:00",
+      lastMessageAt: "2026-11-19T14:00:00+08:00",
+      isReadOnly: true,
+      messages: [
+        {
+          id: "01942f30-1200-7000-8000-000000000501",
+          role: "assistant",
+          content: [{ type: "text", text: "第一天去清水寺。" }],
+          createdAt: "2026-11-19T14:00:00+08:00",
+        },
+      ],
+    } as const;
+    expect(PublicAiChatResponseSchema.safeParse(payload).success).toBe(true);
+    expect(
+      PublicAiChatResponseSchema.safeParse({
+        ...payload,
+        messages: [
+          {
+            ...payload.messages[0],
+            content: [...payload.messages[0].content, { type: "tool-call", toolName: "internal" }],
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(PublicAiChatResponseSchema.safeParse({ ...payload, userId: USER_ID }).success).toBe(
       false,
     );
   });
@@ -815,7 +869,9 @@ describe("AI conversation persistence DTOs", () => {
     expect(AiThreadMessageSchema.safeParse(withoutClientId).success).toBe(false);
     expect(AiThreadMessageSchema.safeParse({ ...message, role: "tool" }).success).toBe(false);
     // …and so are extra envelope keys.
-    expect(AiThreadMessageSchema.safeParse({ ...message, attachmentsExtra: [] }).success).toBe(false);
+    expect(AiThreadMessageSchema.safeParse({ ...message, attachmentsExtra: [] }).success).toBe(
+      false,
+    );
     expect(
       AiConversationMessagesResponseSchema.safeParse({
         headId: null,
@@ -904,9 +960,9 @@ describe("AI chat attachments, model and reasoning depth", () => {
     expect(AiAttachmentSchema.safeParse(attach({ sizeBytes: 20 * 1024 * 1024 })).success).toBe(
       true,
     );
-    expect(
-      AiAttachmentSchema.safeParse(attach({ sizeBytes: 20 * 1024 * 1024 + 1 })).success,
-    ).toBe(false);
+    expect(AiAttachmentSchema.safeParse(attach({ sizeBytes: 20 * 1024 * 1024 + 1 })).success).toBe(
+      false,
+    );
     expect(AiAttachmentSchema.safeParse(attach({ sizeBytes: 0 })).success).toBe(false);
     expect(AiAttachmentSchema.safeParse(attach({ mimeType: "application/pdf" })).success).toBe(
       false,
@@ -915,9 +971,9 @@ describe("AI chat attachments, model and reasoning depth", () => {
     expect(AiAttachmentSchema.safeParse(attach({ mediaId: "not-a-uuid" })).success).toBe(false);
     expect(AiAttachmentSchema.safeParse(attach({ kind: "video" })).success).toBe(false);
     // `.strict()`: an unknown key can never be smuggled onto the wire.
-    expect(AiAttachmentSchema.safeParse(attach({ url: "https://example.test/x.png" })).success).toBe(
-      false,
-    );
+    expect(
+      AiAttachmentSchema.safeParse(attach({ url: "https://example.test/x.png" })).success,
+    ).toBe(false);
     expect(AI_ATTACHMENT_MIME_TYPES).toEqual([
       "image/jpeg",
       "image/png",
@@ -946,8 +1002,11 @@ describe("AI chat attachments, model and reasoning depth", () => {
     expect(parsed.models).toHaveLength(1);
     expect(parsed.models[0]?.provider).toBe("openai");
     expect(
-      AiChatModelsResponseSchema.safeParse({ models: [], defaultModel: "", reasoningSupported: true })
-        .success,
+      AiChatModelsResponseSchema.safeParse({
+        models: [],
+        defaultModel: "",
+        reasoningSupported: true,
+      }).success,
     ).toBe(false);
   });
 

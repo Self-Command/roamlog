@@ -36,6 +36,7 @@ import type {
   GenerateAiConversationTitle200,
   GetAiConversation200,
   GetAiStreamStatus200,
+  GetPublicAiChat200,
   ListAiConversationMessages200,
   ListAiConversations200,
   ListAiConversationsParams,
@@ -44,6 +45,8 @@ import type {
   ResumeAiStreamParams,
   RewriteAiSelection200,
   RewriteAiSelectionBody,
+  SetAiConversationVisibility200,
+  SetAiConversationVisibilityBody,
   StreamAiChatBody,
   UnarchiveAiConversation200,
   UpdateAiConversation200,
@@ -2260,6 +2263,158 @@ export const useDeleteAiConversation = <TError = ProblemDetails, TContext = unkn
 > => {
   return useMutation(getDeleteAiConversationMutationOptions(options), queryClient);
 };
+export type setAiConversationVisibilityResponse200 = {
+  data: SetAiConversationVisibility200;
+  status: 200;
+};
+
+export type setAiConversationVisibilityResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type setAiConversationVisibilityResponse401 = {
+  data: ProblemDetails;
+  status: 401;
+};
+
+export type setAiConversationVisibilityResponse403 = {
+  data: ProblemDetails;
+  status: 403;
+};
+
+export type setAiConversationVisibilityResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type setAiConversationVisibilityResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type setAiConversationVisibilityResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type setAiConversationVisibilityResponseSuccess = setAiConversationVisibilityResponse200 & {
+  headers: Headers;
+};
+export type setAiConversationVisibilityResponseError = (
+  | setAiConversationVisibilityResponse400
+  | setAiConversationVisibilityResponse401
+  | setAiConversationVisibilityResponse403
+  | setAiConversationVisibilityResponse404
+  | setAiConversationVisibilityResponse429
+  | setAiConversationVisibilityResponse500
+) & {
+  headers: Headers;
+};
+
+export type setAiConversationVisibilityResponse =
+  setAiConversationVisibilityResponseSuccess | setAiConversationVisibilityResponseError;
+
+export const getSetAiConversationVisibilityUrl = (workspaceId: string, conversationId: string) => {
+  return `/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/visibility`;
+};
+
+/**
+ * Ports vercel/chatbot's visibility action. Public conversations receive an opaque signed share URL; switching to private invalidates every previously issued URL. Only the owning user can change visibility.
+ * @summary Set an AI conversation's private/public visibility
+ */
+export const setAiConversationVisibility = async (
+  workspaceId: string,
+  conversationId: string,
+  setAiConversationVisibilityBody: SetAiConversationVisibilityBody,
+  options?: RequestInit,
+): Promise<setAiConversationVisibilityResponse> => {
+  const res = await fetch(getSetAiConversationVisibilityUrl(workspaceId, conversationId), {
+    ...options,
+    method: "PATCH",
+    headers: getHeaders({ "Content-Type": "application/json" }, options?.headers),
+    body: JSON.stringify(setAiConversationVisibilityBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setAiConversationVisibilityResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as setAiConversationVisibilityResponse;
+};
+
+export const getSetAiConversationVisibilityMutationKey = () =>
+  ["setAiConversationVisibility"] as const;
+
+export const getSetAiConversationVisibilityMutationOptions = <
+  TError = ProblemDetails,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setAiConversationVisibility>>,
+    TError,
+    SetAiConversationVisibilityMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setAiConversationVisibility>>,
+  TError,
+  SetAiConversationVisibilityMutationVariables,
+  TContext
+> => {
+  const mutationKey = getSetAiConversationVisibilityMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setAiConversationVisibility>>,
+    SetAiConversationVisibilityMutationVariables
+  > = (props) => {
+    const { workspaceId, conversationId, data } = props ?? {};
+
+    return setAiConversationVisibility(workspaceId, conversationId, data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetAiConversationVisibilityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setAiConversationVisibility>>
+>;
+export type SetAiConversationVisibilityMutationBody = SetAiConversationVisibilityBody;
+export type SetAiConversationVisibilityMutationError = ProblemDetails;
+export type SetAiConversationVisibilityMutationVariables = {
+  workspaceId: string;
+  conversationId: string;
+  data: SetAiConversationVisibilityBody;
+};
+
+/**
+ * Ports vercel/chatbot's visibility action. Public conversations receive an opaque signed share URL; switching to private invalidates every previously issued URL. Only the owning user can change visibility.
+ * @summary Set an AI conversation's private/public visibility
+ */
+export const useSetAiConversationVisibility = <TError = ProblemDetails, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof setAiConversationVisibility>>,
+      TError,
+      SetAiConversationVisibilityMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof setAiConversationVisibility>>,
+  TError,
+  SetAiConversationVisibilityMutationVariables,
+  TContext
+> => {
+  return useMutation(getSetAiConversationVisibilityMutationOptions(options), queryClient);
+};
 export type archiveAiConversationResponse200 = {
   data: ArchiveAiConversation200;
   status: 200;
@@ -3229,3 +3384,189 @@ export const useGenerateAiConversationTitle = <TError = ProblemDetails, TContext
 > => {
   return useMutation(getGenerateAiConversationTitleMutationOptions(options), queryClient);
 };
+export type getPublicAiChatResponse200 = {
+  data: GetPublicAiChat200;
+  status: 200;
+};
+
+export type getPublicAiChatResponse400 = {
+  data: ProblemDetails;
+  status: 400;
+};
+
+export type getPublicAiChatResponse404 = {
+  data: ProblemDetails;
+  status: 404;
+};
+
+export type getPublicAiChatResponse429 = {
+  data: ProblemDetails;
+  status: 429;
+};
+
+export type getPublicAiChatResponse500 = {
+  data: ProblemDetails;
+  status: 500;
+};
+
+export type getPublicAiChatResponse503 = {
+  data: ProblemDetails;
+  status: 503;
+};
+
+export type getPublicAiChatResponseSuccess = getPublicAiChatResponse200 & {
+  headers: Headers;
+};
+export type getPublicAiChatResponseError = (
+  | getPublicAiChatResponse400
+  | getPublicAiChatResponse404
+  | getPublicAiChatResponse429
+  | getPublicAiChatResponse500
+  | getPublicAiChatResponse503
+) & {
+  headers: Headers;
+};
+
+export type getPublicAiChatResponse = getPublicAiChatResponseSuccess | getPublicAiChatResponseError;
+
+export const getGetPublicAiChatUrl = (token: string) => {
+  return `/v1/public/ai-chats/${token}`;
+};
+
+/**
+ * Anonymous read-only projection of a public conversation. The opaque token is verified against the conversation's current share revision, so switching the conversation to private revokes every old URL immediately. Only text and image message parts are exposed.
+ * @summary Read a publicly shared AI conversation
+ */
+export const getPublicAiChat = async (
+  token: string,
+  options?: RequestInit,
+): Promise<getPublicAiChatResponse> => {
+  const res = await fetch(getGetPublicAiChatUrl(token), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getPublicAiChatResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getPublicAiChatResponse;
+};
+
+export const getGetPublicAiChatQueryKey = (token: string) => {
+  return [`/v1/public/ai-chats/${token}`] as const;
+};
+
+export const getGetPublicAiChatQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPublicAiChat>>,
+  TError = ProblemDetails,
+>(
+  token: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicAiChat>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPublicAiChatQueryKey(token);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicAiChat>>> = ({ signal }) =>
+    getPublicAiChat(token, { signal, ...fetchOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: token !== null && token !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getPublicAiChat>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetPublicAiChatQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicAiChat>>>;
+export type GetPublicAiChatQueryError = ProblemDetails;
+
+/**
+ * Anonymous read-only projection of a public conversation. The opaque token is verified against the conversation's current share revision, so switching the conversation to private revokes every old URL immediately. Only text and image message parts are exposed.
+ * @summary Read a publicly shared AI conversation
+ */
+export function useGetPublicAiChat<
+  TData = Awaited<ReturnType<typeof getPublicAiChat>>,
+  TError = ProblemDetails,
+>(
+  token: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicAiChat>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPublicAiChat>>,
+          TError,
+          Awaited<ReturnType<typeof getPublicAiChat>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Anonymous read-only projection of a public conversation. The opaque token is verified against the conversation's current share revision, so switching the conversation to private revokes every old URL immediately. Only text and image message parts are exposed.
+ * @summary Read a publicly shared AI conversation
+ */
+export function useGetPublicAiChat<
+  TData = Awaited<ReturnType<typeof getPublicAiChat>>,
+  TError = ProblemDetails,
+>(
+  token: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicAiChat>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPublicAiChat>>,
+          TError,
+          Awaited<ReturnType<typeof getPublicAiChat>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Anonymous read-only projection of a public conversation. The opaque token is verified against the conversation's current share revision, so switching the conversation to private revokes every old URL immediately. Only text and image message parts are exposed.
+ * @summary Read a publicly shared AI conversation
+ */
+export function useGetPublicAiChat<
+  TData = Awaited<ReturnType<typeof getPublicAiChat>>,
+  TError = ProblemDetails,
+>(
+  token: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicAiChat>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * Anonymous read-only projection of a public conversation. The opaque token is verified against the conversation's current share revision, so switching the conversation to private revokes every old URL immediately. Only text and image message parts are exposed.
+ * @summary Read a publicly shared AI conversation
+ */
+export function useGetPublicAiChat<
+  TData = Awaited<ReturnType<typeof getPublicAiChat>>,
+  TError = ProblemDetails,
+>(
+  token: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicAiChat>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetPublicAiChatQueryOptions(token, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

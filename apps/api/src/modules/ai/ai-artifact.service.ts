@@ -422,6 +422,7 @@ export class AiArtifactService {
       title: string;
       kind: Extract<AiArtifactKind, "text" | "code" | "sheet">;
       brief?: string;
+      conversationId?: string;
     },
   ): Promise<AiArtifact> {
     const content = await this.generateContent(input.kind, input.title, input.brief);
@@ -429,6 +430,7 @@ export class AiArtifactService {
       title: input.title,
       kind: input.kind,
       content,
+      ...(input.conversationId ? { conversationId: input.conversationId } : {}),
     });
   }
 

@@ -28,6 +28,11 @@ import {
   useConversationSync,
   type RemoteConversationThreadListAdapter,
 } from "./thread-list-adapter";
+import {
+  ConversationVisibilitySubmenu,
+  shareUrlFromThreadCustom,
+  visibilityFromThreadCustom,
+} from "./visibility-selector";
 
 /**
  * Ported behavior from vercel/chatbot
@@ -126,17 +131,23 @@ export function groupThreads<T extends ThreadListDateItem>(
 }
 
 function ThreadListItem({
+  workspaceId,
   onRequestDelete,
   onRequestRename,
   onClose,
 }: {
+  workspaceId: string;
   onRequestDelete: (target: { id: string; title: string }) => void;
   onRequestRename: (target: { id: string; title: string }) => void;
   onClose?: () => void;
 }) {
+  const aui = useAui();
   const item = useAuiState((state) => state.threadListItem);
   const isActive = useAuiState((state) => state.threads.mainThreadId === state.threadListItem.id);
   const title = item.title?.trim() || "新会话";
+  const refreshThreads = useCallback(async () => {
+    await aui.threads.reload();
+  }, [aui]);
 
   return (
     <ThreadListItemPrimitive.Root
@@ -165,7 +176,16 @@ function ThreadListItem({
             <MoreHorizontal aria-hidden="true" className="size-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-36">
+        <DropdownMenuContent align="end" className="w-40">
+          {item.remoteId ? (
+            <ConversationVisibilitySubmenu
+              conversationId={item.remoteId}
+              onUpdated={refreshThreads}
+              shareUrl={shareUrlFromThreadCustom(item.custom)}
+              visibility={visibilityFromThreadCustom(item.custom)}
+              workspaceId={workspaceId}
+            />
+          ) : null}
           <DropdownMenuItem
             onSelect={() => onRequestRename({ id: item.id, title: item.title ?? "" })}
           >
@@ -229,9 +249,11 @@ function LoadMoreSentinel() {
 
 export function AiThreadList({
   adapter,
+  workspaceId,
   onClose,
 }: {
   adapter: RemoteConversationThreadListAdapter;
+  workspaceId: string;
   onClose?: () => void;
 }) {
   const aui = useAui();
@@ -410,6 +432,7 @@ export function AiThreadList({
                 {group.items.map(({ item, index }) => (
                   <ThreadListItemByIndexProvider key={item.id} index={index} archived={false}>
                     <ThreadListItem
+                      workspaceId={workspaceId}
                       onRequestDelete={requestDelete}
                       onRequestRename={requestRename}
                       {...(onClose ? { onClose } : {})}

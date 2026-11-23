@@ -23,12 +23,14 @@ import {
   getAiConversation as getAiConversationRequest,
   listAiConversationMessages as listAiConversationMessagesRequest,
   listAiConversations as listAiConversationsRequest,
+  setAiConversationVisibility as setAiConversationVisibilityRequest,
   unarchiveAiConversation as unarchiveAiConversationRequest,
   updateAiConversation as updateAiConversationRequest,
   upsertAiConversationMessage as upsertAiConversationMessageRequest,
   type CreateAiConversationBody,
   type DeleteAiConversationMessagesBody,
   type ListAiConversationsParams,
+  type SetAiConversationVisibilityBody,
   type UpdateAiConversationBody,
   type UpsertAiConversationMessageBody,
 } from "@roamlog/api-client";
@@ -194,6 +196,24 @@ export async function renameConversation(
   return run(async () =>
     unwrap(
       await updateAiConversationRequest(workspaceId, conversationId, body),
+      AiConversationSchema,
+      path,
+    ),
+  );
+}
+
+/** Upstream `updateChatVisibility`; the response carries the new signed URL. */
+export async function setConversationVisibility(
+  workspaceId: string,
+  conversationId: string,
+  visibility: SetAiConversationVisibilityBody["visibility"],
+): Promise<AiConversation> {
+  const path = conversationPath(workspaceId, `/${conversationId}/visibility`);
+  return run(async () =>
+    unwrap(
+      await setAiConversationVisibilityRequest(workspaceId, conversationId, {
+        visibility,
+      }),
       AiConversationSchema,
       path,
     ),

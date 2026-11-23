@@ -7,6 +7,7 @@
  */
 import type { ListAiConversations200ItemsItemStatus } from "./listAiConversations200ItemsItemStatus";
 import type { ListAiConversations200ItemsItemTitleSource } from "./listAiConversations200ItemsItemTitleSource";
+import type { ListAiConversations200ItemsItemVisibility } from "./listAiConversations200ItemsItemVisibility";
 
 export type ListAiConversations200ItemsItem = {
   /** Sortable UUIDv7 identifier. */
@@ -22,6 +23,12 @@ export type ListAiConversations200ItemsItem = {
   title: string | null;
   titleSource: ListAiConversations200ItemsItemTitleSource;
   status: ListAiConversations200ItemsItemStatus;
+  visibility: ListAiConversations200ItemsItemVisibility;
+  /**
+   * @maxLength 2048
+   * @nullable
+   */
+  shareUrl: string | null;
   /**
    * ISO 8601 timestamp with an explicit UTC offset.
    * @nullable

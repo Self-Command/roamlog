@@ -20,7 +20,15 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { createContext, useContext, useEffect, useId, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { createAiIdempotencyKey } from "@/lib/api/ai";
 
@@ -572,6 +580,7 @@ export function PlanConfirmationCard({
                       setArmed(true);
                       return;
                     }
+                    rememberConfirmedRun(plan.runId);
                     addResult({
                       status: "confirmed",
                       runId: plan.runId,
@@ -599,11 +608,87 @@ function resultLine(result: AiToolResult): string {
   return code ? toolFailureCopy(code) : "这一步没有保存成功，请稍后重试。";
 }
 
+const ARTIFACT_TOOLS = new Set<string>([
+  "artifacts.create",
+  "artifacts.update",
+  "artifacts.edit",
+  "artifacts.suggest",
+]);
+
+/**
+ * Runs confirmed in this browser session. Upstream opens the artifact while
+ * the document tool streams; the local plan transport instead finishes the
+ * execute request before the result card mounts. Remembering the explicit
+ * confirmation lets that result open its artifact once without reopening
+ * persisted results when an old conversation is loaded.
+ */
+const locallyConfirmedRuns = new Set<string>();
+
+function rememberConfirmedRun(runId: string): void {
+  locallyConfirmedRuns.add(runId);
+  // A confirmation whose turn never reaches the result card must not grow this
+  // set for the lifetime of the tab.
+  if (locallyConfirmedRuns.size > 20) {
+    const oldest = locallyConfirmedRuns.values().next().value;
+    if (typeof oldest === "string") locallyConfirmedRuns.delete(oldest);
+  }
+}
+
+/**
+ * Upstream opens the artifact panel from the document tool stream
+ * (`components/chat/create-artifact.tsx`, `lib/ai/tools/create-document.ts`).
+ * Roamlog's plan/execute transport returns the same reference on the tool
+ * result instead. Keep this derivation local so older execute responses that
+ * omitted the optional `artifact` object still open from `entityId`.
+ */
+export function artifactReferenceForResult(
+  item: AiToolResult,
+  call: AiToolCall | undefined,
+):
+  | { id: string; title?: string; kind?: "text" | "code" | "sheet" | "image" }
+  | undefined {
+  if (!item.ok || !call || !ARTIFACT_TOOLS.has(call.tool)) {
+    return undefined;
+  }
+  if (item.artifact) return item.artifact;
+  return item.entityId ? { id: item.entityId } : undefined;
+}
+
 export function ExecutionResultCard({
   result,
+  args,
 }: ToolCallMessagePartProps<Record<string, unknown>, ExecuteToolResult>) {
   const { workspaceSlug } = useWorkspaceChat();
   const artifacts = useOptionalAiArtifact();
+  const lastAutoOpened = useRef<string | null>(null);
+  const runId = typeof args?.runId === "string" ? args.runId : null;
+
+  const artifactResults =
+    result?.status === "executed"
+      ? result.response.results.flatMap((item, index) => {
+          const reference = artifactReferenceForResult(item, result.calls[index]);
+          return reference ? [{ key: `${String(index)}:${reference.id}`, reference }] : [];
+        })
+      : [];
+  // If one turn produces several artifacts, the last result is the newest one,
+  // matching the upstream document stream's last `data-id`.
+  const autoArtifact = artifactResults.at(-1);
+  const autoOpenKey = autoArtifact
+    ? `${runId ?? "run"}:${autoArtifact.key}`
+    : null;
+
+  useEffect(() => {
+    if (!autoArtifact || !artifacts || !autoOpenKey || !runId) return;
+    if (lastAutoOpened.current === autoOpenKey) return;
+    // Consume the confirmation exactly once. A persisted result from history
+    // has no entry here and therefore stays closed.
+    if (!locallyConfirmedRuns.delete(runId)) return;
+    lastAutoOpened.current = autoOpenKey;
+    void artifacts.openArtifact(autoArtifact.reference).catch(() => {
+      // The panel keeps the old artifact visible and surfaces the request error.
+    });
+  }, [artifacts, autoArtifact, autoOpenKey, runId]);
+
   if (!result) return null;
 
   if (result.status === "failed") {
@@ -663,11 +748,7 @@ export function ExecutionResultCard({
             item.ok && item.entityId && call?.tool === "trips.create"
               ? `/w/${workspaceSlug}/trips/${item.entityId}`
               : null;
-          const artifact = (
-            item as AiToolResult & {
-              artifact?: { id: string; title?: string; kind?: string };
-            }
-          ).artifact;
+          const artifact = artifactReferenceForResult(item, call);
 
           return (
             <li key={`${item.tool}-${index}`} className="flex items-start gap-3 px-4 py-3">

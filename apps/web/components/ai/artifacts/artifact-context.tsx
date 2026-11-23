@@ -48,7 +48,8 @@ interface ArtifactContextValue {
   closeArtifact: () => void;
   setMode: (mode: ArtifactMode) => void;
   setVersionIndex: (index: number) => void;
-  saveContent: (content: string, debounce?: boolean) => Promise<void>;
+  /** Resolves true when this content is on the server (or nothing was pending). */
+  saveContent: (content: string, debounce?: boolean) => Promise<boolean>;
   restoreVersion: (version: number) => Promise<void>;
   applySuggestion: (suggestion: AiArtifactSuggestion) => Promise<void>;
   resolveSuggestion: (suggestionId: string, resolved: boolean) => Promise<void>;
@@ -76,19 +77,28 @@ export function AiArtifactProvider({
   const [versionIndex, setVersionIndex] = useState(0);
   const [status, setStatus] = useState<ArtifactStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingContent = useRef<string | null>(null);
+  const saveChain = useRef<Promise<boolean> | null>(null);
   const artifactRef = useRef<AiArtifact | null>(null);
   artifactRef.current = artifact;
 
   const currentContent =
-    versions[versionIndex]?.content ?? artifact?.content ?? "";
+    pendingDraft ?? versions[versionIndex]?.content ?? artifact?.content ?? "";
   const isCurrentVersion = !artifact || versionIndex === versions.length - 1;
 
   const loadDetails = useCallback(
     async (artifactId: string): Promise<void> => {
       setStatus("loading");
       setError(null);
+      if (artifactRef.current && artifactRef.current.id !== artifactId) {
+        setArtifact(null);
+        setVersions([]);
+        setSuggestions([]);
+        setPendingDraft(null);
+        pendingContent.current = null;
+      }
       try {
         const [nextArtifact, nextVersions, nextSuggestions] = await Promise.all([
           getAiArtifact(workspaceId, artifactId),
@@ -98,6 +108,7 @@ export function AiArtifactProvider({
         setArtifact(nextArtifact);
         setVersions(nextVersions);
         setSuggestions(nextSuggestions);
+        setPendingDraft(null);
         setVersionIndex(Math.max(0, nextVersions.length - 1));
         setStatus("idle");
       } catch (cause) {
@@ -112,6 +123,11 @@ export function AiArtifactProvider({
   const openArtifact = useCallback(
     async (reference: ArtifactReference | string): Promise<void> => {
       const id = typeof reference === "string" ? reference : reference.id;
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      await flushSaveRef.current();
       setVisible(true);
       setMode("edit");
       await loadDetails(id);
@@ -121,6 +137,14 @@ export function AiArtifactProvider({
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!artifactRef.current) return;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    // A retry after a save conflict adopts the server version. Keeping the
+    // rejected client draft would retry the same stale optimistic version.
+    pendingContent.current = null;
+    setPendingDraft(null);
     await loadDetails(artifactRef.current.id);
   }, [loadDetails]);
 
@@ -128,60 +152,90 @@ export function AiArtifactProvider({
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
-      const content = pendingContent.current;
-      pendingContent.current = null;
-      if (content !== null && artifactRef.current) {
-        void updateAiArtifact(workspaceId, artifactRef.current.id, {
-          content,
-          version: artifactRef.current.version,
-        }).catch(() => undefined);
-      }
     }
+    if (pendingContent.current !== null) void flushSaveRef.current();
     setVisible(false);
+  }, []);
+
+  const commitPending = useCallback(async (): Promise<boolean> => {
+    const latest = artifactRef.current;
+    const nextContent = pendingContent.current;
+    if (!latest || nextContent === null) return true;
+
+    // Clear before the request so edits made while it is in flight become the
+    // next item on the chain instead of being dropped when the first response
+    // returns.
+    pendingContent.current = null;
+    setStatus("saving");
+    setError(null);
+    try {
+      const updated = await updateAiArtifact(workspaceId, latest.id, {
+        content: nextContent,
+        version: latest.version,
+      });
+      artifactRef.current = updated;
+      setArtifact(updated);
+      setStatus("idle");
+      if (pendingContent.current === null) setPendingDraft(null);
+      try {
+        const nextVersions = await listAiArtifactVersions(workspaceId, updated.id);
+        setVersions(nextVersions);
+        setVersionIndex(Math.max(0, nextVersions.length - 1));
+      } catch {
+        setStatus("error");
+        setError("文档已保存，但版本列表加载失败，请重新加载。");
+      }
+      return true;
+    } catch (cause) {
+      // Preserve the draft for a retry, but never overwrite a newer edit that
+      // arrived while this request was in flight.
+      if (pendingContent.current === null) pendingContent.current = nextContent;
+      setStatus("error");
+      setError(messageOf(cause));
+      return false;
+    }
   }, [workspaceId]);
 
+  const flushSave = useCallback((): Promise<boolean> => {
+    const previous = saveChain.current ?? Promise.resolve(true);
+    const next = previous.then(async () => {
+      let ok = true;
+      while (pendingContent.current !== null) {
+        ok = await commitPending();
+        if (!ok) break;
+      }
+      return ok;
+    });
+    saveChain.current = next;
+    void next.then(() => {
+      if (saveChain.current === next) saveChain.current = null;
+    });
+    return next;
+  }, [commitPending]);
+
+  const flushSaveRef = useRef(flushSave);
+  flushSaveRef.current = flushSave;
+
   const saveContent = useCallback(
-    async (content: string, debounce = true): Promise<void> => {
+    async (content: string, debounce = true): Promise<boolean> => {
       const current = artifactRef.current;
-      if (!current || !isCurrentVersion) return;
+      if (!current || !isCurrentVersion) return false;
 
       pendingContent.current = content;
+      setPendingDraft(content);
       if (saveTimer.current) clearTimeout(saveTimer.current);
 
-      const commit = async (): Promise<void> => {
-        const latest = artifactRef.current;
-        const nextContent = pendingContent.current;
-        if (!latest || nextContent === null) return;
-        setStatus("saving");
-        setError(null);
-        try {
-          const updated = await updateAiArtifact(workspaceId, latest.id, {
-            content: nextContent,
-            version: latest.version,
-          });
-          pendingContent.current = null;
-          setArtifact(updated);
-          setStatus("idle");
-          const nextVersions = await listAiArtifactVersions(workspaceId, updated.id);
-          setVersions(nextVersions);
-          setVersionIndex(Math.max(0, nextVersions.length - 1));
-        } catch (cause) {
-          setStatus("error");
-          setError(messageOf(cause));
-        }
-      };
-
       if (!debounce) {
-        await commit();
-        return;
+        return flushSave();
       }
 
       saveTimer.current = setTimeout(() => {
         saveTimer.current = null;
-        void commit();
+        void flushSaveRef.current();
       }, 2000);
+      return true;
     },
-    [isCurrentVersion, workspaceId],
+    [flushSave, isCurrentVersion],
   );
 
   useEffect(
@@ -193,6 +247,7 @@ export function AiArtifactProvider({
 
   const restoreVersion = useCallback(
     async (version: number): Promise<void> => {
+      if (!(await flushSaveRef.current())) return;
       const current = artifactRef.current;
       if (!current) return;
       setStatus("saving");
@@ -200,6 +255,7 @@ export function AiArtifactProvider({
       try {
         const restored = await restoreAiArtifactVersion(workspaceId, current.id, version);
         setArtifact(restored);
+        setPendingDraft(null);
         setMode("edit");
         const nextVersions = await listAiArtifactVersions(workspaceId, restored.id);
         setVersions(nextVersions);
@@ -224,8 +280,13 @@ export function AiArtifactProvider({
           suggestionId,
           resolved,
         );
+        // The REST list returns only unresolved suggestions; mirror that in
+        // the panel so applying/ignoring removes the row instead of leaving a
+        // disabled "0 待处理" section behind.
         setSuggestions((rows) =>
-          rows.map((row) => (row.id === saved.id ? saved : row)),
+          resolved
+            ? rows.filter((row) => row.id !== saved.id)
+            : rows.map((row) => (row.id === saved.id ? saved : row)),
         );
       } catch (cause) {
         setError(messageOf(cause));
@@ -236,6 +297,7 @@ export function AiArtifactProvider({
 
   const applySuggestion = useCallback(
     async (suggestion: AiArtifactSuggestion): Promise<void> => {
+      await flushSaveRef.current();
       const current = artifactRef.current;
       if (!current || !isCurrentVersion) return;
       if (!current.content.includes(suggestion.originalText)) {
@@ -246,7 +308,8 @@ export function AiArtifactProvider({
         suggestion.originalText,
         suggestion.suggestedText,
       );
-      await saveContent(nextContent, false);
+      const saved = await saveContent(nextContent, false);
+      if (!saved) return;
       await resolveSuggestion(suggestion.id, true);
     },
     [isCurrentVersion, resolveSuggestion, saveContent],

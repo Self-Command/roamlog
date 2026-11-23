@@ -26,6 +26,8 @@ function makeConversation(overrides: Partial<AiConversation> = {}): AiConversati
     title: "京都一周",
     titleSource: "placeholder",
     status: "regular",
+    visibility: "private",
+    shareUrl: null,
     lastMessageAt: LAST_MESSAGE_AT,
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
@@ -91,6 +93,7 @@ describe("remote thread list adapter", () => {
           status: "regular",
           title: "京都一周",
           lastMessageAt: new Date(LAST_MESSAGE_AT),
+          custom: { visibility: "private", shareUrl: null },
         },
       ],
     });
@@ -179,6 +182,7 @@ describe("remote thread list adapter", () => {
       status: "regular",
       title: "归档会话",
       lastMessageAt: new Date(LAST_MESSAGE_AT),
+      custom: { visibility: "private", shareUrl: null },
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -211,6 +215,60 @@ describe("remote thread list adapter", () => {
     ]);
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`/v1/workspaces/${WORKSPACE_ID}/ai/conversations/${CONVERSATION_ID}/messages`);
+  });
+
+  it("history load() uses persisted client ids for deletion, not server UUIDs", async () => {
+    const serverId1 = "01942f30-1200-7000-8000-0000000000d1";
+    const serverId2 = "01942f30-1200-7000-8000-0000000000d2";
+    fetchMock
+      .mockResolvedValueOnce(
+        makeResponse({
+          headId: "client-2",
+          messages: [
+            {
+              parentId: null,
+              message: {
+                id: serverId1,
+                role: "user",
+                content: "旧问题",
+                createdAt: CREATED_AT,
+                clientId: "client-1",
+              },
+            },
+            {
+              parentId: "client-1",
+              message: {
+                id: serverId2,
+                role: "assistant",
+                content: "旧回答",
+                createdAt: LAST_MESSAGE_AT,
+                clientId: "client-2",
+              },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(makeResponse({ message: "Messages deleted." }));
+
+    const history = createRemoteHistoryAdapter(WORKSPACE_ID, () => CONVERSATION_ID);
+    const repository = await history.load();
+
+    expect(repository.messages.map((item) => item.message.id)).toEqual([
+      "client-1",
+      "client-2",
+    ]);
+    expect(repository.messages.map((item) => item.parentId)).toEqual([null, "client-1"]);
+
+    expect(history.delete).toBeTypeOf("function");
+    if (!history.delete) throw new Error("history.delete is required");
+    await history.delete(repository.messages.slice(1));
+
+    const [deleteUrl, deleteInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(deleteUrl).toBe(
+      `/v1/workspaces/${WORKSPACE_ID}/ai/conversations/${CONVERSATION_ID}/messages`,
+    );
+    expect(deleteInit.method).toBe("DELETE");
+    expect(JSON.parse(String(deleteInit.body))).toEqual({ ids: ["client-2"] });
   });
 
   it("append() is idempotent: the same clientId sends one PUT with one body", async () => {

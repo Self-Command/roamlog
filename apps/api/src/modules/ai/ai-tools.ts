@@ -47,6 +47,8 @@ export interface AiToolContext {
   readonly actor: AuthenticatedActor;
   readonly membership: WorkspaceMembershipAccess;
   readonly runId: string;
+  /** Persisted conversation for this run; absent on legacy Redis plans. */
+  readonly conversationId?: string;
   /** Places returned by `places.search` during this run, keyed by provider id. */
   readonly candidates: Map<string, AiPlaceCandidate>;
   /**
@@ -1562,7 +1564,10 @@ export class AiToolbox {
         const created = await this.artifactService.createGenerated(
           context.actor,
           context.membership,
-          parsed.data as { title: string; kind: "text" | "code" | "sheet"; brief?: string },
+          {
+            ...(parsed.data as { title: string; kind: "text" | "code" | "sheet"; brief?: string }),
+            ...(context.conversationId ? { conversationId: context.conversationId } : {}),
+          },
         );
         return {
           ok: true,

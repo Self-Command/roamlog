@@ -8,10 +8,10 @@ import {
   useRemoteThreadListRuntime,
 } from "@assistant-ui/react";
 import { Button } from "@roamlog/ui";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PLAN_TOOL_NAME, createAiChatModelAdapter } from "./chat-model-adapter";
+import { DesktopChatHeader } from "./chat-header";
 import { createMediaAttachmentAdapter } from "./media-attachment-adapter";
 import { WorkspaceChatProvider } from "./plan-card";
 import { AiArtifactProvider } from "./artifacts/artifact-context";
@@ -237,6 +237,23 @@ export function AiChat({ workspaceId, workspaceSlug, role, initialConversationId
     if (!isMobile) setDrawerOpen(false);
   }, [isMobile]);
 
+  // The mobile chat is a fixed surface between the app header and bottom nav.
+  // The page underneath no longer needs to scroll, and leaving the body
+  // scrollbar visible would draw a dark strip over the right edge of the
+  // full-bleed panel (especially on Windows). Restore both elements on route
+  // change or when crossing the desktop breakpoint.
+  useEffect(() => {
+    if (!isMobile) return;
+    const bodyOverflow = document.body.style.overflow;
+    const htmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = htmlOverflow;
+    };
+  }, [isMobile]);
+
   useEffect(() => {
     const handlePopState = () => setConversationId(conversationIdFromLocation());
     window.addEventListener("popstate", handlePopState);
@@ -303,75 +320,75 @@ export function AiChat({ workspaceId, workspaceSlug, role, initialConversationId
     <AiArtifactProvider workspaceId={workspaceId}>
       <WorkspaceChatProvider value={context}>
         <AssistantRuntimeProvider runtime={runtime}>
-        <AutoResumeThread workspaceId={workspaceId} conversationId={conversationId ?? null} />
-        <div className="flex h-[calc(100dvh-15rem)] min-h-[560px] overflow-hidden rounded-card border border-hairline-strong bg-surface-0">
-          {collapsed ? null : (
-            <aside
-              aria-label="会话列表"
-              className="hidden w-[248px] shrink-0 border-r border-hairline lg:block"
-            >
-              <div className="flex h-full min-h-0 flex-col">
-                <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="sidebar" />
-                <div className="min-h-0 flex-1">
-                  <AiThreadList adapter={threadListAdapter} />
-                </div>
-              </div>
-            </aside>
-          )}
-
-          {drawerOpen ? (
-            <div className="fixed inset-0 z-40 lg:hidden">
-              <button
-                type="button"
-                aria-label="关闭会话列表"
-                className="absolute inset-0 bg-black/60"
-                onClick={() => setDrawerOpen(false)}
-              />
-              <div className="absolute inset-y-0 left-0 w-[80%] max-w-[320px] border-r border-hairline-strong shadow-xl">
+          <AutoResumeThread workspaceId={workspaceId} conversationId={conversationId ?? null} />
+          {/*
+            Mobile chat owns the space between the sticky app header and the
+            fixed bottom navigation. On a 360–390 px phone the page header would
+            otherwise push the composer behind `MobileNav`; making the chat a
+            dedicated fixed surface is the same shell model as the upstream
+            full-height chat, adapted to Roamlog's app frame. Desktop keeps the
+            bordered in-page card.
+          */}
+          <div
+            className="fixed inset-x-0 top-16 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 flex overflow-hidden border-y border-hairline-strong bg-surface-1 md:static md:z-auto md:h-[calc(100dvh-15rem)] md:min-h-[560px] md:rounded-card md:border"
+            data-testid="ai-chat-shell"
+          >
+            {collapsed ? null : (
+              <aside
+                aria-label="会话列表"
+                className="hidden w-[248px] shrink-0 border-r border-hairline lg:block"
+              >
                 <div className="flex h-full min-h-0 flex-col">
                   <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="sidebar" />
                   <div className="min-h-0 flex-1">
-                    <AiThreadList
-                      adapter={threadListAdapter}
-                      onClose={() => setDrawerOpen(false)}
-                    />
+                    <AiThreadList adapter={threadListAdapter} workspaceId={workspaceId} />
+                  </div>
+                </div>
+              </aside>
+            )}
+
+            {drawerOpen ? (
+              <div className="fixed inset-0 z-40 lg:hidden">
+                <button
+                  type="button"
+                  aria-label="关闭会话列表"
+                  className="absolute inset-0 bg-black/60"
+                  onClick={() => setDrawerOpen(false)}
+                />
+                <div className="absolute inset-y-0 left-0 w-[80%] max-w-[320px] border-r border-hairline-strong shadow-xl">
+                  <div className="flex h-full min-h-0 flex-col">
+                    <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="sidebar" />
+                    <div className="min-h-0 flex-1">
+                      <AiThreadList
+                        adapter={threadListAdapter}
+                        workspaceId={workspaceId}
+                        onClose={() => setDrawerOpen(false)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="hidden items-center gap-2 border-b border-hairline px-3 py-2 lg:flex">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={collapsed ? "展开会话列表" : "收起会话列表"}
-                aria-expanded={!collapsed}
-                onClick={toggleSidebar}
-              >
-                {collapsed ? (
-                  <PanelLeftOpen aria-hidden="true" className="size-4" />
-                ) : (
-                  <PanelLeftClose aria-hidden="true" className="size-4" />
-                )}
-              </Button>
-              <p className="type-meta truncate">AI 旅行助手 · 先计划，后写入</p>
-            </div>
-
-            <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="banner" />
-
-            <div className="min-h-0 flex-1">
-              <ChatThread
+            <div className="flex min-w-0 flex-1 flex-col">
+              <DesktopChatHeader
+                collapsed={collapsed}
+                onToggleSidebar={toggleSidebar}
                 workspaceId={workspaceId}
-                onDeleteAll={handleDeleteAll}
-                onOpenSidebar={() => setDrawerOpen(true)}
               />
+
+              <RuntimeConversationSyncStatus adapter={threadListAdapter} variant="banner" />
+
+              <div className="min-h-0 flex-1">
+                <ChatThread
+                  workspaceId={workspaceId}
+                  onDeleteAll={handleDeleteAll}
+                  onOpenSidebar={() => setDrawerOpen(true)}
+                />
+              </div>
             </div>
+            <ArtifactPanel />
           </div>
-          <ArtifactPanel />
-        </div>
         </AssistantRuntimeProvider>
       </WorkspaceChatProvider>
     </AiArtifactProvider>

@@ -1,23 +1,173 @@
 "use client";
 
 import {
+  AlertTriangle,
+  ChartNoAxesCombined,
+  Check,
   ChevronLeft,
   ChevronRight,
   Columns2,
+  Copy,
+  FileCode2,
   GitCompare,
+  ListChecks,
   Loader2,
+  MessageSquareText,
+  PenLine,
   RotateCcw,
+  Sparkles,
   X,
 } from "lucide-react";
+import { useAui, useAuiState } from "@assistant-ui/react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@roamlog/ui";
 
-import { ArtifactCodeEditor } from "./code-editor";
+import type { AiArtifactKind } from "../../../lib/api/ai-artifacts";
+import { ArtifactCodeWorkspace } from "./code-workspace";
 import { ArtifactDiffView } from "./diff-view";
 import { ArtifactImageEditor } from "./image-editor";
 import { ArtifactSheetEditor } from "./sheet-editor";
 import { ArtifactTextEditor } from "./text-editor";
 import { useAiArtifact } from "./artifact-context";
+
+const TOOLBAR_ACTIONS: Readonly<
+  Record<
+    AiArtifactKind,
+    readonly { label: string; prompt: string; icon: typeof PenLine }[]
+  >
+> = {
+  text: [
+    {
+      label: "最终润色",
+      icon: PenLine,
+      prompt:
+        "请对当前旅行文档做最终润色：检查语法、补足小标题、理顺段落，并保持事实和信息不变。",
+    },
+    {
+      label: "生成建议",
+      icon: MessageSquareText,
+      prompt: "请为当前旅行文档生成具体、可应用的改进建议。",
+    },
+  ],
+  code: [
+    {
+      label: "添加注释",
+      icon: FileCode2,
+      prompt: "请给当前代码添加简洁的中文注释，帮助读者理解关键步骤。",
+    },
+    {
+      label: "添加日志",
+      icon: ListChecks,
+      prompt: "请给当前代码添加必要的调试日志，不改变原有行为。",
+    },
+  ],
+  sheet: [
+    {
+      label: "清洗数据",
+      icon: Sparkles,
+      prompt: "请格式化和清理当前表格数据，保留真实内容并统一格式。",
+    },
+    {
+      label: "分析可视化",
+      icon: ChartNoAxesCombined,
+      prompt: "请分析当前表格数据，并创建一个 Python 代码文档来可视化。",
+    },
+  ],
+  image: [],
+};
+
+function ArtifactToolbarActions() {
+  const { artifact, currentContent, isCurrentVersion } = useAiArtifact();
+  const aui = useAui();
+  const running = useAuiState((state) => state.thread.isRunning);
+  const [copied, setCopied] = useState(false);
+
+  if (!artifact || !isCurrentVersion) return null;
+  const actions = TOOLBAR_ACTIONS[artifact.kind];
+
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(currentContent);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1_500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <>
+      {artifact.kind === "image" ? null : (
+        <Button
+          aria-label="复制文档内容"
+          className="size-8 px-0"
+          onClick={() => void copy()}
+          size="sm"
+          title={copied ? "已复制" : "复制内容"}
+          type="button"
+          variant="ghost"
+        >
+          {copied ? (
+            <Check aria-hidden="true" className="size-4 text-accent-green" />
+          ) : (
+            <Copy aria-hidden="true" className="size-4" />
+          )}
+        </Button>
+      )}
+      {actions.map((action) => {
+        const Icon = action.icon;
+        return (
+          <Button
+            aria-label={action.label}
+            className="size-8 px-0"
+            disabled={running}
+            key={action.label}
+            onClick={() => {
+              aui.composer().setText(action.prompt);
+              void aui.composer().send();
+            }}
+            size="sm"
+            title={action.label}
+            type="button"
+            variant="ghost"
+          >
+            <Icon aria-hidden="true" className="size-4" />
+          </Button>
+        );
+      })}
+    </>
+  );
+}
+
+function ArtifactErrorBanner() {
+  const { error, refresh, status } = useAiArtifact();
+  if (status !== "error" || !error) return null;
+
+  return (
+    <div
+      className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-accent-red/25 bg-accent-red/5 px-3 py-2 text-xs text-accent-red md:px-4"
+      data-testid="artifact-error"
+      role="alert"
+    >
+      <span className="flex min-w-0 items-start gap-2">
+        <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+        <span className="min-w-0 break-words">{error}</span>
+      </span>
+      <Button
+        onClick={() => {
+          void refresh().catch(() => undefined);
+        }}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        重新加载
+      </Button>
+    </div>
+  );
+}
 
 function ArtifactHeader() {
   const {
@@ -63,6 +213,7 @@ function ArtifactHeader() {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        <ArtifactToolbarActions />
         {artifact?.kind !== "image" ? (
           <Button
             aria-label={mode === "diff" ? "返回编辑" : "查看改动"}
@@ -145,7 +296,8 @@ function ArtifactContent() {
           suggestions={isCurrentVersion ? suggestions : []}
         />
       ) : artifact.kind === "code" ? (
-        <ArtifactCodeEditor
+        <ArtifactCodeWorkspace
+          key={artifact.id}
           content={currentContent}
           editable={editable}
           onSave={(content, debounce) => void saveContent(content, debounce)}
@@ -251,17 +403,35 @@ function ArtifactFooter() {
 
 export function ArtifactPanel() {
   const { visible } = useAiArtifact();
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(max-width: 767px)");
+    const update = () => setPortalTarget(query.matches ? document.body : null);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
   if (!visible) return null;
 
-  return (
+  const panel = (
     <aside
       aria-label="Artifact 面板"
-      className="fixed inset-0 z-50 flex h-dvh w-dvw flex-col overflow-hidden border-hairline-strong bg-surface-0 md:static md:z-auto md:h-full md:w-[min(58%,780px)] md:min-w-[420px] md:border-l"
+      className={
+        portalTarget
+          ? "fixed inset-0 z-[100] flex h-dvh w-dvw flex-col overflow-hidden border-hairline-strong bg-surface-1"
+          : "flex h-full w-[min(46%,720px)] min-w-[380px] shrink-0 flex-col overflow-hidden border-l border-hairline-strong bg-surface-1"
+      }
       data-testid="artifact"
     >
       <ArtifactHeader />
+      <ArtifactErrorBanner />
       <ArtifactContent />
       <ArtifactFooter />
     </aside>
   );
+
+  return portalTarget ? createPortal(panel, portalTarget) : panel;
 }

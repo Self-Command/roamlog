@@ -95,6 +95,8 @@ export class AiAbortedError extends Error {
 interface PlanLoopInput {
   readonly actor: AuthenticatedActor;
   readonly membership: WorkspaceMembershipAccess;
+  /** Persisted conversation for streaming turns; absent on blocking-only calls. */
+  readonly conversationId?: string;
   readonly settings: AiSettings;
   readonly adapter: AiProtocolAdapter;
   /** Full model conversation: history followed by the current user message. */
@@ -531,6 +533,28 @@ export class AiPlanService {
 
     try {
       if (candidates && this.providerRouter) {
+        // Commit the conversation identity before waiting for the provider's
+        // first token. The transport needs `meta.streamId` immediately to
+        // create the resumable producer; otherwise a slow model (observed
+        // 90s to first byte) leaves the browser with no replayable stream.
+        // Provider failover still owns text/tool events and the final
+        // persistence metadata, so this provisional provider label is only
+        // informational.
+        const initialCandidate = candidates[0]!;
+        selectedSettings = initialCandidate.settings;
+        firstByteMs = Date.now() - startedAt;
+        yield metaFor(selectedSettings);
+        this.logger.log(
+          {
+            event: "ai.stream_started",
+            protocol: selectedSettings.protocol,
+            model: selectedSettings.model,
+            conversationId: conversation.id,
+            firstByteMs,
+            providerId: initialCandidate.runtime.id,
+          },
+          "ai.stream_started",
+        );
         const frames = this.providerRouter.streamWithFailover<AiStreamEvent, PlanLoopOutcome>(
           candidates,
           (candidate) =>
@@ -567,20 +591,6 @@ export class AiPlanService {
             selectedSettings = next.value.candidate.settings;
           }
           const event = next.value.event;
-          if (event.type === "meta") {
-            firstByteMs = Date.now() - startedAt;
-            this.logger.log(
-              {
-                event: "ai.stream_started",
-                protocol: selectedSettings.protocol,
-                model: selectedSettings.model,
-                conversationId: conversation.id,
-                firstByteMs,
-                providerId: next.value.candidate.runtime.id,
-              },
-              "ai.stream_started",
-            );
-          }
           trackEvent(event);
           // Every frame yielded by this path is already committed; progress is
           // transient and `done` remains exclusive to the finalizer below.
@@ -606,6 +616,7 @@ export class AiPlanService {
         const loop = this.runPlanLoop({
           actor,
           membership,
+          conversationId: conversation.id,
           settings,
           adapter: resolved.adapter,
           messages: buildMessages(settings),
@@ -850,10 +861,11 @@ export class AiPlanService {
   /**
    * One provider attempt for a streaming turn.
    *
-   * The caller buffers every event until this generator either yields its
-   * first committed user-visible event or completes. The provider's `meta`
-   * frame is deliberately the first event so a failed attempt can be discarded
-   * before the client sees a conversation/message id from the wrong provider.
+   * The caller emits the conversation identity (`meta`) before entering the
+   * failover iterator, so a transport can create its resumable producer while
+   * the provider is still thinking. This generator therefore only yields
+   * progress/text/tool events; the caller buffers those until the first
+   * committed event and can still discard a failed attempt.
    */
   private async *streamCandidate(input: {
     readonly candidate: AiProviderCandidate;
@@ -881,16 +893,6 @@ export class AiPlanService {
     const adapter = this.adapterFactory(settings);
     this.assertConfigured(settings, adapter);
 
-    yield {
-      type: "meta",
-      v: 1,
-      conversationId: input.conversationId,
-      userMessageId: input.userMessageId,
-      assistantMessageId: input.assistantMessageId,
-      streamId: input.streamId,
-      provider: { protocol: settings.protocol, model: settings.model },
-    };
-
     const messages: AiConversationMessage[] = [
       ...input.history,
       {
@@ -907,6 +909,7 @@ export class AiPlanService {
     const loop = this.runPlanLoop({
       actor: input.actor,
       membership: input.membership,
+      conversationId: input.conversationId,
       settings,
       adapter,
       messages,
@@ -1646,6 +1649,7 @@ export class AiPlanService {
       runId,
       workspaceId: input.membership.workspaceId,
       userId: input.actor.user.id,
+      ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       message,
       plannedCalls,
       candidates: [...candidates.values()],

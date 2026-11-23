@@ -7,6 +7,7 @@
  */
 import type { CreateAiConversation201Status } from "./createAiConversation201Status";
 import type { CreateAiConversation201TitleSource } from "./createAiConversation201TitleSource";
+import type { CreateAiConversation201Visibility } from "./createAiConversation201Visibility";
 
 export type CreateAiConversation201 = {
   /** Sortable UUIDv7 identifier. */
@@ -22,6 +23,12 @@ export type CreateAiConversation201 = {
   title: string | null;
   titleSource: CreateAiConversation201TitleSource;
   status: CreateAiConversation201Status;
+  visibility: CreateAiConversation201Visibility;
+  /**
+   * @maxLength 2048
+   * @nullable
+   */
+  shareUrl: string | null;
   /**
    * ISO 8601 timestamp with an explicit UTC offset.
    * @nullable
