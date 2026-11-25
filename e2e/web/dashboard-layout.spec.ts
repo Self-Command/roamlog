@@ -51,12 +51,12 @@ async function openDashboard(page: Page): Promise<void> {
 
 /** The next-trip hero card on the left of the first row. */
 function nextTripCard(page: Page): Locator {
-  return page.locator("section").filter({ hasText: "NEXT JOURNEY" }).first();
+  return page.locator("section").filter({ hasText: "下一段旅行" }).first();
 }
 
 /** The "接下来" itinerary aside on the right of the first row. */
 function upNextCard(page: Page): Locator {
-  return page.locator("section").filter({ hasText: "UP NEXT" }).first();
+  return page.locator("section").filter({ hasText: "接下来" }).first();
 }
 
 interface ColumnMetrics {
@@ -284,7 +284,7 @@ test("DASHBOARD_GRID_STRETCH — 1440px next-trip row hugs its content on both s
           : "",
       };
     };
-    return { recent: read("RECENTLY UPDATED"), budget: read("预算分布") };
+    return { recent: read("最近更新"), budget: read("预算分布") };
   });
   console.log(`[dashboard-layout] recent-vs-budget=${JSON.stringify(recentRow)}`);
   for (const [name, value] of Object.entries(recentRow)) {

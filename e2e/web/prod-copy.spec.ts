@@ -59,7 +59,7 @@ const ROUTES: RouteCheck[] = [
   { name: "03-journal", path: "/journal", heading: "全部日志" },
   { name: "04-map", path: "/map", heading: "世界足迹" },
   { name: "05-insights", path: "/insights", heading: "旅行洞察" },
-  { name: "06-settings", path: "/settings", heading: "设置" },
+  { name: "06-settings", path: "/settings", heading: "个人资料" },
   { name: "07-activity", path: "/activity", heading: "活动流" },
   { name: "08-notifications", path: "/notifications", heading: "通知中心" },
 ];

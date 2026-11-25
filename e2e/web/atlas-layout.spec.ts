@@ -320,8 +320,8 @@ test("MAP_ATLAS_LAYOUT — dashboard two-column grids measured for the same stre
   });
 
   const pairs = [
-    { name: "next-trip", left: "NEXT JOURNEY", right: "接下来" },
-    { name: "recent-vs-budget", left: "RECENTLY UPDATED", right: "预算分布" },
+    { name: "next-trip", left: "下一段旅行", right: "接下来" },
+    { name: "recent-vs-budget", left: "最近更新", right: "预算分布" },
   ] as const;
 
   for (const pair of pairs) {
