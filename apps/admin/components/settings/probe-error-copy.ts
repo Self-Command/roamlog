@@ -54,9 +54,9 @@ const TARGET_LABELS: Record<SettingsProbeTarget, string> = {
   mail: "邮件",
 };
 
-const BUCKET_COPY = "Bucket 不存在或无权访问：检查 bucket 名称与权限";
+const BUCKET_COPY = "存储桶不存在或无权访问：请检查存储桶名称与访问权限";
 const UNAVAILABLE_COPY = "探测服务不可用，配置未保存。可稍后重试";
-const MAIL_GENERIC_COPY = "邮件探测未通过：检查 host、端口、用户名与密码";
+const MAIL_GENERIC_COPY = "邮件连接检查未通过：请检查服务器地址、端口、用户名与密码";
 
 /**
  * target + code → actionable copy. Add rows here, never inline strings in the
@@ -67,27 +67,27 @@ export const PROBE_COPY_TABLE: Readonly<
 > = {
   storage: {
     STORAGE_ENDPOINT_UNREACHABLE:
-      "存储服务无法连接：检查 endpoint 与网络（当前 endpoint: {endpoint}）",
+      "存储服务无法连接：请检查服务地址与网络（当前地址：{endpoint}）",
     STORAGE_PUBLIC_ENDPOINT_UNREACHABLE:
-      "对外访问地址不可达：浏览器可能无法加载图片，检查 publicEndpoint 与 CORS",
-    MISSING_CREDENTIALS: "缺少访问凭据：请先填写 Access Key 与 Secret Key",
+      "公开访问地址不可达：图片可能无法加载，请检查公开地址与跨域访问设置",
+    MISSING_CREDENTIALS: "缺少访问凭据：请填写访问密钥与私有密钥",
     PROBE_UNAVAILABLE: UNAVAILABLE_COPY,
   },
   mail: {
     CONNECTION_FAILED:
-      "无法连接邮件服务器：检查 host 与 port（465 用隐式 TLS，587 用 STARTTLS）",
+      "无法连接邮件服务器：请检查服务器地址与端口（465 使用隐式加密，587 使用 STARTTLS）",
     AUTH_FAILED: "SMTP 认证被拒：检查用户名与应用专用密码（不是账号登录密码）",
-    MISSING_CREDENTIALS: "缺少 mail.from 或凭据配置",
-    MAIL_NOT_CONFIGURED: "邮件配置不完整：检查 provider、from 与凭据",
+    MISSING_CREDENTIALS: "缺少发件地址或访问凭据",
+    MAIL_NOT_CONFIGURED: "邮件配置不完整：请检查发件服务、发件地址与访问凭据",
     PROBE_UNAVAILABLE: UNAVAILABLE_COPY,
   },
 };
 
 const CREDENTIAL_NOTES: Readonly<Record<string, string>> = {
-  "storage.accessKey": "保存探测缺少访问凭据：请填写 Access Key。",
-  "storage.secretKey": "保存探测缺少访问凭据：请填写 Secret Key。",
+  "storage.accessKey": "缺少访问凭据，请填写访问密钥。",
+  "storage.secretKey": "缺少访问凭据，请填写私有密钥。",
   "mail.from": "缺少发件地址：保存探测需要用它确定收件人。",
-  "mail.resendApiKey": "缺少 Resend API Key：填好后再保存。",
+  "mail.resendApiKey": "缺少 Resend 接口密钥：填好后再保存。",
   "mail.smtpUser": "缺少 SMTP 用户名：填好后再保存。",
   "mail.smtpPassword": "缺少 SMTP 密码：填好后再保存。",
 };
@@ -174,7 +174,7 @@ export function probeFallbackCopy(detail?: string | null): ProbeCopy {
   return {
     eyebrow: "保存被拦截 · 探测",
     headline: "保存前探测失败，配置未写入",
-    body: detail?.trim() || "服务端没有返回探测明细；可稍后重试。",
+    body: detail?.trim() || "保存前的检查没有返回详细信息，请稍后重试。",
     failedAt: null,
     credentialNotes: {},
   };

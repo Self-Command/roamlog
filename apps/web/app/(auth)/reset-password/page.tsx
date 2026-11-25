@@ -16,9 +16,9 @@ export default async function ResetPasswordPage({
 
   return (
     <AuthPageFrame
-      eyebrow="CHOOSE A NEW PASSWORD"
+      eyebrow="设置新密码"
       title="设置新密码"
-      description="重置令牌通常只能使用一次。当前页面只验证两次输入是否一致，不会写回任何账号。"
+      description="重置链接通常只能使用一次。请输入并确认你的新密码。"
       footer={
         <p className="text-center text-xs text-muted">
           需要新的链接？{" "}

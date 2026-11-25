@@ -26,7 +26,7 @@ export function AdminTopbar({
   const environment = resolveAdminEnvironment();
 
   return (
-    <header className="sticky top-0 z-20 h-14 border-b border-hairline bg-black/85 backdrop-blur-xl">
+    <header className="sticky top-0 z-20 h-14 border-b border-hairline bg-canvas/95 backdrop-blur-md">
       <div className="flex h-full items-center gap-2 px-3 sm:px-5 lg:px-6">
         <IconButton
           type="button"
@@ -74,7 +74,7 @@ export function AdminTopbar({
             type="button"
             onClick={onOpenCommandPalette}
             aria-label="搜索页面、用户或工作区 K"
-            className="hidden h-8 w-[clamp(12rem,22vw,20rem)] items-center gap-2 rounded-control border border-hairline bg-surface-1/60 px-2.5 text-left text-[11px] text-muted outline-none transition-colors hover:border-hairline-strong hover:text-body focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas md:flex"
+            className="hidden h-8 w-[clamp(12rem,22vw,20rem)] items-center gap-2 rounded-control border border-hairline bg-surface-1/70 px-2.5 text-left text-[11px] text-muted outline-none transition-colors hover:border-hairline-strong hover:text-body focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas md:flex"
           >
             <Search aria-hidden="true" className="size-3.5" />
             <span className="truncate">搜索页面、用户或工作区</span>
@@ -106,7 +106,7 @@ export function AdminTopbar({
             <Avatar name={session.name} size={26} />
             <div className="hidden xl:block">
               <p className="text-[11px] leading-none text-ink">{session.name}</p>
-              <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.08em] text-muted">
+              <p className="mt-1 font-ui text-[9px] tracking-[0.04em] text-muted">
                 {ADMIN_ROLE_LABELS[session.role]}
               </p>
             </div>

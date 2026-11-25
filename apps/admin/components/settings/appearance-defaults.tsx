@@ -2,6 +2,7 @@
 
 import {
   APPEARANCE_MODES,
+  DEFAULT_SKIN_ID,
   FONT_PAIRING_CATALOG,
   SKIN_CATALOG,
   type AdminSettingItem,
@@ -10,6 +11,8 @@ import {
   type FontPairingId,
   type SettingValue,
   type SkinId,
+  normalizeFontPairingId,
+  normalizeSkinId,
 } from "@roamlog/contracts";
 import { Check, Monitor, Moon, Palette, RotateCcw, Save, Sun, Type } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -22,10 +25,13 @@ import { groupItems } from "../../lib/admin-settings";
 import { loadFontPairing } from "../../lib/font-pairing-loader";
 import { cn } from "../admin-shell/cn";
 import { AdminPageHeader } from "../admin-ui/admin-page-header";
+import { AppearanceWorkbenchPreview } from "./appearance-workbench-preview";
 
 const DEFAULT_MODE: AppearanceMode = "system";
-const DEFAULT_SKIN: SkinId = "editorial-noir";
-const DEFAULT_FONT: FontPairingId = "editorial-classic";
+const DEFAULT_SKIN: SkinId = DEFAULT_SKIN_ID;
+const DEFAULT_FONT: FontPairingId = "fluent-native";
+const ACTIVE_SKINS = SKIN_CATALOG.filter((entry) => entry.status === "active");
+const ACTIVE_FONTS = FONT_PAIRING_CATALOG.filter((entry) => entry.status === "active");
 
 interface AppearanceDraft {
   mode: AppearanceMode;
@@ -56,15 +62,11 @@ function asMode(value: SettingValue | undefined, fallback: AppearanceMode): Appe
 }
 
 function asSkin(value: SettingValue | undefined, fallback: SkinId): SkinId {
-  return typeof value === "string" && SKIN_CATALOG.some((entry) => entry.id === value)
-    ? (value as SkinId)
-    : fallback;
+  return typeof value === "string" ? normalizeSkinId(value) : fallback;
 }
 
 function asFont(value: SettingValue | undefined, fallback: FontPairingId): FontPairingId {
-  return typeof value === "string" && FONT_PAIRING_CATALOG.some((entry) => entry.id === value)
-    ? (value as FontPairingId)
-    : fallback;
+  return typeof value === "string" ? normalizeFontPairingId(value) : fallback;
 }
 
 function asBoolean(value: SettingValue | undefined, fallback: boolean): boolean {
@@ -103,15 +105,15 @@ function failureMessage(error: unknown): string {
   if (error instanceof AdminSettingsError) {
     const code = error.failure.code;
     if (code === "ADMIN_2FA_REQUIRED") {
-      return "需要完成 TOTP 2FA 验证后才能保存外观默认值。";
+      return "请先完成两步验证，再保存外观默认值。";
     }
     if (code === "SETTINGS_ENCRYPTION_UNAVAILABLE" || code === "PROVIDER_SECRETS_UNAVAILABLE") {
-      return "密钥存储未就绪，外观默认值尚未写入。请先修复服务端密钥配置。";
+      return "密钥服务暂时不可用，外观默认值尚未保存。请稍后重试。";
     }
     if (error.failure.status === 403) {
       return "需要超级管理员权限才能保存外观默认值。";
     }
-    return error.failure.detail?.trim() || error.failure.title || "保存失败，请稍后重试。";
+    return "保存失败，请稍后重试；如果持续失败，请联系平台管理员。";
   }
   return error instanceof Error ? error.message : "保存失败，请稍后重试。";
 }
@@ -259,8 +261,6 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
     );
   }
 
-  const resolvedPreviewMode: "light" | "dark" = draft.mode === "dark" ? "dark" : "light";
-
   return (
     <section data-settings-group="theme" aria-label="外观与字体 设置" className="space-y-6">
       <AdminPageHeader
@@ -300,7 +300,7 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
           role="note"
           className="rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-xs text-accent-slate"
         >
-          只有超级管理员可以修改平台默认外观；当前角色只能查看。
+          只有超级管理员可以修改平台默认外观；当前账号只能查看。
         </p>
       ) : null}
 
@@ -345,7 +345,7 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
                     "flex min-h-14 items-center gap-3 rounded-control border px-3 text-left transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                     selected
-                      ? "border-ink bg-surface-2 text-ink"
+                      ? "border-accent-solid bg-surface-2 text-ink"
                       : "border-hairline text-body hover:border-hairline-strong",
                   )}
                 >
@@ -365,18 +365,18 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
 
         <section className="rounded-card border border-hairline-strong bg-surface-1 p-4 sm:p-5">
           <div className="flex items-center gap-2">
-            <Palette aria-hidden="true" className="size-4 text-accent-orange" />
-            <h2 className="text-[13px] font-medium text-ink">默认皮肤</h2>
+            <Palette aria-hidden="true" className="size-4 text-accent-blue" />
+            <h2 className="text-[13px] font-medium text-ink">默认主题</h2>
           </div>
           <p className="mt-1 text-[11px] leading-5 text-muted">
-            六套皮肤都包含完整浅色和深色语义 token；这里只设默认值，用户可在前台覆盖。
+            {ACTIVE_SKINS.length} 套企业主题都包含完整浅色和深色语义 token；这里只设默认值，用户可在前台覆盖。
           </p>
           <div
             role="radiogroup"
-            aria-label="默认皮肤"
-            className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"
+            aria-label="默认主题"
+            className="mt-4 grid gap-2 sm:grid-cols-2"
           >
-            {SKIN_CATALOG.map((skin) => {
+            {ACTIVE_SKINS.map((skin) => {
               const selected = draft.skin === skin.id;
               return (
                 <button
@@ -390,7 +390,7 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
                     "min-w-0 rounded-control border p-3 text-left transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                     selected
-                      ? "border-ink bg-surface-2"
+                      ? "border-accent-solid bg-surface-2"
                       : "border-hairline hover:border-hairline-strong",
                   )}
                 >
@@ -430,14 +430,14 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
             <h2 className="text-[13px] font-medium text-ink">默认字体</h2>
           </div>
           <p className="mt-1 text-[11px] leading-5 text-muted">
-            六套配对全部从本地 Fontsource 资源加载，不请求外部字体服务。
+            四套企业字体全部从本地 Fontsource 或系统字体栈加载，不请求外部字体服务。
           </p>
           <div
             role="radiogroup"
             aria-label="默认字体"
-            className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"
+            className="mt-4 grid gap-2 sm:grid-cols-2"
           >
-            {FONT_PAIRING_CATALOG.map((font) => {
+            {ACTIVE_FONTS.map((font) => {
               const selected = draft.fontPairing === font.id;
               return (
                 <button
@@ -451,7 +451,7 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
                     "min-w-0 rounded-control border p-3 text-left transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                     selected
-                      ? "border-ink bg-surface-2"
+                      ? "border-accent-solid bg-surface-2"
                       : "border-hairline hover:border-hairline-strong",
                   )}
                 >
@@ -465,13 +465,13 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
                     className="mt-2 block truncate text-[20px] leading-7 text-ink"
                     style={{ fontFamily: font.displayStack }}
                   >
-                    Aa 京都 · Journey
+                    Aa 工作台 · 工作区
                   </span>
                   <span
                     className="mt-1 block truncate font-mono text-[9px] uppercase tracking-[0.08em] text-muted"
                     style={{ fontFamily: font.monoStack }}
                   >
-                    12 photos / 4 stops
+                    12 个文件 / 4 行
                   </span>
                   <span className="mt-1 block text-[10px] leading-4 text-muted">
                     {font.description}
@@ -490,7 +490,7 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
             <div>
               <h2 className="text-[13px] font-medium text-ink">允许用户覆盖</h2>
               <p className="mt-1 text-[11px] leading-5 text-muted">
-                关闭后，已登录用户只能使用平台默认皮肤、模式和字体；已有的个人选择会保留但暂不生效。
+                关闭后，已登录用户只能使用平台默认主题、模式和字体；已有的个人选择会保留但暂不生效。
               </p>
             </div>
             <Switch
@@ -510,45 +510,30 @@ export function AppearanceDefaults({ role, api, onDirtyChange }: AppearanceDefau
         <section className="rounded-card border border-hairline-strong bg-surface-1 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <Palette aria-hidden="true" className="size-4 text-accent-blue" />
-            <h2 className="text-[13px] font-medium text-ink">实时预览</h2>
+            <h2 className="text-[13px] font-medium text-ink">工作台与内容预览</h2>
           </div>
           <p className="mt-1 text-[11px] leading-5 text-muted">
-            预览使用 Web 端的共享组件，不改变 Admin 控制台自身的固定深色外观。
+            预览使用 Web 端的企业工作台结构，不改变 Admin 控制台自身的固定深色外观。
           </p>
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            <AppearancePreview
+          <div className="mt-4">
+            <AppearanceWorkbenchPreview
               mode={draft.mode}
               skin={draft.skin}
               fontPairing={draft.fontPairing}
-              surface="web"
             />
-            <div className="space-y-3">
-              <AppearancePreview
-                mode={draft.mode === "system" ? "light" : draft.mode}
-                skin={draft.skin}
-                fontPairing={draft.fontPairing}
-                surface="journal"
-              />
-              <AppearancePreview
-                mode={draft.mode === "system" ? "dark" : draft.mode}
-                skin={draft.skin}
-                fontPairing={draft.fontPairing}
-                surface="share"
-              />
-            </div>
           </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid gap-3 xl:grid-cols-2">
             <AppearancePreview
-              mode={resolvedPreviewMode}
+              mode={draft.mode === "system" ? "light" : draft.mode}
               skin={draft.skin}
               fontPairing={draft.fontPairing}
-              surface="error"
+              surface="journal"
             />
             <AppearancePreview
-              mode={resolvedPreviewMode}
+              mode={draft.mode === "system" ? "dark" : draft.mode}
               skin={draft.skin}
               fontPairing={draft.fontPairing}
-              surface="empty"
+              surface="share"
             />
           </div>
         </section>

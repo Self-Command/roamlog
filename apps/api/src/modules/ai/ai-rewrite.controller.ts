@@ -14,6 +14,7 @@ import { TenantGuard } from "../../common/guards/tenant.guard.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { AI_SSE_HEARTBEAT_MS, DEFAULT_SSE_HEARTBEAT_MS } from "./ai.controller.js";
 import { AiRewriteService } from "./ai-rewrite.service.js";
+import { serializeSseEvent } from "./sse-frame.js";
 
 /**
  * The streaming half of selection rewriting.
@@ -87,13 +88,13 @@ export class AiRewriteController {
       for await (const event of this.rewriter.stream(prepared, { signal: client.signal })) {
         if (event.type === "meta") messageId = event.assistantMessageId;
         if (event.type === "done") messageId = event.messageId;
-        await writeSse(res, event, ++seq);
+        seq = await writeSse(res, event, seq + 1);
       }
     } catch (error) {
       // Safety net only: `stream()` already turns an empty answer into
       // error+done. Anything thrown here is a transport/adapter failure.
       if (!res.writableEnded && !res.destroyed && !client.signal.aborted) {
-        await writeSse(res, toSseError(error), ++seq);
+        seq = await writeSse(res, toSseError(error), seq + 1);
         await writeSse(
           res,
           { type: "done", messageId: messageId || "rewrite-error", finishReason: "error" },
@@ -125,10 +126,10 @@ export class AiRewriteController {
 }
 
 /** `id: <n>` / `event: <type>` / single-line JSON `data:` / blank line. */
-async function writeSse(res: Response, event: AiStreamEvent, seq: number): Promise<boolean> {
-  if (res.writableEnded || res.destroyed) return false;
-  const frame = `id: ${String(seq).padStart(6, "0")}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
-  if (res.write(frame)) return true;
+async function writeSse(res: Response, event: AiStreamEvent, seq: number): Promise<number> {
+  if (res.writableEnded || res.destroyed) return seq;
+  const serialized = serializeSseEvent(event, seq);
+  if (res.write(serialized.frame)) return serialized.nextSeq;
   await new Promise<void>((resolve) => {
     const done = (): void => {
       res.off("drain", done);
@@ -138,7 +139,7 @@ async function writeSse(res: Response, event: AiStreamEvent, seq: number): Promi
     res.once("drain", done);
     res.once("close", done);
   });
-  return !res.writableEnded && !res.destroyed;
+  return res.writableEnded || res.destroyed ? seq : serialized.nextSeq;
 }
 
 const KNOWN_AI_CODES = new Set<string>(Object.values(AI_ERROR_CODES));

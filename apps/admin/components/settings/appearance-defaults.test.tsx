@@ -55,24 +55,17 @@ function themeItems(overrides: Partial<Record<string, SettingValue>> = {}): Admi
       "theme.defaultSkin",
       "string",
       "默认皮肤",
-      "editorial-noir",
-      overrides["theme.defaultSkin"] ?? "editorial-noir",
-      ["editorial-noir", "catppuccin", "tokyo-night", "rose-pine", "kanagawa", "everforest"],
+      "porcelain",
+      overrides["theme.defaultSkin"] ?? "porcelain",
+      ["porcelain", "fluent", "carbon", "carbon-soft"],
     ),
     makeThemeItem(
       "theme.defaultFont",
       "string",
       "默认字体",
-      "editorial-classic",
-      overrides["theme.defaultFont"] ?? "editorial-classic",
-      [
-        "editorial-classic",
-        "literary-warm",
-        "modern-editorial",
-        "expressive-serif",
-        "cjk-editorial",
-        "swiss-modern",
-      ],
+      "primer-system",
+      overrides["theme.defaultFont"] ?? "primer-system",
+      ["primer-system", "primer-cjk", "fluent-native", "carbon-plex"],
     ),
     makeThemeItem(
       "theme.allowUserOverride",
@@ -145,12 +138,12 @@ afterEach(() => {
   vi.restoreAllMocks();
   document.documentElement.dataset.mode = "dark";
   document.documentElement.dataset.theme = "dark";
-  document.documentElement.dataset.skin = "editorial-noir";
-  document.documentElement.dataset.font = "editorial-classic";
+  document.documentElement.dataset.skin = "carbon";
+  document.documentElement.dataset.font = "carbon-plex";
 });
 
 describe("AppearanceDefaults", () => {
-  it("loads the four controls and six skin/font choices", async () => {
+  it("loads the four controls and the native enterprise skin/font choices", async () => {
     const fake = fakeApi();
     render(<AppearanceDefaults role="super_admin" api={fake.api} />);
 
@@ -166,12 +159,14 @@ describe("AppearanceDefaults", () => {
       "true",
     );
     expect(
-      within(screen.getByRole("radiogroup", { name: "默认皮肤" })).getAllByRole("radio"),
-    ).toHaveLength(6);
+      within(screen.getByRole("radiogroup", { name: "默认主题" })).getAllByRole("radio"),
+    ).toHaveLength(4);
     expect(
       within(screen.getByRole("radiogroup", { name: "默认字体" })).getAllByRole("radio"),
-    ).toHaveLength(6);
+    ).toHaveLength(4);
     expect(screen.getByRole("switch", { name: "允许用户覆盖外观" })).toBeChecked();
+    expect(screen.getByTestId("admin-appearance-workbench-preview-system")).toBeInTheDocument();
+    expect(screen.getAllByText("工作台").length).toBeGreaterThan(0);
   });
 
   it("saves only changed appearance keys and reloads the server snapshot", async () => {
@@ -179,21 +174,24 @@ describe("AppearanceDefaults", () => {
     const fake = fakeApi();
     render(<AppearanceDefaults role="super_admin" api={fake.api} />);
 
-    await screen.findByRole("radiogroup", { name: "默认皮肤" });
+    await screen.findByRole("radiogroup", { name: "默认主题" });
     await user.click(screen.getByRole("radio", { name: "深色" }));
-    await user.click(screen.getByRole("radio", { name: /猫咖/ }));
+    await user.click(screen.getByRole("radio", { name: /Fluent 2/ }));
     await user.click(screen.getByRole("switch", { name: "允许用户覆盖外观" }));
     await user.click(screen.getByRole("button", { name: "保存外观" }));
 
     expect(fake.update).toHaveBeenCalledOnce();
     expect(fake.update.mock.calls[0]?.[0]).toEqual([
       { key: "theme.defaultMode", value: "dark" },
-      { key: "theme.defaultSkin", value: "catppuccin" },
+      { key: "theme.defaultSkin", value: "fluent" },
       { key: "theme.allowUserOverride", value: false },
     ]);
     expect(fake.list).toHaveBeenCalledTimes(2);
     expect(await screen.findByRole("status")).toHaveTextContent("外观默认值已保存");
-    expect(screen.getByRole("radio", { name: /猫咖/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Fluent 2/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 
   it("keeps the draft and shows field errors after a 422", async () => {
@@ -219,13 +217,18 @@ describe("AppearanceDefaults", () => {
     );
     render(<AppearanceDefaults role="super_admin" api={fake.api} />);
 
-    await screen.findByRole("radiogroup", { name: "默认皮肤" });
-    await user.click(screen.getByRole("radio", { name: /常青林/ }));
+    await screen.findByRole("radiogroup", { name: "默认主题" });
+    await user.click(screen.getByRole("radio", { name: /Carbon 柔和灰阶/ }));
     await user.click(screen.getByRole("button", { name: "保存外观" }));
 
     expect(await screen.findByText("该皮肤不可用。")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /常青林/ })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("alert")).toHaveTextContent("The appearance value is invalid.");
+    expect(screen.getByRole("radio", { name: /Carbon 柔和灰阶/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "保存失败，请稍后重试；如果持续失败，请联系平台管理员。",
+    );
   });
 
   it("renders as read-only for an analyst", async () => {
@@ -233,7 +236,7 @@ describe("AppearanceDefaults", () => {
     render(<AppearanceDefaults role="analyst" api={fake.api} />);
 
     expect(
-      await screen.findByText("只有超级管理员可以修改平台默认外观；当前角色只能查看。"),
+      await screen.findByText("只有超级管理员可以修改平台默认外观；当前账号只能查看。"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "保存外观" })).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "浅色" })).toBeDisabled();
@@ -244,16 +247,16 @@ describe("AppearanceDefaults", () => {
     const fake = fakeApi();
     document.documentElement.dataset.mode = "dark";
     document.documentElement.dataset.theme = "dark";
-    document.documentElement.dataset.skin = "editorial-noir";
-    document.documentElement.dataset.font = "editorial-classic";
+    document.documentElement.dataset.skin = "carbon";
+    document.documentElement.dataset.font = "carbon-plex";
 
     render(<AppearanceDefaults role="super_admin" api={fake.api} />);
-    await screen.findByRole("radiogroup", { name: "默认皮肤" });
+    await screen.findByRole("radiogroup", { name: "默认主题" });
     await user.click(screen.getByRole("radio", { name: "浅色" }));
-    await user.click(screen.getByRole("radio", { name: /常青林/ }));
+    await user.click(screen.getByRole("radio", { name: /Carbon 柔和灰阶/ }));
 
     expect(document.documentElement).toHaveAttribute("data-mode", "dark");
-    expect(document.documentElement).toHaveAttribute("data-skin", "editorial-noir");
-    expect(document.documentElement).toHaveAttribute("data-font", "editorial-classic");
+    expect(document.documentElement).toHaveAttribute("data-skin", "carbon");
+    expect(document.documentElement).toHaveAttribute("data-font", "carbon-plex");
   });
 });

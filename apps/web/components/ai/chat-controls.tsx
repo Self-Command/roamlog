@@ -33,7 +33,7 @@
  */
 
 import type { AiReasoningEffort } from "@roamlog/contracts";
-import { AI_REASONING_EFFORTS } from "@roamlog/contracts";
+import { AI_DEFAULT_REASONING_EFFORT, AI_REASONING_EFFORTS } from "@roamlog/contracts";
 import {
   Button,
   DropdownMenu,
@@ -41,13 +41,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@roamlog/ui";
 import { Brain, ChevronDown } from "lucide-react";
 
 import { aiChatSelectionStore, useAiChatSelection } from "./chat-selection";
 import { useAiChatModels } from "./model-selector";
+import { useAiReasoningDefault } from "./use-ai-reasoning";
 
 export { ModelSelectorCompact, useAiChatModels } from "./model-selector";
 
@@ -68,8 +68,12 @@ export function ReasoningSelectorCompact({ workspaceId }: { workspaceId: string 
   const selection = useAiChatSelection(workspaceId);
   const store = aiChatSelectionStore(workspaceId);
   const supported = models?.reasoningSupported ?? true;
-  const currentLabel =
-    selection.reasoningEffort === undefined ? "默认" : REASONING_LABELS[selection.reasoningEffort];
+  const platformDefault = useAiReasoningDefault();
+  const currentEffort =
+    selection.reasoningEffort ??
+    (platformDefault as AiReasoningEffort) ??
+    AI_DEFAULT_REASONING_EFFORT;
+  const currentLabel = REASONING_LABELS[currentEffort];
 
   return (
     <DropdownMenu>
@@ -80,8 +84,8 @@ export function ReasoningSelectorCompact({ workspaceId }: { workspaceId: string 
           size="sm"
           aria-label="选择思考深度"
           disabled={!supported}
-          title={supported ? undefined : "当前网关协议不接收思考深度参数"}
-          className="h-7 gap-1.5 px-2 text-xs font-normal text-muted"
+          title={supported ? undefined : "当前 AI 服务不支持调整思考强度"}
+          className="h-7 min-w-0 shrink gap-1.5 px-2 text-xs font-normal text-muted"
           data-testid="reasoning-selector"
         >
           <Brain aria-hidden="true" className="size-3.5" />
@@ -94,20 +98,14 @@ export function ReasoningSelectorCompact({ workspaceId }: { workspaceId: string 
       <DropdownMenuContent align="start" side="top">
         <DropdownMenuLabel className="type-meta px-2.5 py-1 text-stone">思考深度</DropdownMenuLabel>
         <DropdownMenuRadioGroup
-          value={selection.reasoningEffort ?? "default"}
+          value={currentEffort}
           onValueChange={(value) => {
             store.set({
               ...selection,
-              ...(value === "default"
-                ? { reasoningEffort: undefined }
-                : { reasoningEffort: value as AiReasoningEffort }),
+              reasoningEffort: value as AiReasoningEffort,
             });
           }}
         >
-          <DropdownMenuRadioItem value="default" data-testid="reasoning-option-default">
-            默认（由网关决定）
-          </DropdownMenuRadioItem>
-          <DropdownMenuSeparator />
           {AI_REASONING_EFFORTS.map((effort) => (
             <DropdownMenuRadioItem
               key={effort}
@@ -120,7 +118,7 @@ export function ReasoningSelectorCompact({ workspaceId }: { workspaceId: string 
         </DropdownMenuRadioGroup>
         {supported ? null : (
           <p className="px-2.5 py-2 text-xs text-muted">
-            当前协议（Anthropic Messages）没有思考深度字段，后端不会转发。
+            当前 AI 服务不支持调整思考强度。
           </p>
         )}
       </DropdownMenuContent>

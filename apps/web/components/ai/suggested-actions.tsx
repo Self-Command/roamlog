@@ -5,19 +5,19 @@
  * `components/chat/suggested-actions.tsx` @ a8989b52 (Apache-2.0).
  *
  * Adaptation layer: the upstream `Suggestion` and `useChatHelpers.sendMessage`
- * are replaced by a button and an `onSelect` callback. Layout, responsive
- * horizontal/2-column behavior, stagger, hover motion and test id are kept.
+ * are replaced by a button and an `onSelect` callback. The product renders the
+ * list inside the empty thread instead of above the composer, so the cards use
+ * a one-column mobile / two-column desktop grid. The cards render immediately
+ * (no initial opacity animation) so every option is visible on first paint.
  */
 
-import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 
+import { AI_DEFAULT_SUGGESTED_PROMPTS } from "@roamlog/contracts";
 import { cn } from "./cn";
 
-export const TRAVEL_SUGGESTIONS = [
-  "想去京都一周，预算 8000，喜欢古寺和咖啡馆",
-  "带爸妈去成都四天，节奏慢一点，少走路",
-  "周末去杭州，预算 2000，想住湖边",
-] as const;
+/** Kept as a named export for the existing empty-state tests. */
+export const GENERIC_SUGGESTIONS = AI_DEFAULT_SUGGESTED_PROMPTS;
 
 export interface SuggestedActionsProps {
   suggestions?: readonly string[];
@@ -27,7 +27,7 @@ export interface SuggestedActionsProps {
 }
 
 export function SuggestedActions({
-  suggestions = TRAVEL_SUGGESTIONS,
+  suggestions = GENERIC_SUGGESTIONS,
   onSelect,
   disabled = false,
   className,
@@ -35,44 +35,34 @@ export function SuggestedActions({
   return (
     <div
       className={cn(
-        "flex w-full gap-2.5 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible",
+        "grid w-full grid-cols-1 gap-2 sm:grid-cols-2",
         className,
       )}
       data-testid="suggested-actions"
-      style={{
-        msOverflowStyle: "none",
-        scrollbarWidth: "none",
-        WebkitOverflowScrolling: "touch",
-      }}
     >
-      {suggestions.map((suggestion, index) => (
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          className="min-w-[200px] shrink-0 sm:min-w-0 sm:shrink"
-          exit={{ opacity: 0, y: 16 }}
-          initial={{ opacity: 0, y: 16 }}
-          key={suggestion}
-          transition={{
-            delay: 0.06 * index,
-            duration: 0.4,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-        >
+      {suggestions.map((suggestion) => (
+        <div className="min-w-0" key={suggestion}>
           <button
             className={cn(
-              "h-auto w-full whitespace-nowrap rounded-card border border-hairline bg-surface-1 px-4 py-3 text-left text-[12px] leading-relaxed text-muted",
-              "transition-all duration-200 hover:-translate-y-0.5 hover:bg-surface-2 hover:text-ink hover:shadow-lg",
+              "group flex h-auto min-h-12 w-full items-center gap-3 whitespace-normal rounded-card border border-hairline-strong bg-surface-1 px-3 py-3 text-left text-[13px] leading-relaxed text-body",
+              "transition-colors duration-150 hover:border-accent-blue/50 hover:bg-surface-2 hover:text-ink focus-visible:border-accent-blue",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0",
-              "motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:whitespace-normal sm:p-4 sm:text-[13px]",
+              "motion-reduce:transition-none sm:px-4 sm:py-3",
               disabled && "pointer-events-none opacity-50",
             )}
             disabled={disabled}
             onClick={() => void onSelect(suggestion)}
             type="button"
           >
-            {suggestion}
+            <span
+              aria-hidden="true"
+              className="flex size-8 shrink-0 items-center justify-center rounded-control border border-hairline bg-accent-blue/10 text-accent-blue transition-colors group-hover:border-accent-blue/40 group-hover:bg-accent-blue/15"
+            >
+              <Sparkles className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">{suggestion}</span>
           </button>
-        </motion.div>
+        </div>
       ))}
     </div>
   );

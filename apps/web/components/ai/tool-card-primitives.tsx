@@ -20,13 +20,7 @@
  */
 
 import { Badge } from "@roamlog/ui";
-import {
-  CheckCircle,
-  ChevronDown,
-  Circle,
-  Wrench,
-  XCircle,
-} from "lucide-react";
+import { CheckCircle, ChevronDown, Circle, Wrench, XCircle } from "lucide-react";
 import {
   createContext,
   useContext,
@@ -122,11 +116,7 @@ export function CollapsibleTrigger({
 
 export type CollapsibleContentProps = ComponentProps<"div">;
 
-export function CollapsibleContent({
-  className,
-  children,
-  ...props
-}: CollapsibleContentProps) {
+export function CollapsibleContent({ className, children, ...props }: CollapsibleContentProps) {
   const { open, contentId } = useCollapsible();
   if (!open) return null;
 
@@ -141,12 +131,7 @@ export function CollapsibleContent({
 /* Tool card                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export type ToolCardState =
-  | "running"
-  | "complete"
-  | "error"
-  | "cancelled"
-  | "waiting";
+export type ToolCardState = "running" | "complete" | "error" | "cancelled" | "waiting";
 
 export type ToolProps = CollapsibleProps;
 
@@ -227,9 +212,7 @@ export const ToolHeader = ({
   ...props
 }: ToolHeaderProps) => {
   const derivedName =
-    toolType === "dynamic-tool"
-      ? toolName
-      : toolType?.split("-").slice(1).join("-") ?? toolName;
+    toolType === "dynamic-tool" ? toolName : (toolType?.split("-").slice(1).join("-") ?? toolName);
   const label = title ?? derivedName ?? "工具";
 
   return (
@@ -248,17 +231,12 @@ export const ToolHeader = ({
         </span>
         {getStatusBadge(state)}
         {durationMs !== undefined ? (
-          <span
-            data-testid="tool-duration"
-            className="type-meta shrink-0 text-stone"
-          >
+          <span data-testid="tool-duration" className="type-meta shrink-0 text-stone">
             {formatDuration(durationMs)}
           </span>
         ) : null}
         {progressLabel ? (
-          <span className="min-w-0 max-w-full truncate type-meta text-muted">
-            {progressLabel}
-          </span>
+          <span className="min-w-0 max-w-full truncate type-meta text-muted">{progressLabel}</span>
         ) : null}
       </div>
       <ChevronDown
@@ -305,19 +283,50 @@ function jsonText(value: unknown): string {
 
 export type ToolInputProps = ComponentProps<"div"> & {
   input: unknown;
+  /** Raw streamed JSON. It may be incomplete while the model is still writing. */
+  rawText?: string;
+  preferRaw?: boolean;
+  /** Compact, product-language summary shown before the raw JSON. */
+  summary?: ReactNode;
+  /** True while the model is still producing the argument JSON. */
+  streaming?: boolean;
 };
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
-  if (input === undefined) return null;
+export const ToolInput = ({
+  className,
+  input,
+  rawText,
+  preferRaw = false,
+  summary,
+  streaming = false,
+  ...props
+}: ToolInputProps) => {
+  if (input === undefined && !rawText) return null;
+  const code = preferRaw && rawText && rawText.length > 0 ? rawText : jsonText(input ?? {});
 
   return (
     <div className={cn("min-w-0 space-y-2 overflow-hidden", className)} {...props}>
-      <h4 className="text-xs font-medium uppercase tracking-wide text-muted">
-        参数
-      </h4>
-      <div className="min-w-0 overflow-hidden rounded-card bg-surface-2">
-        <CodeBlock code={jsonText(input)} language="json" />
-      </div>
+      <h4 className="text-xs font-medium uppercase tracking-wide text-muted">参数</h4>
+      {summary ? (
+        <div
+          className="min-w-0 rounded-control border border-hairline bg-surface-0/45 px-3 py-2"
+          data-testid="tool-input-summary"
+        >
+          {summary}
+        </div>
+      ) : streaming ? (
+        <p className="text-xs leading-5 text-muted" data-testid="tool-input-streaming">
+          正在准备操作…
+        </p>
+      ) : null}
+      <details className="group/raw min-w-0 rounded-control border border-hairline bg-surface-0/30">
+        <summary className="cursor-pointer list-none px-3 py-2 text-[11px] text-muted outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ink [&::-webkit-details-marker]:hidden">
+          查看原始参数
+        </summary>
+        <div className="min-w-0 overflow-hidden border-t border-hairline bg-surface-2">
+          <CodeBlock code={code} language="json" />
+        </div>
+      </details>
     </div>
   );
 };
@@ -325,12 +334,15 @@ export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
 export type ToolOutputProps = ComponentProps<"div"> & {
   output: unknown;
   errorText?: string;
+  /** Compact, product-language result summary shown before the raw JSON. */
+  summary?: ReactNode;
 };
 
 export const ToolOutput = ({
   className,
   output,
   errorText,
+  summary,
   ...props
 }: ToolOutputProps) => {
   if (output === undefined && !errorText) return null;
@@ -345,17 +357,32 @@ export const ToolOutput = ({
       <div
         role={isError ? "alert" : undefined}
         className={cn(
-          "min-w-0 overflow-x-auto rounded-card text-xs",
+          "min-w-0 rounded-card text-xs",
           isError && "bg-accent-red/10 text-accent-red",
         )}
       >
         {errorText ? (
           <div className="whitespace-pre-wrap break-words px-3 py-2">{errorText}</div>
         ) : null}
-        {output !== undefined ? (
-          <CodeBlock code={jsonText(output)} language="json" />
-        ) : null}
       </div>
+      {summary && !isError ? (
+        <div
+          className="min-w-0 rounded-control border border-hairline bg-surface-0/45 px-3 py-2"
+          data-testid="tool-output-summary"
+        >
+          {summary}
+        </div>
+      ) : null}
+      {output !== undefined ? (
+        <details className="min-w-0 rounded-control border border-hairline bg-surface-0/30">
+          <summary className="cursor-pointer list-none px-3 py-2 text-[11px] text-muted outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ink [&::-webkit-details-marker]:hidden">
+            查看原始结果
+          </summary>
+          <div className="min-w-0 overflow-x-auto border-t border-hairline">
+            <CodeBlock code={jsonText(output)} language="json" />
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 };

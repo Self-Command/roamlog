@@ -74,6 +74,21 @@ export interface AiStepResult {
 }
 
 /**
+ * One fragment of a model tool call while it is still being streamed.
+ *
+ * `argumentsDelta` is raw JSON text, not a parsed object: providers split it
+ * at arbitrary boundaries. The service turns `index` into the same stable
+ * tool-call id it uses later for `tool.start`, so the UI can upsert one card
+ * instead of creating a second card after the model finishes.
+ */
+export interface AiToolCallDelta {
+  readonly index: number;
+  readonly id?: string;
+  readonly name: string;
+  readonly argumentsDelta: string;
+}
+
+/**
  * Streaming knobs for {@link AiProtocolAdapter.streamStep}.
  *
  * `onDelta` is the name callers should use; `onTextDelta` is the compatible
@@ -87,6 +102,16 @@ export interface AiStreamOptions {
   readonly onDelta?: (text: string) => void | Promise<void>;
   /** Spec-compatible alias for `onDelta` (§1.4.6). */
   readonly onTextDelta?: (delta: string) => void | Promise<void>;
+  /**
+   * Receives provider-supplied reasoning text. Never synthesize this from a
+   * status label: gateways that do not expose reasoning must leave it unset.
+   */
+  readonly onReasoningDelta?: (delta: string) => void | Promise<void>;
+  /**
+   * Receives tool-call fragments while the provider is still emitting the
+   * call. Adapters invoke this only once a tool name is known.
+   */
+  readonly onToolCallDelta?: (delta: AiToolCallDelta) => void | Promise<void>;
 }
 
 /**
@@ -97,9 +122,10 @@ export interface AiProtocolAdapter {
   readonly protocol: AiProtocol;
   step(input: AiStepInput): Promise<AiStepResult>;
   /**
-   * Streaming version of `step`: text deltas go through `options.onDelta` as
-   * they arrive, while the resolved value keeps the exact `AiStepResult` shape
-   * so `AiPlanService` can fall back to `step()` when this is not implemented.
+   * Streaming version of `step`: text, reasoning and tool-call argument deltas
+   * go through their callbacks as they arrive, while the resolved value keeps
+   * the exact `AiStepResult` shape so `AiPlanService` can fall back to `step()`
+   * when this is not implemented.
    */
   streamStep?(input: AiStepInput, options: AiStreamOptions): Promise<AiStepResult>;
 }

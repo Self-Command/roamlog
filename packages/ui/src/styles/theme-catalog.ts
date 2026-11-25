@@ -1,13 +1,18 @@
 /**
  * Semantic appearance catalog.
  *
- * The palettes below are ports of the pinned upstream themes documented in
- * docs/superpowers/specs/2026-11-22-theme-font-system-design.md. Roamlog only
- * maps upstream roles into its semantic token names; it does not invent a
- * replacement hue palette.
+ * The upstream palettes are ports of the pinned themes documented in
+ * docs/superpowers/specs/2026-11-22-theme-font-system-design.md. Porcelain is
+ * the user-approved internal Roamlog skin; it only adds semantic color,
+ * material, radius and shadow tokens and does not change layout.
  */
 
 export const THEME_SKINS = [
+  "porcelain",
+  "primer",
+  "fluent",
+  "carbon",
+  "carbon-soft",
   "editorial-noir",
   "catppuccin",
   "tokyo-night",
@@ -17,9 +22,15 @@ export const THEME_SKINS = [
 ] as const;
 
 export type ThemeSkinId = (typeof THEME_SKINS)[number];
+export type EnterpriseThemeSkinId =
+  | "porcelain"
+  | "primer"
+  | "fluent"
+  | "carbon"
+  | "carbon-soft";
 export type ThemeModeId = "light" | "dark";
 
-export interface SkinPalette {
+export interface BaseSkinPalette {
   readonly canvas: string;
   readonly surface1: string;
   readonly surface2: string;
@@ -44,7 +55,272 @@ export interface SkinPalette {
   readonly info: string;
 }
 
-export const SKIN_PALETTES: Record<ThemeSkinId, Record<ThemeModeId, SkinPalette>> = {
+export interface SkinPalette extends BaseSkinPalette {
+  readonly accentPrimary: string;
+  readonly hairline: string;
+  readonly hairlineStrong: string;
+  readonly radiusCard: string;
+  readonly radiusControl: string;
+  readonly shadowCard: string;
+  readonly shadowOverlay: string;
+  readonly focusRingOuter: string;
+  readonly focusRingInner: string;
+}
+
+const BASE_SKIN_PALETTES: Record<
+  ThemeSkinId,
+  Record<ThemeModeId, BaseSkinPalette>
+> = {
+  porcelain: {
+    light: {
+      canvas: "#f6f5f2",
+      surface1: "#fcfbf9",
+      surface2: "#f2f0ec",
+      surfaceDeep: "#ece9e4",
+      overlay: "rgba(255, 255, 255, 0.88)",
+      ink: "#1d1d1f",
+      body: "#464548",
+      muted: "#6e6d70",
+      ash: "#858387",
+      stone: "#79777a",
+      accentWarm: "#1f2022",
+      accentBlue: "#5d6b78",
+      accentGreen: "#5f7468",
+      accentRed: "#9b5e5e",
+      accentYellow: "#a88a5a",
+      accentSlate: "#6e6d70",
+      accentContrast: "#ffffff",
+      focusRing: "#007aff",
+      success: "#52705d",
+      warning: "#876b42",
+      danger: "#8f5353",
+      info: "#5d6b78",
+    },
+    dark: {
+      canvas: "#141416",
+      surface1: "#1c1b1f",
+      surface2: "#19181c",
+      surfaceDeep: "#0d0e10",
+      overlay: "rgba(24, 24, 27, 0.90)",
+      ink: "#f2f1ee",
+      body: "#c4c2be",
+      muted: "#93918c",
+      ash: "#a8a5a0",
+      stone: "#b5b2ac",
+      accentWarm: "#f2f1ee",
+      accentBlue: "#9aa6b2",
+      accentGreen: "#82a393",
+      accentRed: "#bd8686",
+      accentYellow: "#bba070",
+      accentSlate: "#93918c",
+      accentContrast: "#111111",
+      focusRing: "#0a84ff",
+      success: "#82a393",
+      warning: "#bba070",
+      danger: "#bd8686",
+      info: "#9aa6b2",
+    },
+  },
+  primer: {
+    light: {
+      canvas: "#ffffff",
+      surface1: "#f6f8fa",
+      surface2: "#eff2f5",
+      surfaceDeep: "#e6eaef",
+      overlay: "#ffffff",
+      ink: "#1f2328",
+      body: "#25292e",
+      muted: "#59636e",
+      ash: "#818b98",
+      stone: "#59636e",
+      accentWarm: "#1f883d",
+      accentBlue: "#0969da",
+      accentGreen: "#1a7f37",
+      accentRed: "#cf222e",
+      accentYellow: "#9a6700",
+      accentSlate: "#59636e",
+      accentContrast: "#ffffff",
+      focusRing: "#0969da",
+      success: "#1a7f37",
+      warning: "#9a6700",
+      danger: "#d1242f",
+      info: "#0969da",
+    },
+    dark: {
+      canvas: "#0d1117",
+      surface1: "#151b23",
+      surface2: "#262c36",
+      surfaceDeep: "#2a313c",
+      overlay: "#010409",
+      ink: "#f0f6fc",
+      body: "#f0f6fc",
+      muted: "#9198a1",
+      ash: "#656c76",
+      stone: "#9198a1",
+      accentWarm: "#238636",
+      accentBlue: "#4493f8",
+      accentGreen: "#3fb950",
+      accentRed: "#da3633",
+      accentYellow: "#9e6a03",
+      accentSlate: "#9198a1",
+      accentContrast: "#ffffff",
+      focusRing: "#1f6feb",
+      success: "#3fb950",
+      warning: "#d29922",
+      danger: "#f85149",
+      info: "#4493f8",
+    },
+  },
+  fluent: {
+    light: {
+      canvas: "#ffffff",
+      surface1: "#fafafa",
+      surface2: "#f5f5f5",
+      surfaceDeep: "#f0f0f0",
+      overlay: "#ffffff",
+      ink: "#242424",
+      body: "#424242",
+      muted: "#616161",
+      ash: "#707070",
+      stone: "#616161",
+      accentWarm: "#0f6cbd",
+      accentBlue: "#115ea3",
+      accentGreen: "#0e700e",
+      accentRed: "#b10e1c",
+      accentYellow: "#bc4b09",
+      accentSlate: "#707070",
+      accentContrast: "#ffffff",
+      focusRing: "#0f6cbd",
+      success: "#094509",
+      warning: "#8a3707",
+      danger: "#6e0811",
+      info: "#115ea3",
+    },
+    dark: {
+      canvas: "#292929",
+      surface1: "#1f1f1f",
+      surface2: "#141414",
+      surfaceDeep: "#0a0a0a",
+      overlay: "#292929",
+      ink: "#ffffff",
+      body: "#d6d6d6",
+      muted: "#adadad",
+      ash: "#999999",
+      stone: "#adadad",
+      accentWarm: "#115ea3",
+      accentBlue: "#479ef5",
+      accentGreen: "#54b054",
+      accentRed: "#dc626d",
+      accentYellow: "#faa06b",
+      accentSlate: "#999999",
+      accentContrast: "#ffffff",
+      focusRing: "#479ef5",
+      success: "#9fd89f",
+      warning: "#fdcfb4",
+      danger: "#eeacb2",
+      info: "#479ef5",
+    },
+  },
+  carbon: {
+    light: {
+      canvas: "#ffffff",
+      surface1: "#f4f4f4",
+      surface2: "#e8e8e8",
+      surfaceDeep: "#e0e0e0",
+      overlay: "#ffffff",
+      ink: "#161616",
+      body: "#525252",
+      muted: "#6f6f6f",
+      ash: "#8d8d8d",
+      stone: "#525252",
+      accentWarm: "#0f62fe",
+      accentBlue: "#0043ce",
+      accentGreen: "#24a148",
+      accentRed: "#da1e28",
+      accentYellow: "#f1c21b",
+      accentSlate: "#525252",
+      accentContrast: "#ffffff",
+      focusRing: "#0f62fe",
+      success: "#198038",
+      warning: "#8e6a00",
+      danger: "#da1e28",
+      info: "#0043ce",
+    },
+    dark: {
+      canvas: "#161616",
+      surface1: "#262626",
+      surface2: "#333333",
+      surfaceDeep: "#393939",
+      overlay: "#393939",
+      ink: "#f4f4f4",
+      body: "#c6c6c6",
+      muted: "#a8a8a8",
+      ash: "#6f6f6f",
+      stone: "#c6c6c6",
+      accentWarm: "#0f62fe",
+      accentBlue: "#a6c8ff",
+      accentGreen: "#42be65",
+      accentRed: "#fa4d56",
+      accentYellow: "#f1c21b",
+      accentSlate: "#c6c6c6",
+      accentContrast: "#ffffff",
+      focusRing: "#ffffff",
+      success: "#42be65",
+      warning: "#f1c21b",
+      danger: "#fa4d56",
+      info: "#4589ff",
+    },
+  },
+  "carbon-soft": {
+    light: {
+      canvas: "#f4f4f4",
+      surface1: "#ffffff",
+      surface2: "#e8e8e8",
+      surfaceDeep: "#e0e0e0",
+      overlay: "#f4f4f4",
+      ink: "#161616",
+      body: "#525252",
+      muted: "#6f6f6f",
+      ash: "#8d8d8d",
+      stone: "#525252",
+      accentWarm: "#0f62fe",
+      accentBlue: "#0043ce",
+      accentGreen: "#24a148",
+      accentRed: "#da1e28",
+      accentYellow: "#f1c21b",
+      accentSlate: "#525252",
+      accentContrast: "#ffffff",
+      focusRing: "#0f62fe",
+      success: "#198038",
+      warning: "#8e6a00",
+      danger: "#da1e28",
+      info: "#0043ce",
+    },
+    dark: {
+      canvas: "#262626",
+      surface1: "#393939",
+      surface2: "#474747",
+      surfaceDeep: "#525252",
+      overlay: "#525252",
+      ink: "#f4f4f4",
+      body: "#c6c6c6",
+      muted: "#c6c6c6",
+      ash: "#8d8d8d",
+      stone: "#c6c6c6",
+      accentWarm: "#0f62fe",
+      accentBlue: "#78a9ff",
+      accentGreen: "#42be65",
+      accentRed: "#ff8389",
+      accentYellow: "#f1c21b",
+      accentSlate: "#c6c6c6",
+      accentContrast: "#ffffff",
+      focusRing: "#ffffff",
+      success: "#42be65",
+      warning: "#f1c21b",
+      danger: "#ff8389",
+      info: "#4589ff",
+    },
+  },
   "editorial-noir": {
     light: {
       canvas: "#fdfdfc",
@@ -347,6 +623,204 @@ export const SKIN_PALETTES: Record<ThemeSkinId, Record<ThemeModeId, SkinPalette>
   },
 };
 
+type ExtendedSkinTokens = Pick<
+  SkinPalette,
+  | "accentPrimary"
+  | "hairline"
+  | "hairlineStrong"
+  | "radiusCard"
+  | "radiusControl"
+  | "shadowCard"
+  | "shadowOverlay"
+  | "focusRingOuter"
+  | "focusRingInner"
+>;
+
+/**
+ * Primer, Fluent and Carbon values are copied from the pinned sources listed
+ * in `.audit/theme-enterprise/*-spec.md`. They are not derived by hand.
+ */
+const ENTERPRISE_EXTENDED_TOKENS: Record<
+  EnterpriseThemeSkinId,
+  Record<ThemeModeId, ExtendedSkinTokens>
+> = {
+  porcelain: {
+    light: {
+      accentPrimary: "#1f2022",
+      hairline: "rgba(29, 29, 31, 0.08)",
+      hairlineStrong: "rgba(29, 29, 31, 0.13)",
+      radiusCard: "12px",
+      radiusControl: "8px",
+      shadowCard:
+        "0 1px 2px rgba(29, 29, 31, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.62)",
+      shadowOverlay: "0 18px 48px rgba(29, 29, 31, 0.14)",
+      focusRingOuter: "#007aff",
+      focusRingInner: "rgba(255, 255, 255, 0.7)",
+    },
+    dark: {
+      accentPrimary: "#f2f1ee",
+      hairline: "rgba(255, 255, 255, 0.08)",
+      hairlineStrong: "rgba(255, 255, 255, 0.13)",
+      radiusCard: "12px",
+      radiusControl: "8px",
+      shadowCard:
+        "0 1px 2px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06)",
+      shadowOverlay: "0 18px 48px rgba(0, 0, 0, 0.46)",
+      focusRingOuter: "#0a84ff",
+      focusRingInner: "rgba(255, 255, 255, 0.18)",
+    },
+  },
+  primer: {
+    light: {
+      accentPrimary: "#1f883d",
+      hairline: "#d1d9e0b3",
+      hairlineStrong: "#d1d9e0",
+      radiusCard: "6px",
+      radiusControl: "6px",
+      shadowCard: "0 1px 1px 0 #25292e1a, 0 3px 6px 0 #25292e1f",
+      shadowOverlay:
+        "0 0 0 1px #d1d9e000, 0 8px 16px -4px #25292e14, 0 4px 32px -4px #25292e14, 0 24px 48px -12px #25292e14, 0 48px 96px -24px #25292e14",
+      focusRingOuter: "#0969da",
+      focusRingInner: "#ffffff00",
+    },
+    dark: {
+      accentPrimary: "#238636",
+      hairline: "#3d444db3",
+      hairlineStrong: "#3d444d",
+      radiusCard: "6px",
+      radiusControl: "6px",
+      shadowCard: "0 1px 1px 0 #01040966, 0 3px 6px 0 #010409cc",
+      shadowOverlay:
+        "0 0 0 1px #3d444d, 0 8px 16px -4px #01040966, 0 4px 32px -4px #01040966, 0 24px 48px -12px #01040966, 0 48px 96px -24px #01040966",
+      focusRingOuter: "#1f6feb",
+      focusRingInner: "#00000000",
+    },
+  },
+  fluent: {
+    light: {
+      accentPrimary: "#0f6cbd",
+      hairline: "#f0f0f0",
+      hairlineStrong: "#d1d1d1",
+      radiusCard: "8px",
+      radiusControl: "4px",
+      shadowCard:
+        "0 0 2px rgba(0, 0, 0, .12), 0 2px 4px rgba(0, 0, 0, .14)",
+      shadowOverlay:
+        "0 0 8px rgba(0, 0, 0, .12), 0 8px 16px rgba(0, 0, 0, .14)",
+      focusRingOuter: "#000000",
+      focusRingInner: "#ffffff",
+    },
+    dark: {
+      accentPrimary: "#115ea3",
+      hairline: "#3d3d3d",
+      hairlineStrong: "#666666",
+      radiusCard: "8px",
+      radiusControl: "4px",
+      shadowCard:
+        "0 0 2px rgba(0, 0, 0, .12), 0 2px 4px rgba(0, 0, 0, .14)",
+      shadowOverlay:
+        "0 0 8px rgba(0, 0, 0, .12), 0 8px 16px rgba(0, 0, 0, .14)",
+      focusRingOuter: "#ffffff",
+      focusRingInner: "#000000",
+    },
+  },
+  carbon: {
+    light: {
+      accentPrimary: "#0f62fe",
+      hairline: "#e0e0e0",
+      hairlineStrong: "#c6c6c6",
+      radiusCard: "0",
+      radiusControl: "0",
+      shadowCard: "none",
+      shadowOverlay: "0 8px 16px rgba(0, 0, 0, .12)",
+      focusRingOuter: "#0f62fe",
+      focusRingInner: "transparent",
+    },
+    dark: {
+      accentPrimary: "#0f62fe",
+      hairline: "#393939",
+      hairlineStrong: "#525252",
+      radiusCard: "0",
+      radiusControl: "0",
+      shadowCard: "none",
+      shadowOverlay: "0 8px 16px rgba(0, 0, 0, .24)",
+      focusRingOuter: "#ffffff",
+      focusRingInner: "transparent",
+    },
+  },
+  "carbon-soft": {
+    light: {
+      accentPrimary: "#0f62fe",
+      hairline: "#e0e0e0",
+      hairlineStrong: "#c6c6c6",
+      radiusCard: "0",
+      radiusControl: "0",
+      shadowCard: "none",
+      shadowOverlay: "0 8px 16px rgba(0, 0, 0, .12)",
+      focusRingOuter: "#0f62fe",
+      focusRingInner: "transparent",
+    },
+    dark: {
+      accentPrimary: "#0f62fe",
+      hairline: "#525252",
+      hairlineStrong: "#6f6f6f",
+      radiusCard: "0",
+      radiusControl: "0",
+      shadowCard: "none",
+      shadowOverlay: "0 8px 16px rgba(0, 0, 0, .24)",
+      focusRingOuter: "#ffffff",
+      focusRingInner: "transparent",
+    },
+  },
+};
+
+function legacyExtendedTokens(palette: BaseSkinPalette): ExtendedSkinTokens {
+  return {
+    accentPrimary: palette.accentWarm,
+    hairline: "color-mix(in srgb, var(--skin-ink) 8%, transparent)",
+    hairlineStrong: "color-mix(in srgb, var(--skin-ink) 16%, transparent)",
+    radiusCard: "12px",
+    radiusControl: "8px",
+    shadowCard: "0 1px 2px rgba(0, 0, 0, .08)",
+    shadowOverlay: "0 12px 32px rgba(0, 0, 0, .18)",
+    focusRingOuter: palette.focusRing,
+    focusRingInner: "transparent",
+  };
+}
+
+function isEnterpriseSkin(skin: ThemeSkinId): skin is EnterpriseThemeSkinId {
+  return (
+    skin === "porcelain" ||
+    skin === "primer" ||
+    skin === "fluent" ||
+    skin === "carbon" ||
+    skin === "carbon-soft"
+  );
+}
+
+function withExtendedTokens(
+  skin: ThemeSkinId,
+  mode: ThemeModeId,
+  palette: BaseSkinPalette,
+): SkinPalette {
+  return {
+    ...palette,
+    ...(isEnterpriseSkin(skin)
+      ? ENTERPRISE_EXTENDED_TOKENS[skin][mode]
+      : legacyExtendedTokens(palette)),
+  };
+}
+
+export const SKIN_PALETTES = Object.fromEntries(
+  THEME_SKINS.map((skin) => [
+    skin,
+    {
+      light: withExtendedTokens(skin, "light", BASE_SKIN_PALETTES[skin].light),
+      dark: withExtendedTokens(skin, "dark", BASE_SKIN_PALETTES[skin].dark),
+    },
+  ]),
+) as Record<ThemeSkinId, Record<ThemeModeId, SkinPalette>>;
+
 export const THEME_TOKEN_ROLES = [
   "canvas",
   "surface-1",
@@ -362,6 +836,7 @@ export const THEME_TOKEN_ROLES = [
   "hairline-strong",
   "divider",
   "accent-solid",
+  "accent-primary",
   "accent-soft",
   "accent-glow",
   "accent-orange",
@@ -372,6 +847,8 @@ export const THEME_TOKEN_ROLES = [
   "accent-slate",
   "accent-contrast",
   "focus-ring",
+  "focus-ring-outer",
+  "focus-ring-inner",
   "success",
   "warning",
   "danger",
@@ -399,6 +876,11 @@ export const THEME_CONTRAST_PAIRS = [
 ] as const;
 
 export const SKIN_LABELS: Record<ThemeSkinId, string> = {
+  porcelain: "Porcelain 原生瓷白",
+  primer: "Primer（旧版）",
+  fluent: "Fluent 2 原生企业",
+  carbon: "IBM Carbon",
+  "carbon-soft": "Carbon 柔和灰阶",
   "editorial-noir": "编辑黑",
   catppuccin: "猫咖",
   "tokyo-night": "东京夜",
@@ -408,6 +890,11 @@ export const SKIN_LABELS: Record<ThemeSkinId, string> = {
 };
 
 export const SKIN_SOURCES: Record<ThemeSkinId, string> = {
+  porcelain: "roamlog-porcelain; internal",
+  primer: "primer/primitives@11.10.0 internalCss light/dark; MIT",
+  fluent: "fluentui/react-theme@9.2.2 webLightTheme/webDarkTheme; MIT",
+  carbon: "carbon-design-system/carbon@11.86.0 white/g100 themes; Apache-2.0",
+  "carbon-soft": "carbon-design-system/carbon@11.86.0 g10/g90 themes; Apache-2.0",
   "editorial-noir":
     "radix-ui/colors@dbdb85470547c7d34b9001f48fddb08ded335979 light.ts/dark.ts sand+orange; MIT",
   catppuccin: "catppuccin/palette@07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd; MIT",

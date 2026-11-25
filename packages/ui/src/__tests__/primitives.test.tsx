@@ -24,7 +24,7 @@ describe("design system primitives", () => {
       expect(classes).toContain("focus-visible:ring-focus-ring");
     }
 
-    expect(buttonVariants({ variant: "primary" })).toContain("text-canvas");
+    expect(buttonVariants({ variant: "primary" })).toContain("text-accent-contrast");
     expect(buttonVariants({ variant: "danger" })).toContain("text-danger");
   });
 

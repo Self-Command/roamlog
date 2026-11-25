@@ -163,7 +163,7 @@ export function ProfileSettings({ workspaceSlug }: { workspaceSlug: string }) {
       return;
     }
     if (!workspace) {
-      setAvatarError("当前 Workspace 没有载入，暂时无法上传头像。");
+      setAvatarError("工作区暂时无法加载，请稍后再试。");
       return;
     }
 
@@ -256,7 +256,7 @@ export function ProfileSettings({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="SETTINGS / PROFILE"
+        eyebrow="设置 / 个人资料"
         title="个人资料"
         description="头像、显示名称、时区与语言会用于整个账号，也会出现在其他成员的视图里。"
       />
@@ -285,8 +285,10 @@ export function ProfileSettings({ workspaceSlug }: { workspaceSlug: string }) {
               <Camera aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">AVATAR</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">头像</h2>
+              <p className="type-eyebrow">头像</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                头像
+              </h2>
             </div>
           </div>
 
@@ -361,8 +363,8 @@ export function ProfileSettings({ workspaceSlug }: { workspaceSlug: string }) {
               <MailCheck aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">IDENTITY</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">
+              <p className="type-eyebrow">账号信息</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
                 账号信息
               </h2>
             </div>

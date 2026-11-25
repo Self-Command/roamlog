@@ -217,7 +217,7 @@ function ExactLocationNotice({
           这是行程设置，不在照片页修改。
         </p>
         {canEdit ? null : (
-          <p className="text-[10px] leading-4 text-stone">当前角色不能修改行程设置。</p>
+          <p className="text-[10px] leading-4 text-stone">你没有修改行程设置的权限。</p>
         )}
       </div>
       {canEdit ? (
@@ -346,8 +346,8 @@ export function PhotosTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/media/${target.id}`);
         return response;
       },
-      forbidden: "当前角色不能删除照片。",
-      failure: "照片没有删除。",
+      forbidden: "你没有删除照片的权限。请联系工作区所有者或管理员。",
+      failure: "照片没有删除，请重试。",
     });
     if (deleted) setDeleteTarget(null);
   }
@@ -359,7 +359,7 @@ export function PhotosTab({ tripId }: { tripId: string }) {
     <>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="type-eyebrow">PHOTO LIBRARY</p>
+          <p className="type-eyebrow">照片库</p>
           <PhotoUploader
             workspaceId={workspace.id}
             tripId={tripId}
@@ -403,10 +403,10 @@ export function PhotosTab({ tripId }: { tripId: string }) {
               {groups.map(([date, items]) => (
                 <section key={date} className="space-y-2">
                   <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink">
+                    <h3 className="text-xs font-medium text-ink">
                       {shortDateLabel(date)}
                     </h3>
-                    <span className="font-mono text-[9px] text-stone">{items.length} 张</span>
+                    <span className="text-[11px] text-stone">{items.length} 张</span>
                   </div>
                   <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                     {items.map((item) => (

@@ -93,25 +93,25 @@ function AdminDataContent<T>({
           <div className="min-w-0">
             <p className="type-eyebrow text-accent-red">
               {twoFactorRequired
-                ? "需要绑定 2FA"
+                ? "需要两步验证"
                 : accessDenied
-                  ? "平台访问被拒绝"
+                  ? "没有后台权限"
                   : "加载失败"}
             </p>
-            <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">
+            <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.02em] text-ink">
               {twoFactorRequired
-                ? "先绑定 TOTP 验证器"
+                ? "先完成两步验证"
                 : accessDenied
                   ? "当前账户没有后台权限"
                   : "加载失败，请稍后重试"}
             </h2>
             <p className="mt-2 text-[12px] leading-6 text-muted">
               {twoFactorRequired
-                ? "后端要求平台管理员完成 TOTP 注册与验证。完成前，后台会拒绝所有管理请求。"
-                : "后台数据暂时无法读取，请稍后重试；多次失败请联系平台管理员。"}
+                ? "为保证后台安全，请先完成两步验证。完成后才能继续管理操作。"
+                : "后台数据暂时无法读取，请稍后重试；如果持续失败，请联系平台管理员。"}
             </p>
             <details className="mt-3 font-mono text-[9px] text-stone">
-              <summary className="cursor-pointer select-none">错误详情</summary>
+              <summary className="cursor-pointer select-none">技术详情</summary>
               <p className="mt-1 break-all">
                 {resource.error.code} · HTTP {resource.error.status || "网络错误"} ·{" "}
                 {resource.error.detail}
@@ -150,7 +150,7 @@ function AdminDataContent<T>({
       <EmptyState
         icon={AlertTriangle}
         title="没有可显示的数据"
-        description="后台 API 返回了空结果，请检查后端状态后重试。"
+        description="暂时没有可显示的数据。请重新加载，或调整筛选条件后再试。"
         className="rounded-card border border-hairline-strong bg-surface-1"
       />
     );
@@ -164,7 +164,7 @@ function AdminDataContent<T>({
           className="flex flex-wrap items-center gap-2 rounded-control border border-accent-yellow/25 bg-accent-yellow/5 px-3 py-2 text-[11px] text-accent-yellow"
         >
           <LocateFixed aria-hidden="true" className="size-3.5" />
-          后端降级：{resource.degraded.join(" · ")}
+          部分服务暂时不可用：{resource.degraded.join(" · ")}
           <Button variant="ghost" size="sm" className="ml-auto" onClick={resource.refetch}>
             重新检查
           </Button>

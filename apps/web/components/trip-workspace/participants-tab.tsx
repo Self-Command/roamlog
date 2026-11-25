@@ -69,7 +69,9 @@ function roleTone(role: string): Tone {
 }
 
 function participantRoleError(error: unknown): string {
-  if (isForbidden(error)) return "当前角色不能调整参与者角色。";
+  if (isForbidden(error)) {
+    return "你没有调整参与者角色的权限。请联系工作区所有者或管理员。";
+  }
   if (isApiError(error)) {
     if (error.status === 401) return "登录状态已失效，请重新登录后再试。";
     if (error.status === 400) return "角色值无效，请重新选择。";
@@ -78,7 +80,7 @@ function participantRoleError(error: unknown): string {
     // it as 「HTTP 200」 would name a successful status as the error, so keep
     // the two cases distinct.
     if (error.code === "INVALID_RESPONSE") {
-      return "参与者数据无法识别，请刷新页面后重试。";
+      return "参与者暂时无法加载，请刷新页面后重试。";
     }
     return "角色调整失败，请稍后重试。";
   }
@@ -142,7 +144,7 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/trips/${tripId}/participants`);
         return response;
       },
-      forbidden: "当前角色不能添加参与者。",
+      forbidden: "你没有添加参与者的权限。请联系工作区所有者或管理员。",
       failure: "参与者没有添加。",
     });
     if (added) {
@@ -164,7 +166,7 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/trips/${tripId}/participants/${target.userId}`);
         return response;
       },
-      forbidden: "当前角色不能移除参与者。",
+      forbidden: "你没有移除参与者的权限。请联系工作区所有者或管理员。",
       failure: "参与者没有移除。",
     });
     if (removed) setRemoveTarget(null);
@@ -196,7 +198,7 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
       <Panel title="参与者" meta={`${roleLabel(role)} · 无权限`}>
         <EmptyBlock
           icon={Lock}
-          title="当前角色不能查看参与者"
+          title="你没有查看参与者的权限"
           description={`${roleLabel(role)} 只能看到自己有权访问的内容，参与者名单不会提供给当前角色。`}
         />
       </Panel>
@@ -309,7 +311,7 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
                             disabled={pending || rolePendingId !== null}
                             aria-label={`更改 ${displayName} 的旅行角色`}
                             aria-busy={rolePendingId === participant.id}
-                            title="工作区 Owner/Admin 的权限高于旅行内角色"
+                            title="工作区所有者或管理员的权限高于旅行内角色"
                             className="h-9 w-28 text-xs"
                           >
                             <option value="viewer">可查看</option>
@@ -348,7 +350,7 @@ export function ParticipantsTab({ tripId }: { tripId: string }) {
         {!canManageRoles || (!capabilities.addParticipant && !capabilities.removeParticipant) ? (
           <p role="note" className="px-1 text-[11px] leading-5 text-muted">
             {!canManageRoles
-              ? "只有行程创建者或工作区 Owner/Admin 可以调整参与者角色；你仍可以查看当前角色。"
+              ? "只有行程创建者、工作区所有者或管理员可以调整参与者角色；你仍可以查看当前角色。"
               : null}
             {!canManageRoles && (!capabilities.addParticipant || !capabilities.removeParticipant)
               ? " "

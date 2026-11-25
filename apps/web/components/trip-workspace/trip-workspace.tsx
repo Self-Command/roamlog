@@ -82,7 +82,7 @@ function TripWorkspaceBody() {
         assertMutationOk(response, `/v1/trips/${trip.id}`);
         return response;
       },
-      forbidden: "当前角色不能删除旅行。",
+      forbidden: "你没有删除这趟旅行的权限。请联系工作区所有者或管理员。",
       failure: "旅行没有删除。",
     });
     if (deleted) {
@@ -103,7 +103,7 @@ function TripWorkspaceBody() {
         const parsed = TripSchema.safeParse(response.data);
         return parsed.success ? parsed.data : null;
       },
-      forbidden: "当前角色不能复制旅行。",
+      forbidden: "你没有复制这趟旅行的权限。请联系工作区所有者或管理员。",
       failure: "旅行没有复制。",
     });
     if (created) {

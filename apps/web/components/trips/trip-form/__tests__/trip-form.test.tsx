@@ -490,7 +490,7 @@ describe("TripForm edit", () => {
     await user.click(screen.getByRole("button", { name: "保存旅行" }));
 
     const banner = await screen.findByRole("alert");
-    expect(banner).toHaveTextContent("409 版本冲突");
+    expect(banner).toHaveTextContent("有其他成员先更新了这趟旅行");
     await user.click(screen.getByRole("button", { name: "重新加载最新版本" }));
     expect(onReload).toHaveBeenCalledTimes(1);
   });

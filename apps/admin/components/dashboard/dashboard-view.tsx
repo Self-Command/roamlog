@@ -63,11 +63,9 @@ function DashboardSourceNotice({
       <div className="flex items-start gap-3">
         <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-red" />
         <div className="min-w-0 space-y-2">
-          <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-accent-red">
-            数据源错误{state.error?.code ? ` · ${state.error.code}` : ""}
-          </p>
+          <p className="text-[10px] font-medium text-accent-red">数据加载失败</p>
           <p className="text-[11px] leading-5 text-body">
-            {state.error?.detail ?? `${subject}加载失败，请重试。`}
+            {subject}暂时没有加载成功，请重试；如果持续失败，请联系平台管理员。
           </p>
           <Button type="button" variant="ghost" size="sm" onClick={state.refetch}>
             <RefreshCw aria-hidden="true" />
@@ -102,7 +100,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         eyebrow="平台 / 总览"
         title="平台总览"
         description={
-          "运营指标、后台队列与邮件健康。仅有当前快照时趋势显示单点。"}
+          "查看运营指标、任务队列和邮件送达情况。当前只有一次统计时，趋势图会显示一个数据点。"}
         readOnly={role === "analyst"}
         actions={
           <div className="text-right">
@@ -182,8 +180,8 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">增长 / 12 天</p>
-              <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">
+              <p className="type-eyebrow">近 12 天增长</p>
+              <h2 className="mt-2 font-display text-xl font-semibold tracking-[-0.02em] text-ink">
                 用户与工作区趋势
               </h2>
             </div>
@@ -202,8 +200,8 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">审计 / 最新</p>
-              <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">
+              <p className="type-eyebrow">最近审计记录</p>
+              <h2 className="mt-2 font-display text-xl font-semibold tracking-[-0.02em] text-ink">
                 最近审计事件
               </h2>
             </div>
@@ -256,8 +254,10 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">BullMQ / 健康度</p>
-              <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">队列健康</h2>
+              <p className="type-eyebrow">后台任务队列状态</p>
+              <h2 className="mt-2 font-display text-xl font-semibold tracking-[-0.02em] text-ink">
+                队列健康
+              </h2>
             </div>
             {metricsReady ? (
               <Badge tone={failedJobs > 0 ? "red" : "green"}>{failedJobs} 个失败</Badge>
@@ -307,8 +307,10 @@ export function DashboardView({ role, data }: DashboardViewProps) {
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">Resend / 投递</p>
-              <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">邮件健康</h2>
+              <p className="type-eyebrow">邮件送达情况</p>
+              <h2 className="mt-2 font-display text-xl font-semibold tracking-[-0.02em] text-ink">
+                邮件健康
+              </h2>
             </div>
             {emailsReady ? (
               <Badge tone={deliveryRate > 99 ? "green" : "yellow"}>
@@ -330,7 +332,7 @@ export function DashboardView({ role, data }: DashboardViewProps) {
                   return (
                     <div key={key} className="bg-surface-1 px-3 py-4">
                       <dt className="type-eyebrow">{EMAIL_STATUS_LABELS[key]}</dt>
-                      <dd className="mt-2 font-serif text-xl text-ink">
+                      <dd className="mt-2 font-display text-xl font-semibold text-ink">
                         {key === "delivered"
                           ? new Intl.NumberFormat("zh-CN").format(value)
                           : value}

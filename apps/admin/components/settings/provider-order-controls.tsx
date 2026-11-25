@@ -58,9 +58,9 @@ interface ProviderOrderControlsProps {
 
 function errorMessage(error: unknown): string {
   if (error instanceof AdminMutationError) {
-    return error.failure.detail?.trim() || error.failure.title || error.failure.code;
+    return "顺序保存失败，请稍后重试；如果持续失败，请联系平台管理员。";
   }
-  return error instanceof Error ? error.message : "顺序保存失败，请重试。";
+  return "顺序保存失败，请稍后重试；如果持续失败，请联系平台管理员。";
 }
 
 function SortableRow({

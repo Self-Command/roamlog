@@ -447,7 +447,9 @@ describe("行程表单指定可见范围", () => {
     await user.click(screen.getByRole("button", { name: "保存旅行" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("可见范围已提交，但返回的数据无法识别。");
+    expect(alert).toHaveTextContent(
+      "可见范围已提交，但暂时无法确认保存结果，请刷新页面后查看。",
+    );
     expect(alert).not.toHaveTextContent("服务器返回");
   });
 

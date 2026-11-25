@@ -4,20 +4,25 @@ import {
   AI_ATTACHMENT_MAX_BYTES,
   AI_ATTACHMENT_MIME_TYPES,
   AI_ERROR_CODES,
+  AI_HUMAN_CANCEL_REASON,
   AI_REASONING_EFFORTS,
   AI_REWRITE_INSTRUCTIONS,
   AI_REWRITE_MAX_COMMAND_CHARS,
   AI_REWRITE_MAX_CONTEXT_CHARS,
   AI_REWRITE_MAX_INPUT_CHARS,
   AI_REWRITE_MAX_TEXT_CHARS,
+  AI_STREAM_DELTA_MAX_CHARS,
   AI_TOOL_NAMES,
   AiAttachmentSchema,
+  AiAskUserResultSchema,
   AiChatModelsResponseSchema,
   AiChatRequestSchema,
   AiChatResponseSchema,
   AiConversationListResponseSchema,
   AiConversationMessagesResponseSchema,
   AiConversationSchema,
+  AiConfirmBriefResultSchema,
+  AiHumanToolResultSchema,
   PublicAiChatResponseSchema,
   AiRewriteRequestSchema,
   AiRewriteResponseSchema,
@@ -32,6 +37,9 @@ import {
   SetAiConversationVisibilityRequestSchema,
   UpdateAiConversationRequestSchema,
   UpsertAiMessageRequestSchema,
+  confirmBriefRevisionText,
+  isConfirmBriefConfirmed,
+  isHumanToolCancellation,
   isReadOnlyAiTool,
 } from "../api/ai";
 
@@ -156,6 +164,68 @@ describe("AI planning contracts", () => {
     });
     expect(parsed.subjects?.[TRIP_ID]).toEqual({ label: "清水寺" });
     expect(parsed.plannedCalls).toHaveLength(1);
+  });
+
+  it("carries bounded display-only plan details on both response paths", () => {
+    const details = {
+      objective: "慢节奏看古寺与咖啡",
+      constraints: ["两个人", "总预算 8000 元"],
+      assumptions: ["四月天气适合步行"],
+      days: [
+        {
+          date: "2027-04-02",
+          title: "第一天",
+          items: [
+            {
+              time: "09:00",
+              title: "清水寺",
+              location: "东山区",
+              type: "activity" as const,
+            },
+          ],
+        },
+      ],
+      budget: { amountMinor: 800_000, currency: "CNY", breakdown: ["住宿 5000 元"] },
+      logistics: ["购买公交一日券"],
+      risks: ["热门寺院排队"],
+      alternatives: ["雨天改去博物馆"],
+    };
+    const response = {
+      runId: RUN_ID,
+      message: "完整计划",
+      plannedCalls: [{ tool: "trips.create" as const, args: { title: "京都" } }],
+      readOnlyTrace: [],
+      usage: {},
+      provider: { protocol: "openai-chat" as const, model: "m" },
+      expiresAt: "2026-11-19T14:00:00+08:00",
+      details,
+    };
+    expect(AiChatResponseSchema.safeParse(response).success).toBe(true);
+
+    const planEvent = {
+      type: "plan" as const,
+      runId: RUN_ID,
+      message: "完整计划",
+      plannedCalls: response.plannedCalls,
+      readOnlyTrace: [],
+      expiresAt: response.expiresAt,
+      details,
+    };
+    expect(AiStreamEventSchema.safeParse(planEvent).success).toBe(true);
+
+    // Display facts are still bounded and validated like any other payload.
+    expect(
+      AiChatResponseSchema.safeParse({
+        ...response,
+        details: { ...details, days: [{ date: "not-a-date", items: [] }] },
+      }).success,
+    ).toBe(false);
+    expect(
+      AiChatResponseSchema.safeParse({
+        ...response,
+        details: { ...details, budget: { amountMinor: -1, currency: "CNY" } },
+      }).success,
+    ).toBe(false);
   });
 
   it("does not accept model-authored coordinates, timezones or visibility in the plan envelope", () => {
@@ -512,6 +582,48 @@ describe("AI stream event protocol v1", () => {
     );
   });
 
+  it("caps every append-only delta event", () => {
+    const exact = "a".repeat(AI_STREAM_DELTA_MAX_CHARS);
+    const tooLong = "a".repeat(AI_STREAM_DELTA_MAX_CHARS + 1);
+
+    expect(AiStreamEventSchema.safeParse({ type: "text.delta", delta: exact }).success).toBe(
+      true,
+    );
+    expect(AiStreamEventSchema.safeParse({ type: "text.delta", delta: tooLong }).success).toBe(
+      false,
+    );
+    expect(
+      AiStreamEventSchema.safeParse({
+        type: "reasoning.delta",
+        partId: "reasoning-1",
+        delta: exact,
+      }).success,
+    ).toBe(true);
+    expect(
+      AiStreamEventSchema.safeParse({
+        type: "reasoning.delta",
+        partId: "reasoning-1",
+        delta: tooLong,
+      }).success,
+    ).toBe(false);
+    expect(
+      AiStreamEventSchema.safeParse({
+        type: "tool.args.delta",
+        toolCallId: "call-1",
+        name: "trips.create",
+        argsTextDelta: exact,
+      }).success,
+    ).toBe(true);
+    expect(
+      AiStreamEventSchema.safeParse({
+        type: "tool.args.delta",
+        toolCallId: "call-1",
+        name: "trips.create",
+        argsTextDelta: tooLong,
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts the additive subjects map and rejects a malformed one", () => {
     const plan = {
       type: "plan" as const,
@@ -573,6 +685,33 @@ describe("AI stream event protocol v1", () => {
     );
   });
 
+  it("parses reasoning and streamed tool-argument deltas (strict)", () => {
+    const reasoning = {
+      type: "reasoning.delta" as const,
+      partId: "reasoning-round-1",
+      delta: "先确认用户意图。",
+    };
+    const reasoningEnd = {
+      type: "reasoning.end" as const,
+      partId: "reasoning-round-1",
+      durationMs: 1_250,
+    };
+    const toolArgs = {
+      type: "tool.args.delta" as const,
+      toolCallId: "round-1-call-0",
+      name: "places.search",
+      argsTextDelta: '{"q":"京都"',
+    };
+
+    for (const event of [reasoning, reasoningEnd, toolArgs]) {
+      expect(AiStreamEventSchema.safeParse(event).success).toBe(true);
+      expect(AiStreamEventSchema.safeParse({ ...event, extra: true }).success).toBe(false);
+    }
+    expect(AiStreamEventSchema.safeParse({ ...reasoning, delta: "" }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...reasoningEnd, durationMs: -1 }).success).toBe(false);
+    expect(AiStreamEventSchema.safeParse({ ...toolArgs, argsTextDelta: 1 }).success).toBe(false);
+  });
+
   it("parses the appended tool lifecycle events and rejects extra fields (strict)", () => {
     const start = {
       type: "tool.start" as const,
@@ -622,20 +761,113 @@ describe("AI stream event protocol v1", () => {
     ).toBe(true);
   });
 
-  it("keeps the discriminated union append-only at ten event types", () => {
+  it("keeps the discriminated union append-only at fourteen event types", () => {
     expect(AiStreamEventTypeSchema.options).toEqual([
       "meta",
       "text.delta",
+      "reasoning.delta",
+      "reasoning.end",
+      "human.request",
       "plan",
       "usage",
       "error",
       "done",
       "progress",
       "tool.start",
+      "tool.args.delta",
       "tool.progress",
       "tool.end",
     ]);
-    expect(AiStreamEventSchema.options).toHaveLength(10);
+    expect(AiStreamEventSchema.options).toHaveLength(14);
+  });
+
+  it("accepts a human request and a matching typed resume result", () => {
+    const humanRequest = {
+      type: "human.request" as const,
+      toolCallId: "human-1",
+      name: "ask_user" as const,
+      args: {
+        title: "先确认旅行需求",
+        questions: [
+          { id: "destination", prompt: "想去哪里？", kind: "text" as const },
+        ],
+      },
+      startedAt: "2026-11-23T14:00:00+08:00",
+    };
+    expect(AiStreamEventSchema.safeParse(humanRequest).success).toBe(true);
+    expect(AiStreamEventSchema.safeParse({ ...humanRequest, args: [] }).success).toBe(false);
+
+    const result = {
+      toolCallId: "human-1",
+      name: "ask_user" as const,
+      result: {
+        answers: {
+          destination: { values: ["京都"], text: "京都" },
+        },
+      },
+    };
+    expect(AiHumanToolResultSchema.safeParse(result).success).toBe(true);
+    expect(
+      AiChatRequestSchema.safeParse({
+        conversationId: CONVERSATION_ID,
+        humanToolResult: result,
+      }).success,
+    ).toBe(true);
+    expect(
+      AiChatRequestSchema.safeParse({
+        message: "另一个新问题",
+        conversationId: CONVERSATION_ID,
+        humanToolResult: result,
+      }).success,
+    ).toBe(false);
+    expect(AiChatRequestSchema.safeParse({ humanToolResult: result }).success).toBe(false);
+  });
+
+  it("accepts upstream approved:false dismissals and keeps legacy decisions readable", () => {
+    const askCancelled = AiAskUserResultSchema.parse({
+      approved: false,
+      reason: AI_HUMAN_CANCEL_REASON,
+    });
+    const briefCancelled = AiConfirmBriefResultSchema.parse({
+      approved: false,
+    });
+    const briefConfirmed = AiConfirmBriefResultSchema.parse({ approved: true });
+    const legacyConfirmed = AiConfirmBriefResultSchema.parse({ decision: "confirmed" });
+    const legacyRevision = AiConfirmBriefResultSchema.parse({
+      decision: "revise",
+      text: "预算改成 5000",
+    });
+    const revision = AiConfirmBriefResultSchema.parse({
+      approved: false,
+      reason: "预算改成 5000",
+    });
+
+    expect(isHumanToolCancellation(askCancelled)).toBe(true);
+    expect(isHumanToolCancellation(briefCancelled)).toBe(true);
+    expect(isHumanToolCancellation(briefConfirmed)).toBe(false);
+    expect(isConfirmBriefConfirmed(briefConfirmed)).toBe(true);
+    expect(isConfirmBriefConfirmed(legacyConfirmed)).toBe(true);
+    expect(confirmBriefRevisionText(legacyRevision)).toBe("预算改成 5000");
+    expect(confirmBriefRevisionText(revision)).toBe("预算改成 5000");
+    expect(isHumanToolCancellation(revision)).toBe(false);
+  });
+
+  it("does not accept a third cancellation state or an empty revision", () => {
+    expect(
+      AiAskUserResultSchema.safeParse({ status: "cancelled" }).success,
+    ).toBe(false);
+    expect(
+      AiConfirmBriefResultSchema.safeParse({
+        approved: false,
+        reason: "",
+      }).success,
+    ).toBe(false);
+    expect(
+      AiConfirmBriefResultSchema.safeParse({
+        approved: true,
+        reason: "extra",
+      }).success,
+    ).toBe(false);
   });
 
   it("requires meta.v to be exactly 1", () => {

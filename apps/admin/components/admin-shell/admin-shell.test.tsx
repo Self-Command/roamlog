@@ -271,7 +271,7 @@ describe("AdminShell", () => {
     await user.click(screen.getByRole("button", { name: /退出登录/ }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("退出登录失败（HTTP 500）");
+    expect(alert).toHaveTextContent("退出登录没有完成");
     expect(alert).toHaveTextContent("当前会话仍然有效");
     expect(redirectToAdminLoginMock).not.toHaveBeenCalled();
     // The console still shows the authenticated identity because the cookie was kept.

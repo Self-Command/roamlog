@@ -110,7 +110,7 @@ describe("头部概览（真实 trip 字段）", () => {
 
     const heading = await screen.findByRole("heading", { level: 1, name: "京都慢行" });
     expect(heading.className).toContain("type-trip-title");
-    expect(screen.getByText(/3 天/)).toBeInTheDocument();
+    expect(screen.getAllByText(/3 天/).length).toBeGreaterThan(0);
     expect(screen.getByText("上海")).toBeInTheDocument();
     expect(screen.getByText("CN")).toBeInTheDocument();
     expect(screen.getByText("Asia/Shanghai")).toBeInTheDocument();
@@ -120,9 +120,9 @@ describe("头部概览（真实 trip 字段）", () => {
     expect(screen.getByText("家庭")).toBeInTheDocument();
     expect(await screen.findByText("林间（嘉宾）")).toBeInTheDocument();
     expect(await screen.findByText("顾行舟")).toBeInTheDocument();
-    expect(screen.getByText(/VERSION 5/)).toBeInTheDocument();
+    expect(screen.queryByText(/版本\s*5/u)).not.toBeInTheDocument();
     expect(screen.getByText("工作区可见")).toBeInTheDocument();
-    expect(screen.getByText("Editor")).toBeInTheDocument();
+    expect(screen.getByText("编辑者")).toBeInTheDocument();
   });
 
   it("预算与已花按币种分别展示，不折算、不合并", async () => {
@@ -139,7 +139,7 @@ describe("头部概览（真实 trip 字段）", () => {
     expect(text).toContain(formatMinor(512_300, "CNY"));
     expect(text).toContain(formatMinor(88_000, "JPY"));
     expect(text).toContain(`预算 ${formatMinor(900_000, "CNY")}`);
-    expect(text).toContain("分币种不折算");
+    expect(text).toContain("不同币种不会自动换算");
     // 两个币种各自成行：折算会产生一个额外的合并值
     expect(screen.getAllByText("CNY · 已花")).toHaveLength(1);
     expect(screen.getAllByText("JPY · 已花")).toHaveLength(1);
@@ -164,15 +164,15 @@ describe("头部概览（真实 trip 字段）", () => {
 
     const editButton = await screen.findByRole("button", { name: /编辑旅行/ });
     expect(editButton).toBeDisabled();
-    expect(editButton.getAttribute("title")).toContain("Viewer 只能阅读和评论");
+    expect(editButton.getAttribute("title")).toContain("你是只读成员，只能阅读和评论");
 
     const duplicate = screen.getByRole("button", { name: /复制/ });
     expect(duplicate).toBeDisabled();
-    expect(duplicate.getAttribute("title")).toContain("Viewer 只能阅读和评论");
+    expect(duplicate.getAttribute("title")).toContain("你是只读成员，只能阅读和评论");
 
     const remove = screen.getByRole("button", { name: "删除" });
     expect(remove).toBeDisabled();
-    expect(remove.getAttribute("title")).toContain("Viewer 只能阅读和评论");
+    expect(remove.getAttribute("title")).toContain("你是只读成员，只能阅读和评论");
 
     // Viewer 连分享链接都不可读，因此整个分享 tab 不出现
     expect(screen.queryByRole("tab", { name: "分享" })).not.toBeInTheDocument();

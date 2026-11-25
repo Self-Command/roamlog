@@ -39,7 +39,7 @@ export function ResetPasswordForm({ token }: { token?: string }) {
     }
 
     if (!token) {
-      setError("重置链接缺少 token。请重新发送重置邮件。");
+      setError("重置链接不完整，请重新发送重置邮件。");
       return;
     }
 

@@ -1,10 +1,10 @@
 "use client";
 
 import type { BudgetSummary, Trip, WorkspaceWithRole } from "@roamlog/contracts";
-import { Badge, Button, PageGlow } from "@roamlog/ui";
+import { Badge, Button } from "@roamlog/ui";
 import { ArrowLeft, CalendarDays, Copy, MapPin, Pencil, Route, Tags, Trash2, Users } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { CoverUploader } from "@/components/media";
 import { ReportMenu } from "@/components/moderation/report-menu";
@@ -82,7 +82,6 @@ export function TripWorkspaceHeader({
   onDelete: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [coverError, setCoverError] = useState<string | null>(null);
   const membersQuery = useMembersQuery(workspace.id);
   const participants = useParticipants(trip.id);
 
@@ -108,19 +107,17 @@ export function TripWorkspaceHeader({
   }, [memberNames, participants, trip.guestNames]);
 
   const participantsLabel = useMemo(() => {
-    if (!capabilities.readParticipants) return "无权限查看参与者";
-    if (participants.state === "error") return "参与者读取失败";
-    if (participants.state === "loading") return "读取参与者…";
+    if (!capabilities.readParticipants) return "你没有查看参与者的权限";
+    if (participants.state === "error") return "参与者暂时无法加载";
+    if (participants.state === "loading") return "正在加载参与者…";
     return `${participants.data.length} 位参与者`;
   }, [capabilities.readParticipants, participants]);
 
   const editHref = `/w/${workspaceSlug}/trips/${trip.id}/edit`;
 
   return (
-    <header className="relative overflow-hidden rounded-card border border-hairline-strong bg-surface-1">
-      <PageGlow accent="orange" className="opacity-25" />
-
-      <div className="relative space-y-6 p-5 sm:p-7">
+    <header className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1 shadow-card">
+      <div className="space-y-5 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <Button asChild variant="ghost" size="sm">
             <Link href={`/w/${workspaceSlug}/trips`}>
@@ -143,13 +140,13 @@ export function TripWorkspaceHeader({
         <div>
           <p className="type-eyebrow">
             {trip.countryCodes.length > 0 ? trip.countryCodes.join(" · ") : "国家未填"} /{" "}
-            {trip.durationDays} DAYS / VERSION {trip.version}
+            {trip.durationDays} 天
           </p>
-          <h1 className="type-trip-title mt-3">{trip.title}</h1>
+          <h1 className="type-trip-title mt-2">{trip.title}</h1>
           {trip.summary ? (
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-body">{trip.summary}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-body">{trip.summary}</p>
           ) : (
-            <p className="mt-3 text-sm leading-6 text-stone">还没有摘要。</p>
+            <p className="mt-2 text-sm leading-6 text-stone">还没有摘要。</p>
           )}
         </div>
 
@@ -198,7 +195,7 @@ export function TripWorkspaceHeader({
           </Button>
         </div>
 
-        <div className="grid gap-5 border-t border-hairline pt-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 border-t border-hairline pt-4 sm:grid-cols-2 xl:grid-cols-3">
           <MetaPair label="日期 · 天数" hint="含首尾两天">
             <span className="inline-flex items-center gap-1.5">
               <CalendarDays aria-hidden="true" className="size-3.5 text-muted" />
@@ -236,7 +233,7 @@ export function TripWorkspaceHeader({
                 {trip.destinations.map((destination) => (
                   <li
                     key={destination}
-                    className="inline-flex items-center gap-1 rounded-pill border border-hairline-strong bg-surface-2 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-body"
+                    className="inline-flex items-center gap-1 rounded-control border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-body"
                   >
                     <MapPin aria-hidden="true" className="size-3 text-muted" />
                     {destination}
@@ -264,8 +261,8 @@ export function TripWorkspaceHeader({
             label="预算 · 已花"
             hint={
               trip.budgetAmountMinor !== null && trip.budgetCurrency
-                ? `预算 ${formatMinor(trip.budgetAmountMinor, trip.budgetCurrency)} · 分币种不折算`
-                : "预算未设置 · 分币种不折算"
+                ? `预算 ${formatMinor(trip.budgetAmountMinor, trip.budgetCurrency)} · 不同币种不会自动换算`
+                : "预算未设置 · 不同币种不会自动换算"
             }
           >
             <BudgetBlock summary={budget} />
@@ -275,10 +272,10 @@ export function TripWorkspaceHeader({
 
       <section
         aria-label="封面"
-        className="relative flex flex-col gap-3 border-t border-hairline px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:p-7"
+        className="flex flex-col gap-3 border-t border-hairline px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6"
       >
         <div className="max-w-[16rem]">
-          <p className="type-eyebrow">封面 / COVER</p>
+          <p className="type-eyebrow">封面图片</p>
         </div>
         <div className="w-full sm:max-w-sm">
           <CoverUploader
@@ -291,13 +288,7 @@ export function TripWorkspaceHeader({
                 queryClient.setQueryData(queryKeys.trip(trip.id), change.trip);
               }
             }}
-            onError={(error) => setCoverError(error.message)}
           />
-          {coverError ? (
-            <p role="alert" className="mt-2 text-[11px] leading-4 text-accent-red">
-              {coverError}
-            </p>
-          ) : null}
         </div>
       </section>
     </header>

@@ -5,6 +5,7 @@ import { vi } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { configureApp } from "../src/bootstrap/configure-app.js";
 import { PrismaService } from "../src/modules/prisma/prisma.service.js";
+import { RealtimeGateway } from "../src/modules/realtime/realtime.gateway.js";
 import { RedisService } from "../src/modules/redis/redis.service.js";
 import { StorageService } from "../src/modules/storage/storage.service.js";
 
@@ -43,6 +44,16 @@ export async function createTestApp(): Promise<{
     .useValue(mocks.prisma)
     .overrideProvider(RedisService)
     .useValue(mocks.redis)
+    // RealtimeGateway opens two real ioredis connections for the Socket.IO
+    // adapter even when RedisService is stubbed. These e2e apps do not exercise
+    // websockets, and Node's shared process can otherwise surface ioredis
+    // "Connection is closed" rejections while another worker tears down its
+    // app. Keep the provider inert so the test job owns no background sockets.
+    .overrideProvider(RealtimeGateway)
+    .useValue({
+      onApplicationBootstrap: async () => undefined,
+      onModuleDestroy: () => undefined,
+    })
     .overrideProvider(StorageService)
     .useValue(mocks.storage)
     .compile();

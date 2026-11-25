@@ -1,8 +1,12 @@
 import {
   AppearanceCookieSchema,
   AppearanceDefaultsSchema,
+  DEFAULT_FONT_PAIRING_ID,
+  DEFAULT_SKIN_ID,
   ResolvedAppearanceSchema,
   SKIN_CATALOG,
+  normalizeFontPairingId,
+  normalizeSkinId,
   type AppearanceCookie,
   type AppearanceDefaults,
   type AppearanceMode,
@@ -28,8 +32,8 @@ export const APPEARANCE_TIMEOUT_MS = 3_000;
 
 const FALLBACK_DEFAULTS: AppearanceDefaults = {
   mode: "system",
-  skin: "editorial-noir",
-  fontPairing: "editorial-classic",
+  skin: DEFAULT_SKIN_ID,
+  fontPairing: DEFAULT_FONT_PAIRING_ID,
 };
 
 export interface AppearanceSourceChoice {
@@ -77,12 +81,24 @@ function parseCookie(cookie: AppearanceCookie | null | undefined): AppearanceCoo
     return null;
   }
   const parsed = AppearanceCookieSchema.safeParse(cookie);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) return null;
+  return {
+    ...parsed.data,
+    skin: parsed.data.skin ? normalizeSkinId(parsed.data.skin) : undefined,
+    fontPairing: parsed.data.fontPairing
+      ? normalizeFontPairingId(parsed.data.fontPairing)
+      : undefined,
+  };
 }
 
 export function resolveAppearanceForRequest(input: ResolveAppearanceInput): ResolvedAppearance {
   const parsedPlatform = AppearanceDefaultsSchema.safeParse(input.platform);
-  const platform = parsedPlatform.success ? parsedPlatform.data : FALLBACK_DEFAULTS;
+  const rawPlatform = parsedPlatform.success ? parsedPlatform.data : FALLBACK_DEFAULTS;
+  const platform: AppearanceDefaults = {
+    ...rawPlatform,
+    skin: normalizeSkinId(rawPlatform.skin),
+    fontPairing: normalizeFontPairingId(rawPlatform.fontPairing),
+  };
   const canOverride = input.canOverride ?? input.db?.canOverride ?? true;
 
   if (!canOverride) {
@@ -103,8 +119,10 @@ export function resolveAppearanceForRequest(input: ResolveAppearanceInput): Reso
   const sourceChoice = db ?? usableCookie;
   const fields = {
     mode: sourceChoice?.mode ?? platform.mode,
-    skin: sourceChoice?.skin ?? platform.skin,
-    fontPairing: sourceChoice?.fontPairing ?? platform.fontPairing,
+    skin: normalizeSkinId(sourceChoice?.skin ?? platform.skin),
+    fontPairing: normalizeFontPairingId(
+      sourceChoice?.fontPairing ?? platform.fontPairing,
+    ),
   };
   const hasOverride = Boolean(
     sourceChoice &&
@@ -146,7 +164,13 @@ export function parseAppearanceCookie(raw: string | null | undefined): Appearanc
     try {
       const parsed = AppearanceCookieSchema.safeParse(JSON.parse(candidate));
       if (parsed.success) {
-        return parsed.data;
+        return {
+          ...parsed.data,
+          skin: parsed.data.skin ? normalizeSkinId(parsed.data.skin) : undefined,
+          fontPairing: parsed.data.fontPairing
+            ? normalizeFontPairingId(parsed.data.fontPairing)
+            : undefined,
+        };
       }
     } catch {
       // Try the URI-decoded form, then fall through to null.
@@ -183,10 +207,10 @@ export function resolveLegacyAccentSkin(accent: unknown): SkinId {
 }
 
 export function themeColorsForSkin(skin: SkinId): { light: string; dark: string } {
-  const entry = SKIN_CATALOG.find((candidate) => candidate.id === skin);
+  const entry = SKIN_CATALOG.find((candidate) => candidate.id === normalizeSkinId(skin));
   return entry
     ? { light: entry.lightPreview.canvas, dark: entry.darkPreview.canvas }
-    : { light: "#F6F4EF", dark: "#000000" };
+    : { light: "#ffffff", dark: "#0d1117" };
 }
 
 function hasSessionCookie(cookieHeader: string): boolean {

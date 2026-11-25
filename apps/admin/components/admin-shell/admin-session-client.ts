@@ -27,7 +27,7 @@ export async function signOutAdminSession(): Promise<void> {
   // report "already signed out" at runtime. Treat that as success.
   const status: number = response.status;
   if (status >= 400 && status !== 401) {
-    throw new AdminSignOutError(status, `退出登录失败（HTTP ${status}）。`);
+    throw new AdminSignOutError(status, "退出登录没有完成，请稍后重试。");
   }
 }
 
@@ -36,7 +36,7 @@ export function adminSignOutErrorMessage(error: unknown): string {
     if (error.status === 0) {
       return "无法连接认证服务，退出登录失败。";
     }
-    return `退出登录失败（HTTP ${error.status}），当前会话仍然有效。`;
+    return "退出登录没有完成，当前会话仍然有效。请稍后重试。";
   }
   if (error instanceof Error && error.message.trim()) {
     return error.message;

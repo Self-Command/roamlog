@@ -182,8 +182,8 @@ targetTypeFilter,
       } catch (error) {
         setStatusMessage(
           error instanceof AdminMutationError
-            ? `导出失败：${error.failure.code} · ${error.failure.detail}`
-            : "导出失败，请检查 API 与权限后重试。",
+            ? "导出失败，请稍后重试；如果持续失败，请联系平台管理员。"
+            : "导出失败，请稍后重试。",
         );
       } finally {
         setIsExporting(false);
@@ -395,9 +395,9 @@ targetTypeFilter,
           {null}
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
             <p className="type-eyebrow">不可篡改性</p>
-            <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">只追加审计</h2>
+            <h2 className="mt-2 font-display text-xl font-semibold text-ink">审计记录只增不改</h2>
             <p className="mt-2 text-[11px] leading-5 text-muted">
-              管理器不可编辑或删除审计事件。当前页面不提供任何修改入口，只提供筛选与 CSV 导出。
+              管理员不能编辑或删除审计记录。本页只提供筛选和导出。
             </p>
           </section>
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">

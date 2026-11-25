@@ -86,15 +86,31 @@ async function collectStream(
 
 interface PartLike {
   type: string;
+  id?: string;
   text?: string;
   toolName?: string;
-  args?: { plan?: { plannedCalls?: unknown[] } };
+  toolCallId?: string;
+  argsText?: string;
+  status?: { type?: string };
+  args?: {
+    plan?: {
+      plannedCalls?: unknown[];
+      details?: {
+        days?: unknown[];
+        budget?: { amountMinor?: number; currency?: string };
+      };
+    };
+    title?: string;
+    summary?: string;
+  };
+  result?: unknown;
 }
 
 async function collectAdapter(
   messages: readonly unknown[],
   threadId?: string,
   assistantMessageId?: string,
+  inFlight?: unknown,
 ): Promise<ChatModelRunResult[]> {
   const adapter = createAiChatModelAdapter({ workspaceId: WORKSPACE_ID, canWrite: true });
   const stream = adapter.run({
@@ -102,6 +118,7 @@ async function collectAdapter(
     abortSignal: new AbortController().signal,
     ...(threadId ? { unstable_threadId: threadId } : {}),
     ...(assistantMessageId ? { unstable_assistantMessageId: assistantMessageId } : {}),
+    ...(inFlight ? { unstable_getMessage: () => inFlight } : {}),
   } as never) as AsyncGenerator<ChatModelRunResult, void, void>;
 
   const chunks: ChatModelRunResult[] = [];
@@ -340,9 +357,273 @@ describe("chat model adapter streaming", () => {
     const final = chunks[chunks.length - 1];
 
     expect(final?.status).toEqual({ type: "incomplete", reason: "error" });
-    expect(textOf(final)).toContain("模型服务暂时不可用");
+    expect(textOf(final)).toContain("AI 服务暂时不可用");
     expect(textOf(final)).not.toContain("计划已整理");
     expect(chunks.some((chunk) => chunk.status?.type === "complete")).toBe(false);
+  });
+
+  it("streams reasoning parts and tool argument fragments before the final answer", async () => {
+    const toolCallId = "round-1-call-0";
+    const body = [
+      sseFrame(metaEvent(), 1),
+      sseFrame(
+        {
+          type: "reasoning.delta",
+          partId: "reasoning-round-1",
+          delta: "先判断",
+        },
+        2,
+      ),
+      sseFrame(
+        {
+          type: "reasoning.delta",
+          partId: "reasoning-round-1",
+          delta: "需要搜索地点。",
+        },
+        3,
+      ),
+      sseFrame(
+        {
+          type: "tool.args.delta",
+          toolCallId,
+          name: "places.search",
+          argsTextDelta: '{"q":"',
+        },
+        4,
+      ),
+      sseFrame(
+        {
+          type: "tool.args.delta",
+          toolCallId,
+          name: "places.search",
+          argsTextDelta: '京都"}',
+        },
+        5,
+      ),
+      sseFrame(
+        {
+          type: "tool.start",
+          toolCallId,
+          name: "places.search",
+          stepId: "round-1",
+          args: { q: "京都" },
+          startedAt: "2026-11-23T08:00:00.000Z",
+        },
+        6,
+      ),
+      sseFrame(
+        {
+          type: "tool.end",
+          toolCallId,
+          status: "ok",
+          result: { candidates: [] },
+          finishedAt: "2026-11-23T08:00:01.000Z",
+          durationMs: 1000,
+        },
+        7,
+      ),
+      sseFrame(
+        {
+          type: "reasoning.end",
+          partId: "reasoning-round-1",
+          durationMs: 900,
+        },
+        8,
+      ),
+      sseFrame({ type: "text.delta", delta: "查到了。" }, 9),
+      sseFrame({ type: "done", messageId: "a1", finishReason: "stop" }, 10),
+    ].join("");
+    fetchMock.mockResolvedValue(responseFrom(body));
+
+    const chunks = await collectAdapter([USER_MESSAGE], CONVERSATION_ID);
+    const allParts = chunks.flatMap((chunk) => (chunk.content ?? []) as readonly PartLike[]);
+    const runningReasoning = allParts.find(
+      (part) =>
+        part.type === "reasoning" && part.status?.type === "running" && part.text === "先判断",
+    );
+    expect(runningReasoning).toMatchObject({
+      type: "reasoning",
+      id: "reasoning-round-1",
+      text: "先判断",
+      status: { type: "running" },
+    });
+
+    const partialTool = allParts.find(
+      (part) =>
+        part.type === "tool-call" && part.toolCallId === toolCallId && part.argsText === '{"q":"',
+    );
+    expect(partialTool).toMatchObject({
+      type: "tool-call",
+      toolName: "places.search",
+      argsText: '{"q":"',
+    });
+
+    const final = chunks.at(-1);
+    expect(final?.status).toEqual({ type: "complete", reason: "stop" });
+    const finalParts = (final?.content ?? []) as PartLike[];
+    expect(finalParts.find((part) => part.type === "reasoning")).toMatchObject({
+      id: "reasoning-round-1",
+      text: "先判断需要搜索地点。",
+      status: { type: "complete" },
+    });
+    expect(finalParts.find((part) => part.type === "tool-call")).toMatchObject({
+      toolName: "places.search",
+      argsText: JSON.stringify({ q: "京都" }),
+    });
+  });
+
+  it("turns human.request into a pending ask_user form without a plan", async () => {
+    const body = [
+      sseFrame(metaEvent(), 1),
+      sseFrame({ type: "text.delta", delta: "我需要先确认几个问题。" }, 2),
+      sseFrame(
+        {
+          type: "human.request",
+          toolCallId: "human-1",
+          name: "ask_user",
+          args: {
+            title: "先确认旅行需求",
+            questions: [{ id: "destination", prompt: "想去哪里？", kind: "text" }],
+          },
+          startedAt: "2026-11-23T08:00:00.000Z",
+        },
+        3,
+      ),
+      sseFrame({ type: "done", messageId: "a1", finishReason: "requires-action" }, 4),
+    ].join("");
+    fetchMock.mockResolvedValue(responseFrom(body));
+
+    const chunks = await collectAdapter([USER_MESSAGE], CONVERSATION_ID);
+    const final = chunks.at(-1);
+    expect(final?.status).toEqual({ type: "requires-action", reason: "tool-calls" });
+    const human = (final?.content ?? []).find(
+      (part) => part.type === "tool-call" && part.toolName === "ask_user",
+    ) as PartLike | undefined;
+    expect(human).toMatchObject({
+      toolCallId: "human-1",
+      toolName: "ask_user",
+      args: { title: "先确认旅行需求" },
+    });
+    expect(human?.result).toBeUndefined();
+    expect(
+      (final?.content ?? []).some(
+        (part) => part.type === "tool-call" && part.toolName === PLAN_TOOL_NAME,
+      ),
+    ).toBe(false);
+  });
+
+  it("resumes with humanToolResult and no synthetic user message", async () => {
+    const completedAssistant = {
+      role: "assistant",
+      id: "a1",
+      createdAt: new Date(),
+      content: [
+        {
+          type: "tool-call",
+          toolName: "ask_user",
+          toolCallId: "human-1",
+          args: { title: "先确认旅行需求", questions: [] },
+          argsText: "{}",
+          result: {
+            answers: {
+              destination: { values: ["京都"] },
+              pace: { values: ["slow"] },
+            },
+          },
+        },
+      ],
+    };
+    const body = [
+      sseFrame(metaEvent(), 1),
+      sseFrame(
+        {
+          type: "human.request",
+          toolCallId: "human-2",
+          name: "confirm_brief",
+          args: {
+            title: "京都慢旅行",
+            summary: "两个人去京都，节奏慢。",
+            constraints: ["喜欢古寺"],
+            assumptions: ["住京都站附近"],
+          },
+          startedAt: "2026-11-23T08:00:01.000Z",
+        },
+        2,
+      ),
+      sseFrame({ type: "done", messageId: "a1", finishReason: "requires-action" }, 3),
+    ].join("");
+    fetchMock.mockResolvedValue(responseFrom(body));
+
+    const chunks = await collectAdapter(
+      [USER_MESSAGE],
+      CONVERSATION_ID,
+      "a1",
+      completedAssistant,
+    );
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const sent = JSON.parse(String(requestInit.body)) as Record<string, unknown>;
+    expect(requestUrl).toBe(`/v1/workspaces/${WORKSPACE_ID}/ai/chat/stream`);
+    expect(sent).toMatchObject({
+      conversationId: CONVERSATION_ID,
+      humanToolResult: {
+        toolCallId: "human-1",
+        name: "ask_user",
+        result: { answers: { destination: { values: ["京都"] } } },
+      },
+    });
+    expect(sent.message).toBeUndefined();
+    expect(sent.clientMessageId).toBeUndefined();
+    expect(chunks.at(-1)?.status).toEqual({ type: "requires-action", reason: "tool-calls" });
+    const nextHuman = (chunks.at(-1)?.content ?? []).find(
+      (part) => part.type === "tool-call" && part.toolName === "confirm_brief",
+    ) as PartLike | undefined;
+    expect(nextHuman?.toolCallId).toBe("human-2");
+  });
+
+  it("sends an approved:false dismissal instead of a new user turn", async () => {
+    const dismissedAssistant = {
+      role: "assistant",
+      id: "a1",
+      createdAt: new Date(),
+      content: [
+        {
+          type: "tool-call",
+          toolName: "confirm_brief",
+          toolCallId: "human-1",
+          args: { title: "确认旅行需求", summary: "京都 5 天" },
+          argsText: "{}",
+          result: { approved: false, reason: "user_cancelled" },
+        },
+      ],
+    };
+    const body = [
+      sseFrame(metaEvent(), 1),
+      sseFrame({ type: "text.delta", delta: "已取消本次请求。" }, 2),
+      sseFrame({ type: "done", messageId: "a1", finishReason: "stop" }, 3),
+    ].join("");
+    fetchMock.mockResolvedValue(responseFrom(body));
+
+    const chunks = await collectAdapter(
+      [USER_MESSAGE],
+      CONVERSATION_ID,
+      "a1",
+      dismissedAssistant,
+    );
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const sent = JSON.parse(String(requestInit.body)) as Record<string, unknown>;
+
+    expect(sent.message).toBeUndefined();
+    expect(sent.humanToolResult).toEqual({
+      toolCallId: "human-1",
+      name: "confirm_brief",
+      result: { approved: false, reason: "user_cancelled" },
+    });
+    expect(textOf(chunks.at(-1)!)).toBe("已取消本次请求。");
+    expect(
+      (chunks.at(-1)?.content ?? []).some(
+        (part) => part.type === "tool-call" && part.toolName === PLAN_TOOL_NAME,
+      ),
+    ).toBe(false);
   });
 
   it("turns a plan frame into the plan-card tool part with its plannedCalls", async () => {
@@ -356,6 +637,15 @@ describe("chat model adapter streaming", () => {
           message: "计划已整理。",
           plannedCalls: [PLAN_CALL],
           readOnlyTrace: [],
+          details: {
+            days: [
+              {
+                date: "2027-04-01",
+                items: [{ title: "清水寺", time: "09:00" }],
+              },
+            ],
+            budget: { amountMinor: 800_000, currency: "CNY" },
+          },
           expiresAt: new Date(Date.now() + 600_000).toISOString(),
         },
         3,
@@ -375,6 +665,10 @@ describe("chat model adapter streaming", () => {
       PartLike | undefined;
     expect(tool?.toolName).toBe(PLAN_TOOL_NAME);
     expect(tool?.args?.plan?.plannedCalls).toEqual([PLAN_CALL]);
+    expect(tool?.args?.plan?.details).toMatchObject({
+      days: [expect.objectContaining({ date: "2027-04-01" })],
+      budget: { amountMinor: 800_000, currency: "CNY" },
+    });
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(requestUrl).toBe(`/v1/workspaces/${WORKSPACE_ID}/ai/chat/stream`);

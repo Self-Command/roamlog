@@ -7,6 +7,7 @@ import {
   type AiAttachment,
   type AiChatModelsResponse,
   type AiChatResponse,
+  type AiHumanToolResult,
   type AiPlanHint,
   type AiPlanWarning,
   type AiReasoningEffort,
@@ -31,6 +32,7 @@ export type AiFailureKind =
   | "not_configured"
   | "quota"
   | "loop_limit"
+  | "incomplete_plan"
   | "upstream"
   | "schema_invalid"
   | "run_not_found"
@@ -47,6 +49,7 @@ const CODE_KINDS: Readonly<Record<string, AiFailureKind>> = {
   AI_NOT_CONFIGURED: "not_configured",
   AI_QUOTA: "quota",
   AI_LOOP_LIMIT: "loop_limit",
+  AI_PLAN_INCOMPLETE: "incomplete_plan",
   AI_UPSTREAM: "upstream",
   AI_SCHEMA_INVALID: "schema_invalid",
   AI_RUN_NOT_FOUND: "run_not_found",
@@ -63,6 +66,7 @@ const CODE_KINDS: Readonly<Record<string, AiFailureKind>> = {
 const RETRYABLE: ReadonlySet<AiFailureKind> = new Set<AiFailureKind>([
   "network",
   "upstream",
+  "incomplete_plan",
   "unknown",
 ]);
 
@@ -286,7 +290,9 @@ export async function createAiPlan(workspaceId: string, input: AiPlanInput): Pro
 }
 
 /** Extends the blocking plan input with the optional conversation identifiers. */
-export interface AiStreamPlanInput extends AiPlanInput {
+export interface AiStreamPlanInput {
+  message?: string;
+  hints?: AiPlanHint;
   conversationId?: string;
   clientMessageId?: string;
   assistantMessageId?: string;
@@ -296,6 +302,8 @@ export interface AiStreamPlanInput extends AiPlanInput {
   reasoningEffort?: AiReasoningEffort;
   /** Media already uploaded through the media presign→PUT→complete pipeline. */
   attachments?: AiAttachment[];
+  /** Answer to a paused `ask_user` / `confirm_brief`; mutually exclusive with `message`. */
+  humanToolResult?: AiHumanToolResult;
 }
 
 export type AiStreamPlanOptions = AbortSignal | { signal?: AbortSignal };
@@ -661,7 +669,8 @@ export async function* streamAiPlanRecords(
   if (signal?.aborted) return;
 
   const path = `/v1/workspaces/${encodeURIComponent(workspaceId)}/ai/chat/stream`;
-  const body: AiStreamPlanInput = { message: input.message };
+  const body: AiStreamPlanInput = {};
+  if (input.message) body.message = input.message;
   if (input.hints) body.hints = input.hints;
   if (input.conversationId) body.conversationId = input.conversationId;
   if (input.clientMessageId) body.clientMessageId = input.clientMessageId;
@@ -671,6 +680,7 @@ export async function* streamAiPlanRecords(
   if (input.attachments && input.attachments.length > 0) {
     body.attachments = input.attachments;
   }
+  if (input.humanToolResult) body.humanToolResult = input.humanToolResult;
 
   let response: Response;
   try {

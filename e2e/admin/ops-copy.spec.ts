@@ -156,7 +156,7 @@ test.describe("admin operations copy", () => {
     await expect(page.getByRole("heading", { name: "进入平台控制台" })).toBeVisible();
     await page.getByLabel("管理员邮箱").fill(ADMIN_EMAIL);
     await page.getByLabel("密码").fill(ADMIN_PASSWORD);
-    await page.getByRole("button", { name: "继续验证" }).click();
+    await page.getByRole("button", { name: "登录" }).click();
 
     await page.waitForURL(/\/admin(\/|$)/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "平台总览" })).toBeVisible();
@@ -238,13 +238,13 @@ test.describe("admin operations copy", () => {
     // Absent values stay explicit, but the variable that would fill them is a
     // build-time detail and must not be named in the console. The API reports no
     // build timestamp in development, so this is the live unreported state.
-    await expect(page.getByText(/后端未上报构建时间/)).toBeVisible();
+    await expect(page.getByText(/服务未上报构建时间/)).toBeVisible();
     await expect(page.getByText(/ROAMLOG_API_VERSION|ROAMLOG_BUILD_TIME/)).toHaveCount(0);
     await expect(page.getByText(/NEXT_PUBLIC_/)).toHaveCount(0);
     // The old wording is gone from this page entirely.
     await expect(page.getByText("未接入", { exact: true })).toHaveCount(0);
     // Worker liveness is unprovable here: it reads "无法确认", never "未接入".
-    await expect(page.getByText("无法确认")).toBeVisible();
+    await expect(page.getByText("无法确认", { exact: true })).toBeVisible();
 
     await expectCleanCopy(page, "/admin/system → 版本与迁移");
   });
@@ -257,7 +257,10 @@ test.describe("admin operations copy", () => {
 
     // The "does not take effect" truth must survive; only the mechanism is gone.
     await expect(page.getByText(/未接入（不生效）/).first()).toBeVisible();
-    await expect(page.getByText(/上传限流在部署配置中固定，在此修改不生效/)).toBeVisible();
+    await page.getByRole("tab", { name: "限制" }).click();
+    await expect(
+      page.getByText(/上传签名限流在部署配置中固定，在此修改不生效/),
+    ).toBeVisible();
     await expect(page.getByText(/仍读环境变量，|上传限流未接入/)).toHaveCount(0);
 
     // No env var names, no endpoint paths on the configuration surface.

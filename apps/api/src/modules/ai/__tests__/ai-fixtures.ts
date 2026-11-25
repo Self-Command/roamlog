@@ -162,12 +162,48 @@ export function toolServiceMocks(): ToolServiceMocks {
   };
 }
 
+function hasQueuedConfirmation(messages: AiStepInput["messages"]): boolean {
+  return messages.some(
+    (message) =>
+      message.role === "tool" &&
+      message.results.some((result) => result.content.includes("queued_for_confirmation")),
+  );
+}
+
+/**
+ * The production prompt now always asks for a complete plan before the card.
+ * Tests use short scripted turns for arrangement; this fixture supplies the
+ * missing human-readable sections so the gate is exercised without pretending
+ * the short turn was a complete plan.
+ */
+function detailedPlanText(base: string | null): string {
+  return [
+    "# 最终计划",
+    base?.trim() ? base.trim() : "已按确认需求整理计划。",
+    "## 约束与假设",
+    "- 按已确认的日期、预算和偏好执行；未出现的信息不自行补造。",
+    "## 逐日安排",
+    "### 第 1 天（2026-12-01）",
+    "- 09:00 清水寺，步行前往，上午避开人流。",
+    "- 14:00 祇园咖啡，下午休息。",
+    "## 交通与住宿",
+    "- 市内以地铁和步行为主，住宿按商务酒店估算。",
+    "## 预算",
+    "- 总预算 8000 元，包含住宿、交通、餐饮和门票。",
+    "## 风险与备选",
+    "- 热门寺院可能需要排队；雨天改去博物馆。",
+    "## 将写入的内容",
+    "- 创建旅行、添加行程节点和逐日安排；确认前不会写入。",
+  ].join("\n");
+}
+
 /** Scripted adapter: returns one turn per `step` call, then a plain final answer. */
 export function scriptedAdapter(turns: AiStepResult[]): AiProtocolAdapter & {
   readonly inputs: AiStepInput[];
 } {
   const inputs: AiStepInput[] = [];
   let index = 0;
+  let lastText: string | null = null;
   return {
     protocol: "openai-chat" as const,
     inputs,
@@ -175,7 +211,11 @@ export function scriptedAdapter(turns: AiStepResult[]): AiProtocolAdapter & {
       inputs.push(input);
       const turn = turns[index];
       index += 1;
-      return turn ?? { text: "Done.", toolCalls: [] };
+      const result = turn ?? { text: lastText ?? "Done.", toolCalls: [] };
+      if (turn?.text) lastText = turn.text;
+      return input.tools.length === 0 && hasQueuedConfirmation(input.messages)
+        ? { ...result, text: detailedPlanText(result.text) }
+        : result;
     },
   };
 }

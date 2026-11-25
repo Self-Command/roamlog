@@ -79,7 +79,7 @@ export function providerLabel(provider: PlaceProvider | null): string {
 
 export const MEDIA_STATUS_LABELS: Record<MediaStatus, string> = {
   pending: "等待处理",
-  processing: "服务器处理中",
+  processing: "图片处理中",
   ready: "已就绪",
   failed: "处理失败",
 };

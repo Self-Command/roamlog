@@ -150,6 +150,6 @@ describe("PermissionsView", () => {
     });
     expect(checkbox).toBeDisabled();
     expect(screen.getByRole("button", { name: "保存变更" })).toBeDisabled();
-    expect(screen.getByText(/仅超级管理员可修改权限矩阵/)).toBeInTheDocument();
+    expect(screen.getByText("只有超级管理员可以修改权限矩阵。")).toBeInTheDocument();
   });
 });

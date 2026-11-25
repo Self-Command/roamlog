@@ -24,21 +24,17 @@ const MODES = [
 ] as const;
 
 const SKINS = [
-  { id: "editorial-noir", label: "编辑黑" },
-  { id: "catppuccin", label: "猫咖" },
-  { id: "tokyo-night", label: "东京夜" },
-  { id: "rose-pine", label: "玫瑰松" },
-  { id: "kanagawa", label: "神奈川" },
-  { id: "everforest", label: "常青林" },
+  { id: "porcelain", label: "Porcelain 原生瓷白" },
+  { id: "fluent", label: "Fluent 2 原生企业" },
+  { id: "carbon", label: "IBM Carbon" },
+  { id: "carbon-soft", label: "Carbon 柔和灰阶" },
 ] as const;
 
 const FONT_PAIRINGS = [
-  { id: "editorial-classic", label: "经典编辑" },
-  { id: "literary-warm", label: "文学暖调" },
-  { id: "modern-editorial", label: "现代编辑" },
-  { id: "expressive-serif", label: "表达衬线" },
-  { id: "cjk-editorial", label: "中文编辑" },
-  { id: "swiss-modern", label: "瑞士现代" },
+  { id: "primer-system", label: "Primer 系统" },
+  { id: "primer-cjk", label: "Primer 中文" },
+  { id: "fluent-native", label: "Fluent 原生" },
+  { id: "carbon-plex", label: "Carbon Plex" },
 ] as const;
 
 interface FontResource {
@@ -207,7 +203,7 @@ test.describe("user appearance and public share", () => {
     await context?.close();
   });
 
-  test("all six skins and six local font pairings persist without flash", async () => {
+  test("four enterprise themes and four local font pairings persist without flash", async () => {
     await page.goto(`${WEB_URL}/w/${workspaceSlug}/settings/appearance`, {
       waitUntil: "domcontentloaded",
     });
@@ -219,7 +215,7 @@ test.describe("user appearance and public share", () => {
       page.getByRole("radiogroup", { name: "显示模式" }).locator('[role="radio"]'),
     ).toHaveCount(MODES.length);
     await expect(
-      page.getByRole("radiogroup", { name: "皮肤" }).locator('[role="radio"]'),
+      page.getByRole("radiogroup", { name: "主题" }).locator('[role="radio"]'),
     ).toHaveCount(SKINS.length);
     await expect(
       page.getByRole("radiogroup", { name: "字体配对" }).locator('[role="radio"]'),
@@ -264,7 +260,7 @@ test.describe("user appearance and public share", () => {
     ] as const) {
       await chooseRadio(page, "显示模式", mode.label);
       for (const skin of SKINS) {
-        await chooseRadio(page, "皮肤", skin.label);
+        await chooseRadio(page, "主题", skin.label);
         await expect(page.locator("html")).toHaveAttribute("data-skin", skin.id);
         await page.waitForTimeout(80);
         const background = await backgroundOf(page);
@@ -286,11 +282,11 @@ test.describe("user appearance and public share", () => {
     }
 
     await chooseRadio(page, "显示模式", "浅色");
-    await chooseRadio(page, "皮肤", "猫咖");
-    await chooseRadio(page, "字体配对", "文学暖调");
+    await chooseRadio(page, "主题", "Porcelain 原生瓷白");
+    await chooseRadio(page, "字体配对", "Fluent 原生");
     await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
-    await expect(page.locator("html")).toHaveAttribute("data-skin", "catppuccin");
-    await expect(page.locator("html")).toHaveAttribute("data-font", "literary-warm");
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+    await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
     await page.getByRole("button", { name: "保存外观", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "外观设置已保存" })).toBeVisible({
       timeout: 30_000,
@@ -298,13 +294,13 @@ test.describe("user appearance and public share", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
-    await expect(page.locator("html")).toHaveAttribute("data-skin", "catppuccin");
-    await expect(page.locator("html")).toHaveAttribute("data-font", "literary-warm");
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+    await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
     const saved = await readUserAppearance(page);
     expect(saved).toMatchObject({
       mode: "light",
-      skin: "catppuccin",
-      fontPairing: "literary-warm",
+      skin: "porcelain",
+      fontPairing: "fluent-native",
       source: "user",
     });
     evidence.persistence = {
@@ -333,8 +329,8 @@ test.describe("user appearance and public share", () => {
     ]);
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
-    await expect(page.locator("html")).toHaveAttribute("data-skin", "catppuccin");
-    await expect(page.locator("html")).toHaveAttribute("data-font", "literary-warm");
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+    await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expectNoHorizontalOverflow(page, "appearance settings 390");
@@ -388,8 +384,8 @@ test.describe("user appearance and public share", () => {
       });
       expect(loginResponse?.status()).toBe(200);
       await expect(guestPage.locator("html")).toHaveAttribute("data-mode", "dark");
-      await expect(guestPage.locator("html")).toHaveAttribute("data-skin", "rose-pine");
-      await expect(guestPage.locator("html")).toHaveAttribute("data-font", "cjk-editorial");
+      await expect(guestPage.locator("html")).toHaveAttribute("data-skin", "fluent");
+      await expect(guestPage.locator("html")).toHaveAttribute("data-font", "fluent-native");
       await shot(guestPage, "guest-cookie-login-1440.png");
 
       const shareResponse = await guestPage.goto(`${WEB_URL}/share/${SHARE_TOKEN}`, {
@@ -397,8 +393,8 @@ test.describe("user appearance and public share", () => {
       });
       expect(shareResponse?.status()).toBe(200);
       await expect(guestPage.locator("html")).toHaveAttribute("data-mode", "dark");
-      await expect(guestPage.locator("html")).toHaveAttribute("data-skin", "rose-pine");
-      await expect(guestPage.locator("html")).toHaveAttribute("data-font", "cjk-editorial");
+      await expect(guestPage.locator("html")).toHaveAttribute("data-skin", "fluent");
+      await expect(guestPage.locator("html")).toHaveAttribute("data-font", "fluent-native");
       await shot(guestPage, "guest-cookie-share-1440.png");
 
       await guestPage.setViewportSize({ width: 390, height: 844 });
@@ -411,8 +407,8 @@ test.describe("user appearance and public share", () => {
         loginStatus: loginResponse?.status(),
         shareStatus: shareResponse?.status(),
         mode: "dark",
-        skin: "rose-pine",
-        fontPairing: "cjk-editorial",
+        skin: "fluent",
+        fontPairing: "fluent-native",
         externalFontRequests: external,
       };
     } finally {

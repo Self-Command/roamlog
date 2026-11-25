@@ -68,7 +68,9 @@ describe("AI planner golden prompts (offline)", () => {
       }
       // The only visibility a model may request is a non-public one.
       expect(properties).not.toContain("public_link");
-      expect(tool.description).toMatch(/Read-only, no side effects|WRITES DATA/u);
+      expect(tool.description).toMatch(
+        /Read-only, no side effects|WRITES DATA|human-input tool/u,
+      );
     }
   });
 });

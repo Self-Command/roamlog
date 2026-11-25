@@ -24,7 +24,7 @@
  */
 
 import { Inject, Injectable, Optional } from "@nestjs/common";
-import type { AiReasoningEffort } from "@roamlog/contracts";
+import { AI_DEFAULT_REASONING_EFFORT, type AiReasoningEffort } from "@roamlog/contracts";
 
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { SETTINGS_BY_KEY } from "../settings/settings.registry.js";
@@ -421,6 +421,14 @@ export function resolveAiSettingsFromStored(
     (value) => parseStoredInteger(value, ...AI_DAILY_QUOTA_BOUNDS),
     integerFromEnv(...AI_DAILY_QUOTA_BOUNDS),
   );
+  const defaultReasoningEffort = effectiveValue(
+    "ai.defaultReasoningEffort",
+    stored,
+    env,
+    envLockOf,
+    (value) => reasoningEffortFromValue(typeof value === "string" ? value : undefined),
+    reasoningEffortFromValue,
+  );
   const baseUrl = effectiveValue(
     "ai.baseUrl",
     stored,
@@ -459,6 +467,7 @@ export function resolveAiSettingsFromStored(
     ["ai.timeoutMs", timeoutMs],
     ["ai.maxOutputTokens", maxOutputTokens],
     ["ai.dailyQuota", dailyQuota],
+    ["ai.defaultReasoningEffort", defaultReasoningEffort],
     ["ai.baseUrl", baseUrl],
     ["ai.apiKey", apiKey],
     ["ai.model", model],
@@ -480,6 +489,10 @@ export function resolveAiSettingsFromStored(
       timeoutMs: timeoutMs.value ?? base.timeoutMs,
       maxOutputTokens: maxOutputTokens.value ?? base.maxOutputTokens,
       dailyQuota: dailyQuota.value ?? base.dailyQuota,
+      reasoningEffort:
+        defaultReasoningEffort.value ??
+        base.reasoningEffort ??
+        AI_DEFAULT_REASONING_EFFORT,
       baseUrl: mergedBaseUrl,
       apiKey: mergedApiKey,
       model: mergedModel,

@@ -43,10 +43,10 @@ export interface TripAccessGrantEditor {
 const EMPTY_SELECTION: AccessGrantSelection = { workspaces: [], users: [] };
 const MAX_GRANTS_PER_KIND = 50;
 const WORKSPACE_ROLE_LABELS: Record<string, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  editor: "Editor",
-  viewer: "Viewer",
+  owner: "所有者",
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "只读成员",
 };
 
 function roleLabel(role: string): string {
@@ -56,12 +56,12 @@ function roleLabel(role: string): string {
 function readableError(error: unknown): string {
   if (!isApiError(error)) return "网络异常，无法读取可见范围。请检查网络后重试。";
   if (error.status === 401) return "登录状态已失效，请重新登录后再试。";
-  if (error.status === 403) return "当前角色没有读取可见范围的权限。";
+  if (error.status === 403) return "你没有读取可见范围的权限。请联系工作区所有者或管理员。";
   if (error.status === 404) return "找不到这趟旅行，或你没有访问权限。";
   if (error.code === "INVALID_RESPONSE") {
-    return "可见范围数据无法识别，请刷新页面后重试。";
+    return "可见范围暂时无法加载，请刷新页面后重试。";
   }
-  return `可见范围读取失败（HTTP ${error.status}）。请稍后重试。`;
+  return "可见范围暂时无法加载，请稍后重试。";
 }
 
 function sameIds(left: AccessGrantSelection, right: AccessGrantSelection): boolean {
@@ -278,7 +278,7 @@ function GrantOptionGroup({
   return (
     <div className="min-w-0 rounded-control border border-hairline bg-surface-1/50 p-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h4 className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">{title}</h4>
+        <h4 className="type-eyebrow">{title}</h4>
         <span className="type-meta tabular-nums">
           {selected.length}/{MAX_GRANTS_PER_KIND}
         </span>
@@ -452,7 +452,7 @@ export function AccessGrantsField({
       {editor.status === "ready" && editor.canManage ? (
         <div className="mt-4 space-y-4">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">已选范围</p>
+            <p className="type-eyebrow">已选范围</p>
             <div className="mt-2">
               <SelectedChips
                 selection={[...editor.selection.workspaces, ...editor.selection.users]}
@@ -504,7 +504,7 @@ export function AccessGrantsField({
       {editor.status === "ready" && !editor.canManage ? (
         <div className="mt-4 space-y-3">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+            <p className="type-eyebrow">
               当前可见范围
             </p>
             <div className="mt-2">
@@ -526,7 +526,7 @@ export function AccessGrantsField({
             className="flex items-start gap-2 rounded-control border border-hairline bg-surface-1 px-3 py-2 text-[11px] leading-5 text-muted"
           >
             <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-            只有行程创建者或工作区 Owner/Admin 可以调整可见范围；你仍可以查看当前设置。
+            只有行程创建者或工作区所有者、管理员可以调整可见范围；你仍可以查看当前设置。
           </p>
         </div>
       ) : null}

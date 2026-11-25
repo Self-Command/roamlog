@@ -37,7 +37,7 @@ export class AdminMediaService {
           ? { deletedAt: { not: null } }
           : query.status === "active"
             ? { deletedAt: null }
-            : {};
+            : { deletedAt: null };
 
     const rows = await this.prisma.client.media.findMany({
       where: {

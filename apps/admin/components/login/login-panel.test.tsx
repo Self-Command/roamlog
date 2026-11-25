@@ -49,16 +49,16 @@ describe("LoginPanel", () => {
 
     await user.type(screen.getByLabelText(/管理员邮箱/), "ops@roamlog.test");
     await user.type(screen.getByLabelText(/^密码/), "real-password");
-    await user.click(screen.getByRole("button", { name: "继续验证" }));
+    await user.click(screen.getByRole("button", { name: "登录" }));
 
     expect(transport.signIn).toHaveBeenCalledWith({
       email: "ops@roamlog.test",
       password: "real-password",
     });
-    expect(screen.getByRole("heading", { name: "双因素认证" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "两步验证" })).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/6 位验证码/), "654321");
-    await user.click(screen.getByRole("button", { name: "进入控制台" }));
+    await user.click(screen.getByRole("button", { name: "验证并进入控制台" }));
 
     expect(transport.verifyTotp).toHaveBeenCalledWith("654321");
     expect(onAuthenticated).toHaveBeenCalledOnce();

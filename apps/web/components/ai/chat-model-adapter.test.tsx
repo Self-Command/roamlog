@@ -9,6 +9,7 @@ import {
   executeAiRun,
   streamAiPlan,
 } from "@/lib/api/ai";
+import { listConversationMessages } from "@/lib/api/ai-conversations";
 
 import {
   EXECUTE_TOOL_NAME,
@@ -28,12 +29,17 @@ vi.mock("@/lib/api/ai", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/api/ai-conversations", () => ({
+  listConversationMessages: vi.fn(),
+}));
+
 const WORKSPACE_ID = "018f0a00-0000-7000-8000-0000000000aa";
 const RUN_ID = "0123456789abcdef0123456789abcdef";
 
 const planMock = vi.mocked(createAiPlan);
 const executeMock = vi.mocked(executeAiRun);
 const streamMock = vi.mocked(streamAiPlan);
+const listMessagesMock = vi.mocked(listConversationMessages);
 
 const CONVERSATION_ID = "018f0a00-0000-7000-8000-0000000000cc";
 
@@ -85,11 +91,13 @@ interface PartLike {
 
 async function collect(
   messages: readonly unknown[],
+  options: Record<string, unknown> = {},
 ): Promise<{ status?: unknown; content: PartLike[] }[]> {
   const adapter = createAiChatModelAdapter({ workspaceId: WORKSPACE_ID, canWrite: true });
   const stream = adapter.run({
     messages,
     abortSignal: new AbortController().signal,
+    ...options,
   } as never);
   const resolved = stream instanceof Promise ? await stream : stream;
   if (!("next" in (resolved as object))) {
@@ -166,7 +174,48 @@ describe("createAiChatModelAdapter", () => {
 
     expect(planMock).not.toHaveBeenCalled();
     expect(first(chunks).status).toEqual({ type: "complete", reason: "stop" });
-    expect(JSON.stringify(first(chunks).content)).toContain("AI 尚未配置");
+    expect(JSON.stringify(first(chunks).content)).toContain("AI 服务尚未启用");
+  });
+
+  it("recovers a persisted plan when the stream body drops before done", async () => {
+    streamMock.mockImplementation(() => {
+      throw new TypeError("network dropped");
+    });
+    listMessagesMock.mockResolvedValue({
+      headId: "a1",
+      messages: [
+        {
+          parentId: "u1",
+          message: {
+            id: "a1",
+            role: "assistant",
+            createdAt: new Date().toISOString(),
+            clientId: "a1",
+            status: { type: "requires-action", reason: "tool-calls" },
+            content: [
+              { type: "text", text: "计划已整理。" },
+              {
+                type: "tool-call",
+                toolCallId: "plan-1",
+                toolName: PLAN_TOOL_NAME,
+                args: { plan: makePlan() },
+                argsText: JSON.stringify({ plan: makePlan() }),
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const chunks = await collect([USER_MESSAGE], {
+      unstable_threadId: CONVERSATION_ID,
+      unstable_assistantMessageId: "a1",
+    });
+
+    expect(first(chunks).status).toEqual({ type: "requires-action", reason: "tool-calls" });
+    const plan = first(chunks).content.find((part) => part.toolName === PLAN_TOOL_NAME);
+    expect(plan?.args?.plan?.runId).toBe(RUN_ID);
+    expect(JSON.stringify(first(chunks).content)).not.toContain("网络中断");
   });
 
   it("runs executeAiRun only for the calls the user confirmed", async () => {
@@ -256,7 +305,7 @@ describe("createAiChatModelAdapter", () => {
     expect(first(chunks).status).toEqual({ type: "complete", reason: "stop" });
     expect(first(chunks).content).toHaveLength(1);
     expect(first(chunks).content[0]?.type).toBe("text");
-    expect(JSON.stringify(first(chunks).content)).toContain("AI 尚未配置");
+    expect(JSON.stringify(first(chunks).content)).toContain("AI 服务尚未启用");
   });
 
   it("builds a content array in arrival order from tool.start / tool.progress / tool.end", async () => {

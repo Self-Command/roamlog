@@ -36,10 +36,10 @@ import {
 } from "@/lib/query";
 
 const roleLabels: Record<WorkspaceRole, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  editor: "Editor",
-  viewer: "Viewer",
+  owner: "所有者",
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "只读成员",
 };
 
 export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
@@ -81,10 +81,7 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
 
   if (!workspace) {
     return (
-      <ErrorState
-        title="Workspace 不可用"
-        description="当前账号无法载入这个 Workspace 的成员列表。"
-      />
+      <ErrorState title="工作区不可用" description="当前账号无法加载这个工作区的成员列表。" />
     );
   }
 
@@ -102,7 +99,11 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
       setMessage("");
       setDialogOpen(false);
     } catch (cause) {
-      setError(isForbidden(cause) ? "你的角色不能邀请成员。" : "邀请没有发送成功，请稍后重试。");
+      setError(
+        isForbidden(cause)
+          ? "你没有邀请成员的权限。请联系工作区所有者或管理员。"
+          : "邀请发送失败，请稍后重试。",
+      );
     }
   }
 
@@ -118,7 +119,11 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
       });
       setNotice(`${member.user.name} 的角色已更新为 ${roleLabels[nextRole]}。`);
     } catch (cause) {
-      setError(isForbidden(cause) ? "你的角色不能修改成员角色。" : "角色更新失败。");
+      setError(
+        isForbidden(cause)
+          ? "你没有修改成员角色的权限。请联系工作区所有者或管理员。"
+          : "角色更新失败，请稍后重试。",
+      );
     }
   }
 
@@ -129,9 +134,13 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
     setError(null);
     try {
       await removeMember.mutateAsync({ workspaceId: workspace.id, memberId });
-      setNotice(`${member.user.name} 已被移出 Workspace。`);
+      setNotice(`${member.user.name} 已被移出工作区。`);
     } catch (cause) {
-      setError(isForbidden(cause) ? "你的角色不能移除成员。" : "成员移除失败。");
+      setError(
+        isForbidden(cause)
+          ? "你没有移除成员的权限。请联系工作区所有者或管理员。"
+          : "成员移除失败，请稍后重试。",
+      );
     }
   }
 
@@ -142,16 +151,20 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
       await revokeInvitation.mutateAsync({ workspaceId: workspace.id, invitationId });
       setNotice("待接受邀请已撤销。");
     } catch (cause) {
-      setError(isForbidden(cause) ? "你的角色不能撤销邀请。" : "撤销邀请失败。");
+      setError(
+        isForbidden(cause)
+          ? "你没有撤销邀请的权限。请联系工作区所有者或管理员。"
+          : "撤销邀请失败，请稍后重试。",
+      );
     }
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`TOGETHER / ${String(members.length).padStart(2, "0")} MEMBERS`}
+        eyebrow={`工作区 / ${String(members.length).padStart(2, "0")} 位成员`}
         title="成员与邀请"
-        description="Owner 与 Admin 管理成员；Viewer 可以阅读工作区内容并发表评论。"
+        description="所有者和管理员可以管理成员；只读成员可以阅读内容并发表评论。"
         actions={
           canManage ? (
             <Button type="button" variant="primary" onClick={() => setDialogOpen(true)}>
@@ -184,13 +197,13 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
         className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline-strong bg-hairline lg:grid-cols-4"
       >
         {[
-          { label: "成员总数", value: members.length, hint: "Owner 与同行者", icon: Users },
+          { label: "成员总数", value: members.length, hint: "所有者与成员", icon: Users },
           {
             label: "可编辑",
             value: members.filter((member) =>
               ["owner", "admin", "editor"].includes(member.role),
             ).length,
-            hint: "Owner + Admin + Editor",
+            hint: "所有者、管理员和编辑者",
             icon: PenLine,
           },
           { label: "待接受邀请", value: invitations.length, hint: "7 天后自动失效", icon: Mail },
@@ -217,9 +230,9 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
       <section className="surface-card overflow-hidden" aria-label="工作区成员列表">
         <div className="flex items-center justify-between gap-4 border-b border-hairline p-5">
           <div>
-            <p className="type-eyebrow">WORKSPACE PEOPLE</p>
-            <h2 className="mt-1.5 font-serif text-2xl tracking-[-0.02em] text-ink">
-              一起旅行的人
+            <p className="type-eyebrow">成员列表</p>
+            <h2 className="mt-1.5 font-display text-xl font-semibold tracking-[-0.02em] text-ink">
+              工作区成员
             </h2>
           </div>
           <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
@@ -252,7 +265,7 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
                         {self ? "（你）" : ""}
                       </p>
                       {owner ? (
-                        <Crown aria-label="Owner" className="size-3 text-accent-orange" />
+                        <Crown aria-label="所有者" className="size-3 text-accent-orange" />
                       ) : null}
                     </div>
                     <p className="truncate text-[11px] text-muted">{member.user.email}</p>
@@ -272,9 +285,9 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
                       className="h-10 max-w-40 text-[11px]"
                       disabled={updateMember.isPending || member.status !== "active"}
                     >
-                      <option value="admin">Admin</option>
-                      <option value="editor">Editor</option>
-                      <option value="viewer">Viewer</option>
+                      <option value="admin">管理员</option>
+                      <option value="editor">编辑者</option>
+                      <option value="viewer">只读成员</option>
                     </Select>
                   )}
                 </div>
@@ -307,8 +320,8 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
       {invitations.length > 0 ? (
         <section className="surface-card overflow-hidden" aria-label="待接受邀请">
           <div className="border-b border-hairline p-5">
-            <p className="type-eyebrow">PENDING INVITATIONS</p>
-            <h2 className="mt-1.5 font-serif text-2xl tracking-[-0.02em] text-ink">
+            <p className="type-eyebrow">待接受的邀请</p>
+            <h2 className="mt-1.5 font-display text-xl font-semibold tracking-[-0.02em] text-ink">
               等待回应
             </h2>
           </div>
@@ -347,7 +360,7 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
             <DialogHeader>
               <DialogTitle>邀请成员</DialogTitle>
               <DialogDescription>
-                邀请发送到邮箱。对方需要先完成登录，才能接受并进入 Workspace。
+                邀请会发送到邮箱。对方需要先登录，然后接受邀请进入工作区。
               </DialogDescription>
             </DialogHeader>
             <FormField label="邮箱">
@@ -364,9 +377,9 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
                 value={role}
                 onChange={(event) => setRole(event.target.value as typeof role)}
               >
-                <option value="admin">Admin</option>
-                <option value="editor">Editor</option>
-                <option value="viewer">Viewer</option>
+                <option value="admin">管理员</option>
+                <option value="editor">编辑者</option>
+                <option value="viewer">只读成员</option>
               </Select>
             </FormField>
             <FormField label="留言（可选）">

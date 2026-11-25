@@ -61,7 +61,7 @@ export function TrendChart({ data }: TrendChartProps) {
           {data.length} {data.length === 1 ? "个快照" : "天"}
         </span>
       </div>
-      <div className="overflow-hidden rounded-control border border-hairline bg-black/30">
+      <div className="overflow-hidden rounded-control border border-hairline bg-surface-deep/40">
         <svg
           role="img"
           aria-label={`用户与工作区 ${data.length} 日趋势图`}

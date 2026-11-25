@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function ForgotPasswordPage() {
   return (
     <AuthPageFrame
-      eyebrow="ACCOUNT RECOVERY"
+      eyebrow="账号恢复"
       title="找回账号访问"
       description="输入注册邮箱，我们会发送一封带一次性重置链接的邮件。链接 30 分钟内有效，且只能使用一次。"
       footer={

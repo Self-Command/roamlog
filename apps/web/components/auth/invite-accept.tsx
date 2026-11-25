@@ -20,6 +20,12 @@ const roleDescriptions = {
   viewer: "可以阅读全部共享内容，并参与评论。",
 } as const;
 
+const roleLabels = {
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "只读成员",
+} as const;
+
 export function InviteAccept({ workspaceName, inviterName, role, token }: InviteAcceptProps) {
   const adapter = useDataAdapter();
   const [notice, setNotice] = useState<string | null>(null);
@@ -28,7 +34,7 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
 
   async function handleAccept() {
     if (!token) {
-      setError("邀请链接不完整，缺少邀请凭证。请向工作区管理员索取新的邀请链接。");
+      setError("邀请链接不完整，请向工作区管理员索取新的邀请链接。");
       return;
     }
 
@@ -46,8 +52,8 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
 
   return (
     <div>
-      <Badge tone="blue">TRAVEL ARCHIVE INVITATION</Badge>
-      <h1 className="mt-4 font-serif text-[clamp(2rem,1.5rem+1vw,2.75rem)] leading-none tracking-[-0.035em] text-ink">
+      <Badge tone="blue">旅行档案邀请</Badge>
+      <h1 className="mt-3 font-display text-[clamp(1.75rem,1.5rem+0.7vw,2.25rem)] leading-tight font-semibold tracking-[-0.02em] text-ink">
         加入「{workspaceName}」
       </h1>
       <p className="mt-4 text-sm leading-6 text-muted">{inviterName} 邀请你共同维护旅行档案。</p>
@@ -59,10 +65,10 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-serif text-2xl leading-none tracking-[-0.02em] text-ink">
+              <p className="font-display text-xl leading-tight font-semibold tracking-[-0.015em] text-ink">
                 {workspaceName}
               </p>
-              <Badge tone={role === "viewer" ? "slate" : "green"}>{role}</Badge>
+              <Badge tone={role === "viewer" ? "slate" : "green"}>{roleLabels[role]}</Badge>
             </div>
             <p className="mt-2 text-xs leading-5 text-muted">{roleDescriptions[role]}</p>
           </div>
@@ -75,7 +81,7 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
           </li>
           <li className="flex items-start gap-2">
             <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-blue" />
-            访问权限由工作区角色控制，Viewer 只读但可以评论。
+            访问权限由工作区角色控制；只读成员可以阅读全文并参与评论。
           </li>
         </ul>
       </div>
@@ -116,7 +122,7 @@ export function InviteAccept({ workspaceName, inviterName, role, token }: Invite
           size="lg"
           className="flex-1"
           onClick={() =>
-            setNotice("已记录谢绝选择；关闭页面即可，你不会加入这个工作区。")
+            setNotice("已拒绝邀请。关闭页面即可，你不会加入这个工作区。")
           }
         >
           <X aria-hidden="true" />

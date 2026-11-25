@@ -1,6 +1,6 @@
 import type { AttachmentAdapter, ChatModelAdapter, PendingAttachment } from "@assistant-ui/react";
 import { AssistantRuntimeProvider, ThreadPrimitive, useLocalRuntime } from "@assistant-ui/react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MultimodalInput, type MultimodalInputProps } from "../multimodal-input";
 import { resetAiChatModelStoresForTests } from "../model-selector";
 import { resetAiChatSelectionStores } from "../chat-selection";
-import { TRAVEL_SUGGESTIONS } from "../suggested-actions";
 import { VISION_UNAVAILABLE_NOTE } from "../vision-note";
 
 const WORKSPACE_ID = "018f0a00-0000-7000-8000-0000000000aa";
@@ -128,16 +127,12 @@ afterEach(() => {
 });
 
 describe("MultimodalInput", () => {
-  it("sends a suggested action through the assistant-ui runtime", async () => {
-    const user = userEvent.setup();
-    const onRun = vi.fn();
-    render(<Harness onRun={onRun} />);
+  it("does not render starter prompts above the composer", () => {
+    render(<Harness />);
 
-    expect(await screen.findByTestId("suggested-actions")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: TRAVEL_SUGGESTIONS[0] }));
-
-    await waitFor(() => expect(onRun).toHaveBeenCalledTimes(1));
-    expect(onRun).toHaveBeenCalledWith(TRAVEL_SUGGESTIONS[0]);
+    const composer = screen.getByTestId("composer-root");
+    expect(within(composer).queryByTestId("suggested-actions")).toBeNull();
+    expect(screen.queryByTestId("suggested-actions")).toBeNull();
   });
 
   it("restores a saved draft and runs a slash command with the keyboard", async () => {
@@ -169,6 +164,15 @@ describe("MultimodalInput", () => {
     await user.type(screen.getByTestId("multimodal-input"), "刚刚输入的草稿");
 
     expect(window.localStorage.getItem("input")).toBe("刚刚输入的草稿");
+  });
+
+  it("keeps the composer compact while preserving auto-grow limits", () => {
+    render(<Harness />);
+
+    const input = screen.getByTestId("multimodal-input");
+    expect(input.className).toContain("min-h-10");
+    expect(input.className).toContain("max-h-48");
+    expect(input.className).not.toContain("min-h-24");
   });
 
   it("moves through slash commands with arrow keys", async () => {

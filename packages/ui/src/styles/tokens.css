@@ -1,38 +1,37 @@
 @source "../**/*.{ts,tsx}";
 
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
 
-  --canvas: #000000;
-  --surface-1: #0a0a0c;
-  --surface-2: #101012;
-  --surface-deep: #06060a;
-  --ink: #fcfdff;
-  --body: rgba(252, 253, 255, 0.86);
-  --muted: #a1a4a5;
-  --ash: #888e90;
-  --stone: #7a8083;
-  --hairline: rgba(255, 255, 255, 0.06);
-  --hairline-strong: rgba(255, 255, 255, 0.14);
-  --divider: rgba(255, 255, 255, 0.04);
+  --canvas: light-dark(#ffffff, #292929);
+  --surface-1: light-dark(#fafafa, #1f1f1f);
+  --surface-2: light-dark(#f5f5f5, #141414);
+  --surface-deep: light-dark(#f0f0f0, #0a0a0a);
+  --ink: light-dark(#242424, #ffffff);
+  --body: light-dark(#424242, #d6d6d6);
+  --muted: light-dark(#616161, #adadad);
+  --ash: light-dark(#707070, #999999);
+  --stone: light-dark(#616161, #adadad);
+  --hairline: light-dark(#f0f0f0, #3d3d3d);
+  --hairline-strong: light-dark(#d1d1d1, #666666);
+  --divider: light-dark(#f0f0f0, #3d3d3d);
 
-  --accent-orange: #ff801f;
-  --accent-blue: #3b9eff;
-  --accent-green: #11ff99;
-  --accent-red: #ff2047;
-  --accent-yellow: #ffc53d;
-  /* Sixth atmospheric accent from the Resend analysis; never used as a solid surface. */
-  --accent-slate: #94a3b8;
+  --accent-orange: light-dark(#0f6cbd, #115ea3);
+  --accent-blue: light-dark(#115ea3, #479ef5);
+  --accent-green: light-dark(#0e700e, #54b054);
+  --accent-red: light-dark(#b10e1c, #dc626d);
+  --accent-yellow: light-dark(#bc4b09, #faa06b);
+  --accent-slate: light-dark(#707070, #999999);
 
-  --glow-orange: rgba(255, 89, 0, 0.18);
-  --glow-blue: rgba(0, 117, 255, 0.18);
-  --glow-green: rgba(17, 255, 153, 0.14);
-  --glow-red: rgba(255, 32, 71, 0.16);
-  --glow-yellow: rgba(255, 197, 61, 0.14);
-  --glow-slate: rgba(100, 116, 139, 0.16);
+  --glow-orange: transparent;
+  --glow-blue: transparent;
+  --glow-green: transparent;
+  --glow-red: transparent;
+  --glow-yellow: transparent;
+  --glow-slate: transparent;
 
-  --roamlog-radius-card: 12px;
-  --roamlog-radius-control: 8px;
+  --roamlog-radius-card: 8px;
+  --roamlog-radius-control: 4px;
   --roamlog-radius-pill: 9999px;
 
   --font-geist: "Geist Variable";
@@ -45,36 +44,54 @@
   --font-inter: "Inter Variable";
   --font-fraunces: "Fraunces Variable";
   --font-jetbrains-mono: "JetBrains Mono Variable";
+  --font-mona-sans: "Mona Sans Variable";
+  --font-ibm-plex-sans: "IBM Plex Sans Variable";
+  --font-ibm-plex-mono: "IBM Plex Mono";
 
-  --roamlog-font-serif:
-    var(--font-instrument), var(--font-noto-serif), "Songti SC", "SimSun", serif;
-  --roamlog-font-sans:
-    var(--font-geist), var(--font-noto-sans), ui-sans-serif, system-ui, sans-serif;
-  --roamlog-font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --roamlog-font-display:
+    "Segoe UI", -apple-system, BlinkMacSystemFont, var(--font-noto-sans),
+    "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Roboto,
+    "Helvetica Neue", sans-serif;
+  --roamlog-font-ui:
+    "Segoe UI", -apple-system, BlinkMacSystemFont, var(--font-noto-sans),
+    "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Roboto,
+    "Helvetica Neue", sans-serif;
+  --roamlog-font-prose:
+    "Instrument Serif", "Noto Serif SC Variable", "Songti SC", "SimSun", serif;
+  --roamlog-font-serif: var(--roamlog-font-prose);
+  --roamlog-font-sans: var(--roamlog-font-ui);
+  --roamlog-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
 
-  --roamlog-text-page-title: clamp(2.75rem, 2rem + 2vw, 3.5rem);
-  --roamlog-text-trip-title: clamp(2.5rem, 1.75rem + 1.8vw, 3rem);
-  --roamlog-text-journal-title: clamp(1.75rem, 1.25rem + 1.1vw, 2.25rem);
+  --roamlog-text-page-title: 2rem;
+  --roamlog-text-trip-title: 2rem;
+  --roamlog-text-journal-title: 1.75rem;
 
-  --surface-overlay: #17171b;
-  --accent-solid: #ff801f;
-  --accent-soft: rgba(255, 128, 31, 0.16);
-  --accent-glow: rgba(255, 89, 0, 0.18);
-  --accent-contrast: #111110;
-  --focus-ring: #ff801f;
-  --success: #71d083;
-  --warning: #ffca16;
-  --danger: #ff9592;
-  --info: #70b8ff;
-  --chart-1: #ff801f;
-  --chart-2: #3b9eff;
-  --chart-3: #53b365;
-  --chart-4: #ec5d5e;
-  --chart-5: #ffd60a;
-  --chart-6: #7c7b74;
-  --map-route: #3b9eff;
-  --map-marker: #ff801f;
-  --selection: rgba(255, 255, 255, 0.18);
+  --surface-overlay: light-dark(#ffffff, #292929);
+  --accent-primary: light-dark(#0f6cbd, #115ea3);
+  --accent-solid: var(--accent-primary);
+  --accent-soft: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+  --accent-glow: transparent;
+  --accent-contrast: #ffffff;
+  --focus-ring: light-dark(#0f6cbd, #479ef5);
+  --focus-ring-outer: var(--focus-ring);
+  --focus-ring-inner: light-dark(#ffffff00, #00000000);
+  --success: light-dark(#094509, #9fd89f);
+  --warning: light-dark(#8a3707, #fdcfb4);
+  --danger: light-dark(#6e0811, #eeacb2);
+  --info: light-dark(#115ea3, #479ef5);
+  --chart-1: var(--accent-primary);
+  --chart-2: var(--accent-blue);
+  --chart-3: var(--accent-green);
+  --chart-4: var(--accent-red);
+  --chart-5: var(--accent-yellow);
+  --chart-6: var(--accent-slate);
+  --map-route: var(--accent-blue);
+  --map-marker: var(--accent-primary);
+  --selection: color-mix(in srgb, var(--accent-primary) 22%, transparent);
+  --shadow-card: none;
+  --shadow-overlay: 0 8px 24px rgb(0 0 0 / 16%);
 }
 
 [data-mode="light"] {
@@ -87,6 +104,226 @@
 
 [data-mode="system"] {
   color-scheme: light dark;
+}
+
+[data-skin="porcelain"] {
+  --skin-canvas: light-dark(#f6f5f2, #141416);
+  --skin-surface-1: light-dark(#fcfbf9, #1c1b1f);
+  --skin-surface-2: light-dark(#f2f0ec, #19181c);
+  --skin-surface-deep: light-dark(#ece9e4, #0d0e10);
+  --skin-overlay: light-dark(rgba(255, 255, 255, 0.88), rgba(24, 24, 27, 0.90));
+  --skin-ink: light-dark(#1d1d1f, #f2f1ee);
+  --skin-body: light-dark(#464548, #c4c2be);
+  --skin-muted: light-dark(#6e6d70, #93918c);
+  --skin-ash: light-dark(#858387, #a8a5a0);
+  --skin-stone: light-dark(#79777a, #b5b2ac);
+  --skin-accent-primary: light-dark(#1f2022, #f2f1ee);
+  --skin-accent-warm: light-dark(#1f2022, #f2f1ee);
+  --skin-accent-blue: light-dark(#5d6b78, #9aa6b2);
+  --skin-accent-green: light-dark(#5f7468, #82a393);
+  --skin-accent-red: light-dark(#9b5e5e, #bd8686);
+  --skin-accent-yellow: light-dark(#a88a5a, #bba070);
+  --skin-accent-slate: light-dark(#6e6d70, #93918c);
+  --skin-accent-contrast: light-dark(#ffffff, #111111);
+  --skin-focus-ring: light-dark(#007aff, #0a84ff);
+  --skin-focus-ring-outer: light-dark(#007aff, #0a84ff);
+  --skin-focus-ring-inner: light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.18));
+  --skin-success: light-dark(#52705d, #82a393);
+  --skin-warning: light-dark(#876b42, #bba070);
+  --skin-danger: light-dark(#8f5353, #bd8686);
+  --skin-info: light-dark(#5d6b78, #9aa6b2);
+  --skin-hairline: light-dark(rgba(29, 29, 31, 0.08), rgba(255, 255, 255, 0.08));
+  --skin-hairline-strong: light-dark(rgba(29, 29, 31, 0.13), rgba(255, 255, 255, 0.13));
+  --skin-radius-card: 12px;
+  --skin-radius-control: 8px;
+}
+
+[data-skin="primer"] {
+  --skin-canvas: light-dark(#ffffff, #0d1117);
+  --skin-surface-1: light-dark(#f6f8fa, #151b23);
+  --skin-surface-2: light-dark(#eff2f5, #262c36);
+  --skin-surface-deep: light-dark(#e6eaef, #2a313c);
+  --skin-overlay: light-dark(#ffffff, #010409);
+  --skin-ink: light-dark(#1f2328, #f0f6fc);
+  --skin-body: light-dark(#25292e, #f0f6fc);
+  --skin-muted: light-dark(#59636e, #9198a1);
+  --skin-ash: light-dark(#818b98, #656c76);
+  --skin-stone: light-dark(#59636e, #9198a1);
+  --skin-accent-primary: light-dark(#1f883d, #238636);
+  --skin-accent-warm: light-dark(#1f883d, #238636);
+  --skin-accent-blue: light-dark(#0969da, #4493f8);
+  --skin-accent-green: light-dark(#1a7f37, #3fb950);
+  --skin-accent-red: light-dark(#cf222e, #da3633);
+  --skin-accent-yellow: light-dark(#9a6700, #9e6a03);
+  --skin-accent-slate: light-dark(#59636e, #9198a1);
+  --skin-accent-contrast: light-dark(#ffffff, #ffffff);
+  --skin-focus-ring: light-dark(#0969da, #1f6feb);
+  --skin-focus-ring-outer: light-dark(#0969da, #1f6feb);
+  --skin-focus-ring-inner: light-dark(#ffffff00, #00000000);
+  --skin-success: light-dark(#1a7f37, #3fb950);
+  --skin-warning: light-dark(#9a6700, #d29922);
+  --skin-danger: light-dark(#d1242f, #f85149);
+  --skin-info: light-dark(#0969da, #4493f8);
+  --skin-hairline: light-dark(#d1d9e0b3, #3d444db3);
+  --skin-hairline-strong: light-dark(#d1d9e0, #3d444d);
+  --skin-radius-card: 6px;
+  --skin-radius-control: 6px;
+}
+
+[data-skin="fluent"] {
+  --skin-canvas: light-dark(#ffffff, #292929);
+  --skin-surface-1: light-dark(#fafafa, #1f1f1f);
+  --skin-surface-2: light-dark(#f5f5f5, #141414);
+  --skin-surface-deep: light-dark(#f0f0f0, #0a0a0a);
+  --skin-overlay: light-dark(#ffffff, #292929);
+  --skin-ink: light-dark(#242424, #ffffff);
+  --skin-body: light-dark(#424242, #d6d6d6);
+  --skin-muted: light-dark(#616161, #adadad);
+  --skin-ash: light-dark(#707070, #999999);
+  --skin-stone: light-dark(#616161, #adadad);
+  --skin-accent-primary: light-dark(#0f6cbd, #115ea3);
+  --skin-accent-warm: light-dark(#0f6cbd, #115ea3);
+  --skin-accent-blue: light-dark(#115ea3, #479ef5);
+  --skin-accent-green: light-dark(#0e700e, #54b054);
+  --skin-accent-red: light-dark(#b10e1c, #dc626d);
+  --skin-accent-yellow: light-dark(#bc4b09, #faa06b);
+  --skin-accent-slate: light-dark(#707070, #999999);
+  --skin-accent-contrast: light-dark(#ffffff, #ffffff);
+  --skin-focus-ring: light-dark(#0f6cbd, #479ef5);
+  --skin-focus-ring-outer: light-dark(#000000, #ffffff);
+  --skin-focus-ring-inner: light-dark(#ffffff, #000000);
+  --skin-success: light-dark(#094509, #9fd89f);
+  --skin-warning: light-dark(#8a3707, #fdcfb4);
+  --skin-danger: light-dark(#6e0811, #eeacb2);
+  --skin-info: light-dark(#115ea3, #479ef5);
+  --skin-hairline: light-dark(#f0f0f0, #3d3d3d);
+  --skin-hairline-strong: light-dark(#d1d1d1, #666666);
+  --skin-radius-card: 8px;
+  --skin-radius-control: 4px;
+}
+
+[data-skin="carbon"] {
+  --skin-canvas: light-dark(#ffffff, #161616);
+  --skin-surface-1: light-dark(#f4f4f4, #262626);
+  --skin-surface-2: light-dark(#e8e8e8, #333333);
+  --skin-surface-deep: light-dark(#e0e0e0, #393939);
+  --skin-overlay: light-dark(#ffffff, #393939);
+  --skin-ink: light-dark(#161616, #f4f4f4);
+  --skin-body: light-dark(#525252, #c6c6c6);
+  --skin-muted: light-dark(#6f6f6f, #a8a8a8);
+  --skin-ash: light-dark(#8d8d8d, #6f6f6f);
+  --skin-stone: light-dark(#525252, #c6c6c6);
+  --skin-accent-primary: light-dark(#0f62fe, #0f62fe);
+  --skin-accent-warm: light-dark(#0f62fe, #0f62fe);
+  --skin-accent-blue: light-dark(#0043ce, #a6c8ff);
+  --skin-accent-green: light-dark(#24a148, #42be65);
+  --skin-accent-red: light-dark(#da1e28, #fa4d56);
+  --skin-accent-yellow: light-dark(#f1c21b, #f1c21b);
+  --skin-accent-slate: light-dark(#525252, #c6c6c6);
+  --skin-accent-contrast: light-dark(#ffffff, #ffffff);
+  --skin-focus-ring: light-dark(#0f62fe, #ffffff);
+  --skin-focus-ring-outer: light-dark(#0f62fe, #ffffff);
+  --skin-focus-ring-inner: light-dark(transparent, transparent);
+  --skin-success: light-dark(#198038, #42be65);
+  --skin-warning: light-dark(#8e6a00, #f1c21b);
+  --skin-danger: light-dark(#da1e28, #fa4d56);
+  --skin-info: light-dark(#0043ce, #4589ff);
+  --skin-hairline: light-dark(#e0e0e0, #393939);
+  --skin-hairline-strong: light-dark(#c6c6c6, #525252);
+  --skin-radius-card: 0;
+  --skin-radius-control: 0;
+}
+
+[data-skin="carbon-soft"] {
+  --skin-canvas: light-dark(#f4f4f4, #262626);
+  --skin-surface-1: light-dark(#ffffff, #393939);
+  --skin-surface-2: light-dark(#e8e8e8, #474747);
+  --skin-surface-deep: light-dark(#e0e0e0, #525252);
+  --skin-overlay: light-dark(#f4f4f4, #525252);
+  --skin-ink: light-dark(#161616, #f4f4f4);
+  --skin-body: light-dark(#525252, #c6c6c6);
+  --skin-muted: light-dark(#6f6f6f, #c6c6c6);
+  --skin-ash: light-dark(#8d8d8d, #8d8d8d);
+  --skin-stone: light-dark(#525252, #c6c6c6);
+  --skin-accent-primary: light-dark(#0f62fe, #0f62fe);
+  --skin-accent-warm: light-dark(#0f62fe, #0f62fe);
+  --skin-accent-blue: light-dark(#0043ce, #78a9ff);
+  --skin-accent-green: light-dark(#24a148, #42be65);
+  --skin-accent-red: light-dark(#da1e28, #ff8389);
+  --skin-accent-yellow: light-dark(#f1c21b, #f1c21b);
+  --skin-accent-slate: light-dark(#525252, #c6c6c6);
+  --skin-accent-contrast: light-dark(#ffffff, #ffffff);
+  --skin-focus-ring: light-dark(#0f62fe, #ffffff);
+  --skin-focus-ring-outer: light-dark(#0f62fe, #ffffff);
+  --skin-focus-ring-inner: light-dark(transparent, transparent);
+  --skin-success: light-dark(#198038, #42be65);
+  --skin-warning: light-dark(#8e6a00, #f1c21b);
+  --skin-danger: light-dark(#da1e28, #ff8389);
+  --skin-info: light-dark(#0043ce, #4589ff);
+  --skin-hairline: light-dark(#e0e0e0, #525252);
+  --skin-hairline-strong: light-dark(#c6c6c6, #6f6f6f);
+  --skin-radius-card: 0;
+  --skin-radius-control: 0;
+}
+
+[data-skin="porcelain"][data-mode="light"],
+[data-skin="porcelain"][data-mode="system"] {
+  --skin-shadow-card: 0 1px 2px rgba(29, 29, 31, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  --skin-shadow-overlay: 0 18px 48px rgba(29, 29, 31, 0.14);
+}
+
+[data-skin="porcelain"][data-mode="dark"] {
+  --skin-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --skin-shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.46);
+}
+
+[data-skin="primer"][data-mode="light"],
+[data-skin="primer"][data-mode="system"] {
+  --skin-shadow-card: 0 1px 1px 0 #25292e1a, 0 3px 6px 0 #25292e1f;
+  --skin-shadow-overlay: 0 0 0 1px #d1d9e000, 0 8px 16px -4px #25292e14, 0 4px 32px -4px #25292e14, 0 24px 48px -12px #25292e14, 0 48px 96px -24px #25292e14;
+}
+
+[data-skin="primer"][data-mode="dark"] {
+  --skin-shadow-card: 0 1px 1px 0 #01040966, 0 3px 6px 0 #010409cc;
+  --skin-shadow-overlay: 0 0 0 1px #3d444d, 0 8px 16px -4px #01040966, 0 4px 32px -4px #01040966, 0 24px 48px -12px #01040966, 0 48px 96px -24px #01040966;
+}
+
+[data-skin="fluent"][data-mode="light"],
+[data-skin="fluent"][data-mode="system"],
+[data-skin="fluent"][data-mode="dark"] {
+  --skin-shadow-card: 0 0 2px rgba(0, 0, 0, .12), 0 2px 4px rgba(0, 0, 0, .14);
+  --skin-shadow-overlay: 0 0 8px rgba(0, 0, 0, .12), 0 8px 16px rgba(0, 0, 0, .14);
+}
+
+[data-skin="carbon"][data-mode="light"],
+[data-skin="carbon"][data-mode="system"],
+[data-skin="carbon-soft"][data-mode="light"],
+[data-skin="carbon-soft"][data-mode="system"] {
+  --skin-shadow-card: none;
+  --skin-shadow-overlay: 0 8px 16px rgba(0, 0, 0, .12);
+}
+
+[data-skin="carbon"][data-mode="dark"],
+[data-skin="carbon-soft"][data-mode="dark"] {
+  --skin-shadow-card: none;
+  --skin-shadow-overlay: 0 8px 16px rgba(0, 0, 0, .24);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-skin="porcelain"][data-mode="system"] {
+    --skin-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --skin-shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.46);
+  }
+
+  [data-skin="primer"][data-mode="system"] {
+    --skin-shadow-card: 0 1px 1px 0 #01040966, 0 3px 6px 0 #010409cc;
+    --skin-shadow-overlay: 0 0 0 1px #3d444d, 0 8px 16px -4px #01040966, 0 4px 32px -4px #01040966, 0 24px 48px -12px #01040966, 0 48px 96px -24px #01040966;
+  }
+
+  [data-skin="carbon"][data-mode="system"],
+  [data-skin="carbon-soft"][data-mode="system"] {
+    --skin-shadow-overlay: 0 8px 16px rgba(0, 0, 0, .24);
+  }
 }
 
 [data-skin="editorial-noir"] {
@@ -239,6 +476,80 @@
   --skin-info: light-dark(#3a94c5, #7fbbb3);
 }
 
+html[data-skin="porcelain"] body {
+  background-color: var(--canvas) !important;
+  background-image:
+    radial-gradient(
+      1100px 680px at 12% 0%,
+      color-mix(in srgb, var(--accent-primary) 7%, transparent),
+      transparent 64%
+    ),
+    radial-gradient(
+      900px 620px at 92% 14%,
+      color-mix(in srgb, var(--ink) 4%, transparent),
+      transparent 62%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--surface-2) 26%, transparent),
+      transparent 62%
+    ) !important;
+  background-attachment: fixed !important;
+}
+
+html[data-skin="porcelain"] body > div.flex.min-h-dvh {
+  background: transparent !important;
+}
+
+html[data-skin="porcelain"] main {
+  background: transparent !important;
+}
+
+html[data-skin="porcelain"] header {
+  background: color-mix(in srgb, var(--surface-1) 78%, transparent) !important;
+  border-color: var(--hairline) !important;
+  box-shadow: inset 0 -1px 0 var(--hairline) !important;
+  backdrop-filter: blur(18px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(135%) !important;
+}
+
+html[data-skin="porcelain"] aside {
+  background: color-mix(in srgb, var(--surface-deep) 72%, transparent) !important;
+  border-color: var(--hairline) !important;
+  backdrop-filter: blur(22px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(135%) !important;
+}
+
+html[data-skin="porcelain"] .surface-card {
+  background: color-mix(in srgb, var(--surface-1) 86%, transparent) !important;
+  border-color: var(--hairline) !important;
+  box-shadow: var(--shadow-card) !important;
+  backdrop-filter: blur(14px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(125%) !important;
+}
+
+html[data-skin="porcelain"] [role="dialog"] {
+  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent) !important;
+  border-color: var(--hairline-strong) !important;
+  box-shadow: var(--shadow-overlay) !important;
+  backdrop-filter: blur(24px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
+}
+
+html[data-skin="porcelain"] [data-testid="composer-root"] {
+  background: color-mix(in srgb, var(--surface-1) 86%, transparent) !important;
+  border-color: var(--hairline) !important;
+  backdrop-filter: blur(20px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
+}
+
+html[data-skin="porcelain"] nav[aria-label="移动端主导航"] {
+  background: color-mix(in srgb, var(--surface-1) 84%, transparent) !important;
+  border-color: var(--hairline) !important;
+  backdrop-filter: blur(22px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(135%) !important;
+}
+
 [data-skin] {
   --canvas: var(--skin-canvas);
   --surface-1: var(--skin-surface-1);
@@ -250,8 +561,9 @@
   --muted: var(--skin-muted);
   --ash: var(--skin-ash);
   --stone: var(--skin-stone);
-  --hairline: color-mix(in srgb, var(--skin-ink) 8%, transparent);
-  --hairline-strong: color-mix(in srgb, var(--skin-ink) 16%, transparent);
+  --hairline: var(--skin-hairline, color-mix(in srgb, var(--skin-ink) 8%, transparent));
+  --hairline-strong:
+    var(--skin-hairline-strong, color-mix(in srgb, var(--skin-ink) 16%, transparent));
   --divider: color-mix(in srgb, var(--skin-ink) 5%, transparent);
   --accent-orange: var(--skin-accent-warm);
   --accent-blue: var(--skin-accent-blue);
@@ -259,11 +571,14 @@
   --accent-red: var(--skin-accent-red);
   --accent-yellow: var(--skin-accent-yellow);
   --accent-slate: var(--skin-accent-slate);
-  --accent-solid: var(--skin-accent-warm);
-  --accent-soft: color-mix(in srgb, var(--skin-accent-warm) 16%, transparent);
-  --accent-glow: color-mix(in srgb, var(--skin-accent-warm) 18%, transparent);
+  --accent-primary: var(--skin-accent-primary, var(--skin-accent-warm));
+  --accent-solid: var(--accent-primary);
+  --accent-soft: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  --accent-glow: transparent;
   --accent-contrast: var(--skin-accent-contrast);
-  --focus-ring: var(--skin-focus-ring);
+  --focus-ring: var(--skin-focus-ring-outer, var(--skin-focus-ring));
+  --focus-ring-outer: var(--skin-focus-ring-outer, var(--skin-focus-ring));
+  --focus-ring-inner: var(--skin-focus-ring-inner, transparent);
   --success: var(--skin-success);
   --warning: var(--skin-warning);
   --danger: var(--skin-danger);
@@ -281,8 +596,82 @@
   --chart-5: var(--skin-accent-yellow);
   --chart-6: var(--skin-accent-slate);
   --map-route: var(--skin-accent-blue);
-  --map-marker: var(--skin-accent-warm);
-  --selection: color-mix(in srgb, var(--skin-accent-warm) 24%, transparent);
+  --map-marker: var(--accent-primary);
+  --selection: color-mix(in srgb, var(--accent-primary) 24%, transparent);
+  --roamlog-radius-card: var(--skin-radius-card, 6px);
+  --roamlog-radius-control: var(--skin-radius-control, 6px);
+  --shadow-card: var(--skin-shadow-card, none);
+  --shadow-overlay: var(--skin-shadow-overlay, 0 8px 24px rgb(0 0 0 / 16%));
+}
+
+[data-font] {
+  --roamlog-font-display: var(--roamlog-font-sans);
+  --roamlog-font-ui: var(--roamlog-font-sans);
+  --roamlog-font-prose: var(--roamlog-font-serif);
+}
+
+[data-font="primer-system"] {
+  --roamlog-font-display:
+    var(--font-mona-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    var(--font-noto-sans), "Noto Sans SC", Helvetica, Arial, sans-serif;
+  --roamlog-font-ui:
+    var(--font-mona-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    var(--font-noto-sans), "Noto Sans SC", Helvetica, Arial, sans-serif;
+  --roamlog-font-prose:
+    var(--font-instrument), var(--font-noto-serif), "Songti SC", "SimSun", serif;
+  --roamlog-font-serif: var(--roamlog-font-prose);
+  --roamlog-font-sans: var(--roamlog-font-ui);
+  --roamlog-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+[data-font="primer-cjk"] {
+  --roamlog-font-display:
+    var(--font-noto-sans), "Noto Sans SC", ui-sans-serif, system-ui,
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --roamlog-font-ui:
+    var(--font-noto-sans), "Noto Sans SC", ui-sans-serif, system-ui,
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --roamlog-font-prose:
+    var(--font-noto-serif), "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --roamlog-font-serif: var(--roamlog-font-prose);
+  --roamlog-font-sans: var(--roamlog-font-ui);
+  --roamlog-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+[data-font="fluent-native"] {
+  --roamlog-font-display:
+    "Segoe UI", -apple-system, BlinkMacSystemFont, var(--font-noto-sans),
+    "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Roboto,
+    "Helvetica Neue", sans-serif;
+  --roamlog-font-ui:
+    "Segoe UI", -apple-system, BlinkMacSystemFont, var(--font-noto-sans),
+    "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Roboto,
+    "Helvetica Neue", sans-serif;
+  --roamlog-font-prose:
+    var(--font-newsreader), var(--font-noto-serif), "Songti SC", "SimSun", serif;
+  --roamlog-font-serif: var(--roamlog-font-prose);
+  --roamlog-font-sans: var(--roamlog-font-ui);
+  --roamlog-font-mono: Consolas, "Cascadia Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+[data-font="carbon-plex"] {
+  --roamlog-font-display:
+    var(--font-ibm-plex-sans), var(--font-noto-sans), "Noto Sans SC",
+    ui-sans-serif, system-ui, sans-serif;
+  --roamlog-font-ui:
+    var(--font-ibm-plex-sans), var(--font-noto-sans), "Noto Sans SC",
+    ui-sans-serif, system-ui, sans-serif;
+  --roamlog-font-prose:
+    var(--font-newsreader), var(--font-noto-serif), "Songti SC", "SimSun", serif;
+  --roamlog-font-serif: var(--roamlog-font-prose);
+  --roamlog-font-sans: var(--roamlog-font-ui);
+  --roamlog-font-mono:
+    var(--font-ibm-plex-mono), "IBM Plex Mono", var(--font-noto-sans),
+    ui-monospace, SFMono-Regular, monospace;
 }
 
 [data-font="editorial-classic"] {
@@ -374,17 +763,20 @@
 
   --font-serif: var(--roamlog-font-serif);
   --font-sans: var(--roamlog-font-sans);
+  --font-display: var(--roamlog-font-display);
+  --font-ui: var(--roamlog-font-ui);
+  --font-prose: var(--roamlog-font-prose);
   --font-mono: var(--roamlog-font-mono);
 
   --text-page-title: var(--roamlog-text-page-title);
-  --text-page-title--line-height: 1.1;
-  --text-page-title--letter-spacing: -0.035em;
+  --text-page-title--line-height: 1.5;
+  --text-page-title--letter-spacing: -0.01em;
   --text-trip-title: var(--roamlog-text-trip-title);
-  --text-trip-title--line-height: 1.1;
-  --text-trip-title--letter-spacing: -0.035em;
+  --text-trip-title--line-height: 1.5;
+  --text-trip-title--letter-spacing: -0.01em;
   --text-journal-title: var(--roamlog-text-journal-title);
-  --text-journal-title--line-height: 1.12;
-  --text-journal-title--letter-spacing: -0.025em;
+  --text-journal-title--line-height: 1.3;
+  --text-journal-title--letter-spacing: -0.005em;
   --text-meta: 0.625rem;
   --text-meta--line-height: 1.4;
   --text-meta--letter-spacing: 0.12em;
@@ -402,7 +794,7 @@
 
   html {
     background: var(--canvas);
-    color-scheme: dark;
+    color-scheme: light dark;
     text-rendering: optimizeLegibility;
   }
 
@@ -410,7 +802,7 @@
     min-height: 100dvh;
     background: var(--canvas);
     color: var(--body);
-    font-family: var(--roamlog-font-sans);
+    font-family: var(--roamlog-font-ui);
     -webkit-font-smoothing: antialiased;
   }
 
@@ -450,8 +842,9 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--focus-ring);
+    outline: 2px solid var(--focus-ring-outer);
     outline-offset: 2px;
+    box-shadow: 0 0 0 1px var(--focus-ring-inner);
   }
 
   input[type="date"]::-webkit-calendar-picker-indicator {
@@ -491,85 +884,73 @@
 
 @layer utilities {
   .type-page-title {
-    font-family: var(--roamlog-font-serif);
+    font-family: var(--roamlog-font-display);
     font-size: var(--roamlog-text-page-title);
-    font-weight: 400;
-    line-height: 1.1;
-    letter-spacing: var(--tracking-display);
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
     color: var(--ink);
     text-wrap: balance;
   }
 
   .type-trip-title {
-    font-family: var(--roamlog-font-serif);
+    font-family: var(--roamlog-font-display);
     font-size: var(--roamlog-text-trip-title);
-    font-weight: 400;
-    line-height: 1.1;
-    letter-spacing: var(--tracking-display);
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
     color: var(--ink);
     text-wrap: balance;
   }
 
   .type-journal-title {
-    font-family: var(--roamlog-font-serif);
+    font-family: var(--roamlog-font-prose);
     font-size: var(--roamlog-text-journal-title);
-    font-weight: 400;
-    line-height: 1.12;
-    letter-spacing: -0.025em;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.005em;
     color: var(--ink);
     text-wrap: balance;
   }
 
   :lang(en) .type-page-title,
   :lang(en) .type-trip-title {
-    line-height: 1;
+    line-height: 1.3;
   }
 
   .type-eyebrow {
-    font-family: var(--roamlog-font-mono);
-    font-size: 0.625rem;
-    font-weight: 400;
-    line-height: 1.4;
-    letter-spacing: var(--tracking-meta);
-    text-transform: uppercase;
+    font-family: var(--roamlog-font-ui);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.625;
+    letter-spacing: 0;
+    text-transform: none;
     color: var(--muted);
   }
 
   .type-meta {
-    font-family: var(--roamlog-font-mono);
-    font-size: 0.6875rem;
-    line-height: 1.5;
+    font-family: var(--roamlog-font-ui);
+    font-size: 0.75rem;
+    line-height: 1.625;
     color: var(--muted);
   }
 
   .type-body {
-    font-family: var(--roamlog-font-sans);
+    font-family: var(--roamlog-font-ui);
     font-size: 0.875rem;
-    line-height: 1.5;
+    line-height: 1.625;
     color: var(--body);
   }
 
   .page-glow {
-    position: absolute;
-    top: -180px;
-    left: 50%;
-    width: min(800px, 110vw);
-    height: 720px;
-    transform: translateX(-50%);
-    pointer-events: none;
-    background: radial-gradient(
-      ellipse 58% 54% at 50% 0%,
-      var(--page-glow-color, var(--glow-orange)) 0%,
-      transparent 72%
-    );
-    mask-image: linear-gradient(to bottom, black 20%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, black 20%, transparent 100%);
+    display: none;
   }
 
   .surface-card {
     border: 1px solid var(--hairline-strong);
     border-radius: var(--roamlog-radius-card);
     background: var(--surface-1);
+    box-shadow: var(--shadow-card);
   }
 
   .focus-ring {

@@ -147,7 +147,9 @@ describe("ProviderGroupPage", () => {
     vi.mocked(api.group).mockResolvedValue(group([provider]));
 
     render(<ProviderGroupPage group="ai" role="super_admin" api={api} />);
-    expect(await screen.findByText("网络断开")).toBeInTheDocument();
+    expect(
+      await screen.findByText("无法加载服务商配置，请稍后重试。"),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "重新加载" }));
     const table = await screen.findByTestId("provider-table");

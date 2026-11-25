@@ -14,7 +14,6 @@ import {
   MEDIA_COMPRESSION_LIMITS,
   PUBLIC_SETTINGS_REVALIDATE_SECONDS,
   PUBLIC_SETTING_KEYS,
-  THEME_ACCENT_TOKENS,
   applyTitleTemplate,
   buildSiteMetadata,
   getMediaCompressionPolicy,
@@ -230,11 +229,10 @@ describe("resolveThemePresentation", () => {
     expect(themed.dataTheme).toBe("dark");
     expect(themed.colorScheme).toBe("dark");
     expect(themed.style.colorScheme).toBe("dark");
-    expect(themed.skin).toBe("tokyo-night");
+    expect(themed.skin).toBe("carbon");
     expect(themed.fontPairing).toBe(DEFAULT_THEME_FONT);
-    expect(themed.style["--accent-primary"]).toBe(THEME_ACCENT_TOKENS.blue.primary);
-    expect(themed.style["--accent-primary"]).not.toBe(fallback.style["--accent-primary"]);
-    expect(themed.style["--accent-primary-glow"]).toBe(THEME_ACCENT_TOKENS.blue.glow);
+    expect(themed.style["--accent-primary"]).toBeUndefined();
+    expect(themed.style["--accent-primary-glow"]).toBeUndefined();
   });
 
   it("accepts light once the light token set ships", () => {
@@ -253,14 +251,16 @@ describe("resolveThemePresentation", () => {
     expect(resolveThemeMode("sepia")).toBe("system");
     expect(resolveThemeAccent("chartreuse")).toBe("white");
     expect(resolveDefaultSkin({ storedSkin: "not-a-skin", legacyAccent: "rose" })).toBe(
-      "rose-pine",
+      "porcelain",
     );
     expect(resolveThemeFont("not-a-font")).toBe(DEFAULT_THEME_FONT);
   });
 
   it("maps legacy accents only when no explicit skin is present", () => {
-    expect(resolveDefaultSkin({ storedSkin: null, legacyAccent: "rose" })).toBe("rose-pine");
-    expect(resolveDefaultSkin({ storedSkin: "kanagawa", legacyAccent: "rose" })).toBe("kanagawa");
+    expect(resolveDefaultSkin({ storedSkin: null, legacyAccent: "rose" })).toBe("porcelain");
+    expect(resolveDefaultSkin({ storedSkin: "kanagawa", legacyAccent: "rose" })).toBe(
+      "carbon-soft",
+    );
   });
 
   it("mirrors every public SEO and appearance key in PUBLIC_SETTING_KEYS", () => {

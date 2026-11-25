@@ -235,7 +235,7 @@ export function useLivePhotoUpload(
           const media = await uploadStill(client, workspaceId, tripId ?? null, pair, options);
           update(index, { mediaId: media.id, media });
           if (!media.id.trim()) {
-            update(index, { error: "服务器未返回媒体编号。" });
+            update(index, { error: "图片已上传，但暂时无法确认，请重试。" });
             continue;
           }
 

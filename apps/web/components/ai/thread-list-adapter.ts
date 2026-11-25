@@ -436,7 +436,7 @@ class ConversationGateway {
     try {
       serialized = JSON.stringify(body);
     } catch {
-      this.sync.update({ writeError: "消息内容无法序列化，暂时无法保存。" });
+      this.sync.update({ writeError: "消息暂时无法保存，请重试。" });
       return;
     }
     if (this.lastSuccessfulPut.get(clientId) === serialized) return;

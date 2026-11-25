@@ -31,7 +31,7 @@ export function EmptyState({
           <Icon aria-hidden="true" className="size-4" />
         </span>
       ) : null}
-      <h3 className="font-serif text-2xl leading-tight tracking-[-0.02em] text-ink">{title}</h3>
+      <h3 className="font-display text-2xl leading-tight tracking-[-0.02em] text-ink">{title}</h3>
       <p className="mt-2 max-w-sm text-sm leading-6 text-muted">{description}</p>
       {action ? <div className="mt-5">{action}</div> : null}
     </div>
@@ -63,7 +63,7 @@ export function ErrorState({
       <span className="mb-4 flex size-10 items-center justify-center rounded-pill border border-accent-red/20 bg-accent-red/10 text-accent-red">
         <AlertTriangle aria-hidden="true" className="size-4" />
       </span>
-      <h3 className="font-serif text-2xl leading-tight tracking-[-0.02em] text-ink">{title}</h3>
+      <h3 className="font-display text-2xl leading-tight tracking-[-0.02em] text-ink">{title}</h3>
       <p className="mt-2 max-w-sm text-sm leading-6 text-muted">{description}</p>
       {retryAction ? <div className="mt-5">{retryAction}</div> : null}
     </div>

@@ -7,13 +7,13 @@ import {
   Button,
   EmptyState,
   ErrorState,
-  PageGlow,
   PageHeader,
   Progress,
   Skeleton,
 } from "@roamlog/ui";
 import { CalendarDays, ChevronRight, MapPin, Route, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { useItineraryQuery, useMeQuery, useTripsQuery, useWorkspaceBySlug } from "@/lib/query";
 import {
@@ -69,6 +69,11 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
   const nextCoverUrl = nextTrip?.cover?.url ?? nextTrip?.cover?.thumbUrl ?? null;
   const itineraryQuery = useItineraryQuery(nextTrip?.id);
   const currentUserName = meQuery.data?.name ?? "—";
+  const [nextCoverFailed, setNextCoverFailed] = useState(false);
+
+  useEffect(() => {
+    setNextCoverFailed(false);
+  }, [nextCoverUrl]);
 
   if (workspacesQuery.isLoading || tripsQuery.isLoading) {
     return <DashboardLoading />;
@@ -78,7 +83,7 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
     return (
       <ErrorState
         title="总览暂时不可用"
-        description="Workspace 或旅行数据没有返回。请稍后重试。"
+        description="工作区或旅行数据暂时无法加载，请稍后重试。"
         retryAction={
           <Button
             type="button"
@@ -109,13 +114,11 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
     .slice(0, 3);
 
   return (
-    <div className="relative">
-      <PageGlow accent="orange" className="opacity-50" />
-
+    <div>
       <PageHeader
-        eyebrow={`${workspace.name.toUpperCase()} / OVERVIEW`}
+        eyebrow={`${workspace.name} / 总览`}
         title="旅行总览"
-        description={`${trips.length} 趟旅行，${countries.size} 个国家，${cities.size} 个城市。下一段行程、预算和最近整理的旅行都在这里。`}
+        description={`${trips.length} 趟旅行，${countries.size} 个国家，${cities.size} 个城市。下一段行程、预算和最近更新的旅行都在这里。`}
         actions={
           <Button asChild variant="primary" size="md">
             <Link href={`/w/${workspaceSlug}/trips/new`}>
@@ -131,15 +134,15 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
         className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-hairline-strong bg-hairline-strong lg:grid-cols-4"
       >
         {[
-          ["旅行", trips.length.toString(), "TOTAL JOURNEYS"],
-          ["国家", countries.size.toString(), "COUNTRIES VISITED"],
-          ["城市", cities.size.toString(), "STOPS COLLECTED"],
-          ["在册天数", travelDays.toString(), "DAYS ON THE ROAD"],
+          ["旅行", trips.length.toString(), "旅行总数"],
+          ["国家", countries.size.toString(), "到访国家"],
+          ["城市", cities.size.toString(), "到访城市"],
+          ["旅行天数", travelDays.toString(), "累计天数"],
         ].map(([label, value, meta]) => (
-          <div key={label} className="bg-surface-1 p-4">
+          <div key={label} className="bg-surface-1 px-4 py-3.5">
             <p className="type-eyebrow">{meta}</p>
-            <div className="mt-3 flex items-baseline justify-between gap-2">
-              <span className="font-serif text-3xl leading-none tracking-[-0.03em] text-ink">
+            <div className="mt-2 flex items-baseline justify-between gap-2">
+              <span className="font-display text-2xl leading-none font-semibold tracking-[-0.02em] text-ink">
                 {value}
               </span>
               <span className="text-xs text-muted">{label}</span>
@@ -152,12 +155,18 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
         <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
           <section className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1">
             <div
-              className={`relative aspect-[16/7] overflow-hidden border-b border-hairline ${
+              className={`relative aspect-[4/3] overflow-hidden border-b border-hairline sm:aspect-[16/7] ${
                 nextCoverUrl ? "bg-surface-deep" : "bg-surface-2"
               }`}
             >
-              {nextCoverUrl ? (
-                <img src={nextCoverUrl} alt="" className="size-full object-cover" loading="lazy" />
+              {nextCoverUrl && !nextCoverFailed ? (
+                <img
+                  src={nextCoverUrl}
+                  alt=""
+                  className="size-full object-cover"
+                  loading="lazy"
+                  onError={() => setNextCoverFailed(true)}
+                />
               ) : null}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
               <div className="relative flex h-full flex-col justify-between p-5">
@@ -174,10 +183,10 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
                   </Badge>
                 </div>
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.13em] text-white/60">
-                    NEXT JOURNEY
+                  <p className="font-ui text-[11px] font-medium text-white/70">
+                    下一段旅行
                   </p>
-                  <h2 className="mt-2 max-w-xl font-serif text-trip-title text-ink">
+                  <h2 className="mt-2 max-w-xl font-display text-trip-title text-white">
                     {nextTrip.title}
                   </h2>
                 </div>
@@ -194,7 +203,7 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
                     </span>
                     {tripDurationDays(nextTrip.startDate, nextTrip.endDate)} 天
                   </p>
-                  <p className="mt-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-body">
+                  <p className="mt-2 flex items-center gap-2 text-xs text-body">
                     <Route aria-hidden="true" className="size-3.5 text-muted" />
                     {nextTrip.origin}
                     {nextTrip.destinations.length > 0
@@ -213,14 +222,14 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
               <div className="mt-5 grid gap-4 border-t border-hairline pt-4 sm:grid-cols-[1fr_auto]">
                 <div>
                   <div className="mb-2 flex items-center justify-between text-[10px] text-muted">
-                    <span>旅程进度</span>
+                    <span>行程进度</span>
                     <span>{Math.round(journeyProgress(nextTrip))}%</span>
                   </div>
                   <Progress value={journeyProgress(nextTrip)} aria-label="旅程进度" />
                 </div>
                 <div className="flex items-center justify-between gap-6 sm:justify-end">
                   <div>
-                    <p className="type-eyebrow">BUDGET</p>
+                    <p className="type-eyebrow">预算</p>
                     <p className="mt-1 text-sm text-ink">
                       {nextTrip.budgetAmountMinor !== null && nextTrip.budgetCurrency !== null
                         ? formatBudget(nextTrip.budgetAmountMinor, nextTrip.budgetCurrency)
@@ -243,11 +252,13 @@ export function DashboardPage({ workspaceSlug }: DashboardPageProps) {
             </div>
           </section>
 
-          <section className="rounded-card border border-hairline-strong bg-surface-1 p-5">
+          <section className="surface-card p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="type-eyebrow">UP NEXT</p>
-                <h2 className="mt-2 font-serif text-2xl tracking-[-0.025em] text-ink">接下来</h2>
+                <p className="type-eyebrow">下一项</p>
+                <h2 className="mt-1.5 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                  接下来
+                </h2>
               </div>
               {nextTrip.countryCodes.length > 0 ? (
                 <Badge tone="orange">{nextTrip.countryCodes.join(" · ")}</Badge>

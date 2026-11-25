@@ -64,7 +64,7 @@ export function DesktopChatHeader({
         )}
       </Button>
       <p className="min-w-0 flex-1 truncate type-meta">
-        {collapsed ? "AI 旅行助手 · 先计划，后写入" : title}
+        {collapsed ? "AI 旅行助手" : title}
       </p>
       {remoteId ? (
         <ConversationVisibilitySelector

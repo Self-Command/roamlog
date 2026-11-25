@@ -61,7 +61,7 @@ test.describe("Admin live API journey", () => {
     );
   });
 
-  test("blocks a platform admin without verified TOTP with ADMIN_2FA_REQUIRED", async ({
+  test("asks a platform admin without verified TOTP to finish two-step verification", async ({
     page,
   }) => {
     test.setTimeout(90_000);
@@ -70,12 +70,12 @@ test.describe("Admin live API journey", () => {
     await page.goto("/login");
     await page.getByLabel("管理员邮箱").fill(fixture.pendingAdmin.email);
     await page.getByLabel("密码").fill(fixture.pendingAdmin.password);
-    await page.getByRole("button", { name: "继续验证" }).click();
+    await page.getByRole("button", { name: "登录" }).click();
     await page.waitForURL("**/admin");
 
-    await expect(page.getByText("ADMIN_2FA_REQUIRED", { exact: true })).toBeVisible({
+    await expect(page.getByText("先完成两步验证", { exact: true })).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByRole("heading", { name: "先绑定 TOTP 验证器" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "先完成两步验证" })).toBeVisible();
   });
 });

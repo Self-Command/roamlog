@@ -110,7 +110,7 @@ const MAX_RETRIES = 2;
 
 class UploadTimeout extends Error {
   constructor() {
-    super("上传对象存储超时（60 秒）。");
+    super("图片上传超时，请检查网络后重试。");
     this.name = "UploadTimeout";
   }
 }

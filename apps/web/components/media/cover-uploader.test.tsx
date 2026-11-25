@@ -106,7 +106,7 @@ describe("CoverUploader", () => {
     });
 
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(screen.getByText("封面正在服务器处理中…")).toBeInTheDocument();
+    expect(screen.getByText("封面正在处理中…")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "替换" })).toBeInTheDocument();
   });
 
@@ -125,6 +125,8 @@ describe("CoverUploader", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("只支持 JPEG");
     expect(screen.getByRole("status")).toHaveTextContent("上传失败，请查看错误提示。");
     expect(screen.getByRole("button", { name: "选择其他文件" })).toBeInTheDocument();
+    expect(screen.queryByText(/浏览器无法显示这个图片格式/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/上传后会转换为兼容格式/)).not.toBeInTheDocument();
     expect(calls.presign).toHaveLength(0);
   });
 
@@ -218,7 +220,7 @@ describe("CoverUploader", () => {
     await user.upload(screen.getByLabelText("选择旅行封面"), makeImage());
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "对象存储拒绝了该文件：超过 25 MB 上限。",
+      "文件超过 25 MB 上限，请压缩后重试。",
     );
     expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "选择其他文件" })).toBeInTheDocument();
@@ -266,8 +268,8 @@ describe("CoverUploader", () => {
     });
     fireEvent.error(preview);
 
-    expect(await screen.findByText(/浏览器无法预览此格式/)).toBeInTheDocument();
-    expect(screen.getByText(/上传时会尝试转换为 WebP/)).toBeInTheDocument();
+    expect(await screen.findByText(/浏览器无法显示这个图片格式/)).toBeInTheDocument();
+    expect(screen.getByText(/上传后会转换为兼容格式/)).toBeInTheDocument();
   });
 
   it("announces compression in the live region before upload", async () => {

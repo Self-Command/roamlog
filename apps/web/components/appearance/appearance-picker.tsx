@@ -26,7 +26,10 @@ import {
   useUpdateAppearanceMutation,
 } from "@/lib/query";
 
-import { AppearancePreview } from "./appearance-preview";
+import { WorkspaceAppearancePreview } from "./workspace-appearance-preview";
+
+const ACTIVE_SKINS = SKIN_CATALOG.filter((entry) => entry.status === "active");
+const ACTIVE_FONTS = FONT_PAIRING_CATALOG.filter((entry) => entry.status === "active");
 
 export interface AppearancePickerFormProps {
   data: ResolvedAppearance;
@@ -113,9 +116,9 @@ export function AppearancePickerForm({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="ACCOUNT / APPEARANCE"
+        eyebrow="个人设置"
         title="外观"
-        description="选择适合你的阅读节奏。外观偏好会跟随账号同步，也可以在任意设备恢复平台默认。"
+        description="选择工作区主题、显示模式和本地字体。偏好跟随账号同步，也可以随时恢复平台默认。"
         actions={
           <Badge tone={data.canOverride ? "blue" : "neutral"}>
             {data.canOverride ? "可自定义" : "平台已锁定"}
@@ -160,7 +163,9 @@ export function AppearancePickerForm({
             <legend className="sr-only">显示模式</legend>
             <div className="flex items-center gap-2">
               <Palette aria-hidden="true" className="size-4 text-muted" />
-              <p className="type-eyebrow">显示模式</p>
+              <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                显示模式
+              </p>
             </div>
             <div role="radiogroup" aria-label="显示模式" className="mt-3 grid grid-cols-3 gap-2">
               {APPEARANCE_MODES.map((mode) => {
@@ -172,9 +177,9 @@ export function AppearancePickerForm({
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-control border px-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
+                    className={`flex min-h-14 flex-col items-center justify-center gap-1.5 rounded-control border px-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
                       selected
-                        ? "border-hairline-strong bg-surface-2 text-ink"
+                        ? "border-accent-solid bg-surface-2 text-ink"
                         : "border-hairline text-muted hover:border-hairline-strong hover:text-body"
                     }`}
                     onClick={() => selectMode(mode)}
@@ -191,18 +196,22 @@ export function AppearancePickerForm({
           </fieldset>
 
           <fieldset disabled={!canEdit} className={`surface-card p-5 ${fieldsetClass(!canEdit)}`}>
-            <legend className="sr-only">皮肤</legend>
+            <legend className="sr-only">主题</legend>
             <div className="flex items-end justify-between gap-3">
               <div>
-                <p className="type-eyebrow">皮肤</p>
-                <p className="mt-1 text-xs text-muted">颜色、表面与氛围的整体组合。</p>
+                <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  工作区主题
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  只展示有明确企业来源的主题；默认使用平台推荐主题。
+                </p>
               </div>
-              <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                6 SKINS
+              <span className="font-ui text-[10px] text-stone">
+                {ACTIVE_SKINS.length} 个主题
               </span>
             </div>
-            <div role="radiogroup" aria-label="皮肤" className="mt-4 grid gap-2 sm:grid-cols-2">
-              {SKIN_CATALOG.map((skin) => {
+            <div role="radiogroup" aria-label="主题" className="mt-4 grid gap-2 sm:grid-cols-2">
+              {ACTIVE_SKINS.map((skin) => {
                 const selected = value.skin === skin.id;
                 return (
                   <button
@@ -211,16 +220,16 @@ export function AppearancePickerForm({
                     role="radio"
                     aria-checked={selected}
                     aria-label={`${skin.label}：${skin.description}`}
-                    className={`relative rounded-control border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
+                    className={`relative rounded-control border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
                       selected
-                        ? "border-hairline-strong bg-surface-2"
+                        ? "border-accent-solid bg-surface-2"
                         : "border-hairline hover:border-hairline-strong hover:bg-surface-1"
                     }`}
                     onClick={() => selectSkin(skin.id)}
                     onKeyDown={(event) =>
                       handleRadioKeyDown(
                         event,
-                        SKIN_CATALOG.map((entry) => entry.id),
+                        ACTIVE_SKINS.map((entry) => entry.id),
                         value.skin,
                         selectSkin,
                       )
@@ -248,9 +257,16 @@ export function AppearancePickerForm({
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <span className="text-xs font-medium text-ink">{skin.label}</span>
-                      {selected ? (
-                        <Check aria-hidden="true" className="size-3.5 text-accent-green" />
-                      ) : null}
+                      <span className="flex items-center gap-1">
+                        {skin.id === data.defaults.skin ? (
+                          <span className="rounded border border-hairline bg-canvas px-1.5 py-0.5 text-[9px] text-muted">
+                            平台默认
+                          </span>
+                        ) : null}
+                        {selected ? (
+                          <Check aria-hidden="true" className="size-3.5 text-accent-green" />
+                        ) : null}
+                      </span>
                     </div>
                     <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-muted">
                       {skin.description}
@@ -265,15 +281,19 @@ export function AppearancePickerForm({
             <legend className="sr-only">字体配对</legend>
             <div className="flex items-end justify-between gap-3">
               <div>
-                <p className="type-eyebrow">字体配对</p>
-                <p className="mt-1 text-xs text-muted">标题、正文和元数据的本地字体组合。</p>
+                <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  字体配对
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  企业界面、中文优先与高密度数据的本地字体组合。
+                </p>
               </div>
-              <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                6 PAIRINGS
+              <span className="font-ui text-[10px] text-stone">
+                4 个字体
               </span>
             </div>
             <div role="radiogroup" aria-label="字体配对" className="mt-4 grid gap-2 sm:grid-cols-2">
-              {FONT_PAIRING_CATALOG.map((font) => {
+              {ACTIVE_FONTS.map((font) => {
                 const selected = value.fontPairing === font.id;
                 return (
                   <button
@@ -282,16 +302,16 @@ export function AppearancePickerForm({
                     role="radio"
                     aria-checked={selected}
                     aria-label={`${font.label}：${font.description}`}
-                    className={`rounded-control border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
+                    className={`rounded-control border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
                       selected
-                        ? "border-hairline-strong bg-surface-2"
+                        ? "border-accent-solid bg-surface-2"
                         : "border-hairline hover:border-hairline-strong hover:bg-surface-1"
                     }`}
                     onClick={() => selectFont(font.id)}
                     onKeyDown={(event) =>
                       handleRadioKeyDown(
                         event,
-                        FONT_PAIRING_CATALOG.map((entry) => entry.id),
+                        ACTIVE_FONTS.map((entry) => entry.id),
                         value.fontPairing,
                         selectFont,
                       )
@@ -299,27 +319,34 @@ export function AppearancePickerForm({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-medium text-ink">{font.label}</span>
-                      {selected ? (
-                        <Check aria-hidden="true" className="size-3.5 text-accent-green" />
-                      ) : null}
+                      <span className="flex items-center gap-1">
+                        {font.id === data.defaults.fontPairing ? (
+                          <span className="rounded border border-hairline bg-canvas px-1.5 py-0.5 text-[9px] text-muted">
+                            平台默认
+                          </span>
+                        ) : null}
+                        {selected ? (
+                          <Check aria-hidden="true" className="size-3.5 text-accent-green" />
+                        ) : null}
+                      </span>
                     </div>
                     <p
                       className="mt-2 truncate text-lg leading-6 text-ink"
                       style={{ fontFamily: font.displayStack }}
                     >
-                      在雨停之前去看海
+                      工作台排版
                     </p>
                     <p
                       className="mt-1 truncate text-[10px] text-muted"
                       style={{ fontFamily: font.bodyStack }}
                     >
-                      Travel notes, 2026 · 12 张照片
+                      旅行日志 · 2026 · 12 个文件
                     </p>
                     <p
                       className="mt-1 truncate text-[9px] uppercase tracking-[0.08em] text-stone"
                       style={{ fontFamily: font.monoStack }}
                     >
-                      LAT 34.42 / LNG 132.45
+                      编号 8F2A / 24 行
                     </p>
                   </button>
                 );
@@ -327,7 +354,7 @@ export function AppearancePickerForm({
             </div>
           </fieldset>
 
-          <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-card border border-hairline-strong bg-canvas/95 p-3 backdrop-blur">
+          <div className="relative z-10 flex flex-wrap items-center gap-2 rounded-card border border-hairline-strong bg-surface-1/95 p-3 backdrop-blur lg:sticky lg:bottom-3">
             <span className="mr-auto text-[11px] text-muted">
               {dirty
                 ? "有未保存的外观修改"
@@ -362,14 +389,15 @@ export function AppearancePickerForm({
         <aside className="min-w-0 xl:sticky xl:top-6" aria-label="外观预览">
           <div className="rounded-card border border-hairline-strong bg-surface-1 p-3">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="type-eyebrow">实时预览</p>
-              <span className="font-mono text-[9px] text-stone">{value.skin}</span>
+              <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                工作台预览
+              </p>
+              <span className="font-ui text-[10px] text-stone">{value.skin}</span>
             </div>
-            <AppearancePreview
+            <WorkspaceAppearancePreview
               mode={value.mode}
               skin={value.skin}
               fontPairing={value.fontPairing}
-              surface="journal"
             />
           </div>
         </aside>
@@ -425,7 +453,7 @@ export function AppearancePicker() {
   if (query.error || !query.data || !draft) {
     return (
       <div className="space-y-3">
-        <PageHeader eyebrow="ACCOUNT / APPEARANCE" title="外观" />
+        <PageHeader eyebrow="个人设置" title="外观" />
         <p
           role="alert"
           className="rounded-control border border-accent-red/25 bg-accent-red/5 px-3 py-2 text-xs text-accent-red"

@@ -12,10 +12,16 @@ export default function GlobalError({
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-5 py-16">
       <div className="w-full max-w-lg">
-        <p className="mb-6 text-center font-serif text-2xl tracking-[-0.03em] text-ink">Roamlog</p>
+        <p className="mb-6 text-center font-display text-xl font-semibold tracking-[-0.02em] text-ink">
+          Roamlog
+        </p>
         <ErrorState
-          title="页面遇到异常"
-          description={error.digest ? `请求编号：${error.digest}` : error.message}
+          title="页面暂时无法打开"
+          description={
+            error.digest
+              ? `页面暂时无法显示。请重试；如果仍然失败，请把请求编号 ${error.digest} 发给支持人员。`
+              : "页面暂时无法显示。请重试；如果仍然失败，请稍后联系支持人员。"
+          }
           retryAction={
             <Button type="button" variant="primary" onClick={reset}>
               重试

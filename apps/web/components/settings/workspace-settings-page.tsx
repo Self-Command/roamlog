@@ -82,10 +82,10 @@ const DENSITIES = [
 ] as const;
 
 const ROLES = {
-  owner: "Owner",
-  admin: "Admin",
-  editor: "Editor",
-  viewer: "Viewer",
+  owner: "所有者",
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "只读成员",
 } as const;
 
 /** Same rule as the contract (`packages/contracts/src/entities/workspace.ts:19-22`). */
@@ -126,10 +126,10 @@ function formFromWorkspace(workspace: WorkspaceWithRole): WorkspaceFormState {
 
 function slugError(value: string): string | null {
   const slug = value.trim();
-  if (slug.length === 0) return "Slug 不能为空。";
-  if (slug.length > 80) return "Slug 最多 80 个字符。";
+  if (slug.length === 0) return "工作区地址不能为空。";
+  if (slug.length > 80) return "工作区地址最多 80 个字符。";
   if (!SLUG_PATTERN.test(slug)) {
-    return "Slug 只能使用小写字母、数字和单个连字符，且不能以连字符开头或结尾。";
+    return "工作区地址只能使用小写字母、数字和单个连字符，且不能以连字符开头或结尾。";
   }
   return null;
 }
@@ -273,7 +273,7 @@ function WorkspaceLogoField({ workspace, canManage, applying, onApply }: LogoFie
           id="workspace-logo-title"
           className="font-mono text-[10px] uppercase tracking-[0.13em] text-muted"
         >
-          工作区 Logo
+          工作区标志
         </h3>
         <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
           {statusChip}
@@ -292,7 +292,7 @@ function WorkspaceLogoField({ workspace, canManage, applying, onApply }: LogoFie
               disabled={!canPick}
             >
               <ImageUp aria-hidden="true" className="size-3.5" />
-              {logoMediaId ? "替换 Logo" : "上传 Logo"}
+              {logoMediaId ? "替换标志" : "上传标志"}
             </Button>
             {logoMediaId ? (
               <Button
@@ -330,7 +330,7 @@ function WorkspaceLogoField({ workspace, canManage, applying, onApply }: LogoFie
           {upload.phase === "uploading" || upload.phase === "compressing" ? (
             <Progress
               value={upload.progress ?? 0}
-              aria-label="Logo 上传进度"
+              aria-label="标志上传进度"
               aria-valuetext={`${upload.progress ?? 0}%`}
               indicatorClassName="motion-reduce:transition-none!"
             />
@@ -356,7 +356,7 @@ function WorkspaceLogoField({ workspace, canManage, applying, onApply }: LogoFie
         accept={COVER_ACCEPT_ATTRIBUTE}
         className="sr-only"
         tabIndex={-1}
-        aria-label="选择工作区 Logo"
+        aria-label="选择工作区标志"
         disabled={!canPick}
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
@@ -418,7 +418,7 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
   if (!workspace || !form || !baseline) {
     return (
       <p className="text-sm text-muted">
-        工作区设置不可用：当前账号不是该工作区的成员，或链接中的 slug 已失效。
+        工作区设置暂时无法加载：当前账号不是该工作区的成员，或工作区地址已失效。
       </p>
     );
   }
@@ -497,12 +497,12 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
     setLogoApplying(true);
     try {
       await updateWorkspace.mutateAsync({ workspaceId: workspace.id, input: { logoMediaId } });
-      setNotice(logoMediaId ? "工作区 Logo 已更新。" : "工作区 Logo 已移除。");
+      setNotice(logoMediaId ? "工作区标志已更新。" : "工作区标志已移除。");
     } catch (cause) {
       setError(
         isForbidden(cause)
-          ? "你的角色不能修改工作区 Logo。"
-          : "工作区 Logo 更新失败，请稍后重试。",
+          ? "你的角色不能修改工作区标志。"
+          : "工作区标志更新失败，请稍后重试。",
       );
     } finally {
       setLogoApplying(false);
@@ -512,7 +512,7 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="WORKSPACE / SETTINGS"
+        eyebrow="工作区 / 设置"
         title="工作区设置"
         description="工作区名称、地址、默认时区与日历，以及新建内容的默认偏好。"
       />
@@ -522,7 +522,7 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
           role="status"
           className="rounded-control border border-accent-orange/25 bg-accent-orange/5 px-3 py-2 text-xs leading-5 text-accent-orange"
         >
-          当前角色是 {roleLabel}。只有 Owner 和 Admin 可以修改工作区设置，本页内容对你只读。
+          当前角色是{roleLabel}。只有所有者和管理员可以修改工作区设置，本页内容对你只读。
         </p>
       ) : null}
 
@@ -547,8 +547,10 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
         <div className="grid items-start gap-4 xl:grid-cols-2">
           <section className="surface-card space-y-5 p-5" aria-label="工作区身份">
             <div className="border-b border-hairline pb-4">
-              <p className="type-eyebrow">IDENTITY</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">身份与地址</h2>
+              <p className="type-eyebrow">基本信息</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                身份与地址
+              </h2>
             </div>
 
             <WorkspaceLogoField
@@ -569,8 +571,8 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
             </FormField>
 
             <FormField
-              label="Slug"
-              hint="位于每个页面地址中的 /w/ 之后。修改后地址会立即变更，旧链接将不再指向这里。"
+              label="工作区地址"
+              hint="出现在工作区链接中。修改后地址会立即变更，旧链接将不再指向这里。"
               error={currentSlugError}
             >
               <Input
@@ -587,8 +589,10 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
 
           <section className="surface-card space-y-4 p-5" aria-label="地区与日历">
             <div className="border-b border-hairline pb-4">
-              <p className="type-eyebrow">REGION / CALENDAR</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">地区与日历</h2>
+              <p className="type-eyebrow">地区与日历</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                地区与日历
+              </h2>
             </div>
 
             <FormField label="默认时区" hint="行程时间、日志日期与提醒都按这个时区解读。">
@@ -642,8 +646,8 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
             aria-label="新内容默认值"
           >
             <div className="border-b border-hairline pb-4">
-              <p className="type-eyebrow">DEFAULTS</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">
+              <p className="type-eyebrow">默认偏好</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
                 新内容默认值
               </h2>
             </div>
@@ -686,7 +690,7 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
             </div>
 
             <fieldset className="space-y-3">
-              <legend className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+              <legend className="mb-1.5 block type-eyebrow">
                 工作区通知默认
               </legend>
               <div className="flex items-start justify-between gap-4 rounded-control border border-hairline bg-surface-1 px-3 py-2.5">
@@ -726,7 +730,7 @@ export function WorkspaceSettingsPage({ workspaceSlug }: { workspaceSlug: string
             <div className="space-y-2">
               <label
                 htmlFor="workspace-accent-color"
-                className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted"
+                className="mb-1.5 block type-eyebrow"
               >
                 强调色
               </label>

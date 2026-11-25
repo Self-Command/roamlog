@@ -91,12 +91,12 @@ export function TwoFactorEnrollmentPanel({
   return (
     <div className="mx-auto max-w-3xl space-y-5 py-4">
       <header>
-        <p className="type-eyebrow">安全 / TOTP 注册</p>
-        <h1 className="mt-2 font-serif text-[clamp(2rem,1.6rem+1vw,2.75rem)] leading-tight tracking-[-0.04em] text-ink">
-          为平台管理员启用 2FA
+        <p className="type-eyebrow">安全 / 两步验证</p>
+        <h1 className="mt-2 font-display text-[32px] font-semibold leading-10 tracking-[-0.025em] text-ink">
+          为平台管理员启用两步验证
         </h1>
         <p className="mt-3 max-w-2xl text-[13px] leading-6 text-muted">
-          平台角色由后端会话决定。完成 TOTP 绑定与验证前，后台会拒绝所有管理请求。
+          为保证后台安全，请先完成两步验证。完成后才能继续管理操作。
         </p>
       </header>
 
@@ -119,7 +119,7 @@ export function TwoFactorEnrollmentPanel({
               id="enrollment-password"
               label="当前密码"
               required
-              hint="密码只用于本次 Better Auth 2FA 注册请求，不会写入前端存储。"
+              hint="密码只用于本次绑定，不会被保存。"
             >
               <Input
                 autoComplete="current-password"
@@ -135,7 +135,7 @@ export function TwoFactorEnrollmentPanel({
             ) : null}
             <Button type="submit" variant="primary" disabled={isSubmitting}>
               <QrCode aria-hidden="true" />
-              {isSubmitting ? "正在生成…" : "生成 TOTP 密钥"}
+              {isSubmitting ? "正在生成…" : "开始绑定验证器"}
             </Button>
           </form>
         </section>
@@ -143,12 +143,12 @@ export function TwoFactorEnrollmentPanel({
         <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-5">
             <div className="flex items-center justify-between gap-2">
-              <p className="type-eyebrow">扫描 TOTP</p>
-              <Badge tone="green">本地二维码</Badge>
+              <p className="type-eyebrow">扫描验证器二维码</p>
+              <Badge tone="green">安全绑定</Badge>
             </div>
             <TOTPQRCode uri={enrollment.totpUri} />
             <p className="mt-3 text-[10px] leading-5 text-muted">
-              二维码在浏览器本地生成，TOTP 密钥不会发送给第三方二维码服务。
+              用身份验证器扫描二维码；验证码只在本次绑定中使用。
             </p>
             <a
               href={enrollment.totpUri}
@@ -204,7 +204,7 @@ export function TwoFactorEnrollmentPanel({
                 id="enrollment-totp"
                 label="验证器 6 位验证码"
                 required
-                hint="完成验证后，平台管理员会话才能通过后台 2FA 校验。"
+                hint="完成验证后，才能继续进入后台。"
               >
                 <Input
                   autoComplete="one-time-code"
@@ -231,7 +231,7 @@ export function TwoFactorEnrollmentPanel({
                 disabled={code.length !== 6 || isSubmitting}
               >
                 <ShieldCheck aria-hidden="true" />
-                {isSubmitting ? "正在验证…" : "完成 2FA 验证"}
+                {isSubmitting ? "正在验证…" : "完成两步验证"}
               </Button>
             </form>
           </section>
@@ -251,7 +251,7 @@ function TOTPQRCode({ uri }: { uri: string }) {
     <div className="mt-4 overflow-hidden rounded-control border border-hairline bg-white p-3">
       <svg
         role="img"
-        aria-label="TOTP 二维码"
+        aria-label="验证器二维码"
         viewBox={`0 0 ${size} ${size}`}
         className="mx-auto h-auto w-full max-w-[220px]"
       >

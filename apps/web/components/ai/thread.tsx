@@ -12,7 +12,7 @@ import {
   Input,
 } from "@roamlog/ui";
 import { ArrowDown } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AppearanceMode } from "@roamlog/contracts";
 
@@ -25,7 +25,14 @@ import { AssistantMessage, ThinkingMessage, UserMessage } from "./message";
 import { EditComposer } from "./message-editor";
 import { MultimodalInput } from "./multimodal-input";
 import type { SlashCommandHandlers } from "./slash-commands";
-import { useMessages, type ChatStatus } from "./use-messages";
+import { SuggestedActions } from "./suggested-actions";
+import { useAiSuggestedPrompts } from "./use-suggested-prompts";
+import {
+  latestPendingAnchor,
+  scrollAnchorWithinContainer,
+  useMessages,
+  type ChatStatus,
+} from "./use-messages";
 import { shareUrlFromThreadCustom, visibilityFromThreadCustom } from "./visibility-selector";
 
 /**
@@ -37,17 +44,32 @@ import { shareUrlFromThreadCustom, visibilityFromThreadCustom } from "./visibili
  * Roamlog's appearance mutation. No command is a visual placeholder.
  */
 
-function EmptyState() {
+function EmptyState({
+  disabled,
+  onSelect,
+  suggestions,
+}: {
+  disabled: boolean;
+  onSelect: (suggestion: string) => void;
+  suggestions: readonly string[];
+}) {
   return (
-    <div className="flex flex-col items-center gap-3 py-4 text-center sm:gap-6 sm:py-16">
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 py-6 text-center sm:gap-7 sm:py-16">
       <div className="space-y-2">
-        <h2 className="font-serif text-2xl leading-tight tracking-[-0.02em] text-ink sm:text-3xl">
-          先计划，后写入
+        <h2 className="font-display text-xl font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-2xl">
+          从一个目标开始
         </h2>
         <p className="mx-auto max-w-md text-xs leading-5 text-muted sm:text-sm sm:leading-6">
-          用一句话描述目的地、时间和预算。助手只做只读搜索并列出准备执行的操作，你确认后才会写入工作区。
+          描述你的目标、约束和期望结果。信息不足时，助手会先向你提问；确认后再生成计划。
         </p>
         <p className="type-meta text-stone">输入 / 查看会话命令</p>
+      </div>
+      <div className="w-full max-w-xl" data-testid="ai-empty-suggestions">
+        <SuggestedActions
+          disabled={disabled}
+          onSelect={onSelect}
+          suggestions={suggestions}
+        />
       </div>
     </div>
   );
@@ -88,10 +110,80 @@ export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThre
     (state) => state.thread.isRunning && state.thread.messages.at(-1)?.role !== "assistant",
   );
   const messageCount = useAuiState((state) => state.thread.messages.length);
-  const { containerRef, endRef, isAtBottom, scrollToBottom } = useMessages({
+  const suggestions = useAiSuggestedPrompts({ enabled: messageCount === 0 });
+  const {
+    containerRef,
+    endRef,
+    hasSentMessage,
+    isAtBottom,
+    onViewportLeave,
+    scrollToBottom,
+  } = useMessages({
     status,
-    autoScroll: messageCount > 0,
+    // Existing history must not jump to the bottom when it loads. Auto-follow
+    // only while a live turn is producing content.
+    autoScroll: messageCount > 0 && status === "streaming",
   });
+
+  const anchorSeen = useRef<WeakSet<Element>>(new WeakSet());
+  const pendingAnchorSeen = useRef<WeakSet<Element>>(new WeakSet());
+  const hasSentMessageRef = useRef(hasSentMessage);
+  const viewportLeaveRef = useRef(onViewportLeave);
+  hasSentMessageRef.current = hasSentMessage || status === "streaming";
+  viewportLeaveRef.current = onViewportLeave;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const selector = [
+      '[data-testid="ask-user-tool"]',
+      '[data-testid="confirm-brief-tool"]',
+      '[data-testid="plan-surface"]',
+    ].join(",");
+
+    const scheduleAnchorScroll = (anchor: Element) => {
+      // Wait for the browser to finish the insertion/layout pass; otherwise a
+      // bottom-follow mutation can win the race and hide the form header.
+      const scroll = () => {
+        scrollAnchorWithinContainer(container, anchor);
+        viewportLeaveRef.current();
+      };
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => requestAnimationFrame(scroll));
+      } else {
+        setTimeout(scroll, 0);
+      }
+    };
+
+    const markCurrentAnchors = (scrollLatest: boolean) => {
+      const anchors = Array.from(container.querySelectorAll(selector));
+      const unseen = anchors.filter((anchor) => !anchorSeen.current.has(anchor));
+      for (const anchor of unseen) anchorSeen.current.add(anchor);
+
+      // A pending human form restored from persisted history is the task the
+      // user must finish. Unlike an old plan card, it must establish its own
+      // scroll position even though no live message has been sent this session.
+      const pending = latestPendingAnchor(container);
+      if (pending && !pendingAnchorSeen.current.has(pending)) {
+        pendingAnchorSeen.current.add(pending);
+        scheduleAnchorScroll(pending);
+        return;
+      }
+
+      if (!scrollLatest || !hasSentMessageRef.current) return;
+      const latest = unseen.at(-1);
+      if (!latest) return;
+      scheduleAnchorScroll(latest);
+    };
+
+    // Historical anchors are marked as already seen, so opening a conversation
+    // does not jump to an old plan card.
+    markCurrentAnchors(false);
+    const observer = new MutationObserver(() => markCurrentAnchors(true));
+    observer.observe(container, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [containerRef]);
 
   useEffect(() => {
     if (messageCount !== 0) return;
@@ -105,11 +197,21 @@ export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThre
   }, [containerRef, messageCount]);
 
   const [renameOpen, setRenameOpen] = useState(false);
+  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const sendSuggestion = useCallback(
+    (suggestion: string) => {
+      if (status === "streaming") return;
+      setActionError(null);
+      aui.composer.setText(suggestion);
+      void aui.composer.send();
+    },
+    [aui, status],
+  );
 
   // Leaving the thread must abort the in-flight run, otherwise the server keeps
   // generating into a socket nobody watches.
@@ -143,7 +245,7 @@ export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThre
         setRenameOpen(true);
       },
       model: () => {
-        document.querySelector<HTMLButtonElement>("[data-testid='model-selector']")?.click();
+        setModelSelectorOpen(true);
       },
       theme: async () => {
         const root = document.documentElement;
@@ -254,7 +356,11 @@ export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThre
           >
             <div className="mx-auto flex min-h-full w-full min-w-0 max-w-3xl flex-col gap-6">
               <ThreadPrimitive.Empty>
-                <EmptyState />
+                <EmptyState
+                  disabled={status === "streaming"}
+                  onSelect={sendSuggestion}
+                  suggestions={suggestions}
+                />
               </ThreadPrimitive.Empty>
               <ThreadPrimitive.Messages
                 components={{ UserMessage, AssistantMessage, EditComposer }}
@@ -279,7 +385,12 @@ export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThre
         </div>
 
         <div className="border-t border-hairline px-4 py-3">
-          <MultimodalInput workspaceId={workspaceId} commands={commands} />
+          <MultimodalInput
+            commands={commands}
+            modelSelectorOpen={modelSelectorOpen}
+            onModelSelectorOpenChange={setModelSelectorOpen}
+            workspaceId={workspaceId}
+          />
           <p className="mx-auto mt-2 w-full max-w-3xl text-center text-[11px] leading-5 text-stone">
             助手只能先规划；写入必须由你在计划卡里勾选并确认。
           </p>

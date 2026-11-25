@@ -9,6 +9,7 @@ import { formatDateTime } from "../../lib/format";
 import {
   SETTINGS_SOURCE_LABELS,
   SETTING_TYPE_LABELS,
+  settingHelp,
   settingOptionLabel,
   settingValueSource,
   type JsonDraft,
@@ -66,6 +67,7 @@ function FieldHeading({
   note?: string | null;
 }) {
   const consumption = settingFieldConsumption(item.key);
+  const help = settingHelp(item);
   return (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
@@ -84,16 +86,21 @@ function FieldHeading({
                   ? "blue"
                   : "yellow"
             }
-            aria-label={`${item.label} 消费状态`}
+            aria-label={`${item.label} 生效范围`}
           >
             {consumption.label}
           </Badge>
         ) : null}
       </div>
-      <code className="mt-1.5 block font-mono text-[9px] text-muted">{item.key}</code>
-      {item.help ? (
+      <details className="mt-1.5 max-w-md" data-setting-technical-id>
+        <summary className="cursor-pointer list-none text-[10px] text-stone outline-none hover:text-muted focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1 [&::-webkit-details-marker]:hidden">
+          技术标识
+        </summary>
+        <code className="mt-1 block break-all font-mono text-[9px] text-muted">{item.key}</code>
+      </details>
+      {help ? (
         <p id={ids.help} className="mt-2 max-w-2xl text-[11px] leading-5 text-muted">
-          {item.help}
+          {help}
         </p>
       ) : null}
       <p id={ids.source} className="mt-2 font-mono text-[9px] text-stone">
@@ -105,7 +112,7 @@ function FieldHeading({
           role="note"
           className="mt-2 rounded-control border border-accent-yellow/25 bg-accent-yellow/5 px-2.5 py-2 text-[10px] leading-4 text-accent-yellow"
         >
-          由环境变量锁定，界面不可改。
+          由部署配置锁定，界面不可修改。
         </p>
       ) : null}
       {note ? (
@@ -312,12 +319,12 @@ function SecretControl({
           autoComplete="new-password"
           value={secretDraft}
           disabled={item.envLocked}
-          placeholder={hasValue ? "输入新值以替换现有密文" : "输入新值"}
+          placeholder={hasValue ? "输入新值以替换已保存的密钥" : "输入新值"}
           className="h-9 font-mono text-xs"
           onChange={(event) => onSecretChange(event.currentTarget.value)}
         />
         <p className="mt-1.5 text-[10px] leading-4 text-stone">
-          保存后仅显示末四位；服务端永不回显明文。
+          保存后仅显示末四位，不能再次查看完整密钥。
         </p>
       </div>
     </div>
@@ -339,8 +346,9 @@ export function SettingField(props: SettingFieldProps) {
     onRequestReveal,
   } = props;
   const ids = fieldIds(item.key);
+  const help = settingHelp(item);
   const describedBy =
-    [item.help ? ids.help : null, error ? ids.error : null].filter(Boolean).join(" ") || undefined;
+    [help ? ids.help : null, error ? ids.error : null].filter(Boolean).join(" ") || undefined;
 
   const control = (() => {
     if (item.type === "secret") {

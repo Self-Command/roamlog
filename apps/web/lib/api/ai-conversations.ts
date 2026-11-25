@@ -99,7 +99,7 @@ function toConversationError(error: unknown): AiConversationError {
       return new AiConversationError(
         status,
         code,
-        "你没有权限访问这个 Workspace 的 AI 会话。",
+        "你没有权限访问这个工作区的 AI 会话。",
         false,
       );
     }

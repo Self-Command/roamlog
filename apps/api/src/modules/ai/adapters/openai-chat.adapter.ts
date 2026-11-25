@@ -6,6 +6,7 @@ import type {
   AiStepResult,
   AiStreamOptions,
   AiTokenUsage,
+  AiToolCallDelta,
   AiToolCallRequest,
 } from "./adapter.js";
 import {
@@ -147,6 +148,7 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
     let completed = false;
     let usage: AiTokenUsage = {};
     const slots = new Map<number, { id: string; name: string; argumentsJson: string }>();
+    const announcedToolCalls = new Set<number>();
 
     for await (const frame of parseSseStream(body, options.signal)) {
       if (frame.data === "[DONE]") {
@@ -164,6 +166,13 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
         if (content !== null && content.length > 0) {
           text += content;
           await emitDelta(options, content);
+        }
+        // DeepSeek exposes `reasoning_content`; some compatible gateways use
+        // `reasoning`. Prefer the documented field and never synthesize content
+        // when neither is present.
+        const reasoning = textValue(delta?.reasoning_content) ?? textValue(delta?.reasoning);
+        if (reasoning !== null && reasoning.length > 0) {
+          await emitReasoning(options, reasoning);
         }
 
         for (const rawCall of asArray(delta?.tool_calls)) {
@@ -188,6 +197,18 @@ export class OpenAiChatAdapter implements AiProtocolAdapter {
             slot.argumentsJson += fragment;
           }
           slots.set(index, slot);
+          if (slot.name.length > 0) {
+            const alreadyAnnounced = announcedToolCalls.has(index);
+            if (!alreadyAnnounced || (fragment !== null && fragment.length > 0)) {
+              announcedToolCalls.add(index);
+              await emitToolCallDelta(options, {
+                index,
+                ...(slot.id.length > 0 ? { id: slot.id } : {}),
+                name: slot.name,
+                argumentsDelta: fragment ?? "",
+              });
+            }
+          }
         }
 
         // Gateways that close without `data: [DONE]` still signal completion
@@ -255,6 +276,20 @@ function parseJsonRecord(data: string): Record<string, unknown> {
 
 async function emitDelta(options: AiStreamOptions, delta: string): Promise<void> {
   const listener = options.onDelta ?? options.onTextDelta;
+  if (listener) {
+    await listener(delta);
+  }
+}
+
+async function emitReasoning(options: AiStreamOptions, delta: string): Promise<void> {
+  const listener = options.onReasoningDelta;
+  if (listener) {
+    await listener(delta);
+  }
+}
+
+async function emitToolCallDelta(options: AiStreamOptions, delta: AiToolCallDelta): Promise<void> {
+  const listener = options.onToolCallDelta;
   if (listener) {
     await listener(delta);
   }

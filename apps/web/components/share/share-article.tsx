@@ -49,11 +49,20 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
   const tripIndex =
     [...trip.id].reduce((total, character) => total + character.charCodeAt(0), 0) % 5;
   const [coverFailed, setCoverFailed] = useState(false);
+  const budgetHasSpend = Boolean(
+    budget && budget.expenseCount > 0 && budget.displayTotal.amountMinor > 0,
+  );
   // The public payload carries a signed cover URL only once the poster is
   // `ready`; anything else keeps the generated gradient so the hero never
   // renders an empty or broken `<img>`.
   const coverUrl = coverFailed ? null : coverImageUrl(trip.cover);
   const hasCover = coverUrl !== null;
+  const countryLabel = trip.countryCodes.filter(Boolean).join(" · ");
+  const routeLabel =
+    [trip.origin, ...trip.destinations]
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0 && part !== "未填写")
+      .join(" → ") || "路线未填写";
 
   return (
     <main className="mx-auto w-full max-w-[880px] px-5 pb-24 sm:px-8">
@@ -63,7 +72,7 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
             href="/"
             className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted transition-colors hover:text-ink"
           >
-            Shared from Roamlog
+            来自 Roamlog 的分享
           </Link>
           <Badge tone="neutral">{getTripStatusLabel(trip.status)}</Badge>
         </div>
@@ -94,8 +103,8 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
           ) : null}
           <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
             <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink/70">
-              {trip.countryCodes.join(" · ")} / {tripDurationDays(trip.startDate, trip.endDate)}{" "}
-              DAYS
+              {countryLabel ? `${countryLabel} / ` : ""}
+              {tripDurationDays(trip.startDate, trip.endDate)} 天
             </p>
           </div>
         </div>
@@ -116,16 +125,14 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
           <div className="inline-flex items-center gap-1.5">
             <Route aria-hidden="true" className="size-3.5 text-stone" />
             <dt className="sr-only">路线</dt>
-            <dd className="max-w-full truncate">
-              {trip.origin} → {trip.destinations.join(" → ")}
-            </dd>
+            <dd className="max-w-full truncate">{routeLabel}</dd>
           </div>
         </dl>
       </header>
 
       {stops.length ? (
         <section aria-labelledby="share-route" className="border-b border-hairline py-9">
-          <p className="type-eyebrow">ROUTE / {stops.length} STOPS</p>
+          <p className="type-eyebrow">路线 · {stops.length} 个停靠点</p>
           <h2 id="share-route" className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">
             路线与停靠点
           </h2>
@@ -158,7 +165,7 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
         <section aria-labelledby="share-budget" className="border-b border-hairline py-9">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="type-eyebrow">BUDGET / OPTIONAL SUMMARY</p>
+              <p className="type-eyebrow">预算摘要（可选）</p>
               <h2
                 id="share-budget"
                 className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink"
@@ -167,10 +174,18 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
               </h2>
             </div>
             <p className="font-serif text-3xl text-ink">
-              {formatMinor(budget.displayTotal.amountMinor, budget.displayTotal.currency)}
-              <span className="ml-1 align-middle font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                APPROX
-              </span>
+              {budgetHasSpend ? (
+                <>
+                  {budget.displayTotal.approx ? (
+                    <span className="mr-1 align-middle font-mono text-[9px] tracking-[0.1em] text-stone">
+                      约
+                    </span>
+                  ) : null}
+                  {formatMinor(budget.displayTotal.amountMinor, budget.displayTotal.currency)}
+                </>
+              ) : (
+                "未记录费用"
+              )}
             </p>
           </div>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-muted">
@@ -178,7 +193,12 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
               <Wallet aria-hidden="true" className="size-3.5 text-stone" />
               {budget.expenseCount} 笔记录
             </span>
-            {budget.categories.slice(0, 4).map((category) => (
+            {budget.categories
+              .filter((category) =>
+                category.totals.some((total) => total.amountMinor > 0),
+              )
+              .slice(0, 4)
+              .map((category) => (
               <span key={category.category} className="font-mono text-[9px] uppercase text-stone">
                 {category.category} ·{" "}
                 {formatMinor(
@@ -186,13 +206,13 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
                   category.totals[0]?.currency ?? budget.displayCurrency,
                 )}
               </span>
-            ))}
+              ))}
           </div>
         </section>
       ) : null}
 
       <section aria-labelledby="share-journal" className="py-9">
-        <p className="type-eyebrow">JOURNAL / {entries.length} ENTRIES</p>
+        <p className="type-eyebrow">旅行日志 · {entries.length} 篇</p>
         <h2 id="share-journal" className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">
           旅行日志
         </h2>
@@ -241,7 +261,7 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
         <section aria-labelledby="share-photos" className="border-t border-hairline py-9">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <p className="type-eyebrow">PHOTOS / {media.length}</p>
+              <p className="type-eyebrow">照片 · {media.length}</p>
               <h2
                 id="share-photos"
                 className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink"
@@ -261,7 +281,7 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
 
       <footer className="border-t border-hairline py-10">
         <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone">
-          END OF SHARED ARCHIVE
+          分享内容到此结束
         </p>
         {/*
           The public projection renders place names that came from the place
@@ -283,7 +303,7 @@ export function ShareArticle({ data }: { data: PublicTripResponse }) {
             href="/"
             className="inline-flex items-center gap-1.5 rounded-control border border-hairline-strong px-3 py-2 text-[11px] text-body transition-colors hover:border-hairline-strong hover:text-ink"
           >
-            Create your own travel archive
+            创建你的旅行档案
             <ArrowUpRight aria-hidden="true" className="size-3.5" />
           </Link>
         </div>

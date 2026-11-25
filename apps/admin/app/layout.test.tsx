@@ -25,8 +25,8 @@ describe("admin root layout", () => {
 
     expect(html.props["data-mode"]).toBe("dark");
     expect(html.props["data-theme"]).toBe("dark");
-    expect(html.props["data-skin"]).toBe("editorial-noir");
-    expect(html.props["data-font"]).toBe("editorial-classic");
+    expect(html.props["data-skin"]).toBe("carbon");
+    expect(html.props["data-font"]).toBe("carbon-plex");
     expect(html.props.style?.colorScheme).toBe("dark");
   });
 

@@ -47,6 +47,7 @@ import { AiExecuteService } from "./ai-execute.service.js";
 import { AiPlanService } from "./ai-plan.service.js";
 import { AiRewriteService } from "./ai-rewrite.service.js";
 import { AiRunStore } from "./ai-run.store.js";
+import { serializeSseEvent } from "./sse-frame.js";
 
 /**
  * Optional injection token for the SSE heartbeat interval. Production uses the
@@ -430,15 +431,12 @@ export class AiController {
  * only means the kernel buffer is full, and ignoring `drain` would let a slow
  * client grow process memory without bound.
  */
-async function writeSse(res: Response, event: AiStreamEvent, seq: number): Promise<boolean> {
+async function writeSse(res: Response, event: AiStreamEvent, seq: number): Promise<number> {
   if (res.writableEnded || res.destroyed) {
-    return false;
+    return seq;
   }
-  return writeChunk(res, formatSseFrame(event, seq));
-}
-
-function formatSseFrame(event: AiStreamEvent, seq: number): string {
-  return `id: ${String(seq).padStart(6, "0")}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+  const serialized = serializeSseEvent(event, seq);
+  return (await writeChunk(res, serialized.frame)) ? serialized.nextSeq : seq;
 }
 
 /**
@@ -453,9 +451,13 @@ async function* frameStream(
 ): AsyncGenerator<string, void, void> {
   let seq = 0;
   try {
-    yield formatSseFrame(first, ++seq);
+    const firstFrame = serializeSseEvent(first, seq + 1);
+    seq = firstFrame.nextSeq;
+    yield firstFrame.frame;
     for await (const event of rest) {
-      yield formatSseFrame(event, ++seq);
+      const next = serializeSseEvent(event, seq);
+      seq = next.nextSeq;
+      yield next.frame;
     }
   } finally {
     onDone?.();
@@ -555,7 +557,10 @@ function toSseError(error: unknown): AiStreamErrorEvent {
       type: "error",
       code,
       message: rawMessage.slice(0, 1000),
-      retryable: code === "AI_UPSTREAM" || code === "AI_INTERNAL",
+      retryable:
+        code === "AI_UPSTREAM" ||
+        code === "AI_INTERNAL" ||
+        code === "AI_PLAN_INCOMPLETE",
     };
   }
   return {

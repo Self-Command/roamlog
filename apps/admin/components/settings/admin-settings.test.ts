@@ -45,10 +45,10 @@ describe("admin settings helpers", () => {
     expect(SETTINGS_CONSUMPTION.seo).toMatchObject({ status: "frontend" });
     expect(SETTINGS_CONSUMPTION.theme).toMatchObject({ status: "frontend" });
     expect(SETTINGS_CONSUMPTION.places).toMatchObject({ status: "backend" });
-    expect(SETTINGS_CONSUMPTION.places.label).toContain("后端已消费");
+    expect(SETTINGS_CONSUMPTION.places.label).toContain("已由地点服务读取");
     expect(SETTINGS_CONSUMPTION.ai).toEqual({
       status: "backend",
-      label: "后端已消费（AI 模块运行期读取）",
+      label: "已由 AI 服务读取",
     });
     expect(SETTINGS_CONSUMPTION.ai.label).not.toContain("不生效");
 
@@ -57,8 +57,8 @@ describe("admin settings helpers", () => {
         status: "backend",
         label:
           group === "mail"
-            ? "后端已消费，任务进程仍读环境变量"
-            : "后端已消费（API 运行期读取；保存前会跑连通性探测）",
+            ? "已由主服务读取；后台任务仍使用部署配置"
+            : "已由服务读取；保存前会检查连接",
       });
     }
     // The old reverse distortion: these groups were wired but still labelled
@@ -71,7 +71,7 @@ describe("admin settings helpers", () => {
     expect(SETTINGS_CONSUMPTION.limits.status).toBe("unwired");
     expect(SETTINGS_CONSUMPTION.limits.label).toContain("搜索限流已生效");
     expect(SETTINGS_CONSUMPTION.limits.label).toContain("上传限流");
-    expect(SETTINGS_CONSUMPTION.limits.label).toContain("不生效");
+    expect(SETTINGS_CONSUMPTION.limits.label).toContain("仍由部署配置决定");
     // The deployment-config implementation detail must not leak into copy.
     expect(SETTINGS_CONSUMPTION.limits.label).not.toContain("环境变量");
     expect(SETTINGS_CONSUMPTION.limits.label).toContain("部分接入");
@@ -101,28 +101,28 @@ describe("admin settings helpers", () => {
     ]) {
       expect(settingFieldConsumption(key)).toEqual({
         status: "backend",
-        label: "后端已消费（邮件设置）；任务进程导出通知不生效（任务进程未接入）",
+        label: "已由主服务读取；后台任务仍未接入此设置",
       });
     }
     // Group badge must still say the worker reads the environment, so a green
     // API path is not read as “every mail path”.
-    expect(SETTINGS_CONSUMPTION.mail.label).toContain("任务进程仍读环境变量");
+    expect(SETTINGS_CONSUMPTION.mail.label).toContain("后台任务仍使用部署配置");
     expect(settingsGroupConsumption("mail")).toBe(SETTINGS_CONSUMPTION.mail);
   });
 
   it("keeps media's exact 4/6 split and spells out group-level exceptions", () => {
     const media = settingsGroupConsumption("media");
     expect(media.status).toBe("frontend");
-    expect(media.label).toContain("前端已消费 4/6 个键");
-    expect(media.label).toContain("保留原图与实况照片未接入（不生效）");
+    expect(media.label).toContain("已使用最长边、质量、目标字节和最大上传字节");
+    expect(media.label).toContain("保留原图与实况照片暂未接入");
 
     const general = settingsGroupConsumption("general");
     expect(general.status).toBe("frontend");
-    expect(general.label).toContain("注册开关未接入（不生效）");
+    expect(general.label).toContain("注册开关暂未接入");
 
     const seo = settingsGroupConsumption("seo");
     expect(seo.status).toBe("frontend");
-    expect(seo.label).toContain("站点地图未接入（不生效）");
+    expect(seo.label).toContain("站点地图暂未接入");
 
     expect(settingsGroupConsumption("mail")).toBe(SETTINGS_CONSUMPTION.mail);
     expect(settingsGroupConsumption("places")).toBe(SETTINGS_CONSUMPTION.places);
@@ -139,9 +139,17 @@ describe("admin settings helpers", () => {
     ]) {
       expect(settingFieldConsumption(key)).toEqual({
         status: "frontend",
-        label: "前端已消费",
+        label: "已由用户端使用",
       });
     }
+    expect(settingFieldConsumption("ai.defaultReasoningEffort")).toEqual({
+      status: "frontend",
+      label: "已由用户端和 AI 服务读取；用户未选择时使用此默认值",
+    });
+    expect(settingFieldConsumption("ai.suggestedPrompts")).toEqual({
+      status: "frontend",
+      label: "已用于 AI 空会话页",
+    });
     for (const key of [
       "media.keepOriginal",
       "media.livePhotoEnabled",
@@ -160,6 +168,13 @@ describe("admin settings helpers", () => {
       "places.limit",
       "places.cacheTtlSeconds",
       "places.dailyQuota",
+    ]) {
+      expect(settingFieldConsumption(key)).toEqual({
+        status: "backend",
+        label: "已由地点服务读取",
+      });
+    }
+    for (const key of [
       "ai.defaultProvider",
       "ai.timeoutMs",
       "ai.maxOutputTokens",
@@ -167,7 +182,7 @@ describe("admin settings helpers", () => {
     ]) {
       expect(settingFieldConsumption(key)).toEqual({
         status: "backend",
-        label: "后端已消费",
+        label: "已由 AI 服务读取",
       });
     }
     expect(settingFieldConsumption("site.title")).toBeNull();
@@ -176,7 +191,7 @@ describe("admin settings helpers", () => {
   it("never labels limits.uploadPerMinute backend while the presign limiter is unwired", () => {
     expect(settingFieldConsumption("limits.searchPerMinute")).toEqual({
       status: "backend",
-      label: "后端已消费（地点搜索限流，按请求解析）",
+      label: "已由地点服务读取，并按每次请求生效",
     });
     expect(settingFieldConsumption("limits.uploadPerMinute")).toEqual({
       status: "unwired",

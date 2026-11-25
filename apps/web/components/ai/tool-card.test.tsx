@@ -1,22 +1,17 @@
-import type {
-  ToolCallMessagePartProps,
-  ToolCallMessagePartStatus,
-} from "@assistant-ui/react";
+import type { ToolCallMessagePartProps, ToolCallMessagePartStatus } from "@assistant-ui/react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ToolCard, mapToolStateToStatus, type ToolUiState } from "./tool-card";
 
-function props(
-  overrides: Partial<ToolCallMessagePartProps> = {},
-): ToolCallMessagePartProps {
+function props(overrides: Partial<ToolCallMessagePartProps> = {}): ToolCallMessagePartProps {
   return {
     type: "tool-call",
     toolCallId: "tool-1",
     toolName: "places.search",
-    args: { query: "京都", limit: 5 },
-    argsText: JSON.stringify({ query: "京都", limit: 5 }),
+    args: { q: "京都", limit: 5 },
+    argsText: JSON.stringify({ q: "京都", limit: 5 }),
     status: { type: "running" },
     addResult: vi.fn(),
     resume: vi.fn(),
@@ -58,13 +53,16 @@ describe("ToolCard", () => {
     expect(screen.getByTestId("tool-duration")).toHaveTextContent(/秒/);
 
     const trigger = screen.getByRole("button", { name: /搜索地点 运行中/ });
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    await user.click(trigger);
-
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("参数")).toBeInTheDocument();
-    expect(container.textContent).toContain('"query"');
+    expect(screen.getByTestId("tool-input-summary")).toHaveTextContent("京都");
+    expect(screen.getByText("查看原始参数")).toBeInTheDocument();
+    expect(container.textContent).toContain('"q"');
     expect(container.textContent).toContain("京都");
+
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("参数")).not.toBeInTheDocument();
   });
 
   it("renders a completed card with the result body", async () => {
@@ -84,7 +82,30 @@ describe("ToolCard", () => {
 
     await user.click(screen.getByRole("button", { name: /搜索地点 完成/ }));
     expect(screen.getByText("结果")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-output-summary")).toHaveTextContent("返回 1 项内容");
+    expect(screen.getByTestId("tool-output-summary")).toHaveTextContent("金阁寺");
+    expect(screen.getByText("查看原始结果")).toBeInTheDocument();
     expect(container.textContent).toContain("金阁寺");
+  });
+
+  it("renders incomplete streamed argument text while the call is running", async () => {
+    const { container } = render(
+      <ToolCard
+        {...props({
+          args: {},
+          argsText: '{"query":"京',
+          status: { type: "running" },
+        })}
+      />,
+    );
+
+    // A running call starts expanded so the streamed JSON is visible without
+    // forcing the user to discover the disclosure first.
+    expect(screen.getByRole("button", { name: /搜索地点 运行中/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(container.textContent).toContain('"query":"京');
   });
 
   it("renders a failed card with the error text and opens the body by default", () => {
@@ -123,11 +144,13 @@ describe("ToolCard", () => {
     render(<ToolCard {...props()} />);
 
     const trigger = screen.getByRole("button", { name: /搜索地点 运行中/ });
-    await user.click(trigger);
     expect(screen.getByText("参数")).toBeInTheDocument();
 
     await user.click(trigger);
     expect(screen.queryByText("参数")).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(screen.getByText("参数")).toBeInTheDocument();
   });
 
   it("falls back to the raw tool name for unknown tools", () => {

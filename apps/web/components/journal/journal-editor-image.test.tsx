@@ -215,7 +215,7 @@ describe("JournalEditor image upload", () => {
     fireEvent.click(screen.getByRole("button", { name: "插入图片" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("服务端暂时不可用");
+    expect(alert).toHaveTextContent("图片服务暂时不可用");
     expect(container.querySelector("img")).toBeNull();
     expect(screen.queryByText("IMAGE PLACEHOLDER")).not.toBeInTheDocument();
 

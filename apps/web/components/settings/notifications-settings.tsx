@@ -103,13 +103,13 @@ export function NotificationsSettings() {
     return (
       <div className="space-y-6">
         <PageHeader
-          eyebrow="SETTINGS / NOTIFICATIONS"
+          eyebrow="设置 / 通知"
           title="通知"
           description="选择哪些提醒在应用内出现，哪些同时通过邮件发送。"
         />
         <ErrorState
           title="通知偏好不可用"
-          description="没有读取到通知偏好，请稍后重试。"
+          description="通知偏好暂时无法加载，请稍后重试。"
           retryAction={
             <Button
               type="button"
@@ -167,7 +167,7 @@ export function NotificationsSettings() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="SETTINGS / NOTIFICATIONS"
+        eyebrow="设置 / 通知"
         title="通知"
         description="选择哪些提醒在应用内出现，哪些同时通过邮件发送。切换后立即生效。"
       />
@@ -196,8 +196,8 @@ export function NotificationsSettings() {
               <Bell aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">PREFERENCES</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">
+              <p className="type-eyebrow">通知偏好</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
                 通知偏好
               </h2>
               <p className="mt-2 max-w-xl text-xs leading-5 text-muted">
@@ -209,13 +209,13 @@ export function NotificationsSettings() {
         </div>
 
         <div className="mt-2 hidden items-center gap-3 border-b border-hairline pb-2 pt-3 md:flex">
-          <span className="flex-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+          <span className="flex-1 type-eyebrow">
             提醒类型
           </span>
-          <span className="w-28 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+          <span className="w-28 text-center type-eyebrow">
             应用内
           </span>
-          <span className="w-28 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+          <span className="w-28 text-center type-eyebrow">
             邮件
           </span>
         </div>

@@ -243,7 +243,7 @@ function ProviderGroup({
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate text-[13px] leading-5 text-ink">{model.name}</span>
                 {selected ? (
-                  <Check aria-label="当前模型" className="size-3.5 shrink-0 text-accent-green" />
+                  <Check aria-label="当前 AI 模型" className="size-3.5 shrink-0 text-accent-green" />
                 ) : null}
               </span>
               {model.description ? (
@@ -264,16 +264,50 @@ function ProviderGroup({
   );
 }
 
-export function ModelSelectorCompact({ workspaceId }: { workspaceId: string }) {
+export function ModelSelectorCompact({
+  workspaceId,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  workspaceId: string;
+  /** Controlled open state, matching the upstream `ModelSelector` root props. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const { models, error, loading, refetch } = useAiChatModels(workspaceId);
   const selection = useAiChatSelection(workspaceId);
   const store = aiChatSelectionStore(workspaceId);
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const restoredCookie = useRef(false);
+  const focusTimeoutRef = useRef<number | null>(null);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (controlledOpen === undefined) setUncontrolledOpen(next);
+      onOpenChange?.(next);
+    },
+    [controlledOpen, onOpenChange],
+  );
+
+  useEffect(() => {
+    if (!open || focusTimeoutRef.current === null) return;
+    // `/model` can reopen the selector inside the 50 ms window after a
+    // selection. The upstream focus-return must not steal focus and close the
+    // popover the user just requested.
+    window.clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = null;
+  }, [open]);
+
+  useEffect(
+    () => () => {
+      if (focusTimeoutRef.current !== null) window.clearTimeout(focusTimeoutRef.current);
+    },
+    [],
+  );
 
   const currentId = selection.model ?? models?.defaultModel;
   const current = models?.models.find((model) => model.id === currentId) ?? models?.models[0];
-  const label = current?.name ?? (loading ? "正在加载模型…" : error ? "模型加载失败" : "模型");
+  const label = current?.name ?? (loading ? "正在加载 AI 服务…" : error ? "AI 服务加载失败" : "AI 服务");
 
   const grouped = useMemo(() => {
     if (!models) return [];
@@ -303,11 +337,13 @@ export function ModelSelectorCompact({ workspaceId }: { workspaceId: string }) {
       store.set({ ...selection, model: model.id });
       writeModelCookie(model.id);
       setOpen(false);
-      window.setTimeout(() => {
+      if (focusTimeoutRef.current !== null) window.clearTimeout(focusTimeoutRef.current);
+      focusTimeoutRef.current = window.setTimeout(() => {
+        focusTimeoutRef.current = null;
         document.querySelector<HTMLTextAreaElement>("[data-testid='multimodal-input']")?.focus();
       }, 50);
     },
-    [selection, store],
+    [selection, setOpen, store],
   );
 
   return (
@@ -316,8 +352,8 @@ export function ModelSelectorCompact({ workspaceId }: { workspaceId: string }) {
         <Button
           aria-expanded={open}
           aria-haspopup="listbox"
-          aria-label="选择模型"
-          className="h-7 max-w-[220px] gap-1.5 px-2 text-xs font-normal text-muted"
+          aria-label="选择 AI 模型"
+          className="h-7 min-w-0 max-w-[220px] shrink gap-1.5 px-2 text-xs font-normal text-muted"
           data-testid="model-selector"
           size="sm"
           type="button"
@@ -343,14 +379,14 @@ export function ModelSelectorCompact({ workspaceId }: { workspaceId: string }) {
         <TooltipProvider delayDuration={120}>
           <Command defaultValue={current?.id}>
             <CommandInput
-              aria-label="搜索模型"
+              aria-label="搜索 AI 模型"
               autoFocus
               data-testid="model-selector-search"
-              placeholder="搜索模型…"
+              placeholder="搜索 AI 模型…"
             />
             {error ? (
               <div className="space-y-2 px-3 py-5 text-center text-xs text-muted">
-                <p>模型列表加载失败。</p>
+                <p>暂时无法获取可用模型。</p>
                 <Button size="sm" type="button" variant="outline" onClick={() => void refetch()}>
                   重新加载
                 </Button>
@@ -358,18 +394,18 @@ export function ModelSelectorCompact({ workspaceId }: { workspaceId: string }) {
             ) : loading ? (
               <div className="flex items-center justify-center gap-2 px-3 py-6 text-xs text-muted">
                 <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
-                正在加载模型…
+                正在加载 AI 模型…
               </div>
             ) : !models || models.models.length === 0 ? (
               <p
                 className="px-3 py-5 text-center text-xs text-muted"
                 data-testid="model-selector-empty"
               >
-                管理员还没有配置可用模型。
+                管理员还没有启用 AI 服务。
               </p>
             ) : (
               <CommandList>
-                <CommandEmpty>没有匹配的模型。</CommandEmpty>
+                <CommandEmpty>没有匹配的 AI 模型。</CommandEmpty>
                 {grouped.map((group) => (
                   <ProviderGroup
                     key={group.provider}
@@ -383,7 +419,7 @@ export function ModelSelectorCompact({ workspaceId }: { workspaceId: string }) {
             )}
             {models && models.models.length > 0 ? (
               <p className="border-t border-hairline px-3 py-2 font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                由管理员配置 · {models.models.length} 个模型
+                由管理员配置 · {models.models.length} 个 AI 模型
               </p>
             ) : null}
           </Command>

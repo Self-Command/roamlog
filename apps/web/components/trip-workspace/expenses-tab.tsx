@@ -82,7 +82,7 @@ function ExpenseRow({
           {formatMinor(expense.amountMinor, expense.currency)}
         </p>
         <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-          {expense.amountMinor} MINOR · V{expense.version}
+          版本 {expense.version}
         </p>
       </div>
       <Button
@@ -197,7 +197,7 @@ export function ExpensesTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/trips/${tripId}/expenses`);
         return response;
       },
-      forbidden: "当前角色不能记录支出。",
+      forbidden: "你没有记录支出的权限。请联系工作区所有者或管理员。",
       failure: "支出没有保存。",
     });
     if (created) setFormOpen(false);
@@ -213,7 +213,7 @@ export function ExpensesTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/expenses/${target.id}`);
         return response;
       },
-      forbidden: "当前角色不能删除支出。",
+      forbidden: "你没有删除支出的权限。请联系工作区所有者或管理员。",
       failure: "支出没有删除。",
     });
     if (deleted) setDeleteTarget(null);
@@ -270,7 +270,7 @@ export function ExpensesTab({ tripId }: { tripId: string }) {
         {() => (
           <div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-hairline bg-surface-2/40 px-4 py-3">
-              <p className="type-eyebrow">分币种合计</p>
+              <p className="type-eyebrow">按币种合计</p>
               {totals.length === 0 ? (
                 <p className="font-mono text-[11px] text-stone">本页没有支出</p>
               ) : (

@@ -57,9 +57,9 @@ export function ItineraryList({ items }: { items: ItineraryItem[] }) {
               </span>
             </p>
           </div>
-          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-            {item.done ? "DONE" : "PLANNED"}
-          </span>
+          <Badge tone={item.done ? "green" : "neutral"}>
+            {item.done ? "已完成" : "待进行"}
+          </Badge>
         </div>
       ))}
     </div>

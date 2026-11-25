@@ -59,7 +59,7 @@ interface ArtifactContextValue {
 const ArtifactContext = createContext<ArtifactContextValue | null>(null);
 
 function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : "Artifact 请求失败，请重试。";
+  return error instanceof Error ? error.message : "文档操作失败，请重试。";
 }
 
 export function AiArtifactProvider({

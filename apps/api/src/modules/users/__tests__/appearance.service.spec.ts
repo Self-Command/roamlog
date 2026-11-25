@@ -71,8 +71,8 @@ describe("AppearanceService", () => {
 
     expect(result.appearance).toMatchObject({
       mode: "system",
-      skin: "editorial-noir",
-      fontPairing: "editorial-classic",
+      skin: "fluent",
+      fontPairing: "fluent-native",
       source: "platform",
       canOverride: true,
       updatedAt: null,
@@ -86,7 +86,7 @@ describe("AppearanceService", () => {
 
     expect(result.appearance).toMatchObject({
       mode: "light",
-      skin: "editorial-noir",
+      skin: "fluent",
       source: "user",
       updatedAt: NOW.toISOString(),
     });
@@ -121,10 +121,10 @@ describe("AppearanceService", () => {
 
     expect(result.appearance).toMatchObject({
       mode: "system",
-      skin: "kanagawa",
+      skin: "carbon-soft",
       source: "user",
     });
-    expect(result.cookie).toMatchObject({ skin: "kanagawa" });
+    expect(result.cookie).toMatchObject({ skin: "carbon-soft" });
     expect(result.cookie).not.toHaveProperty("mode");
   });
 
@@ -152,8 +152,8 @@ describe("AppearanceService", () => {
 
     expect(result.appearance).toMatchObject({
       mode: "system",
-      skin: "editorial-noir",
-      fontPairing: "editorial-classic",
+      skin: "fluent",
+      fontPairing: "fluent-native",
       source: "platform",
       canOverride: false,
       updatedAt: null,

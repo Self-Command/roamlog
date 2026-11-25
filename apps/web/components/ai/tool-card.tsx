@@ -21,7 +21,12 @@ import type {
 } from "@assistant-ui/react";
 import { useEffect, useState } from "react";
 
-import { toolDisplayName } from "./copy";
+import {
+  describePlannedCall,
+  isKnownToolName,
+  summarizeToolResult,
+  toolDisplayName,
+} from "./copy";
 import {
   Tool,
   ToolContent,
@@ -52,9 +57,7 @@ export type ToolUiState =
  * regular states are `running`, `complete`, `incomplete` and `requires-action`
  * (the latter two are `ToolCallMessagePartStatus` members).
  */
-export function mapToolStateToStatus(
-  state: ToolUiState,
-): ToolCallMessagePartStatus {
+export function mapToolStateToStatus(state: ToolUiState): ToolCallMessagePartStatus {
   switch (state) {
     case "input-streaming":
     case "input-available":
@@ -141,7 +144,7 @@ function errorTextFor(
     const message = (result as { message?: unknown }).message;
     if (typeof message === "string" && message.trim().length > 0) return message;
   }
-  return "工具执行失败";
+  return "这项操作没有完成";
 }
 
 /** Live elapsed time while running; final timing once completed. */
@@ -172,6 +175,7 @@ function useDuration(
 export const ToolCard: ToolCallMessagePartComponent = ({
   toolName,
   args,
+  argsText,
   result,
   isError,
   status,
@@ -180,7 +184,12 @@ export const ToolCard: ToolCallMessagePartComponent = ({
 }: ToolCallMessagePartProps) => {
   const metadata = readRoamlogMetadata(providerMetadata);
   const state = toToolCardState({ status, result, isError, metadata });
-  const [open, setOpen] = useState(() => state === "error" || state === "cancelled");
+  // A live call is opened so its streamed arguments and progress are actually
+  // readable, not hidden behind a collapsed header. Histories still default to
+  // collapsed once the call is complete.
+  const [open, setOpen] = useState(
+    () => state === "running" || state === "error" || state === "cancelled",
+  );
 
   // An error can arrive after the card was first rendered while running; open
   // the body so the reason is visible without an extra click.
@@ -195,6 +204,41 @@ export const ToolCard: ToolCallMessagePartComponent = ({
     metadata.durationMs,
   );
   const errorText = errorTextFor(status, result, isError, metadata);
+  const hasArguments =
+    typeof args === "object" && args !== null && Object.keys(args as object).length > 0;
+  const planned =
+    hasArguments && isKnownToolName(toolName)
+      ? describePlannedCall({
+          tool: toolName,
+          args: args as Record<string, unknown>,
+        })
+      : null;
+  const inputSummary = planned ? (
+    <div className="min-w-0 space-y-0.5">
+      <p className="break-words text-xs font-medium leading-5 text-ink">
+        {planned.headline}
+      </p>
+      {planned.details.length > 0 ? (
+        <p className="break-words text-[11px] leading-5 text-muted">
+          {planned.details.join(" · ")}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
+  const resultSummaryValue =
+    result === undefined ? null : summarizeToolResult(toolName, result);
+  const resultSummary = resultSummaryValue ? (
+    <div className="min-w-0 space-y-0.5">
+      <p className="break-words text-xs font-medium leading-5 text-ink">
+        {resultSummaryValue.headline}
+      </p>
+      {resultSummaryValue.details.length > 0 ? (
+        <p className="break-words text-[11px] leading-5 text-muted">
+          {resultSummaryValue.details.join(" · ")}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <Tool open={open} onOpenChange={setOpen}>
@@ -207,8 +251,14 @@ export const ToolCard: ToolCallMessagePartComponent = ({
         progressLabel={metadata.progressLabel}
       />
       <ToolContent>
-        <ToolInput input={args} />
-        <ToolOutput output={result} errorText={errorText} />
+        <ToolInput
+          input={args}
+          rawText={argsText}
+          preferRaw={state === "running" && !planned}
+          streaming={state === "running"}
+          summary={inputSummary}
+        />
+        <ToolOutput errorText={errorText} output={result} summary={resultSummary} />
       </ToolContent>
     </Tool>
   );

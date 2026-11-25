@@ -102,7 +102,7 @@ function validateCreateDraft(draft: CreateFlagDraft, existing: readonly AdminFla
     draft.rolloutPercentage < 0 ||
     draft.rolloutPercentage > 100
   ) {
-    return "灰度比例必须是 0-100 的整数。";
+    return "开放比例必须是 0–100 的整数。";
   }
   return "";
 }
@@ -221,8 +221,8 @@ export function FlagsView({
       } catch (error) {
         setStatusMessage(
           error instanceof AdminMutationError
-            ? `保存失败：${error.failure.code} · ${error.failure.detail}`
-            : "保存失败，请检查 API 与权限后重试。",
+            ? "保存失败，请稍后重试；如果持续失败，请联系平台管理员。"
+            : "保存失败，请稍后重试。",
         );
         return;
       }
@@ -276,8 +276,8 @@ export function FlagsView({
       } catch (failure) {
         setCreateError(
           failure instanceof AdminMutationError
-            ? `创建失败：${failure.failure.code} · ${failure.failure.detail}`
-            : "创建失败，请检查 API 与权限后重试。",
+            ? "创建失败，请稍后重试；如果持续失败，请联系平台管理员。"
+            : "创建失败，请稍后重试。",
         );
         return;
       }
@@ -298,7 +298,7 @@ export function FlagsView({
     setDrafts((current) => ({ ...current, [key]: toDraft(record) }));
     setCreateOpen(false);
     setCreateDraft(EMPTY_CREATE_DRAFT);
-    setStatusMessage(`已创建 ${key}${"（后端已写入并审计）"}`);
+    setStatusMessage(`已创建 ${key}，并记录到审计日志。`);
   }
 
   async function deleteFlag() {
@@ -312,8 +312,8 @@ export function FlagsView({
       } catch (error) {
         setStatusMessage(
           error instanceof AdminMutationError
-            ? `删除失败：${error.failure.code} · ${error.failure.detail}`
-            : "删除失败，请检查 API 与权限后重试。",
+            ? "删除失败，请稍后重试；如果持续失败，请联系平台管理员。"
+            : "删除失败，请稍后重试。",
         );
         setDeleteTarget(null);
         return;
@@ -334,7 +334,7 @@ export function FlagsView({
       <AdminPageHeader
         eyebrow="平台 / 功能开关"
         title="功能开关"
-        description="管理全局开关、灰度比例和工作区白名单。仅超级管理员可创建、修改或删除，写入由后端审计。"
+        description="管理全局开关、逐步开放比例和工作区范围。只有超级管理员可以修改，操作会记录到审计日志。"
         readOnly={readOnly}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -345,7 +345,7 @@ export function FlagsView({
               size="sm"
               aria-label="新建功能开关"
               disabled={!canUpdate}
-              title={canUpdate ? "新建功能开关" : "仅超级管理员可创建功能开关"}
+              title={canUpdate ? "新建功能开关" : "你没有创建功能开关的权限。"}
               onClick={openCreate}
             >
               <Plus aria-hidden="true" />
@@ -362,8 +362,8 @@ export function FlagsView({
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
           {readOnly
-            ? "分析员可查看开关与灰度状态；所有修改控件保持可见但禁用。"
-            : "功能开关、平台角色和队列操作均为超级管理员专属能力。"}
+            ? "分析员只能查看开关和开放状态，不能修改。"
+            : "只有超级管理员可以修改功能开关。"}
         </div>
       ) : null}
 
@@ -388,15 +388,15 @@ export function FlagsView({
             title="还没有功能开关"
             description={
               canUpdate
-                ? "创建第一个开关：标识全局唯一，灰度比例 0-100，可叠加工作区白名单。"
-                : "当前没有功能开关。创建需要超级管理员角色。"
+                ? "创建第一个开关：标识全局唯一，按百分比逐步开放，也可以指定工作区范围。"
+                : "当前没有功能开关。只有超级管理员可以创建。"
             }
             action={
               <Button
                 variant="outline"
                 size="sm"
                 disabled={!canUpdate}
-                title={canUpdate ? "新建第一个功能开关" : "仅超级管理员可创建功能开关"}
+                title={canUpdate ? "新建第一个功能开关" : "你没有创建功能开关的权限。"}
                 onClick={openCreate}
               >
                 <Plus aria-hidden="true" />
@@ -456,17 +456,17 @@ export function FlagsView({
                   <div className="flex items-end justify-between gap-3">
                     <label
                       htmlFor={`rollout-${flag.key}`}
-                      className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted"
+                      className="font-ui text-[10px] text-muted"
                     >
                       灰度比例
                     </label>
-                    <span className="font-serif text-2xl leading-none text-ink">
+                      <span className="font-display text-2xl font-semibold leading-none text-ink">
                       {draft.rolloutPercentage}%
                     </span>
                   </div>
                   <input
                     id={`rollout-${flag.key}`}
-                    aria-label={`${flag.key} 灰度比例`}
+                    aria-label={`${flag.key} 开放比例`}
                     type="range"
                     min={0}
                     max={100}
@@ -534,7 +534,7 @@ export function FlagsView({
                     </p>
                   ) : (
                     <p className="mt-2 text-[9px] leading-4 text-muted">
-                      未配置白名单时，灰度按全局百分比随机命中。
+                      未指定工作区时，按全局百分比逐步开放。
                     </p>
                   )}
                 </div>
@@ -582,7 +582,7 @@ export function FlagsView({
       <section className="flex items-start gap-3 rounded-card border border-hairline bg-surface-1 p-4">
         <ToggleLeft aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-orange" />
         <div>
-          <h2 className="text-[12px] font-medium text-ink">灰度与白名单同时生效</h2>
+          <h2 className="text-[12px] font-medium text-ink">开放比例与工作区范围同时生效</h2>
           <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted">
             全局关闭时任何白名单都不生效；开启后，白名单工作区始终命中，其余工作区
             按百分比参与灰度。
@@ -597,7 +597,7 @@ export function FlagsView({
             <p className="type-eyebrow">功能开关 / 新建</p>
             <DialogTitle>新建功能开关</DialogTitle>
             <DialogDescription>
-              标识创建后不可修改；灰度百分比必须在 0-100 之间，标识必须全局唯一。
+              标识创建后不可修改；开放百分比必须在 0–100 之间，且标识不能重复。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -644,7 +644,7 @@ export function FlagsView({
                 </Badge>
               </div>
             </div>
-            <FormField id="flag-rollout" label="灰度比例（0-100）">
+            <FormField id="flag-rollout" label="开放比例（0–100）">
               <Input
                 type="number"
                 min={0}
@@ -714,7 +714,7 @@ export function FlagsView({
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="删除功能开关"
-        description="删除后开关将立即对所有工作区失效，且无法恢复；操作会写入后端审计。"
+        description="删除后开关会立即对所有工作区失效，且无法恢复；本次操作会记录到审计日志。"
         targetName={deleteTarget?.key ?? ""}
         confirmationLabel="输入开关标识确认"
         confirmActionLabel="确认删除"

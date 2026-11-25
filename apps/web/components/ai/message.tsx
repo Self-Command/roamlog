@@ -53,11 +53,7 @@ function AssistantText({ text }: TextMessagePartProps) {
 }
 
 function UserText({ text }: TextMessagePartProps) {
-  return (
-    <p className="whitespace-pre-wrap break-words text-sm leading-6 text-ink">
-      {text}
-    </p>
-  );
+  return <p className="whitespace-pre-wrap break-words text-sm leading-6 text-ink">{text}</p>;
 }
 
 /**
@@ -120,12 +116,7 @@ function UserImage({ image, filename, providerMetadata }: ImageMessagePartProps)
 }
 
 function AssistantReasoning({ text, status }: ReasoningMessagePartProps) {
-  return (
-    <MessageReasoning
-      reasoning={text}
-      isLoading={status?.type === "running"}
-    />
-  );
+  return <MessageReasoning reasoning={text} isLoading={status?.type === "running"} />;
 }
 
 /**
@@ -150,12 +141,8 @@ function AssistantProgress() {
   const contentEmpty = useAuiState((state) => state.message.content.length === 0);
   const label = useAuiState((state) => {
     const progress = state.message.metadata?.custom?.progress as
-      | { label?: unknown }
-      | null
-      | undefined;
-    return typeof progress?.label === "string" && progress.label.length > 0
-      ? progress.label
-      : null;
+      { label?: unknown } | null | undefined;
+    return typeof progress?.label === "string" && progress.label.length > 0 ? progress.label : null;
   });
 
   if (status?.type !== "running") return null;
@@ -194,19 +181,13 @@ function AssistantProgress() {
 function AssistantRunStatus() {
   const status = useAuiState((state) => state.message.status);
   const hasText = useAuiState((state) =>
-    state.message.content.some(
-      (part) => part.type === "text" && part.text.trim().length > 0,
-    ),
+    state.message.content.some((part) => part.type === "text" && part.text.trim().length > 0),
   );
   if (status?.type !== "incomplete" || status.reason !== "cancelled") return null;
   // A cancelled run that produced nothing says 已取消; a partial answer is
   // kept and marked 已停止 instead of leaving an endlessly spinning bubble.
   return (
-    <p
-      role="status"
-      data-testid="ai-run-stopped"
-      className="min-h-5 text-xs leading-5 text-muted"
-    >
+    <p role="status" data-testid="ai-run-stopped" className="min-h-5 text-xs leading-5 text-muted">
       {hasText ? "已停止" : "已取消"}
     </p>
   );
@@ -248,9 +229,7 @@ export function UserMessage() {
             data-testid="message-attachments-row"
           >
             <MessagePrimitive.Attachments>
-              {({ attachment }) => (
-                <AttachmentPreview attachment={attachment} variant="message" />
-              )}
+              {({ attachment }) => <AttachmentPreview attachment={attachment} variant="message" />}
             </MessagePrimitive.Attachments>
           </div>
           <MessagePrimitive.Parts components={{ Text: UserText, Image: UserImage }} />
@@ -285,6 +264,9 @@ export function AssistantMessage() {
           components={{
             Text: AssistantText,
             Reasoning: AssistantReasoning,
+            // Human tools are registered globally by the assistant-ui toolkit
+            // in `AuiConfig`; these entries are only the product-specific
+            // plan/execute surfaces.
             tools: { by_name: AI_TOOL_COMPONENTS, Fallback: ToolCard },
           }}
         />

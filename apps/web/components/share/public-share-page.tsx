@@ -103,7 +103,7 @@ export function PublicSharePage({
                 ) : (
                   <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
                     <Link2Off aria-hidden="true" className="size-3.5" />
-                    SHARE LINK NOT FOUND
+                    分享链接不存在或已失效
                   </span>
                 )
               }
@@ -150,7 +150,7 @@ function ShareGate({
     <div className="mx-auto flex min-h-dvh w-full max-w-[720px] items-center px-5 py-14 sm:px-8">
       <div className="w-full rounded-card border border-hairline-strong bg-surface-1 p-6 sm:p-8">
         <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted">
-          Shared from Roamlog / Protected
+          来自 Roamlog 的分享 / 需要密码
         </p>
         <div className="mt-6 flex size-11 items-center justify-center rounded-pill border border-hairline-strong bg-surface-2">
           <LockKeyhole aria-hidden="true" className="size-4 text-accent-orange" />

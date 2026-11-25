@@ -201,7 +201,7 @@ describe("provider settings helpers", () => {
       });
 
     expect(providerMutationErrorMessage(failure("SETTINGS_ENCRYPTION_UNAVAILABLE", 503))).toContain(
-      "密钥存储",
+      "密钥服务",
     );
     expect(providerMutationErrorMessage(failure("PROVIDER_SECRETS_UNAVAILABLE", 503))).toContain(
       "密钥服务",

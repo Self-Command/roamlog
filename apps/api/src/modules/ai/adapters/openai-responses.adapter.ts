@@ -6,6 +6,7 @@ import type {
   AiStepResult,
   AiStreamOptions,
   AiTokenUsage,
+  AiToolCallDelta,
   AiToolCallRequest,
 } from "./adapter.js";
 import {
@@ -144,6 +145,7 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
     let inputTokens: number | undefined;
     let outputTokens: number | undefined;
     const slots = new Map<number, { id: string; name: string; argumentsJson: string }>();
+    const announcedToolCalls = new Set<number>();
 
     for await (const frame of parseSseStream(body, options.signal)) {
       const event = parseJsonRecord(frame.data);
@@ -160,16 +162,32 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
           }
           break;
         }
+        case "response.reasoning_summary_text.delta":
+        case "response.reasoning_text.delta": {
+          const delta = textValue(event.delta);
+          if (delta !== null && delta.length > 0) {
+            await emitReasoning(options, delta);
+          }
+          break;
+        }
         case "response.output_item.added": {
           const index = numberValue(event.output_index);
           const item = asRecord(event.item);
           if (index !== undefined && item?.type === "function_call") {
             const name = textValue(item.name);
             if (name) {
-              slots.set(index, {
+              const slot = {
                 id: textValue(item.call_id) ?? textValue(item.id) ?? "",
                 name: toolNames.toInternal(name),
                 argumentsJson: textValue(item.arguments) ?? "",
+              };
+              slots.set(index, slot);
+              announcedToolCalls.add(index);
+              await emitToolCallDelta(options, {
+                index,
+                ...(slot.id.length > 0 ? { id: slot.id } : {}),
+                name: slot.name,
+                argumentsDelta: slot.argumentsJson,
               });
             }
           }
@@ -179,8 +197,14 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
           const index = numberValue(event.output_index);
           const slot = index === undefined ? undefined : slots.get(index);
           const delta = textValue(event.delta);
-          if (slot && delta) {
+          if (index !== undefined && slot && delta) {
             slot.argumentsJson += delta;
+            await emitToolCallDelta(options, {
+              index,
+              ...(slot.id.length > 0 ? { id: slot.id } : {}),
+              name: slot.name,
+              argumentsDelta: delta,
+            });
           }
           break;
         }
@@ -188,9 +212,19 @@ export class OpenAiResponsesAdapter implements AiProtocolAdapter {
           const index = numberValue(event.output_index);
           const slot = index === undefined ? undefined : slots.get(index);
           const args = textValue(event.arguments);
-          if (slot && args !== null) {
+          if (index !== undefined && slot && args !== null) {
             // The done event carries the complete JSON; it wins over fragments.
+            const wasAnnounced = announcedToolCalls.has(index);
             slot.argumentsJson = args;
+            if (!wasAnnounced) {
+              announcedToolCalls.add(index);
+              await emitToolCallDelta(options, {
+                index,
+                ...(slot.id.length > 0 ? { id: slot.id } : {}),
+                name: slot.name,
+                argumentsDelta: args,
+              });
+            }
           }
           break;
         }
@@ -253,6 +287,20 @@ function parseJsonRecord(data: string): Record<string, unknown> {
 
 async function emitDelta(options: AiStreamOptions, delta: string): Promise<void> {
   const listener = options.onDelta ?? options.onTextDelta;
+  if (listener) {
+    await listener(delta);
+  }
+}
+
+async function emitReasoning(options: AiStreamOptions, delta: string): Promise<void> {
+  const listener = options.onReasoningDelta;
+  if (listener) {
+    await listener(delta);
+  }
+}
+
+async function emitToolCallDelta(options: AiStreamOptions, delta: AiToolCallDelta): Promise<void> {
+  const listener = options.onToolCallDelta;
   if (listener) {
     await listener(delta);
   }

@@ -78,9 +78,9 @@ export function JournalComments({
     <section aria-labelledby={`${id}-title`} className="space-y-3">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="type-eyebrow">COMMENTS</p>
-          <h3 id={`${id}-title`} className="mt-1 font-serif text-xl text-ink">
-            同行者的话
+          <p className="type-eyebrow">评论</p>
+          <h3 id={`${id}-title`} className="mt-1 font-display text-lg font-semibold text-ink">
+            评论
           </h3>
         </div>
         <Badge tone="neutral">{loading ? "…" : comments.length}</Badge>

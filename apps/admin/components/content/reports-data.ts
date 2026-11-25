@@ -154,7 +154,7 @@ export function reportFailure(error: unknown): AdminApiFailure | null {
     return {
       code: "ADMIN_API_NETWORK",
       status: 0,
-      title: "后台 API 不可用",
+      title: "后台服务暂时不可用",
       detail: error.message,
       degraded: [],
     };

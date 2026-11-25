@@ -57,7 +57,7 @@ describe("DashboardView", () => {
     expect(screen.getByText("1.8万")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "最近审计事件" })).toBeInTheDocument();
     const emailHealth = screen.getByRole("region", { name: "邮件健康" });
-    expect(within(emailHealth).getByRole("alert")).toHaveTextContent("EMAILS_UNAVAILABLE");
+    expect(within(emailHealth).getByRole("alert")).toHaveTextContent("邮件健康暂时没有加载成功");
     expect(within(emailHealth).queryByText("126,482")).not.toBeInTheDocument();
 
     fireEvent.click(within(emailHealth).getByRole("button", { name: "重试" }));
@@ -82,7 +82,7 @@ describe("DashboardView", () => {
     expect(screen.getByText("1.8万")).toBeInTheDocument();
     expect(screen.getByText("126,482")).toBeInTheDocument();
     const recentAudit = screen.getByRole("region", { name: "最近审计事件" });
-    expect(within(recentAudit).getByRole("alert")).toHaveTextContent("AUDIT_UNAVAILABLE");
+    expect(within(recentAudit).getByRole("alert")).toHaveTextContent("最近审计事件暂时没有加载成功");
   });
 
   it("degrades metrics-dependent blocks without hiding audit or email health", () => {
@@ -101,7 +101,7 @@ describe("DashboardView", () => {
     );
 
     const metrics = screen.getByRole("region", { name: "核心指标" });
-    expect(within(metrics).getByRole("alert")).toHaveTextContent("METRICS_UNAVAILABLE");
+    expect(within(metrics).getByRole("alert")).toHaveTextContent("核心指标暂时没有加载成功");
     expect(screen.queryByText("用户总数")).not.toBeInTheDocument();
     expect(screen.getByText("126,482")).toBeInTheDocument();
     const recentAudit = screen.getByRole("region", { name: "最近审计事件" });

@@ -31,7 +31,7 @@ import { useAiChatSelection } from "./chat-selection";
 
 /** The copy the composer and the attachment button share. */
 export const VISION_UNAVAILABLE_NOTE =
-  "当前模型无法识别图片：图片只会作为附件保存在会话里，不会发送给模型。";
+  "当前 AI 服务不能读取图片；图片只会作为附件保留在对话中。";
 
 /**
  * The model the next turn will actually use.
@@ -53,7 +53,7 @@ export function VisionNote({ model }: { model: AiChatModel | null | undefined })
   if (!model || model.vision) return null;
   return (
     <p
-      className="basis-full px-2 text-[11px] leading-5 text-stone"
+      className="basis-full px-2 text-[11px] leading-4 text-stone"
       data-testid="vision-note"
       role="note"
     >

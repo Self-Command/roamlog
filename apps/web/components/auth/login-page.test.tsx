@@ -11,8 +11,7 @@ import { getPublicSettings } from "@/lib/settings";
 
 const mockedSettings = vi.mocked(getPublicSettings);
 
-const FALLBACK_TAGLINE =
-  "登录后会进入你的旅行总览。登录状态会安全保留在当前浏览器中。";
+const FALLBACK_TAGLINE = "登录后进入你的旅行总览，行程与日志会留在同一个工作区。";
 
 const IMPLEMENTATION_DETAILS =
   /Better Auth|httpOnly|cookie|localStorage|HTTP|\bAPI\b|后端|服务端|数据库|TOTP|\b2FA\b|认证服务|客户端会话|前端存储/i;

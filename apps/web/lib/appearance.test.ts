@@ -15,8 +15,8 @@ import { resolveThemePresentation } from "./settings";
 
 const PLATFORM = {
   mode: "system" as const,
-  skin: "editorial-noir" as const,
-  fontPairing: "editorial-classic" as const,
+  skin: "fluent" as const,
+  fontPairing: "fluent-native" as const,
 };
 
 describe("resolveAppearanceForRequest", () => {
@@ -40,8 +40,8 @@ describe("resolveAppearanceForRequest", () => {
 
     expect(resolved).toMatchObject({
       mode: "light",
-      skin: "everforest",
-      fontPairing: "literary-warm",
+      skin: "carbon-soft",
+      fontPairing: "fluent-native",
       source: "user",
     });
     expect(resolved.defaults).toEqual(PLATFORM);
@@ -61,8 +61,8 @@ describe("resolveAppearanceForRequest", () => {
 
     expect(resolved).toMatchObject({
       mode: "dark",
-      skin: "catppuccin",
-      fontPairing: "swiss-modern",
+      skin: "fluent",
+      fontPairing: "fluent-native",
       source: "cookie",
     });
   });
@@ -105,8 +105,8 @@ describe("appearance cookie codec", () => {
     const cookie: AppearanceCookie = {
       v: 1,
       mode: "light",
-      skin: "kanagawa",
-      fontPairing: "cjk-editorial",
+      skin: "fluent",
+      fontPairing: "primer-cjk",
       updatedAt: "2026-11-22T12:00:00.000Z",
     };
     const encoded = encodeAppearanceCookie(cookie);
@@ -131,7 +131,7 @@ describe("appearance cookie codec", () => {
     expect(parsed).toMatchObject({
       v: 1,
       mode: "light",
-      fontPairing: "swiss-modern",
+      fontPairing: "fluent-native",
     });
     expect(parsed?.skin).toBeUndefined();
   });
@@ -139,10 +139,10 @@ describe("appearance cookie codec", () => {
 
 describe("appearance presentation helpers", () => {
   it("maps legacy accents and exposes both skin canvases", () => {
-    expect(resolveLegacyAccentSkin("rose")).toBe("rose-pine");
-    expect(themeColorsForSkin("editorial-noir")).toEqual({
-      light: "#f9f9f8",
-      dark: "#000000",
+    expect(resolveLegacyAccentSkin("rose")).toBe("porcelain");
+    expect(themeColorsForSkin("fluent")).toEqual({
+      light: "#ffffff",
+      dark: "#292929",
     });
   });
 
@@ -159,8 +159,8 @@ describe("appearance presentation helpers", () => {
     expect(presentation).toMatchObject({
       mode: "light",
       dataTheme: "light",
-      dataSkin: "catppuccin",
-      dataFont: "modern-editorial",
+      dataSkin: "fluent",
+      dataFont: "fluent-native",
       colorScheme: "light",
     });
   });
@@ -169,8 +169,8 @@ describe("appearance presentation helpers", () => {
 describe("resolveAppearanceFromRequest", () => {
   const settings = {
     "theme.defaultMode": "system" as const,
-    "theme.defaultSkin": "editorial-noir" as const,
-    "theme.defaultFont": "editorial-classic" as const,
+    "theme.defaultSkin": "fluent" as const,
+    "theme.defaultFont": "fluent-native" as const,
     "theme.allowUserOverride": true,
   };
   const cookie = encodeAppearanceCookie({
@@ -202,7 +202,7 @@ describe("resolveAppearanceFromRequest", () => {
       resolveAppearanceFromRequest(settings, sessionCookie, { fetcher }),
     ).resolves.toMatchObject({
       mode: "light",
-      skin: "everforest",
+      skin: "carbon-soft",
       source: "user",
     });
     expect(fetcher).toHaveBeenCalledWith(
@@ -222,7 +222,7 @@ describe("resolveAppearanceFromRequest", () => {
       resolveAppearanceFromRequest(settings, sessionCookie, { fetcher }),
     ).resolves.toMatchObject({
       mode: "dark",
-      skin: "editorial-noir",
+      skin: "fluent",
       source: "cookie",
     });
   });

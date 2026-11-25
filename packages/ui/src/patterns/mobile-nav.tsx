@@ -37,7 +37,7 @@ export function MobileNav({
     <nav
       aria-label={label}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-30 border-t border-hairline-strong bg-black/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden",
+        "fixed inset-x-0 bottom-0 z-30 border-t border-hairline-strong bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden",
         className,
       )}
       {...props}
@@ -58,7 +58,7 @@ export function MobileNav({
               onClick={item.onSelect}
               className={cn(
                 "flex h-14 min-w-14 flex-col items-center justify-center gap-1 rounded-control px-2 text-[10px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
-                item.active ? "text-ink" : "text-muted hover:text-ink",
+                item.active ? "font-medium text-ink" : "text-muted hover:text-ink",
               )}
             >
               {Icon ? <Icon aria-hidden="true" className="size-4" /> : null}

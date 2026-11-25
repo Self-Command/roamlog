@@ -104,6 +104,36 @@ describe("ai.* settings merge", () => {
     expect(ignored).toEqual([]);
   });
 
+  it("defaults reasoning depth to high when no user, provider or env value exists", () => {
+    const { settings } = resolveAiSettingsFromStored({
+      env: {},
+      stored: null,
+    });
+
+    expect(settings.reasoningEffort).toBe("high");
+  });
+
+  it("uses the stored platform reasoning default until a request overrides it", () => {
+    const { settings } = resolveAiSettingsFromStored({
+      env: {},
+      stored: { "ai.defaultReasoningEffort": "low" },
+    });
+
+    expect(settings.reasoningEffort).toBe("low");
+  });
+
+  it("ignores an invalid stored reasoning default and keeps the high fallback", () => {
+    const { settings, ignored } = resolveAiSettingsFromStored({
+      env: {},
+      stored: { "ai.defaultReasoningEffort": "ultra" },
+    });
+
+    expect(settings.reasoningEffort).toBe("high");
+    expect(ignored).toEqual([
+      { key: "ai.defaultReasoningEffort", reason: "unsupported_value" },
+    ]);
+  });
+
   it("enforces envLocked even when a caller hands over raw stored rows", () => {
     const { settings } = resolveAiSettingsFromStored({
       env: { ...BASE_ENV, AI_TIMEOUT_MS: "45000" },

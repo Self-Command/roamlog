@@ -20,7 +20,11 @@ import { fileURLToPath } from "node:url";
 
 import { Test } from "@nestjs/testing";
 import type { INestApplication } from "@nestjs/common";
-import type { AiStreamEvent } from "@roamlog/contracts";
+import {
+  AI_STREAM_DELTA_MAX_CHARS,
+  AiStreamEventSchema,
+  type AiStreamEvent,
+} from "@roamlog/contracts";
 import { createPrismaClient } from "@roamlog/db";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -305,6 +309,53 @@ async function postStream(
   });
 }
 
+const CONFIRM_BRIEF_ARGS = {
+  title: "确认行程需求",
+  summary: "创建 2027-01-01 到 2027-01-03 的测试行程。",
+  constraints: ["测试行程"],
+  assumptions: ["日期为 2027-01-01 到 2027-01-03"],
+} as const;
+
+/**
+ * The write/read-only tool tests must use the same human gate as production:
+ * the first request pauses on confirm_brief, and only the resumed request may
+ * receive write tools or emit a plan.
+ */
+async function approveBrief(
+  baseUrl: string,
+  message: string,
+): Promise<{ first: AiStreamEvent[]; events: AiStreamEvent[] }> {
+  const firstResponse = await postStream(baseUrl, { message });
+  expect(firstResponse.status).toBe(200);
+  const first = eventsOf(parseFrames(await firstResponse.text()));
+  const meta = first.find(
+    (event): event is Extract<AiStreamEvent, { type: "meta" }> => event.type === "meta",
+  );
+  const human = first.find(
+    (event): event is Extract<AiStreamEvent, { type: "human.request" }> =>
+      event.type === "human.request",
+  );
+
+  expect(meta?.conversationId).toBeTruthy();
+  expect(human).toMatchObject({
+    type: "human.request",
+    name: "confirm_brief",
+  });
+  expect(first.some((event) => event.type === "plan")).toBe(false);
+  expect(first.at(-1)).toMatchObject({ type: "done", finishReason: "requires-action" });
+
+  const resumed = await postStream(baseUrl, {
+    conversationId: meta!.conversationId,
+    humanToolResult: {
+      toolCallId: human!.toolCallId,
+      name: "confirm_brief",
+      result: { approved: true },
+    },
+  });
+  expect(resumed.status).toBe(200);
+  return { first, events: eventsOf(parseFrames(await resumed.text())) };
+}
+
 async function waitFor(
   predicate: () => Promise<boolean> | boolean,
   timeoutMs = 5_000,
@@ -535,6 +586,32 @@ integration("AI chat SSE stream on real PostgreSQL", () => {
     expect(assistant?.clientId).toBe(clientId.assistantMessageId);
   }, 60_000);
 
+  it("splits an oversized upstream delta so every HTTP SSE frame obeys the contract cap", async () => {
+    const text = "a".repeat(AI_STREAM_DELTA_MAX_CHARS + 512);
+    const adapter = new FakeAdapter([{ deltas: [text] }]);
+    const { url } = await createApp({ adapter, heartbeatMs: 1_000 });
+
+    const response = await postStream(url, { message: "生成长文本" });
+    expect(response.status).toBe(200);
+
+    const frames = parseFrames(await response.text());
+    const events = eventsOf(frames);
+    const deltas = events.filter(
+      (event): event is Extract<AiStreamEvent, { type: "text.delta" }> =>
+        event.type === "text.delta",
+    );
+
+    expect(deltas.length).toBeGreaterThan(1);
+    expect(deltas.map((event) => event.delta).join("")).toBe(text);
+    expect(deltas.every((event) => event.delta.length <= AI_STREAM_DELTA_MAX_CHARS)).toBe(
+      true,
+    );
+    expect(new Set(frames.map((frame) => frame.id)).size).toBe(frames.length);
+    for (const event of events) {
+      expect(AiStreamEventSchema.safeParse(event).success).toBe(true);
+    }
+  }, 60_000);
+
   it("converts an upstream error after flush into error + done(error) while HTTP stays 200", async () => {
     const adapter = new FakeAdapter([
       {
@@ -724,8 +801,19 @@ integration("AI chat SSE stream on real PostgreSQL", () => {
     expect(events.at(-1)).toMatchObject({ type: "done", finishReason: "stop" });
   }, 60_000);
 
-  it("emits plan exactly once before usage/done for a tool-call round", async () => {
+  it("requires a confirmed brief, then emits plan exactly once before usage/done", async () => {
     const adapter = new FakeAdapter([
+      {
+        deltas: ["请确认需求摘要。"],
+        toolCalls: [
+          {
+            id: "brief_1",
+            name: "confirm_brief",
+            input: CONFIRM_BRIEF_ARGS,
+          },
+        ],
+        usage: { inputTokens: 8, outputTokens: 4 },
+      },
       {
         deltas: ["计划如下"],
         toolCalls: [
@@ -741,9 +829,7 @@ integration("AI chat SSE stream on real PostgreSQL", () => {
     ]);
     const { url } = await createApp({ adapter, heartbeatMs: 1_000 });
 
-    const response = await postStream(url, { message: "建一个测试行程" });
-    expect(response.status).toBe(200);
-    const events = eventsOf(parseFrames(await response.text()));
+    const { events } = await approveBrief(url, "建一个测试行程");
     const types = events.map((event) => event.type);
 
     expect(types.filter((type) => type === "meta")).toHaveLength(1);
@@ -766,13 +852,27 @@ integration("AI chat SSE stream on real PostgreSQL", () => {
     });
     expect(events.at(-1)).toMatchObject({ type: "done", finishReason: "tool-calls" });
 
-    const assistant = await requiredClient().aiMessage.findFirst({ where: { role: "assistant" } });
+    const assistant = await requiredClient().aiMessage.findFirst({
+      where: { role: "assistant" },
+      orderBy: { createdAt: "desc" },
+    });
     expect(assistant?.status).toMatchObject({ type: "complete", reason: "tool-calls" });
     expect(assistant?.metadata).toMatchObject({ finishReason: "tool-calls" });
   }, 60_000);
 
-  it("emits tool.start → tool.end before plan/usage/done for a read-only tool round", async () => {
+  it("requires a confirmed brief, then emits tool.start → tool.end before plan/usage/done", async () => {
     const adapter = new FakeAdapter([
+      {
+        deltas: ["请确认需求摘要。"],
+        toolCalls: [
+          {
+            id: "brief_2",
+            name: "confirm_brief",
+            input: CONFIRM_BRIEF_ARGS,
+          },
+        ],
+        usage: { inputTokens: 8, outputTokens: 4 },
+      },
       {
         deltas: ["我先查一下。"],
         toolCalls: [
@@ -790,9 +890,7 @@ integration("AI chat SSE stream on real PostgreSQL", () => {
     ]);
     const { url } = await createApp({ adapter, heartbeatMs: 1_000 });
 
-    const response = await postStream(url, { message: "帮我做京都三天行程" });
-    expect(response.status).toBe(200);
-    const events = eventsOf(parseFrames(await response.text()));
+    const { events } = await approveBrief(url, "帮我做京都三天行程");
     const types = events.map((event) => event.type);
 
     const starts = events.filter((event) => event.type === "tool.start") as Array<{

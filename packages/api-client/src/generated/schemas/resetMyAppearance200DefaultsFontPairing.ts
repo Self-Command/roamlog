@@ -10,6 +10,10 @@ export type ResetMyAppearance200DefaultsFontPairing =
   (typeof ResetMyAppearance200DefaultsFontPairing)[keyof typeof ResetMyAppearance200DefaultsFontPairing];
 
 export const ResetMyAppearance200DefaultsFontPairing = {
+  "fluent-native": "fluent-native",
+  "primer-system": "primer-system",
+  "primer-cjk": "primer-cjk",
+  "carbon-plex": "carbon-plex",
   "editorial-classic": "editorial-classic",
   "literary-warm": "literary-warm",
   "modern-editorial": "modern-editorial",

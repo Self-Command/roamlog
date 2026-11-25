@@ -5,7 +5,11 @@ import { AnthropicMessagesAdapter } from "../adapters/anthropic-messages.adapter
 import { AiUpstreamError } from "../adapters/http.js";
 import { OpenAiChatAdapter } from "../adapters/openai-chat.adapter.js";
 import { OpenAiResponsesAdapter } from "../adapters/openai-responses.adapter.js";
-import { parseSseStream, postSse } from "../adapters/sse.js";
+import {
+  MAX_UPSTREAM_SSE_FRAME_CHARS,
+  parseSseStream,
+  postSse,
+} from "../adapters/sse.js";
 import type { SseFrame } from "../adapters/sse.js";
 import type { AiSettings } from "../ai.settings.js";
 
@@ -133,10 +137,7 @@ describe("parseSseStream", () => {
       streamOf('data: {"half":1}\n\nevent: text.delta\ndata: split-', "frame\n\n"),
     );
 
-    expect(frames).toEqual([
-      { data: '{"half":1}' },
-      { event: "text.delta", data: "split-frame" },
-    ]);
+    expect(frames).toEqual([{ data: '{"half":1}' }, { event: "text.delta", data: "split-frame" }]);
   });
 
   it("decodes UTF-8 characters split across chunk boundaries", async () => {
@@ -153,6 +154,15 @@ describe("parseSseStream", () => {
     const frames = await collectFrames(streamOf('data: {"tail":true}'));
 
     expect(frames).toEqual([{ data: '{"tail":true}' }]);
+  });
+
+  it("rejects an upstream frame above the hard buffer cap", async () => {
+    const oversized = `data: ${"a".repeat(MAX_UPSTREAM_SSE_FRAME_CHARS)}\n\n`;
+
+    await expect(collectFrames(streamOf(oversized))).rejects.toMatchObject({
+      name: "AiUpstreamError",
+      kind: "invalid_response",
+    });
   });
 
   it("ends the generator cleanly when the AbortSignal fires", async () => {
@@ -210,9 +220,7 @@ describe("postSse", () => {
   });
 
   it("rejects a 200 response that is not text/event-stream", async () => {
-    stubFetch(
-      new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
-    );
+    stubFetch(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }));
 
     await expect(postSse("http://gateway.test/v1/responses")).rejects.toMatchObject({
       name: "AiUpstreamError",
@@ -234,7 +242,27 @@ const OPENAI_CHAT_CHUNKS = sseFrames([
       created: 1_730_000_000,
       model: "test-model",
       choices: [
-        { index: 0, delta: { role: "assistant", content: "" }, finish_reason: null },
+        {
+          index: 0,
+          delta: {
+            role: "assistant",
+            content: "",
+            reasoning_content: "先分析",
+          },
+          finish_reason: null,
+        },
+      ],
+    },
+  },
+  {
+    data: {
+      id: "chatcmpl-1",
+      choices: [
+        {
+          index: 0,
+          delta: { reasoning_content: "用户需求" },
+          finish_reason: null,
+        },
       ],
     },
   },
@@ -332,6 +360,26 @@ const OPENAI_RESPONSES_CHUNKS = sseFrames([
     data: { type: "response.created", response: { id: "resp_1", status: "in_progress" } },
   },
   {
+    event: "response.reasoning_summary_text.delta",
+    data: {
+      type: "response.reasoning_summary_text.delta",
+      item_id: "rs_1",
+      output_index: 0,
+      summary_index: 0,
+      delta: "先确认意图",
+    },
+  },
+  {
+    event: "response.reasoning_summary_text.delta",
+    data: {
+      type: "response.reasoning_summary_text.delta",
+      item_id: "rs_1",
+      output_index: 0,
+      summary_index: 0,
+      delta: "再回答",
+    },
+  },
+  {
     event: "response.output_text.delta",
     data: {
       type: "response.output_text.delta",
@@ -426,16 +474,7 @@ const ANTHROPIC_CHUNKS = sseFrames([
     data: {
       type: "content_block_start",
       index: 0,
-      content_block: { type: "text", text: "" },
-    },
-  },
-  { event: "ping", data: { type: "ping" } },
-  {
-    event: "content_block_delta",
-    data: {
-      type: "content_block_delta",
-      index: 0,
-      delta: { type: "text_delta", text: "京都" },
+      content_block: { type: "thinking", thinking: "" },
     },
   },
   {
@@ -443,7 +482,15 @@ const ANTHROPIC_CHUNKS = sseFrames([
     data: {
       type: "content_block_delta",
       index: 0,
-      delta: { type: "text_delta", text: "的秋天" },
+      delta: { type: "thinking_delta", thinking: "先想一下" },
+    },
+  },
+  {
+    event: "content_block_delta",
+    data: {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "thinking_delta", thinking: "再回答" },
     },
   },
   { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } },
@@ -452,6 +499,32 @@ const ANTHROPIC_CHUNKS = sseFrames([
     data: {
       type: "content_block_start",
       index: 1,
+      content_block: { type: "text", text: "" },
+    },
+  },
+  { event: "ping", data: { type: "ping" } },
+  {
+    event: "content_block_delta",
+    data: {
+      type: "content_block_delta",
+      index: 1,
+      delta: { type: "text_delta", text: "京都" },
+    },
+  },
+  {
+    event: "content_block_delta",
+    data: {
+      type: "content_block_delta",
+      index: 1,
+      delta: { type: "text_delta", text: "的秋天" },
+    },
+  },
+  { event: "content_block_stop", data: { type: "content_block_stop", index: 1 } },
+  {
+    event: "content_block_start",
+    data: {
+      type: "content_block_start",
+      index: 2,
       content_block: { type: "tool_use", id: "toolu_01", name: "trips.create", input: {} },
     },
   },
@@ -459,7 +532,7 @@ const ANTHROPIC_CHUNKS = sseFrames([
     event: "content_block_delta",
     data: {
       type: "content_block_delta",
-      index: 1,
+      index: 2,
       delta: { type: "input_json_delta", partial_json: '{"title":' },
     },
   },
@@ -467,11 +540,11 @@ const ANTHROPIC_CHUNKS = sseFrames([
     event: "content_block_delta",
     data: {
       type: "content_block_delta",
-      index: 1,
+      index: 2,
       delta: { type: "input_json_delta", partial_json: '"京都之旅"}' },
     },
   },
-  { event: "content_block_stop", data: { type: "content_block_stop", index: 1 } },
+  { event: "content_block_stop", data: { type: "content_block_stop", index: 2 } },
   {
     event: "message_delta",
     data: {
@@ -488,14 +561,28 @@ describe("openai-chat streamStep", () => {
     const fetchMock = stubFetch(sseResponse(OPENAI_CHAT_CHUNKS));
     const adapter = new OpenAiChatAdapter(settings("openai-chat"));
     const deltas: string[] = [];
+    const reasoning: string[] = [];
+    const toolArguments = new Map<number, string>();
 
     const result = await adapter.streamStep(INPUT, {
       onDelta: (delta) => {
         deltas.push(delta);
       },
+      onReasoningDelta: (delta) => {
+        reasoning.push(delta);
+      },
+      onToolCallDelta: (delta) => {
+        toolArguments.set(
+          delta.index,
+          `${toolArguments.get(delta.index) ?? ""}${delta.argumentsDelta}`,
+        );
+      },
     });
 
     expect(deltas).toEqual(["京都", "很美"]);
+    expect(reasoning).toEqual(["先分析", "用户需求"]);
+    expect(toolArguments.get(0)).toBe('{"title":"Kyoto"}');
+    expect(toolArguments.get(1)).toBe('{"city":"Osaka"}');
     expect(result.text).toBe("京都很美");
     expect(result.toolCalls).toEqual([
       { id: "call_abc", name: "trips.create", input: { title: "Kyoto" } },
@@ -516,14 +603,27 @@ describe("openai-responses streamStep", () => {
     const fetchMock = stubFetch(sseResponse(OPENAI_RESPONSES_CHUNKS));
     const adapter = new OpenAiResponsesAdapter(settings("openai-responses"));
     const deltas: string[] = [];
+    const reasoning: string[] = [];
+    const toolArguments = new Map<number, string>();
 
     const result = await adapter.streamStep(INPUT, {
       onDelta: (delta) => {
         deltas.push(delta);
       },
+      onReasoningDelta: (delta) => {
+        reasoning.push(delta);
+      },
+      onToolCallDelta: (delta) => {
+        toolArguments.set(
+          delta.index,
+          `${toolArguments.get(delta.index) ?? ""}${delta.argumentsDelta}`,
+        );
+      },
     });
 
     expect(deltas).toEqual(["你好", "，世界"]);
+    expect(reasoning).toEqual(["先确认意图", "再回答"]);
+    expect(toolArguments.get(1)).toBe('{"title":"京都之旅"}');
     expect(result.text).toBe("你好，世界");
     expect(result.toolCalls).toEqual([
       { id: "call_xyz", name: "trips.create", input: { title: "京都之旅" } },
@@ -541,15 +641,28 @@ describe("anthropic-messages streamStep", () => {
     const fetchMock = stubFetch(sseResponse(ANTHROPIC_CHUNKS));
     const adapter = new AnthropicMessagesAdapter(settings("anthropic-messages"));
     const deltas: string[] = [];
+    const reasoning: string[] = [];
+    const toolArguments = new Map<number, string>();
 
     const result = await adapter.streamStep(INPUT, {
       // Alias from the porting spec: adapters must accept both callback names.
       onTextDelta: (delta) => {
         deltas.push(delta);
       },
+      onReasoningDelta: (delta) => {
+        reasoning.push(delta);
+      },
+      onToolCallDelta: (delta) => {
+        toolArguments.set(
+          delta.index,
+          `${toolArguments.get(delta.index) ?? ""}${delta.argumentsDelta}`,
+        );
+      },
     });
 
     expect(deltas).toEqual(["京都", "的秋天"]);
+    expect(reasoning).toEqual(["先想一下", "再回答"]);
+    expect(toolArguments.get(2)).toBe('{"title":"京都之旅"}');
     expect(result.text).toBe("京都的秋天");
     expect(result.toolCalls).toEqual([
       { id: "toolu_01", name: "trips.create", input: { title: "京都之旅" } },
@@ -598,7 +711,9 @@ describe("streamStep abort", () => {
         // Never closes; the abort in onDelta must end the loop.
       },
     });
-    stubFetch(new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }));
+    stubFetch(
+      new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
 
     const deltas: string[] = [];
     const result = await new OpenAiChatAdapter(settings("openai-chat")).streamStep(INPUT, {

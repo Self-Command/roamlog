@@ -1039,7 +1039,7 @@ describe("ShareArticle route map", () => {
       "aria-label",
       "简化世界地图，显示 2 个停靠点",
     );
-    expect(screen.getByText("ROUTE MAP / 2 MAPPED STOPS")).toBeInTheDocument();
+    expect(screen.getByText("路线地图 / 2 个已定位停靠点")).toBeInTheDocument();
     expect(screen.getByTestId(`trip-map-stop-${MAPPED_STOP.id}`)).toBeInTheDocument();
   });
 

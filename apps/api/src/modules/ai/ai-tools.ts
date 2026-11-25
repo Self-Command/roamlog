@@ -1,10 +1,13 @@
 import { HttpException, Inject, Injectable, Optional } from "@nestjs/common";
 import {
+  AiAskUserArgsSchema,
+  AiConfirmBriefArgsSchema,
   CreateItineraryItemRequestSchema,
   CreatePackingItemRequestSchema,
   CreateStopRequestSchema,
   CreateTripRequestSchema,
   isReadOnlyAiTool,
+  type AiHumanToolName,
   type AiPlanSubjects,
   type AiToolCall,
   type AiToolError,
@@ -120,6 +123,31 @@ const expenseParticipant = z
     shareAmountMinor: z.number().int().nonnegative().optional(),
   })
   .strict();
+
+/** Human tools are validated here but never executed by the toolbox. */
+const HUMAN_TOOL_ARGS: Record<AiHumanToolName, z.ZodType> = {
+  ask_user: AiAskUserArgsSchema,
+  confirm_brief: AiConfirmBriefArgsSchema,
+};
+
+export type HumanToolArgsResult =
+  | { readonly ok: true; readonly args: Record<string, unknown> }
+  | { readonly ok: false; readonly error: AiToolError };
+
+/** Validates the model-authored arguments before a stream pauses for a human. */
+export function parseHumanToolArgs(
+  name: AiHumanToolName,
+  rawArgs: Record<string, unknown>,
+): HumanToolArgsResult {
+  const parsed = HUMAN_TOOL_ARGS[name].safeParse(rawArgs);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: { code: "INVALID_ARGUMENTS", message: issueMessage(parsed.error) },
+    };
+  }
+  return { ok: true, args: parsed.data as Record<string, unknown> };
+}
 
 const ArgsSchemas: Record<AiToolName, z.ZodType> = {
   "places.search": z.object({
@@ -475,6 +503,73 @@ const ArgsSchemas: Record<AiToolName, z.ZodType> = {
 };
 
 export const AI_TOOL_SPECS: readonly AiToolSpec[] = [
+  {
+    name: "ask_user",
+    description:
+      "Pause and ask the user for information that is required to do the task but is missing from the request. This is a human-input tool: it never writes data, never queues a plan, and must be the only tool call in the model turn. Ask only necessary questions, never re-ask information already provided, and never silently choose a destination, date, budget, companion, pace, preference or approval on the user's behalf. Questions are generic and may use text, single-choice, multi-choice, date or number controls.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", maxLength: 160 },
+        intro: { type: "string", maxLength: 1000 },
+        questions: {
+          type: "array",
+          minItems: 1,
+          maxItems: 8,
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string", maxLength: 64 },
+              prompt: { type: "string", maxLength: 500 },
+              description: { type: "string", maxLength: 1000 },
+              kind: { type: "string", enum: ["text", "single", "multi", "date", "number"] },
+              required: { type: "boolean" },
+              allowOther: { type: "boolean" },
+              options: {
+                type: "array",
+                minItems: 1,
+                maxItems: 20,
+                items: {
+                  type: "object",
+                  properties: {
+                    label: { type: "string", maxLength: 200 },
+                    value: { type: "string", maxLength: 200 },
+                    description: { type: "string", maxLength: 500 },
+                  },
+                  required: ["label", "value"],
+                },
+              },
+              placeholder: { type: "string", maxLength: 500 },
+              min: { type: "number" },
+              max: { type: "number" },
+              minDate: { type: "string" },
+              maxDate: { type: "string" },
+            },
+            required: ["id", "prompt", "kind"],
+          },
+        },
+      },
+      required: ["title", "questions"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "confirm_brief",
+    description:
+      "Pause and show a faithful brief for the user to confirm before planning. Use this only after the important requirements are known. Include explicit constraints, assumptions and any open questions; if open questions remain, the user must resolve them rather than letting the model guess. This is a human-input tool and must be the only tool call in the turn. No write tool or plan may be proposed until the user confirms.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", maxLength: 160 },
+        summary: { type: "string", maxLength: 8000 },
+        constraints: { type: "array", maxItems: 30, items: { type: "string" } },
+        assumptions: { type: "array", maxItems: 30, items: { type: "string" } },
+        openQuestions: { type: "array", maxItems: 20, items: { type: "string" } },
+      },
+      required: ["title", "summary"],
+      additionalProperties: false,
+    },
+  },
   {
     name: "places.search",
     description:

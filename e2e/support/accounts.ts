@@ -325,9 +325,9 @@ export async function loginOnAdmin(
   await page.goto(`${ADMIN_URL}/login`);
   await page.getByLabel("管理员邮箱").fill(account.email);
   await page.getByLabel("密码").fill(account.password);
-  await page.getByRole("button", { name: "继续验证" }).click();
+  await page.getByRole("button", { name: "登录" }).click();
 
-  const twoFactor = page.getByRole("heading", { name: "双因素认证" });
+  const twoFactor = page.getByRole("heading", { name: "两步验证" });
   const consoleHeading = page.getByRole("link", { name: /平台|总览/ });
 
   await expect
@@ -349,7 +349,7 @@ export async function loginOnAdmin(
       );
     }
     await page.getByLabel("6 位验证码").fill(currentTotp(totpSecret));
-    await page.getByRole("button", { name: "进入控制台" }).click();
+    await page.getByRole("button", { name: "验证并进入控制台" }).click();
   }
 
   await page.waitForURL("**/admin**", { timeout: 30_000 });

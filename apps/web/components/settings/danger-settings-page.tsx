@@ -67,10 +67,10 @@ const EXPORT_FORMATS = [
 ] as const;
 
 const ROLES = {
-  owner: "Owner",
-  admin: "Admin",
-  editor: "Editor",
-  viewer: "Viewer",
+  owner: "所有者",
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "只读成员",
 } as const;
 
 function exportTimestamp(value: string | null): string {
@@ -136,7 +136,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
     },
     onSuccess: () => {
       setTransferOpen(false);
-      setNotice("所有权已转移。你现在是这个工作区的 Admin。");
+      setNotice("所有权已转移。你现在是这个工作区的管理员。");
       void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
       void queryClient.invalidateQueries({ queryKey: queryKeys.members(workspace?.id) });
     },
@@ -168,7 +168,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
   if (!workspace || !meQuery.data) {
     return (
       <p className="text-sm text-muted">
-        危险区不可用：当前账号不是该工作区的成员，或链接中的 slug 已失效。
+        危险操作暂时不可用：当前账号不是该工作区的成员，或工作区地址已失效。
       </p>
     );
   }
@@ -186,7 +186,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
     : membersQuery.isError
       ? "成员列表暂时无法加载，因此还不能选择接收人。"
       : candidates.length > 0
-        ? "只能转给状态为 active 的成员，收到所有权的一方必须已经加入工作区。"
+        ? "只能转给已经加入工作区的成员。"
         : "工作区里还没有其他可接收所有权的成员。先邀请对方加入，再回来转移。";
 
   const detail = exportDetail.data;
@@ -241,7 +241,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="WORKSPACE / DANGER ZONE"
+        eyebrow="工作区 / 危险操作"
         title="危险区"
         description="导出数据、转移所有权与删除工作区。每个操作都需要单独确认，执行前请读完说明。"
       />
@@ -269,8 +269,10 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
             <FileArchive aria-hidden="true" className="size-4" />
           </span>
           <div>
-            <p className="type-eyebrow">EXPORT</p>
-            <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">导出数据</h2>
+            <p className="type-eyebrow">导出</p>
+            <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+              导出数据
+            </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
               把工作区的行程、日志、费用与照片打包保存。导出在后台生成，完成后可以随时下载；
               文件会在一段时间后过期，需要时重新导出即可。
@@ -293,7 +295,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
               </Select>
             </FormField>
             <div className="space-y-2">
-              <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+              <span className="mb-1.5 block type-eyebrow">
                 包含内容
               </span>
               <div className="flex flex-wrap items-center gap-4">
@@ -328,7 +330,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
               {createExport.isPending ? "正在创建导出" : "开始导出"}
             </Button>
             {history.isFetching && !history.isLoading ? (
-              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-stone">
+              <span className="text-[11px] text-stone">
                 正在刷新记录
               </span>
             ) : null}
@@ -380,7 +382,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
 
             {detail.status === "failed" ? (
               <p role="alert" className="mt-3 text-xs leading-5 text-accent-red">
-                导出失败：{detail.error ?? "服务器没有返回原因，请重新导出。"}
+                导出失败：{detail.error ?? "请重新导出。"}
               </p>
             ) : null}
 
@@ -406,7 +408,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
                       {item.format.toUpperCase()} ·{" "}
                       <span className="text-muted">{EXPORT_STATUS_LABELS[item.status]}</span>
                     </p>
-                    <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
+                    <p className="mt-1 text-[11px] text-stone">
                       创建于 {exportTimestamp(item.createdAt)}
                       {item.expiresAt ? ` · 有效期至 ${exportTimestamp(item.expiresAt)}` : ""}
                     </p>
@@ -436,10 +438,12 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
             <ArrowRightLeft aria-hidden="true" className="size-4" />
           </span>
           <div>
-            <p className="type-eyebrow">OWNERSHIP</p>
-            <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">转移所有权</h2>
+            <p className="type-eyebrow">所有权</p>
+            <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+              转移所有权
+            </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-              把工作区交给另一位成员。转移完成后，对方成为 Owner，你会降为 Admin，仍然可以管理成员与内容，但不再拥有删除或继续转移的权限。
+              把工作区交给另一位成员。转移完成后，对方成为所有者，你会变成管理员，仍然可以管理成员与内容，但不再拥有删除或继续转移的权限。
             </p>
           </div>
         </div>
@@ -483,7 +487,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
             </Button>
             {!isOwner ? (
               <p className="text-[11px] leading-5 text-muted">
-                只有 Owner 可以转移所有权。你当前的角色是 {roleLabel}。
+                只有所有者可以转移所有权。你当前的角色是{roleLabel}。
               </p>
             ) : null}
           </div>
@@ -496,8 +500,10 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
             <Siren aria-hidden="true" className="size-4" />
           </span>
           <div>
-            <p className="type-eyebrow">DELETE</p>
-            <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">删除工作区</h2>
+            <p className="type-eyebrow">删除</p>
+            <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+              删除工作区
+            </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
               删除后，工作区会从所有成员的列表中移除，其中的行程、日志、照片与费用都不再可访问。
               这个操作无法在应用内撤销，只能由平台管理员协助恢复。
@@ -521,7 +527,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
           </Button>
           {!isOwner ? (
             <p className="text-[11px] leading-5 text-muted">
-              只有 Owner 可以删除工作区。你当前的角色是 {roleLabel}。
+              只有所有者可以删除工作区。你当前的角色是{roleLabel}。
             </p>
           ) : null}
         </div>
@@ -533,7 +539,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
             <DialogHeader>
               <DialogTitle>确认转移所有权</DialogTitle>
               <DialogDescription>
-                转移后，你会立即降为 Admin，并且不能再删除或转移这个工作区。请确认接收人是你信任的成员。
+                转移后，你会立即变成管理员，并且不能再删除或转移这个工作区。请确认接收人是你信任的成员。
               </DialogDescription>
             </DialogHeader>
 
@@ -556,7 +562,7 @@ export function DangerSettingsPage({ workspaceSlug }: { workspaceSlug: string })
 
             <p className="flex items-start gap-2 rounded-control border border-accent-red/25 bg-accent-red/5 px-3 py-2 text-[11px] leading-5 text-accent-red">
               <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-              这是不可逆的角色变更：你将失去 Owner 专属的删除与转移权限。
+              这是不可逆的权限变更：你将失去所有者专属的删除与转移权限。
             </p>
 
             <DialogFooter>

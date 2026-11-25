@@ -92,7 +92,7 @@ describe("参与者：真实邀请状态与角色", () => {
     renderParticipants();
 
     expect(await screen.findByText("待接受")).toBeInTheDocument();
-    expect(screen.getByText("Viewer")).toBeInTheDocument();
+    expect(screen.getByText("只读成员")).toBeInTheDocument();
     expect(screen.getByText("沈青禾")).toBeInTheDocument();
     expect(screen.getByText(/邀请于/)).toBeInTheDocument();
     expect(screen.queryByText("已接受")).not.toBeInTheDocument();
@@ -135,7 +135,7 @@ describe("参与者：真实邀请状态与角色", () => {
     expect(await screen.findByText("已接受")).toBeInTheDocument();
     // Workspace member role (viewer) wins over the trip invitation role (editor):
     // workspace grants cover every member.
-    expect(screen.getByText("Viewer")).toBeInTheDocument();
+    expect(screen.getByText("只读成员")).toBeInTheDocument();
   });
 
   it("明确拒绝邀请显示「已拒绝」而不是「未知」", async () => {
@@ -153,7 +153,7 @@ describe("参与者：真实邀请状态与角色", () => {
 
     expect(await screen.findByText("已拒绝")).toBeInTheDocument();
     expect(screen.queryByText("未知")).not.toBeInTheDocument();
-    expect(screen.getByText("Viewer")).toBeInTheDocument();
+    expect(screen.getByText("只读成员")).toBeInTheDocument();
   });
 
   it("未知邀请状态显示「未知」而不是空白或崩溃", async () => {
@@ -171,7 +171,7 @@ describe("参与者：真实邀请状态与角色", () => {
 
     expect(await screen.findByText("未知")).toBeInTheDocument();
     expect(screen.getByText("沈青禾")).toBeInTheDocument();
-    expect(screen.getByText("Viewer")).toBeInTheDocument();
+    expect(screen.getByText("只读成员")).toBeInTheDocument();
   });
 
   it("没有 invitedAt 时不显示邀请时间", async () => {

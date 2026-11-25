@@ -1,0 +1,10 @@
+The Fluent 2 font stack uses fonts already installed by the operating system
+(for example Segoe UI on Windows) and does not redistribute any font files.
+
+Segoe UI and other system fonts remain subject to the license supplied with
+the operating system or application that provides them. No font binary is
+vendored by Roamlog.
+
+The Fluent 2 token values used by the theme catalog come from
+@fluentui/react-theme@9.2.2, which is distributed under the MIT License:
+https://github.com/microsoft/fluentui/blob/master/LICENSE

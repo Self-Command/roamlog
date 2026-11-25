@@ -25,6 +25,12 @@ const locales = [
   { value: "en-US", label: "English (US)" },
 ];
 const currencies = ["CNY", "USD", "EUR", "JPY", "GBP"];
+const ROLE_LABELS = {
+  owner: "所有者",
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "只读成员",
+} as const;
 
 export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
   const meQuery = useMeQuery();
@@ -69,7 +75,7 @@ export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
 
   if (!meQuery.data || !workspace) {
     return (
-      <p className="text-sm text-muted">设置不可用：当前账号或 Workspace 没有载入。</p>
+      <p className="text-sm text-muted">设置暂时无法加载：当前账号或工作区未加载。</p>
     );
   }
 
@@ -99,12 +105,12 @@ export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
           defaultCurrency: currency,
         },
       });
-      setNotice("Workspace 设置已保存。");
+      setNotice("工作区设置已保存。");
     } catch (cause) {
       setError(
         isForbidden(cause)
-          ? "你的角色不能修改 Workspace 设置。"
-          : "Workspace 设置保存失败。",
+          ? "你没有修改工作区设置的权限。"
+          : "工作区设置保存失败。",
       );
     }
   }
@@ -112,9 +118,9 @@ export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="ACCOUNT / WORKSPACE"
+        eyebrow="账号 / 工作区"
         title="设置"
-        description="个人资料与 Workspace 偏好设置。"
+        description="个人资料与工作区偏好设置。"
       />
 
       {notice ? (
@@ -141,8 +147,10 @@ export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
               <UserRound aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">PROFILE</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">个人资料</h2>
+              <p className="type-eyebrow">个人资料</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                个人资料
+              </h2>
             </div>
           </div>
           <div className="mt-5 space-y-4">
@@ -183,14 +191,14 @@ export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
               <ShieldCheck aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">WORKSPACE</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">
-                Workspace 设置
+              <p className="type-eyebrow">工作区</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                工作区设置
               </h2>
             </div>
           </div>
           <div className="mt-5 space-y-4">
-            <FormField label="Workspace 名称">
+            <FormField label="工作区名称">
               <Input
                 value={workspaceName}
                 onChange={(event) => setWorkspaceName(event.target.value)}
@@ -229,8 +237,8 @@ export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
             </FormField>
           </div>
           <p className="mt-4 text-[11px] leading-5 text-muted">
-            你的角色：{workspace.role.toUpperCase()}。
-            {canManageWorkspace ? " 可以修改 Workspace 设置。" : " 仅可查看 Workspace 设置。"}
+            你的角色：{ROLE_LABELS[workspace.role]}。
+            {canManageWorkspace ? " 可以修改工作区设置。" : " 仅可查看工作区设置。"}
           </p>
           <Button
             type="submit"
@@ -239,7 +247,7 @@ export function SettingsLive({ workspaceSlug }: { workspaceSlug: string }) {
             disabled={!canManageWorkspace || updateWorkspace.isPending}
           >
             <Save aria-hidden="true" />
-            保存 Workspace
+            保存工作区设置
           </Button>
         </form>
       </div>

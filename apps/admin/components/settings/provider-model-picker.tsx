@@ -50,10 +50,10 @@ function idleMessage(
   apiKeyDraft: string,
 ): string {
   if (!baseUrl.trim()) {
-    return "填写 Base URL 后获取模型。";
+    return "填写服务地址后获取模型。";
   }
   if (!apiKeyDraft.trim() && !hasSavedKey) {
-    return "填写 API Key 后自动获取模型。";
+    return "填写接口密钥后自动获取模型。";
   }
   if (providerId && !apiKeyDraft.trim() && hasSavedKey) {
     return "已保存密钥。点击“获取模型”使用已保存密钥刷新目录。";
@@ -67,17 +67,17 @@ function discoveryErrorMessage(error: unknown): string {
       case "PROVIDER_MODELS_DISCOVERY_UNSUPPORTED":
         return "该服务商没有可用的模型目录，请手动填写模型 ID。";
       case "PROVIDER_MODELS_DISCOVERY_TIMEOUT":
-        return "获取模型超时，请检查 Base URL 和服务商网络后重试。";
+        return "获取模型超时，请检查服务地址和服务商网络后重试。";
       case "PROVIDER_MODELS_RESPONSE_TOO_LARGE":
         return "服务商返回的模型目录过大，已拒绝处理。";
       case "PROVIDER_EGRESS_BLOCKED":
         return "该地址被安全策略阻止，不能用于获取模型。";
       case "PROVIDER_MODELS_DISCOVERY_FAILED":
-        return "获取模型失败，请确认 Base URL、协议和 API Key 是否正确。";
+        return "获取模型失败，请确认服务地址、接口类型和接口密钥是否正确。";
       case "PROVIDER_SECRETS_UNAVAILABLE":
         return "密钥服务不可用，暂时无法使用已保存密钥获取模型。";
       case "ADMIN_2FA_REQUIRED":
-        return "需要完成 TOTP 两步验证后再获取模型。";
+        return "请先完成两步验证，再获取模型。";
       case "ADMIN_ACCESS_DENIED":
         return "当前账号没有获取服务商模型的权限。";
       default:
@@ -127,7 +127,7 @@ export function useProviderModelDiscovery({
       setState({
         status: "idle",
         models: [],
-        message: "填写 Base URL 后获取模型。",
+        message: "填写服务地址后获取模型。",
         manualEntryRequired: false,
       });
       return;
@@ -138,7 +138,7 @@ export function useProviderModelDiscovery({
       setState({
         status: "idle",
         models: [],
-        message: "填写 API Key 后自动获取模型。",
+        message: "填写接口密钥后自动获取模型。",
         manualEntryRequired: false,
       });
       return;
@@ -303,7 +303,7 @@ export function ProviderModelPicker({
   expectedVersion,
   value,
   label = "默认模型",
-  help = "填写 Base URL 和 API Key 后自动获取；目录不可用时可手动填写模型 ID。",
+  help = "填写服务地址和接口密钥后自动获取；目录不可用时可手动填写模型 ID。",
   error,
   disabled = false,
   onChange,

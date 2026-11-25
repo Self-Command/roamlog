@@ -301,7 +301,7 @@ export async function enableTwoFactor(password: string): Promise<TwoFactorEnroll
   if (typeof container?.totpURI !== "string" || !container.totpURI) {
     throw new ApiError(
       200,
-      "登录服务没有返回验证器密钥，请稍后重试。",
+      "登录验证暂时没有完成，请稍后重试。",
       "INVALID_TWO_FACTOR_RESPONSE",
     );
   }

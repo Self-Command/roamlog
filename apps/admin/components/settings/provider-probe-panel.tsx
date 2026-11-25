@@ -49,9 +49,9 @@ const PROBE_ERROR_COPY: Readonly<Record<string, string>> = {
   PROVIDER_NOT_FOUND: "服务商已不存在，请刷新后重试。",
   PROVIDER_ADAPTER_UNSUPPORTED: "当前后台不支持该服务商类型。",
   PROVIDER_VERSION_CONFLICT: "服务商已被其他运营修改，请刷新后重试。",
-  ADMIN_2FA_REQUIRED: "需要完成 TOTP 两步验证后再测试。",
+  ADMIN_2FA_REQUIRED: "请先完成两步验证，再测试连接。",
   ADMIN_ACCESS_DENIED: "当前账号没有测试服务商的权限。",
-  ADMIN_API_NETWORK: "无法连接后台 API，请检查网络后重试。",
+  ADMIN_API_NETWORK: "无法连接后台服务，请检查网络后重试。",
   ADMIN_RESPONSE_INVALID: "测试响应无法解析，请刷新后重试。",
 };
 
@@ -76,7 +76,7 @@ function probeErrorMessage(error: unknown): string {
     return "测试请求过于频繁，请稍后重试。";
   }
   if (error.failure.status === 0) {
-    return "无法连接后台 API，请检查网络后重试。";
+    return "无法连接后台服务，请检查网络后重试。";
   }
   return "测试没有完成，请检查配置后重试。";
 }

@@ -173,7 +173,7 @@ export async function uploadJournalImage(
     processTimeoutMs: options.processTimeoutMs ?? JOURNAL_IMAGE_PROCESS_TIMEOUT_MS,
   });
   if (!media.url) {
-    throw new JournalImageUploadError("NO_URL", "图片已上传，但服务器没有返回可访问的地址。");
+    throw new JournalImageUploadError("NO_URL", "图片已上传，但暂时无法显示，请重试。");
   }
   return media;
 }
@@ -197,16 +197,16 @@ export function journalImageUploadErrorMessage(error: unknown): string {
       return "当前角色没有上传图片的权限。";
     }
     if (error.status === 413) {
-      return "图片超过服务器允许的大小上限。";
+      return "图片超过了允许的大小上限。";
     }
     if (error.status === 415) {
-      return "服务器不接受这种图片格式。";
+      return "不支持这种图片格式。";
     }
     if (error.status === 429) {
       return "操作太频繁，请稍后再试。";
     }
     if (error.status >= 500) {
-      return "图片上传失败：服务端暂时不可用，请重试。";
+      return "图片上传失败，图片服务暂时不可用，请重试。";
     }
     return error.message;
   }

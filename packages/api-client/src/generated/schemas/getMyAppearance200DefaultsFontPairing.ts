@@ -10,6 +10,10 @@ export type GetMyAppearance200DefaultsFontPairing =
   (typeof GetMyAppearance200DefaultsFontPairing)[keyof typeof GetMyAppearance200DefaultsFontPairing];
 
 export const GetMyAppearance200DefaultsFontPairing = {
+  "fluent-native": "fluent-native",
+  "primer-system": "primer-system",
+  "primer-cjk": "primer-cjk",
+  "carbon-plex": "carbon-plex",
   "editorial-classic": "editorial-classic",
   "literary-warm": "literary-warm",
   "modern-editorial": "modern-editorial",

@@ -14,6 +14,7 @@ import { ApiError } from "@/lib/api/errors";
 import { executeAiRun, streamAiPlan } from "@/lib/api/ai";
 
 import { AiChat } from "./ai-chat";
+import { GENERIC_SUGGESTIONS } from "./suggested-actions";
 
 vi.mock("@/lib/api/ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/ai")>();
@@ -30,7 +31,7 @@ const WORKSPACE_SLUG = "kyoto-crew";
 const RUN_ID = "0123456789abcdef0123456789abcdef";
 const TRIP_ID = "018f0a00-0000-7000-8000-0000000000b1";
 const OTHER_TRIP_ID = "018f0a00-0000-7000-8000-0000000000b2";
-const PROMPT = "想去京都一周，预算 8000，喜欢古寺和咖啡馆";
+const PROMPT = GENERIC_SUGGESTIONS[0];
 
 function makePlan(overrides: Partial<AiChatResponse> = {}): AiChatResponse {
   return AiChatResponseSchema.parse({
@@ -204,14 +205,21 @@ afterEach(() => {
 });
 
 describe("AiChat empty state", () => {
-  it("shows the centred title and the three starter prompts", async () => {
+  it("shows generic starter prompts inside the empty page, not above the composer", async () => {
+    const user = userEvent.setup();
     renderChat();
 
-    expect(await screen.findByRole("heading", { name: "先计划，后写入" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: PROMPT })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /带爸妈去成都四天/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /周末去杭州/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "从一个目标开始" })).toBeInTheDocument();
+    for (const suggestion of GENERIC_SUGGESTIONS) {
+      expect(screen.getByRole("button", { name: suggestion })).toBeInTheDocument();
+    }
+    expect(screen.getByTestId("ai-empty-suggestions")).toBeInTheDocument();
+    const composer = screen.getByTestId("composer-root");
+    expect(within(composer).queryByTestId("suggested-actions")).toBeNull();
     expect(screen.getByLabelText("给 AI 助手发消息")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: PROMPT }));
+    await waitFor(() => expect(streamMock).toHaveBeenCalledTimes(1));
   });
 });
 
@@ -248,10 +256,10 @@ describe("AiChat vision disclosure", () => {
 
     const note = await screen.findByTestId("vision-note");
     expect(note).toHaveTextContent(
-      "当前模型无法识别图片：图片只会作为附件保存在会话里，不会发送给模型。",
+      "当前 AI 服务不能读取图片；图片只会作为附件保留在对话中。",
     );
     const attach = screen.getByTestId("attachments-button");
-    expect(attach).toHaveAttribute("title", expect.stringContaining("无法识别图片"));
+    expect(attach).toHaveAttribute("title", expect.stringContaining("不能读取图片"));
     // Archiving a photo is still allowed, so the control stays enabled.
     expect(attach).toBeEnabled();
   });
@@ -438,7 +446,7 @@ describe("AiChat plan confirmation", () => {
 
     const card = await screen.findByLabelText("计划确认卡");
     expect(within(card).getByRole("button", { name: /执行选中的/ })).toBeDisabled();
-    expect(within(card).getByText(/只有 Owner、Admin 或 Editor/)).toBeInTheDocument();
+    expect(within(card).getByText(/请联系工作区所有者或管理员/)).toBeInTheDocument();
     expect(executeMock).not.toHaveBeenCalled();
   });
 });
@@ -451,8 +459,8 @@ describe("AiChat failures", () => {
 
     await sendPrompt(user);
 
-    expect(await screen.findByText("AI 尚未配置")).toBeInTheDocument();
-    expect(screen.getByText(/请在后台系统设置中启用 AI 供应商后再试/)).toBeInTheDocument();
+    expect(await screen.findByText("AI 服务尚未启用")).toBeInTheDocument();
+    expect(screen.getByText(/请联系管理员启用 AI 服务后再试/)).toBeInTheDocument();
     expect(screen.queryByLabelText("计划确认卡")).not.toBeInTheDocument();
   });
 
@@ -463,7 +471,7 @@ describe("AiChat failures", () => {
 
     await sendPrompt(user);
 
-    expect(await screen.findByText("今天的 AI 规划次数已用完")).toBeInTheDocument();
+    expect(await screen.findByText("今天的使用次数已用完")).toBeInTheDocument();
     expect(screen.queryByText(/AI_QUOTA_EXCEEDED/)).not.toBeInTheDocument();
   });
 });

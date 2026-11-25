@@ -20,6 +20,15 @@
 import type { AiReasoningEffort } from "@roamlog/contracts";
 import { useSyncExternalStore } from "react";
 
+const REASONING_STORAGE_PREFIX = "roamlog.ai.reasoning.v1";
+const REASONING_EFFORTS: readonly AiReasoningEffort[] = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+];
+
 export interface AiChatSelection {
   /** `undefined` means "let the server use its configured default". */
   model?: string;
@@ -34,12 +43,50 @@ export interface AiChatSelectionStore {
 
 const stores = new Map<string, AiChatSelectionStore>();
 
+function reasoningStorageKey(workspaceId: string): string {
+  return `${REASONING_STORAGE_PREFIX}:${workspaceId}`;
+}
+
+function readPersistedReasoningEffort(workspaceId: string): AiReasoningEffort | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const value = window.localStorage.getItem(reasoningStorageKey(workspaceId));
+    if (!value) return undefined;
+    const parsed: unknown = JSON.parse(value);
+    return typeof parsed === "string" &&
+      (REASONING_EFFORTS as readonly string[]).includes(parsed)
+      ? (parsed as AiReasoningEffort)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function persistReasoningEffort(
+  workspaceId: string,
+  reasoningEffort: AiReasoningEffort | undefined,
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (reasoningEffort === undefined) {
+      window.localStorage.removeItem(reasoningStorageKey(workspaceId));
+    } else {
+      window.localStorage.setItem(reasoningStorageKey(workspaceId), JSON.stringify(reasoningEffort));
+    }
+  } catch {
+    // Storage can be disabled or full. The in-memory selection still works.
+  }
+}
+
 /** One stable store per workspace (module-level, so remounts keep the choice). */
 export function aiChatSelectionStore(workspaceId: string): AiChatSelectionStore {
   const existing = stores.get(workspaceId);
   if (existing) return existing;
 
-  let value: AiChatSelection = {};
+  const persistedReasoningEffort = readPersistedReasoningEffort(workspaceId);
+  let value: AiChatSelection = persistedReasoningEffort
+    ? { reasoningEffort: persistedReasoningEffort }
+    : {};
   const listeners = new Set<() => void>();
   const store: AiChatSelectionStore = {
     get: () => value,
@@ -51,6 +98,7 @@ export function aiChatSelectionStore(workspaceId: string): AiChatSelectionStore 
         return;
       }
       value = next;
+      persistReasoningEffort(workspaceId, next.reasoningEffort);
       for (const listener of listeners) listener();
     },
     subscribe(listener) {

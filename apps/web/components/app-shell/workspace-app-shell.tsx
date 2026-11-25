@@ -76,14 +76,12 @@ export function WorkspaceAppShell({ children }: { children: ReactNode }) {
       <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-canvas px-6">
         <div className="absolute inset-x-0 top-0 h-px bg-hairline" />
         <div className="w-full max-w-lg">
-          <p className="mb-6 font-serif text-2xl tracking-[-0.03em] text-ink">Roamlog</p>
+          <p className="mb-6 font-display text-xl font-semibold tracking-[-0.02em] text-ink">
+            Roamlog
+          </p>
           <ErrorState
-            title="无法载入 Workspace"
-            description={
-              firstError instanceof Error
-                ? firstError.message
-                : "数据没有返回，请稍后重试。"
-            }
+            title="无法加载工作区"
+            description="账号或工作区暂时无法加载。请检查网络后重试；如果仍然失败，请稍后再试。"
             retryAction={
               <Button
                 type="button"
@@ -110,17 +108,17 @@ export function WorkspaceAppShell({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas px-6">
         <div className="w-full max-w-lg">
-          <p className="type-eyebrow">WORKSPACE NOT FOUND</p>
-          <h1 className="mt-3 font-serif text-4xl tracking-[-0.035em] text-ink">
-            找不到这个 Workspace
+          <p className="type-eyebrow">工作区不可用</p>
+          <h1 className="mt-2 font-display text-2xl font-semibold tracking-[-0.02em] text-ink">
+            找不到这个工作区
           </h1>
           <p className="mt-3 text-sm leading-6 text-muted">
-            当前账号不是该 Workspace 的成员，或链接中的 slug 已失效。
+            当前账号不是该工作区的成员，或工作区地址已失效。
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             <Button asChild variant="primary">
               <NextAppLink href={`/w/${workspacesQuery.data[0]?.slug ?? "roamlog-crew"}`}>
-                返回我的 Workspace
+                返回我的工作区
               </NextAppLink>
             </Button>
             <Button asChild variant="outline">
@@ -147,8 +145,8 @@ export function WorkspaceAppShell({ children }: { children: ReactNode }) {
       >
         <EmptyState
           icon={undefined}
-          title="旅行数据暂不可用"
-          description="Workspace 已载入，但旅行列表没有返回。请稍后重试。"
+          title="旅行数据暂时不可用"
+          description="工作区已加载，但旅行列表暂时无法加载。请稍后重试。"
           action={
             <Button type="button" variant="outline" onClick={() => void tripsQuery.refetch()}>
               重新加载

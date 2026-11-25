@@ -6,15 +6,15 @@ import { AppearancePickerForm, type AppearancePickerFormProps } from "./appearan
 
 const appearance: ResolvedAppearance = {
   mode: "system",
-  skin: "editorial-noir",
-  fontPairing: "editorial-classic",
+  skin: "fluent",
+  fontPairing: "fluent-native",
   source: "user",
   canOverride: true,
   updatedAt: "2026-11-22T12:00:00.000Z",
   defaults: {
     mode: "system",
-    skin: "editorial-noir",
-    fontPairing: "editorial-classic",
+    skin: "fluent",
+    fontPairing: "fluent-native",
   },
 };
 
@@ -38,14 +38,17 @@ function renderForm(overrides: Partial<AppearancePickerFormProps> = {}) {
 }
 
 describe("AppearancePickerForm", () => {
-  it("renders all six skins and all six locally bundled font pairings", () => {
+  it("renders four enterprise themes and four locally bundled font pairings", () => {
     renderForm();
 
-    expect(screen.getAllByRole("radio")).toHaveLength(15);
-    expect(screen.getByRole("radio", { name: /猫咖/ })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /常青林/ })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /文学暖调/ })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /瑞士现代/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("radio")).toHaveLength(11);
+    expect(screen.queryByRole("radio", { name: /Primer 企业中性/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Porcelain/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Fluent 2/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /IBM Carbon/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Carbon Plex/ })).toBeInTheDocument();
+    expect(screen.getByTestId("appearance-workspace-preview-system")).toBeInTheDocument();
+    expect(screen.getAllByText("工作台").length).toBeGreaterThan(0);
   });
 
   it("emits the selected mode without losing the current skin or font", () => {
@@ -56,8 +59,8 @@ describe("AppearancePickerForm", () => {
 
     expect(onChange).toHaveBeenCalledWith({
       mode: "dark",
-      skin: "editorial-noir",
-      fontPairing: "editorial-classic",
+      skin: "fluent",
+      fontPairing: "fluent-native",
     });
   });
 
@@ -66,8 +69,8 @@ describe("AppearancePickerForm", () => {
     renderForm({
       value: {
         mode: "dark",
-        skin: "editorial-noir",
-        fontPairing: "editorial-classic",
+        skin: "fluent",
+        fontPairing: "fluent-native",
       },
       onChange,
     });
@@ -78,8 +81,8 @@ describe("AppearancePickerForm", () => {
 
     expect(onChange).toHaveBeenCalledWith({
       mode: "light",
-      skin: "editorial-noir",
-      fontPairing: "editorial-classic",
+      skin: "fluent",
+      fontPairing: "fluent-native",
     });
   });
 
@@ -87,18 +90,18 @@ describe("AppearancePickerForm", () => {
     const onChange = vi.fn();
     renderForm({ onChange });
 
-    fireEvent.click(screen.getByRole("radio", { name: /常青林/ }));
-    fireEvent.click(screen.getByRole("radio", { name: /瑞士现代/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /IBM Carbon/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /Carbon Plex/ }));
 
     expect(onChange).toHaveBeenNthCalledWith(1, {
       mode: "system",
-      skin: "everforest",
-      fontPairing: "editorial-classic",
+      skin: "carbon",
+      fontPairing: "fluent-native",
     });
     expect(onChange).toHaveBeenNthCalledWith(2, {
       mode: "system",
-      skin: "editorial-noir",
-      fontPairing: "swiss-modern",
+      skin: "fluent",
+      fontPairing: "carbon-plex",
     });
   });
 
@@ -120,8 +123,8 @@ describe("AppearancePickerForm", () => {
     });
 
     expect(screen.getByRole("radio", { name: "深色" })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: /猫咖/ })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: /文学暖调/ })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /Fluent 2/ })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /Carbon Plex/ })).toBeDisabled();
     expect(screen.getByText(/管理员已关闭个人外观覆盖/)).toBeInTheDocument();
   });
 });

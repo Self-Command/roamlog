@@ -17,15 +17,15 @@ import {
 
 const resolved = {
   mode: "dark" as const,
-  skin: "catppuccin" as const,
-  fontPairing: "literary-warm" as const,
+  skin: "carbon" as const,
+  fontPairing: "carbon-plex" as const,
   source: "user" as const,
   canOverride: true,
   updatedAt: "2026-11-22T12:00:00.000Z",
   defaults: {
     mode: "system" as const,
-    skin: "editorial-noir" as const,
-    fontPairing: "editorial-classic" as const,
+    skin: "primer" as const,
+    fontPairing: "primer-system" as const,
   },
 };
 
@@ -48,12 +48,12 @@ describe("web appearance client", () => {
     api.updateMyAppearance.mockResolvedValue(response(resolved));
 
     await expect(
-      saveAppearance({ mode: "dark", skin: "catppuccin", fontPairing: "literary-warm" }),
+      saveAppearance({ mode: "dark", skin: "carbon", fontPairing: "carbon-plex" }),
     ).resolves.toEqual(resolved);
     expect(api.updateMyAppearance).toHaveBeenCalledWith({
       mode: "dark",
-      skin: "catppuccin",
-      fontPairing: "literary-warm",
+      skin: "carbon",
+      fontPairing: "carbon-plex",
     });
   });
 
@@ -69,8 +69,8 @@ describe("web appearance client", () => {
 
     await expect(resetAppearance()).resolves.toMatchObject({
       mode: "system",
-      skin: "editorial-noir",
-      fontPairing: "editorial-classic",
+      skin: "primer",
+      fontPairing: "primer-system",
       source: "platform",
     });
   });
@@ -84,8 +84,8 @@ describe("web appearance client", () => {
 
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.dataset.mode).toBe("light");
-    expect(document.documentElement.dataset.skin).toBe("everforest");
-    expect(document.documentElement.dataset.font).toBe("swiss-modern");
+    expect(document.documentElement.dataset.skin).toBe("carbon-soft");
+    expect(document.documentElement.dataset.font).toBe("fluent-native");
     expect(document.documentElement.style.colorScheme).toBe("light");
   });
 });

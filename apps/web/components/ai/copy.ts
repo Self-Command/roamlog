@@ -115,6 +115,11 @@ function knownTool(value: string): AiToolName | undefined {
   return TOOL_NAMES.has(value) ? (value as AiToolName) : undefined;
 }
 
+/** Runtime guard for callers that receive a tool name from the model. */
+export function isKnownToolName(value: string): value is AiToolName {
+  return knownTool(value) !== undefined;
+}
+
 /**
  * Tool names arrive from the model, so they are not guaranteed to be one of
  * the ten planner tools. Known names get their Chinese label; unknown names
@@ -534,6 +539,113 @@ export function summarizeReadOnlyTrace(trace: ReadonlyArray<AiToolCall>): string
   return `已搜索：${shown}${suffix}（共 ${searches.length} 次查询）`;
 }
 
+export interface ToolResultSummary {
+  /** Short, user-facing outcome. */
+  readonly headline: string;
+  /** Optional supporting facts; never raw JSON. */
+  readonly details: readonly string[];
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function recordList(value: unknown): ReadonlyArray<Record<string, unknown>> {
+  return Array.isArray(value)
+    ? value.filter(
+        (entry): entry is Record<string, unknown> =>
+          typeof entry === "object" && entry !== null && !Array.isArray(entry),
+      )
+    : [];
+}
+
+function displayNameOf(value: Record<string, unknown>): string | undefined {
+  for (const key of ["name", "title", "city", "label", "q"]) {
+    const candidate = textArg(value, key);
+    if (candidate) return clip(candidate, 80);
+  }
+  return undefined;
+}
+
+const RESULT_COLLECTIONS: ReadonlyArray<{
+  key: string;
+  noun: string;
+}> = [
+  { key: "candidates", noun: "个候选地点" },
+  { key: "stops", noun: "个行程节点" },
+  { key: "trips", noun: "趟旅行" },
+  { key: "items", noun: "项内容" },
+  { key: "entries", noun: "篇日志" },
+  { key: "expenses", noun: "笔开销" },
+  { key: "packing", noun: "件装备" },
+  { key: "results", noun: "项结果" },
+  { key: "suggestions", noun: "条建议" },
+];
+
+/**
+ * Converts a tool payload into a compact result summary for the open card.
+ *
+ * The full payload stays available through the "查看原始结果" disclosure.
+ * This follows the AI Elements tool card structure while keeping Roamlog's
+ * product language and never printing an identifier as the headline.
+ */
+export function summarizeToolResult(
+  toolName: string,
+  value: unknown,
+): ToolResultSummary | null {
+  const root = recordValue(value);
+  if (root && root.ok === false) {
+    const error = recordValue(root.error);
+    return {
+      headline: "这次工具调用没有完成",
+      details: [textArg(error ?? {}, "message") ?? "可以稍后重试。"],
+    };
+  }
+
+  const unwrapped =
+    root && "result" in root && (root.ok === true || Object.keys(root).length === 1)
+      ? root.result
+      : value;
+
+  for (const collection of RESULT_COLLECTIONS) {
+    const entries = recordList(recordValue(unwrapped)?.[collection.key]);
+    if (entries.length === 0) continue;
+    const names = entries
+      .map(displayNameOf)
+      .filter((name): name is string => Boolean(name))
+      .slice(0, 3);
+    return {
+      headline: `返回 ${String(entries.length)} ${collection.noun}`,
+      details: names.length > 0 ? [`例如：${names.join(" / ")}`] : [],
+    };
+  }
+
+  if (typeof unwrapped === "string") {
+    return {
+      headline: clip(unwrapped.trim(), 160) || "已返回结果",
+      details: [],
+    };
+  }
+
+  const unwrappedRecord = recordValue(unwrapped);
+  if (unwrappedRecord) {
+    const fields = Object.keys(unwrappedRecord);
+    if (fields.length > 0) {
+      return {
+        headline: `已返回 ${String(fields.length)} 个字段`,
+        details: [],
+      };
+    }
+  }
+
+  if (toolName === "places.search") {
+    return { headline: "没有找到匹配地点", details: [] };
+  }
+  return unwrapped === undefined ? null : { headline: "已返回结果", details: [] };
+}
+
 export interface FailureCopy {
   title: string;
   description: string;
@@ -549,16 +661,16 @@ export function planFailureCopy(kind: AiFailureKind): FailureCopy {
   switch (kind) {
     case "not_configured":
       return {
-        title: "AI 尚未配置",
+        title: "AI 服务尚未启用",
         description:
-          "请在后台系统设置中启用 AI 供应商后再试。现在没有写入任何内容；你也可以先手动创建旅行。",
+          "请联系管理员启用 AI 服务后再试。本次没有写入任何内容；你也可以先手动创建旅行。",
         showAdminLink: true,
       };
     case "quota":
       return {
-        title: "今天的 AI 规划次数已用完",
+        title: "今天的使用次数已用完",
         description:
-          "配额在 UTC 零点重置。这次没有生成计划，也没有写入任何内容；你可以先手动创建旅行。",
+          "明天可以继续使用。本次没有生成计划，也没有写入任何内容。",
       };
     case "loop_limit":
       return {
@@ -566,23 +678,27 @@ export function planFailureCopy(kind: AiFailureKind): FailureCopy {
         description:
           "助手到达了单次规划的上限，没有生成计划，也没有写入任何内容。把需求拆得更具体一些（例如先只建旅行）再试一次。",
       };
+    case "incomplete_plan":
+      return {
+        title: "计划还不够完整",
+        description:
+          "助手这次没有给出可核对的逐日安排、交通、预算或风险，因此没有生成可确认计划，也没有写入任何内容。请补充要求后重试。",
+      };
     case "upstream":
       return {
-        title: "模型服务暂时不可用",
-        description:
-          "计划没有生成，工作区没有被写入任何内容。请稍后重试。",
+        title: "AI 服务暂时不可用",
+        description: "计划没有生成，也没有写入任何内容。请稍后重试。",
       };
     case "schema_invalid":
       return {
-        title: "这次回复无法使用",
-        description:
-          "助手返回的内容没有通过校验，计划没有生成，也没有写入任何内容。调整描述后再试一次。",
+        title: "这次生成的计划不完整",
+        description: "请补充要求后重试。本次没有生成可确认的计划，也没有写入任何内容。",
       };
     case "forbidden":
       return {
-        title: "当前角色不能使用 AI 写入",
+        title: "你没有使用 AI 写入的权限",
         description:
-          "只有 Owner、Admin 或 Editor 可以让助手创建内容。你仍然可以浏览工作区里的旅行。",
+          "请联系工作区所有者或管理员。你仍然可以浏览工作区里的旅行和日志。",
       };
     case "unauthorized":
       return {
@@ -591,18 +707,18 @@ export function planFailureCopy(kind: AiFailureKind): FailureCopy {
       };
     case "invalid_request":
       return {
-        title: "这条需求没有被接受",
-        description: "请把目的地、时间和预算写得更具体一些再试。这次没有写入任何内容。",
+        title: "这条需求还没有被接受",
+        description: "请补充更具体的目的地、时间和预算后再试。本次没有写入任何内容。",
       };
     case "invalid_response":
       return {
         title: "计划没有生成",
-        description: "助手这次返回的内容无法读取，工作区没有被写入任何内容。请重试。",
+        description: "AI 这次返回的内容无法使用，也没有写入任何内容。请重试。",
       };
     case "network":
       return {
         title: "网络中断",
-        description: "请求没有送达服务器，所以这次没有生成计划，也没有写入任何内容。",
+        description: "请求没有送达，所以这次没有生成计划，也没有写入任何内容。请检查网络后重试。",
       };
     case "run_not_found":
     case "run_consumed":
@@ -630,7 +746,7 @@ export function toolFailureCopy(code: string): string {
       return "这条操作的参数不完整，所以没有写入。";
     case "WORKSPACE_ROLE_FORBIDDEN":
     case "FORBIDDEN":
-      return "当前角色没有执行这一步的权限。";
+      return "你没有执行这一步的权限。请联系工作区所有者或管理员。";
     case "VERSION_CONFLICT":
       return "这条内容刚被其他人修改，请刷新后再试。";
     case "TRIP_NOT_FOUND":
@@ -657,25 +773,23 @@ export function executionFailureCopy(kind: AiFailureKind): FailureCopy {
     case "call_not_planned":
       return {
         title: "提交的操作和计划不一致",
-        description: "服务器拒绝了这次执行，没有写入新内容。请重新生成计划后再确认。",
+        description: "这次执行没有被接受，没有写入新内容。请重新生成计划后再确认。",
       };
     case "forbidden":
       return {
-        title: "当前角色不能执行这些操作",
-        description: "执行被拒绝，没有写入任何内容。",
+        title: "你没有执行这些操作的权限",
+        description: "请联系工作区所有者或管理员。本次没有写入任何内容。",
       };
     case "network":
       return {
-        title: "执行结果未知",
-        description:
-          "网络在执行过程中中断。重试会复用同一个请求标识，服务器不会重复创建内容；如果已有内容，请先刷新页面确认。",
+        title: "执行结果尚未确认",
+        description: "网络连接中断。请先刷新页面查看最新状态，再决定是否重试。",
       };
     case "upstream":
     case "unknown":
       return {
         title: "执行没有完成",
-        description:
-          "服务器没有给出完整结果。重试会复用同一个请求标识，不会重复创建内容；如果已有内容，请先刷新页面确认。",
+        description: "暂时无法确认执行结果。请先刷新页面查看最新状态，再决定是否重试。",
       };
     default:
       return {

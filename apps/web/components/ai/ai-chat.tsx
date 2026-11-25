@@ -2,10 +2,13 @@
 
 import type { WorkspaceRole } from "@roamlog/contracts";
 import {
+  AuiConfig,
   AssistantRuntimeProvider,
+  Tools,
   useAui,
   useLocalRuntime,
   useRemoteThreadListRuntime,
+  unstable_Interactables,
 } from "@assistant-ui/react";
 import { Button } from "@roamlog/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,9 +27,19 @@ import {
 import { AiThreadList } from "./thread-list";
 import { ChatThread } from "./thread";
 import { useAutoResume } from "./use-auto-resume";
+import { workflowToolkit } from "./workflow";
+import {
+  createDraftPersistence,
+  DraftScopeProvider,
+} from "./workflow/draft-persistence";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+
+// The generative toolkit contains human tools only. The compiled build stamps
+// `type: "human"`; the authored source exposes `execute`, so key iteration is
+// the one representation shared by both.
+const WORKFLOW_HUMAN_TOOL_NAMES = Object.keys(workflowToolkit);
 
 /**
  * The single-column conversation shell for `/w/{slug}/ai`.
@@ -46,6 +59,11 @@ const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 export interface AiChatProps {
   workspaceId: string;
   workspaceSlug: string;
+  /**
+   * Stable signed-in user id. It namespaces same-device human-tool drafts.
+   * Optional only for isolated component tests; production always passes it.
+   */
+  userId?: string | undefined;
   role: WorkspaceRole;
   initialConversationId?: string | undefined;
 }
@@ -193,8 +211,25 @@ function AutoResumeThread({
   return null;
 }
 
-export function AiChat({ workspaceId, workspaceSlug, role, initialConversationId }: AiChatProps) {
+export function AiChat({
+  workspaceId,
+  workspaceSlug,
+  userId,
+  role,
+  initialConversationId,
+}: AiChatProps) {
   const canWrite = role === "owner" || role === "admin" || role === "editor";
+  const draftUserId = userId ?? "anonymous";
+  const assistantConfig = useMemo(
+    () =>
+      AuiConfig({
+        tools: Tools({ toolkit: workflowToolkit }),
+        unstable_interactables: unstable_Interactables({
+          persistence: createDraftPersistence(workspaceId, draftUserId),
+        }),
+      }),
+    [draftUserId, workspaceId],
+  );
 
   const chatModel = useMemo(
     () => createAiChatModelAdapter({ workspaceId, canWrite }),
@@ -301,7 +336,7 @@ export function AiChat({ workspaceId, workspaceSlug, role, initialConversationId
   const runtimeHook = useCallback(
     () =>
       useLocalRuntime(chatModel, {
-        unstable_humanToolNames: [PLAN_TOOL_NAME],
+        unstable_humanToolNames: [PLAN_TOOL_NAME, ...WORKFLOW_HUMAN_TOOL_NAMES],
         adapters: { attachments: attachmentAdapter },
       }),
     [chatModel, attachmentAdapter],
@@ -319,8 +354,9 @@ export function AiChat({ workspaceId, workspaceSlug, role, initialConversationId
   return (
     <AiArtifactProvider workspaceId={workspaceId}>
       <WorkspaceChatProvider value={context}>
-        <AssistantRuntimeProvider runtime={runtime}>
-          <AutoResumeThread workspaceId={workspaceId} conversationId={conversationId ?? null} />
+        <DraftScopeProvider conversationId={conversationId}>
+          <AssistantRuntimeProvider config={assistantConfig} runtime={runtime}>
+            <AutoResumeThread workspaceId={workspaceId} conversationId={conversationId ?? null} />
           {/*
             Mobile chat owns the space between the sticky app header and the
             fixed bottom navigation. On a 360–390 px phone the page header would
@@ -389,7 +425,8 @@ export function AiChat({ workspaceId, workspaceSlug, role, initialConversationId
             </div>
             <ArtifactPanel />
           </div>
-        </AssistantRuntimeProvider>
+          </AssistantRuntimeProvider>
+        </DraftScopeProvider>
       </WorkspaceChatProvider>
     </AiArtifactProvider>
   );

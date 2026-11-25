@@ -171,7 +171,7 @@ export function mapCoverFailure(error: unknown, phase: CoverUploadPhase): CoverU
     return {
       ...base,
       code: "MEDIA_NOT_READY",
-      message: "图片仍在服务器处理中，稍后会自动重试。",
+      message: "图片仍在处理中，稍后会自动重试。",
       retryable: true,
       resumeAt: "processing",
     };
@@ -197,7 +197,7 @@ export function mapCoverFailure(error: unknown, phase: CoverUploadPhase): CoverU
     return {
       ...base,
       code: "FORBIDDEN",
-      message: "当前角色没有修改封面的权限。",
+      message: "你没有修改封面的权限。请联系工作区所有者或管理员。",
       retryable: false,
     };
   }
@@ -213,7 +213,7 @@ export function mapCoverFailure(error: unknown, phase: CoverUploadPhase): CoverU
     return {
       ...base,
       code: "UPLOAD_TOO_LARGE",
-      message: "文件超过服务器允许的 25 MB 上限。",
+      message: "文件超过 25 MB 上限，请压缩后重试。",
       retryable: false,
     };
   }
@@ -221,7 +221,7 @@ export function mapCoverFailure(error: unknown, phase: CoverUploadPhase): CoverU
     return {
       ...base,
       code: "UPLOAD_UNSUPPORTED_TYPE",
-      message: "服务器不接受这种图片格式。",
+      message: "不支持这种图片格式，请改用 JPEG、PNG 或 WebP。",
       retryable: false,
     };
   }
@@ -237,7 +237,7 @@ export function mapCoverFailure(error: unknown, phase: CoverUploadPhase): CoverU
     return {
       ...base,
       code: "SERVER_ERROR",
-      message: "服务端暂时不可用，请重试。",
+      message: "图片服务暂时不可用，请重试。",
       retryable: true,
     };
   }
@@ -285,7 +285,7 @@ function mapStorageFailure(
   if (status === 413) {
     return {
       code: "UPLOAD_TOO_LARGE",
-      message: "对象存储拒绝了该文件：超过 25 MB 上限。",
+      message: "文件超过 25 MB 上限，请压缩后重试。",
       detail,
       status,
       retryable: false,
@@ -295,7 +295,7 @@ function mapStorageFailure(
   if (status === 415) {
     return {
       code: "UPLOAD_UNSUPPORTED_TYPE",
-      message: "对象存储不接受这种图片格式。",
+      message: "不支持这种图片格式，请改用 JPEG、PNG 或 WebP。",
       detail,
       status,
       retryable: false,
@@ -305,7 +305,7 @@ function mapStorageFailure(
   if (status !== null && status >= 500) {
     return {
       code: "STORAGE_UNAVAILABLE",
-      message: "对象存储暂时不可用，请重试。",
+      message: "图片服务暂时不可用，请重试。",
       detail,
       status,
       retryable: true,
@@ -315,7 +315,7 @@ function mapStorageFailure(
 
   return {
     code: "UPLOAD_HTTP_ERROR",
-    message: `对象存储返回了 HTTP ${status ?? "未知"}。`,
+    message: "图片上传失败，请稍后重试。",
     detail,
     ...(status === null ? {} : { status }),
     retryable: true,

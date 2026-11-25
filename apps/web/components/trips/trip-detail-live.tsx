@@ -40,10 +40,10 @@ export function TripDetailLive({
     const networkFailure = isApiError(failure) && failure.status === 0;
     return (
       <ErrorState
-        title={networkFailure ? "无法连接服务端" : "找不到这趟旅行"}
+        title={networkFailure ? "网络连接失败" : "找不到这趟旅行"}
         description={
           networkFailure
-            ? "网络中断，旅行详情没有加载。恢复连接后可以重试。"
+            ? "旅行详情暂时无法加载，请检查网络后重试。"
             : "旅行不存在、已归档，或当前账号没有访问权限。"
         }
         retryAction={

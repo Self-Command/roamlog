@@ -14,8 +14,9 @@ import {
 } from "./theme-catalog";
 
 const tokenCss = readFileSync(new URL("./tokens.css", import.meta.url), "utf8");
+const ACTIVE_THEME_SKINS = ["porcelain", "primer", "fluent", "carbon", "carbon-soft"] as const;
 
-const paletteVariableNames: Record<keyof SkinPalette, string> = {
+const paletteVariableNames: Record<string, string> = {
   canvas: "canvas",
   surface1: "surface-1",
   surface2: "surface-2",
@@ -115,6 +116,32 @@ describe("six-skin semantic token system", () => {
     const mapping = /\[data-skin\]\s*\{([^}]*)\}/u.exec(tokenCss)?.[1] ?? "";
     for (const role of THEME_TOKEN_ROLES) {
       expect(mapping, role).toContain(`--${role}:`);
+    }
+  });
+
+  it("ports the enterprise surface, radius, shadow and focus roles", () => {
+    for (const skin of ACTIVE_THEME_SKINS) {
+      const block = skinBlock(skin);
+      const palette = SKIN_PALETTES[skin];
+      for (const field of [
+        "accentPrimary",
+        "hairline",
+        "hairlineStrong",
+        "focusRingOuter",
+        "focusRingInner",
+      ] as const) {
+        const variable = field
+          .replace(/([A-Z])/gu, (letter) => `-${letter.toLowerCase()}`);
+        expect(block, `${skin} ${field}`).toContain(
+          `--skin-${variable}: light-dark(${palette.light[field]}, ${palette.dark[field]});`,
+        );
+      }
+      expect(block).toContain(`--skin-radius-card: ${palette.light.radiusCard};`);
+      expect(block).toContain(`--skin-radius-control: ${palette.light.radiusControl};`);
+      expect(tokenCss).toContain(palette.light.shadowCard);
+      expect(tokenCss).toContain(palette.dark.shadowCard);
+      expect(tokenCss).toContain(palette.light.shadowOverlay);
+      expect(tokenCss).toContain(palette.dark.shadowOverlay);
     }
   });
 

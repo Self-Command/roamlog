@@ -143,7 +143,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
       <AdminPageHeader
         eyebrow="信任与安全 / 内容"
         title="内容审核"
-        description="用户提交的举报在这里按状态、内容类型与原因筛选；裁决会写入审计并刷新列表。"
+        description="筛选并处理用户举报，处理结果会记录到审计日志。"
         readOnly={readOnly}
         actions={
           <Button
@@ -166,7 +166,7 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          分析员可查看举报队列与内容快照；裁决操作保持可见但不可用。
+          分析员只能查看举报和处理记录，不能修改。
         </div>
       ) : null}
 
@@ -270,8 +270,8 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
 
       {failure ? (
         <ErrorState
-          title="举报队列没有加载"
-          description={`${failure.code} · ${failure.detail}`}
+          title="举报列表加载失败"
+          description="举报列表暂时没有加载成功，请重试；如果持续失败，请联系平台管理员。"
           retryAction={
             <Button type="button" variant="outline" onClick={() => void page.refetch()}>
               重试
@@ -405,8 +405,8 @@ export function ContentView({ role }: { role: AdminConsoleRole }) {
             </div>
           ) : detailFailure || !selected ? (
             <ErrorState
-              title="举报详情没有加载"
-              description={detailFailure ? `${detailFailure.code} · ${detailFailure.detail}` : "举报不存在。"}
+              title="暂时无法读取这条举报"
+              description="请重试；如果举报已被其他人处理，列表会自动刷新。"
               retryAction={
                 <Button type="button" variant="outline" onClick={() => void detail.refetch()}>
                   重试
@@ -595,11 +595,11 @@ function ResolveForm({
       </div>
       {failure ? (
         <p role="alert" className="text-[12px] text-accent-red">
-          裁决失败：{failure.code} · {failure.detail}
+          裁决失败，请稍后重试；如果持续失败，请联系平台管理员。
         </p>
       ) : null}
       {disabled && !pending ? (
-        <p className="text-[12px] text-muted">当前角色没有裁决权限。</p>
+        <p className="text-[12px] text-muted">你没有处理举报的权限。</p>
       ) : null}
       <div className="flex justify-end">
         <Button type="submit" variant="primary" size="sm" disabled={disabled}>

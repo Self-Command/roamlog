@@ -130,11 +130,11 @@ function ShareTabBody({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/trips/${tripId}/share-links`);
         const parsed = ShareLinkCreatedSchema.safeParse(response.data);
         if (!parsed.success) {
-          throw failureFrom(200, null, "分享链接响应", "分享链接已创建，但返回的数据无法识别，请刷新页面确认。");
+          throw failureFrom(200, null, "分享链接响应", "分享链接已创建，但暂时无法确认结果，请刷新页面查看。");
         }
         return parsed.data;
       },
-      forbidden: "当前角色不能创建分享链接。Viewer 只能阅读和评论。",
+      forbidden: "你没有创建分享链接的权限。只读成员只能阅读和评论。",
       failure: "分享链接没有创建成功。",
     });
 
@@ -166,7 +166,7 @@ function ShareTabBody({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/share-links/${target.id}`);
         return response;
       },
-      forbidden: "当前角色不能撤销分享链接。",
+      forbidden: "你没有撤销分享链接的权限。请联系工作区所有者或管理员。",
       failure: "分享链接没有撤销。",
     });
     if (revoked) setRevokeTarget(null);
@@ -372,7 +372,7 @@ export function ShareTab({ tripId }: { tripId: string }) {
       <Panel title="分享链接">
         <EmptyBlock
           icon={Share2}
-          title="当前角色不能查看分享链接"
+          title="你没有查看分享链接的权限"
           description={deniedReason(role, "查看分享链接")}
         />
       </Panel>

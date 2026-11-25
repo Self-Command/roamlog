@@ -128,8 +128,8 @@ export function EmailsView({
       } catch (error) {
         setStatusMessage(
           error instanceof AdminMutationError
-            ? `重发失败：${error.failure.code} · ${error.failure.detail}`
-            : "重发失败，请检查 API 与权限后重试。",
+            ? "重发失败，请稍后重试；如果持续失败，请联系平台管理员。"
+            : "重发失败，请稍后重试。",
         );
         return;
       }
@@ -150,7 +150,7 @@ export function EmailsView({
       <AdminPageHeader
         eyebrow="投递 / 邮件"
         title="邮件"
-        description="检查 Resend 投递状态、退信与投诉；只有失败 / 退信的邮件可以重发。收件人一律脱敏展示。"
+        description="查看邮件是否送达、退信和投诉情况。失败或退信邮件可以重发，收件人信息会脱敏显示。"
         readOnly={readOnly}
       />
 
@@ -319,7 +319,7 @@ export function EmailsView({
                             disabled={!canResend || !resendable}
                             title={
                               !canResend
-                                ? "当前角色不可重发邮件"
+                                ? "你没有重发邮件的权限。"
                                 : resendable
                                   ? "重新加入发送队列"
                                   : `仅失败 / 退信可重发，当前为 ${EMAIL_STATUS_LABELS[email.status]}`

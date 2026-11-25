@@ -31,7 +31,7 @@ export function NextTripCard({
           {trip.countryCodes.join(" · ")}
         </span>
       </span>
-      <span className="mt-3 block font-serif text-lg leading-tight tracking-[-0.02em] text-ink">
+      <span className="mt-2 block font-display text-base leading-tight font-semibold tracking-[-0.01em] text-ink">
         {trip.title}
       </span>
       <span className="mt-2 block text-[11px] text-muted">

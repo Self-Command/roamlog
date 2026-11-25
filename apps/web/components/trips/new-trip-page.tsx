@@ -26,7 +26,7 @@ export function NewTripPage({ workspaceSlug }: { workspaceSlug: string }) {
     return (
       <ErrorState
         title="无法新建旅行"
-        description="Workspace 没有载入，因此不能计算新旅行的归属。"
+        description="工作区暂时无法加载，因此不能新建旅行。请稍后重试。"
         retryAction={
           <Button type="button" variant="primary" onClick={() => void workspacesQuery.refetch()}>
             重新加载

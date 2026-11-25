@@ -31,6 +31,13 @@ export interface PostSseInit {
 
 const DEFAULT_SSE_TIMEOUT_MS = 60_000;
 
+/**
+ * Upper bound for one upstream SSE block. Provider deltas are normally far
+ * smaller; this prevents an unterminated or malicious frame from growing the
+ * parser buffer without bound before the protocol-level delta cap applies.
+ */
+export const MAX_UPSTREAM_SSE_FRAME_CHARS = 1_048_576;
+
 /** Two consecutive line endings delimit a frame. `\r?` covers CRLF and LF. */
 const FRAME_SEPARATOR = /\r?\n\r?\n/;
 
@@ -103,6 +110,9 @@ export async function* parseSseStream(
         }
         const raw = buffer.slice(0, match.index);
         buffer = buffer.slice(match.index + match[0].length);
+        if (raw.length > MAX_UPSTREAM_SSE_FRAME_CHARS) {
+          throw new AiUpstreamError("invalid_response");
+        }
         const frame = parseFrame(raw);
         if (frame) {
           yield frame;
@@ -111,6 +121,9 @@ export async function* parseSseStream(
 
       if (aborted) {
         return;
+      }
+      if (buffer.length > MAX_UPSTREAM_SSE_FRAME_CHARS) {
+        throw new AiUpstreamError("invalid_response");
       }
     }
 

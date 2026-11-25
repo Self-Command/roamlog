@@ -118,10 +118,10 @@ export function tripCapabilities(role: WorkspaceRole | string | undefined | null
 }
 
 export const ROLE_LABELS: Record<WorkspaceRole, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  editor: "Editor",
-  viewer: "Viewer",
+  owner: "所有者",
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "只读成员",
 };
 
 export function roleLabel(role: WorkspaceRole | string | undefined): string {
@@ -137,10 +137,10 @@ export function roleLabel(role: WorkspaceRole | string | undefined): string {
  */
 export function deniedReason(role: WorkspaceRole | string | undefined, action: string): string {
   if (role === "viewer") {
-    return `Viewer 只能阅读和评论，不能${action}`;
+    return `你是只读成员，只能阅读和评论，不能${action}。请联系工作区所有者或管理员调整权限。`;
   }
   if (!role) {
     return `当前账号没有工作区角色，不能${action}`;
   }
-  return `${roleLabel(role)} 角色不能${action}`;
+  return `你没有${action}的权限。请联系工作区所有者或管理员。`;
 }

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   APPEARANCE_MODES,
   APPEARANCE_SOURCES,
+  ACTIVE_FONT_PAIRING_IDS,
+  ACTIVE_SKIN_IDS,
   AppearanceCookieSchema,
   AppearancePreferenceSchema,
   FONT_PAIRING_CATALOG,
@@ -11,12 +13,26 @@ import {
   SKIN_CATALOG,
   SKIN_IDS,
   UpdateAppearancePreferenceSchema,
+  normalizeFontPairingId,
+  normalizeSkinId,
 } from "../api/appearance";
 
 describe("appearance contracts", () => {
-  it("freezes exactly six skins, six font pairings and three modes", () => {
+  it("freezes four enterprise choices with legacy IDs still parseable", () => {
     expect(APPEARANCE_MODES).toEqual(["system", "light", "dark"]);
+    expect(ACTIVE_SKIN_IDS).toEqual(["porcelain", "fluent", "carbon", "carbon-soft"]);
+    expect(ACTIVE_FONT_PAIRING_IDS).toEqual([
+      "fluent-native",
+      "primer-system",
+      "primer-cjk",
+      "carbon-plex",
+    ]);
     expect(SKIN_IDS).toEqual([
+      "porcelain",
+      "fluent",
+      "carbon",
+      "carbon-soft",
+      "primer",
       "editorial-noir",
       "catppuccin",
       "tokyo-night",
@@ -25,6 +41,10 @@ describe("appearance contracts", () => {
       "everforest",
     ]);
     expect(FONT_PAIRING_IDS).toEqual([
+      "fluent-native",
+      "primer-system",
+      "primer-cjk",
+      "carbon-plex",
       "editorial-classic",
       "literary-warm",
       "modern-editorial",
@@ -40,7 +60,7 @@ describe("appearance contracts", () => {
 
     for (const skin of SKIN_CATALOG) {
       expect(skin.sourceId.trim().length).toBeGreaterThan(0);
-      expect(["MIT", "Apache-2.0"]).toContain(skin.licenseId);
+      expect(["MIT", "Apache-2.0", "internal"]).toContain(skin.licenseId);
       for (const preview of [skin.lightPreview, skin.darkPreview]) {
         expect(preview.canvas).toMatch(/^#[0-9a-f]{6}$/iu);
         expect(preview.ink).toMatch(/^#[0-9a-f]{6}$/iu);
@@ -49,12 +69,23 @@ describe("appearance contracts", () => {
     }
 
     for (const font of FONT_PAIRING_CATALOG) {
-      expect(font.displayStack).toMatch(/serif|sans-serif/iu);
+      expect(font.displayStack).toMatch(/serif|sans-serif|Segoe UI/iu);
       expect(font.bodyStack).toMatch(/sans-serif/iu);
       expect(font.monoStack).toMatch(/monospace/iu);
-      expect(font.licenseId).toBe("OFL-1.1");
+      expect(["OFL-1.1", "system"]).toContain(font.licenseId);
       expect(font.licenseSource).toMatch(/^https:\/\//u);
     }
+  });
+
+  it("normalizes every legacy ID to the enterprise catalog", () => {
+    expect(normalizeSkinId("editorial-noir")).toBe("fluent");
+    expect(normalizeSkinId("catppuccin")).toBe("fluent");
+    expect(normalizeSkinId("tokyo-night")).toBe("carbon");
+    expect(normalizeSkinId("kanagawa")).toBe("carbon-soft");
+    expect(normalizeSkinId("unknown")).toBe("porcelain");
+    expect(normalizeFontPairingId("editorial-classic")).toBe("fluent-native");
+    expect(normalizeFontPairingId("cjk-editorial")).toBe("fluent-native");
+    expect(normalizeFontPairingId("unknown")).toBe("fluent-native");
   });
 
   it("rejects an unknown cookie field without rejecting valid siblings", () => {
@@ -114,11 +145,11 @@ describe("appearance contracts", () => {
       updatedAt: null,
       defaults: {
         mode: "system",
-        skin: "editorial-noir",
-        fontPairing: "editorial-classic",
+        skin: "fluent",
+        fontPairing: "fluent-native",
       },
     });
     expect(APPEARANCE_SOURCES).toContain(parsed.source);
-    expect(parsed.defaults.skin).toBe("editorial-noir");
+    expect(parsed.defaults.skin).toBe("fluent");
   });
 });

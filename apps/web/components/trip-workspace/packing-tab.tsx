@@ -156,8 +156,8 @@ export function PackingTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/packing/${item.id}`);
         return response;
       },
-      forbidden: "当前角色不能修改行李。",
-      failure: "行李状态没有更新。",
+      forbidden: "你没有修改行李的权限。请联系工作区所有者或管理员。",
+      failure: "行李状态没有更新，请重试。",
     });
   }
 
@@ -189,8 +189,8 @@ export function PackingTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/trips/${tripId}/packing`);
         return response;
       },
-      forbidden: "当前角色不能添加行李。",
-      failure: "行李没有添加。",
+      forbidden: "你没有添加行李的权限。请联系工作区所有者或管理员。",
+      failure: "行李没有添加，请重试。",
     });
     if (created) {
       setDraft({ name: "", category: "clothing", quantity: "1" });
@@ -208,8 +208,8 @@ export function PackingTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/packing/${target.id}`);
         return response;
       },
-      forbidden: "当前角色不能删除行李。",
-      failure: "行李没有删除。",
+      forbidden: "你没有删除行李的权限。请联系工作区所有者或管理员。",
+      failure: "行李没有删除，请重试。",
     });
     if (deleted) setDeleteTarget(null);
   }
@@ -281,7 +281,7 @@ export function PackingTab({ tripId }: { tripId: string }) {
             {groups.map((group) => (
               <section key={group.category} className="border-b border-hairline last:border-b-0">
                 <div className="flex items-baseline justify-between gap-2 bg-surface-2/40 px-4 py-2">
-                  <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink">
+                  <h3 className="text-xs font-medium text-ink">
                     {PACKING_CATEGORY_LABELS[group.category]}
                   </h3>
                   <span className="font-mono text-[9px] text-stone">

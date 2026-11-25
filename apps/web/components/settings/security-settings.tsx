@@ -321,7 +321,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="SETTINGS / SECURITY"
+        eyebrow="设置 / 安全"
         title="账号安全"
         description="管理密码、邮箱、两步验证和已登录的设备。修改密码或邮箱前需要再次确认。"
       />
@@ -407,8 +407,10 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
               <KeyRound aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">PASSWORD</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">修改密码</h2>
+              <p className="type-eyebrow">密码</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                修改密码
+              </h2>
             </div>
           </div>
 
@@ -470,8 +472,10 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
               <Mail aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">EMAIL</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">修改邮箱</h2>
+              <p className="type-eyebrow">邮箱</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                修改邮箱
+              </h2>
             </div>
           </div>
 
@@ -528,8 +532,10 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
               <ShieldCheck aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">TWO-FACTOR</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">两步验证</h2>
+              <p className="type-eyebrow">两步验证</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                两步验证
+              </h2>
               <p className="mt-2 max-w-xl text-xs leading-5 text-muted">
                 登录时在密码之外再输入一次验证器中的 6 位验证码。开启后还可以生成一次性备用码。
               </p>
@@ -556,8 +562,10 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
               <Smartphone aria-hidden="true" className="size-4" />
             </span>
             <div>
-              <p className="type-eyebrow">SESSIONS</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">登录设备</h2>
+              <p className="type-eyebrow">登录设备</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                登录设备
+              </h2>
               <p className="mt-2 text-xs leading-5 text-muted">
                 共 {devices.length} 台设备 · {sessions.length} 个有效会话；同一设备只显示一次。
               </p>
@@ -634,7 +642,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
                       ) : null}
                     </p>
                     <p className="mt-1 text-[11px] leading-5 text-muted">{device.profile.detail}</p>
-                    <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
+                    <p className="mt-1 text-[11px] text-muted">
                       {device.ip ?? "未知 IP"} · 最近登录 {formatMoment(device.loginAt)} · 有效至{" "}
                       {formatMoment(device.expiresAt)}
                     </p>
@@ -695,7 +703,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
             <DialogTitle>确认删除账号？</DialogTitle>
             <DialogDescription className="text-sm leading-6 text-muted">
               账号会被匿名化，登录会话、两步验证与通知偏好在同一事务里删除。这个操作无法撤销，
-              历史评论与日志会以「Deleted user」保留。
+              历史评论与日志会显示为“已注销用户”。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -723,8 +731,10 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
             <TriangleAlert aria-hidden="true" className="size-4" />
           </span>
           <div>
-            <p className="type-eyebrow">DANGER</p>
-            <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">删除账号</h2>
+            <p className="type-eyebrow">危险操作</p>
+            <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+              删除账号
+            </h2>
             <p className="mt-2 max-w-xl text-xs leading-5 text-muted">
               删除后当前账号立即退出所有设备，邮箱与姓名会被匿名化。工作区本身不会被删除：
               如果你仍然是某个工作区的所有者，需要先转移所有权或删除该工作区。
@@ -734,20 +744,20 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
 
         <div className="mt-5 max-w-sm space-y-3">
           <FormField
-            label="输入 DELETE 以确认"
-            hint="必须逐字输入大写的 DELETE，删除按钮才会启用。"
+            label="输入“删除账号”以确认"
+            hint="必须逐字输入“删除账号”，删除按钮才会启用。"
           >
             <Input
               value={deleteConfirmation}
               onChange={(event) => setDeleteConfirmation(event.target.value)}
-              placeholder="DELETE"
+              placeholder="删除账号"
               autoComplete="off"
             />
           </FormField>
           <Button
             type="button"
             variant="danger"
-            disabled={deleteConfirmation !== "DELETE" || deleteMutation.isPending}
+            disabled={deleteConfirmation !== "删除账号" || deleteMutation.isPending}
             onClick={() => {
               setDeleteError(null);
               setDeleteOpen(true);

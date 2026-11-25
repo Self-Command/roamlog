@@ -92,10 +92,10 @@ export function SidebarContent({
   workspace,
   primaryNav,
   secondaryNav = [],
-  primarySectionLabel = "Workspace",
-  secondarySectionLabel = "Together",
+  primarySectionLabel = "工作区",
+  secondarySectionLabel = "协作",
   nextTrip,
-  nextTripLabel = "Next journey",
+  nextTripLabel = "下一段旅行",
   primaryAction,
   footer,
   linkComponent: Link = DefaultLink,
@@ -106,10 +106,10 @@ export function SidebarContent({
       <div className="flex h-16 shrink-0 items-center px-5">
         {brand ?? (
           <Link href={brandHref} className="inline-flex items-baseline gap-2">
-            <span className="font-serif text-[23px] leading-none tracking-[-0.03em] text-ink">
+            <span className="font-display text-[22px] font-semibold leading-none tracking-[-0.02em] text-ink">
               Roamlog
             </span>
-            <span className="type-eyebrow translate-y-[-1px] text-[8px]">archive</span>
+            <span className="type-eyebrow translate-y-[-1px] text-[8px]">旅行档案</span>
           </Link>
         )}
       </div>

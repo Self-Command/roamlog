@@ -92,7 +92,7 @@ describe("LoginFormView", () => {
     expect(screen.getByRole("heading", { name: "再确认一次是你" })).toBeInTheDocument();
     expect(screen.getByText("lin.mo@roamlog.local")).toBeInTheDocument();
     expect(auth.signIn).toHaveBeenCalledWith("lin.mo@roamlog.local", "roamlog-demo");
-    expect(screen.getByText("SECURITY CHECK")).toBeInTheDocument();
+    expect(screen.getByText("安全验证")).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "选择验证方式" })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
 

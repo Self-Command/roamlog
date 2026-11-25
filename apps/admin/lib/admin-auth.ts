@@ -33,7 +33,7 @@ export function authErrorMessage(response: AdminAuthResponse): string {
   if (typeof message === "string" && message.trim()) {
     return message;
   }
-  return `认证失败（HTTP ${response.status}）。`;
+  return "登录没有完成，请检查账号信息后重试。";
 }
 
 export function authBackupCodes(response: AdminAuthResponse): string[] {

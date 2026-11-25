@@ -133,7 +133,7 @@ function statusCopy(state: SaveState, lastSavedAt: Date | null) {
     case "error":
       return "保存失败";
     case "conflict":
-      return "版本冲突，等待处理";
+      return "其他人先保存了，等待你选择";
     default:
       return "等待编辑";
   }
@@ -463,7 +463,7 @@ export function JournalEditorSheet({
         <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
           <SheetHeader>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="type-eyebrow">{entryId ? "EDIT JOURNAL ENTRY" : "NEW JOURNAL ENTRY"}</p>
+              <p className="type-eyebrow">{entryId ? "编辑旅行日志" : "新建旅行日志"}</p>
               <span
                 role="status"
                 className={`inline-flex items-center gap-1.5 rounded-pill border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.06em] ${
@@ -503,13 +503,13 @@ export function JournalEditorSheet({
                 </div>
               ) : null}
             </div>
-            <SheetTitle className="mt-2 font-serif text-3xl tracking-[-0.03em]">
+            <SheetTitle className="mt-2 font-prose text-2xl font-semibold tracking-[-0.015em]">
               {entryId ? title || "未命名日志" : "写一篇日志"}
             </SheetTitle>
             <SheetDescription>
               {isReadOnly
-                ? "只读视图。Viewer 可以阅读完整正文并参与评论。"
-                : "5 秒自动保存，失焦也会保存。版本冲突时可以选择重新加载或覆盖。"}
+                ? "只读视图。只读成员可以阅读全文并发表评论。"
+                : "每 5 秒自动保存，离开输入框也会保存。如果其他成员同时修改，会请你选择保留哪一版。"}
             </SheetDescription>
           </SheetHeader>
 
@@ -644,7 +644,7 @@ export function JournalEditorSheet({
                   ) : (
                     <Save aria-hidden="true" />
                   )}
-                  保存
+                  立即保存
                 </Button>
               </div>
             ) : null}

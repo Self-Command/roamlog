@@ -124,7 +124,7 @@ describe("UsersView", () => {
 
     expect(screen.queryByRole("dialog", { name: "暂停账户" })).not.toBeInTheDocument();
     // Without a mutation port the console refuses the write instead of faking it.
-    expect(screen.getByRole("status")).toHaveTextContent("未连接后台 API");
+    expect(screen.getByRole("status")).toHaveTextContent("后台服务未连接");
   });
 
   it("keeps every destructive user action visible but disabled for analysts", async () => {
@@ -134,7 +134,7 @@ describe("UsersView", () => {
     const firstRow = await screen.findByRole("row", { name: /林知夏/ });
     expect(within(firstRow).getByRole("button", { name: "暂停账户" })).toBeDisabled();
     expect(within(firstRow).getByRole("button", { name: "修改平台角色" })).toBeDisabled();
-    expect(within(firstRow).getByRole("button", { name: "删除用户" })).toBeDisabled();
+    expect(within(firstRow).getByRole("button", { name: "移入已删除" })).toBeDisabled();
     expect(screen.getByText("只读分析模式")).toBeInTheDocument();
   });
 
@@ -279,7 +279,7 @@ describe("UsersView", () => {
     await user.click(within(dialog).getByRole("button", { name: "确认暂停" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("ADMIN_ACTION_FORBIDDEN");
+      expect(screen.getByRole("status")).toHaveTextContent("操作没有完成");
     });
     expect(screen.queryByRole("dialog", { name: "暂停账户" })).not.toBeInTheDocument();
   });

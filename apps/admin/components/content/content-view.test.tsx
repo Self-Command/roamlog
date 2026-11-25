@@ -153,7 +153,7 @@ describe("ContentView", () => {
 
     renderView("analyst");
 
-    expect(screen.getByText(/ADMIN_ACTION_FORBIDDEN/)).toBeInTheDocument();
+    expect(screen.getByText("举报列表加载失败")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "重试" }));
     expect(refetch).toHaveBeenCalled();
   });
@@ -193,7 +193,7 @@ describe("ContentView", () => {
     renderView("analyst");
     await user.click(screen.getByRole("button", { name: "查看详情" }));
 
-    expect(await screen.findByText(/当前角色没有裁决权限/)).toBeInTheDocument();
+    expect(await screen.findByText("你没有处理举报的权限。")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "提交裁决" })).toBeDisabled();
   });
 });

@@ -61,7 +61,7 @@ export function EditTripPage({
   if (!workspace) {
     return (
       <ErrorState
-        title="无法载入 Workspace"
+        title="无法加载工作区"
         description="没有找到这个工作区，或你没有访问权限。"
         retryAction={
           <Button type="button" variant="primary" onClick={() => void workspacesQuery.refetch()}>
@@ -95,11 +95,11 @@ export function EditTripPage({
     return (
       <div className="mx-auto w-full max-w-3xl">
         <div className="rounded-card border border-hairline bg-surface-1/60 p-6">
-          <p className="type-eyebrow">TRIPS / EDIT</p>
+          <p className="type-eyebrow">编辑旅行</p>
           <h1 className="type-page-title mt-3">你没有编辑权限</h1>
           <p className="mt-3 text-sm leading-6 text-body">
-            当前工作区角色是 Viewer（只读）。可以查看「{trip.title}」的详情，但不能修改内容。
-            如需编辑，请联系工作区 Owner 或 Admin 调整角色。
+            你是只读成员。可以查看「{trip.title}」的详情，但不能修改内容。
+            如需编辑，请联系工作区所有者或管理员调整权限。
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             <Link href={detailHref} className={buttonVariants({ variant: "primary" })}>

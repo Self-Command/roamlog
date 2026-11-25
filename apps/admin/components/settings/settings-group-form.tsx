@@ -109,7 +109,7 @@ function failureOf(error: unknown): AdminApiFailure {
   return {
     code: "ADMIN_API_NETWORK",
     status: 0,
-    title: "后台接口不可用",
+    title: "后台服务暂时不可用",
     detail: error instanceof Error ? error.message : "后台接口请求未能完成。",
     degraded: [],
   };
@@ -117,7 +117,7 @@ function failureOf(error: unknown): AdminApiFailure {
 
 function permissionText(failure: AdminApiFailure): string | null {
   if (failure.code === "ADMIN_2FA_REQUIRED") {
-    return "需要完成 TOTP 2FA 验证后才能访问后台设置。";
+    return "请先完成两步验证，再访问后台设置。";
   }
   if (failure.status === 403 || failure.code === "ADMIN_ACCESS_DENIED") {
     return "需要超级管理员权限。";
@@ -130,7 +130,7 @@ function permissionText(failure: AdminApiFailure): string | null {
 
 function revealErrorText(failure: AdminApiFailure): string {
   if (failure.code === "ADMIN_2FA_REQUIRED") {
-    return "需要完成 TOTP 2FA 验证后才能显示敏感值。";
+    return "请先完成两步验证，再显示密钥。";
   }
   if (failure.status === 403 || failure.code === "ADMIN_ACCESS_DENIED") {
     return "需要超级管理员权限，无法显示敏感值。";
@@ -141,7 +141,7 @@ function revealErrorText(failure: AdminApiFailure): string {
   if (failure.status === 422) {
     return "确认参数无效，请重新打开确认框后重试。";
   }
-  return `显示失败（${failure.code}），请稍后重试。`;
+  return "显示失败，请稍后重试；如果持续失败，请联系平台管理员。";
 }
 
 function replaceGroup(
@@ -404,7 +404,7 @@ export function SettingsGroupForm({
         setProbeNotes({});
         setBanner({
           tone: "error",
-          title: "有字段未通过服务端校验",
+          title: "有字段没有通过校验",
           detail: "已保留你填写的内容；修正标记的字段后再次保存。",
           action: "save",
         });
@@ -415,8 +415,8 @@ export function SettingsGroupForm({
           tone: "error",
           title: permission ?? "保存失败，可重试",
           detail: permission
-            ? `${failure.code} · ${failure.detail}`
-            : `未写入任何设置，输入已保留。${failure.code} · ${failure.detail}`,
+            ? "请确认账号权限或完成两步验证后重试。"
+            : "未写入任何设置，输入已保留，请稍后重试。",
           ...(permission ? {} : { action: "save" as const }),
         });
       }
@@ -429,13 +429,12 @@ export function SettingsGroupForm({
     let fresh: AdminSettingsResponse;
     try {
       fresh = await api.list();
-    } catch (error) {
-      const failure = failureOf(error);
+    } catch {
       setToast(`已提交 ${updatedCount} 项设置，但重新读取失败。`);
       setBanner({
         tone: "warning",
         title: "保存已提交，但重新读取失败",
-        detail: `服务器可能已经写入；请重新读取确认。${failure.code} · ${failure.detail}`,
+        detail: "服务可能已经写入；请重新读取确认。",
         action: "reload",
       });
       setSaving(false);
@@ -482,7 +481,7 @@ export function SettingsGroupForm({
       setBanner({
         tone: "error",
         title: permissionText(failure) ?? "重新读取失败",
-        detail: `${failure.code} · ${failure.detail}`,
+        detail: "没有读取到最新设置，请稍后重试。",
         action: "reload",
       });
     } finally {
@@ -571,11 +570,11 @@ export function SettingsGroupForm({
             </h2>
             <p className="mt-2 text-[12px] leading-6 text-muted">
               {permission
-                ? "后台设置只对超级管理员开放；如果已具备角色，请确认 TOTP 2FA 已完成。"
+                ? "后台设置只对超级管理员开放；如果已具备权限，请确认两步验证已完成。"
                 : "无法读取设置。请稍后重试。"}
             </p>
             <details className="mt-3 font-mono text-[9px] text-stone">
-              <summary className="cursor-pointer select-none">错误详情</summary>
+              <summary className="cursor-pointer select-none">技术详情</summary>
               <p className="mt-1 break-all">
                 {loadError.code} · HTTP {loadError.status || "网络"} · {loadError.detail}
               </p>
@@ -595,7 +594,7 @@ export function SettingsGroupForm({
       <EmptyState
         icon={AlertTriangle}
         title="没有可显示的设置"
-        description="后台接口没有返回该设置分组，请重新读取或检查后端契约。"
+        description="暂时没有读取到这一组设置。请重试；如果一直为空，请联系平台管理员。"
         action={
           <Button variant="outline" onClick={() => void refresh()}>
             重新读取
@@ -615,9 +614,9 @@ export function SettingsGroupForm({
         : "yellow";
   const consumptionStatusLabel =
     consumption.status === "frontend"
-      ? "前端已消费"
+      ? "已由用户端使用"
       : consumption.status === "backend"
-        ? "后端已消费"
+        ? "已由服务使用"
         : "未接入";
 
   return (
@@ -676,7 +675,7 @@ export function SettingsGroupForm({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          后台设置需要超级管理员权限；当前角色只能查看，保存按钮保持禁用。
+          只有超级管理员可以修改后台设置；当前账号只能查看。
         </div>
       ) : null}
 
@@ -738,7 +737,7 @@ export function SettingsGroupForm({
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="type-eyebrow">消费状态</p>
+            <p className="type-eyebrow">生效范围</p>
             <Badge tone={consumptionTone}>{consumptionStatusLabel}</Badge>
           </div>
           <p
@@ -775,7 +774,7 @@ export function SettingsGroupForm({
               {revealTarget
                 ? `即将显示 ${revealTarget.label}（${revealTarget.key}）的明文。`
                 : "即将显示敏感值的明文。"}
-              这是一次带审计的操作，服务端会记录本次显示；明文默认 10 秒后自动隐藏。
+              本次查看会记录到审计日志；密钥默认 10 秒后自动隐藏。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

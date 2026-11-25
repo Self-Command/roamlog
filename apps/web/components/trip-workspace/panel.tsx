@@ -22,8 +22,10 @@ export function Panel({
     <section className="surface-card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-3">
         <div className="flex flex-wrap items-baseline gap-3">
-          <h2 className="font-serif text-lg leading-tight tracking-[-0.02em] text-ink">{title}</h2>
-          {meta ? <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">{meta}</p> : null}
+          <h2 className="font-display text-base leading-tight font-semibold tracking-[-0.01em] text-ink">
+            {title}
+          </h2>
+          {meta ? <p className="text-xs text-muted">{meta}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
@@ -51,7 +53,9 @@ export function EmptyBlock({
           <Icon aria-hidden="true" className="size-4" />
         </span>
       ) : null}
-      <p className="font-serif text-xl leading-tight tracking-[-0.02em] text-ink">{title}</p>
+      <p className="font-display text-lg leading-tight font-semibold tracking-[-0.01em] text-ink">
+        {title}
+      </p>
       <p className="mt-1.5 max-w-md text-xs leading-5 text-muted">{description}</p>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
@@ -71,7 +75,7 @@ export function SkeletonRows({ rows = 3 }: { rows?: number }) {
 export function QueryError({ title, message, onRetry }: { title: string; message: string; onRetry: () => void }) {
   return (
     <div className="px-4 py-6" role="alert">
-      <p className="font-serif text-lg leading-tight text-ink">{title}</p>
+      <p className="font-display text-base leading-tight font-semibold text-ink">{title}</p>
       <p className="mt-1.5 text-xs leading-5 text-muted">{message}</p>
       <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
         重试
@@ -143,14 +147,14 @@ export function MetaPair({
 
 export function Chips({ items, empty }: { items: readonly string[]; empty: string }) {
   if (items.length === 0) {
-    return <span className="font-mono text-[11px] text-stone">{empty}</span>;
+    return <span className="text-[11px] text-stone">{empty}</span>;
   }
   return (
     <ul className="flex flex-wrap gap-1.5">
       {items.map((item) => (
         <li
           key={item}
-          className="rounded-pill border border-hairline-strong bg-surface-2 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-body"
+          className="rounded-control border border-hairline-strong bg-surface-2 px-2 py-1 text-[11px] text-body"
         >
           {item}
         </li>

@@ -39,7 +39,7 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 w-[220px] flex-col border-r border-hairline bg-surface-deep",
+        "flex h-full min-h-0 w-[220px] flex-col border-r border-hairline bg-surface-1",
         className,
       )}
       aria-label="管理后台侧栏"
@@ -49,15 +49,19 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
           <Compass aria-hidden="true" className="size-4" />
         </span>
         <div className="min-w-0">
-          <p className="font-serif text-[19px] leading-none tracking-[-0.03em] text-ink">Roamlog</p>
-          <p className="type-eyebrow mt-1 text-[8px] text-ash">平台运维</p>
+          <p className="font-display text-[18px] font-semibold leading-none tracking-[-0.02em] text-ink">
+            Roamlog
+          </p>
+          <p className="mt-1 font-ui text-[9px] font-medium tracking-[0.08em] text-muted">
+            平台运维
+          </p>
         </div>
       </div>
 
       {environment ? (
         <div className="border-b border-hairline px-3 py-3">
           <div className="flex items-center justify-between rounded-control border border-hairline bg-surface-1 px-2.5 py-2">
-            <span className="font-mono text-[9px] uppercase tracking-[0.11em] text-muted">
+            <span className="font-ui text-[10px] font-medium tracking-[0.04em] text-muted">
               环境
             </span>
             <Badge tone="slate" aria-label={`环境 ${environment}`}>
@@ -74,7 +78,10 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
         <div className="space-y-5">
           {ADMIN_NAV_GROUPS.map((group) => (
             <section key={group.label} aria-labelledby={`admin-nav-${group.label}`}>
-              <h2 id={`admin-nav-${group.label}`} className="type-eyebrow px-2 pb-2">
+              <h2
+                id={`admin-nav-${group.label}`}
+                className="px-2 pb-2 font-ui text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+              >
                 {group.label}
               </h2>
               <div className="space-y-0.5">
@@ -107,10 +114,10 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
                       aria-current={active ? "page" : undefined}
                       onClick={onNavigate}
                       className={cn(
-                        "flex h-9 items-center gap-2.5 rounded-control px-2.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-deep",
+                        "flex h-9 items-center gap-2.5 rounded-control px-2.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1",
                         active
-                          ? "bg-surface-1 text-ink"
-                          : "text-muted hover:bg-surface-1 hover:text-ink",
+                          ? "bg-surface-2 text-ink"
+                          : "text-muted hover:bg-surface-2/70 hover:text-ink",
                       )}
                     >
                       <Icon
@@ -131,7 +138,7 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
       </nav>
 
       <div className="shrink-0 border-t border-hairline p-3">
-        <div className="rounded-control border border-hairline bg-surface-1 p-3">
+        <div className="rounded-control border border-hairline bg-canvas/40 p-3">
           <div className="flex items-center gap-2.5">
             <Avatar name={session.name} size={30} />
             <div className="min-w-0 flex-1">
@@ -139,23 +146,17 @@ export function AdminSidebar({ activePath, onNavigate, className }: AdminSidebar
               <p className="truncate font-mono text-[9px] text-muted">{session.email}</p>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge tone="neutral">{ADMIN_ROLE_LABELS[session.role]}</Badge>
           </div>
-          <div className="mt-3">
-            <span className="type-eyebrow">平台角色</span>
-            <p className="mt-1.5 font-mono text-[11px] text-body">
-              {ADMIN_ROLE_LABELS[session.role]}
-            </p>
-          </div>
           <p className="mt-2 text-[9px] leading-4 text-stone">
-            平台角色由后端会话与权限校验决定。
+            权限由当前平台角色决定。
           </p>
           <button
             type="button"
             onClick={() => void handleSignOut()}
             disabled={isSigningOut}
-            className="mt-2 flex h-8 w-full items-center gap-2 rounded-control px-1 text-left text-[11px] text-muted outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ink disabled:opacity-60"
+            className="mt-2 flex h-8 w-full items-center gap-2 rounded-control px-1 text-left text-[11px] text-muted outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60"
           >
             <LogOut aria-hidden="true" className="size-3.5" />
             {isSigningOut ? "正在退出…" : "退出登录"}

@@ -178,45 +178,45 @@ const userActionCopy: Record<
     action: "admin.user.restore",
   },
   delete: {
-    title: "删除用户",
-    description: "用户进入软删除状态，后续需由管理员恢复。操作由后端执行并写入审计。",
-    confirmLabel: "确认删除",
+    title: "移入已删除",
+    description: "账户将无法登录，管理员之后可以恢复。本次操作会记录到审计日志。",
+    confirmLabel: "确认移入已删除",
     action: "admin.user.delete",
   },
   "change-role": {
     title: "修改平台角色",
-    description: "平台角色与工作区角色完全独立，变更将影响整个后台能力范围。",
+    description: "平台角色与工作区角色相互独立。修改后，这个账号的后台权限会立即变化。",
     confirmLabel: "确认修改",
     action: "admin.user.change-role",
   },
   "force-logout": {
     title: "强制登出",
-    description: "撤销该用户的全部活跃会话，操作由后端执行并写入审计。",
+    description: "撤销该用户当前的全部登录会话，用户需要重新登录。本次操作会记录到审计日志。",
     confirmLabel: "确认登出",
     action: "admin.user.force-logout",
   },
   "reset-2fa": {
-    title: "重置 2FA",
-    description: "清除现有 TOTP 绑定，用户下次登录必须重新注册双因素认证。",
+    title: "重置两步验证",
+    description: "清除现有验证器绑定，用户下次登录时需要重新完成两步验证。",
     confirmLabel: "确认重置",
     action: "admin.user.reset-2fa",
   },
   "bulk-suspend": {
     title: "批量暂停账户",
-    description: "所选账户会进入暂停状态，操作由后端执行并写入审计。",
+    description: "所选账户会暂停登录，数据会保留，之后可以恢复。本次操作会记录到审计日志。",
     confirmLabel: "确认批量暂停",
     action: "admin.user.bulk-suspend",
   },
   "bulk-restore": {
     title: "批量恢复账户",
-    description: "所选已暂停账户会恢复访问，操作由后端执行并写入审计。",
+    description: "所选账户会恢复访问。本次操作会记录到审计日志。",
     confirmLabel: "确认批量恢复",
     action: "admin.user.bulk-restore",
   },
   "bulk-delete": {
     title: "批量删除账户",
-    description: "所选账户进入软删除状态，需由管理员恢复。操作由后端执行并写入审计。",
-    confirmLabel: "确认批量删除",
+    description: "所选账户将移入已删除，需要时可由管理员恢复。本次操作会记录到审计日志。",
+    confirmLabel: "确认批量移入已删除",
     action: "admin.user.bulk-delete",
   },
 };
@@ -371,7 +371,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
 
   function mutationFailureMessage(error: unknown, fallback: string): string {
     return error instanceof AdminMutationError
-      ? `操作失败：${error.failure.code} · ${error.failure.detail}`
+      ? "操作没有完成，请稍后重试；如果持续失败，请联系平台管理员。"
       : fallback;
   }
 
@@ -410,7 +410,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
         }
       } catch (error) {
         setStatusMessage(
-          mutationFailureMessage(error, "操作失败，请检查 API 与权限后重试。"),
+          mutationFailureMessage(error, "操作没有完成，请稍后重试。"),
         );
         setPendingAction(null);
         return;
@@ -419,11 +419,11 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
       setPendingAction(null);
       setDetailUser(null);
       setSelectedIds(new Set());
-      setStatusMessage(`已提交：${copy.action}（审计由后端写入）`);
+      setStatusMessage(`${copy.action}已完成，并记录到审计日志。`);
       return;
     }
 
-    setStatusMessage("未连接后台 API，操作未提交。");
+    setStatusMessage("后台服务未连接，本次操作没有提交。");
     setPendingAction(null);
   }
 
@@ -445,7 +445,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
       setStatusMessage("用户 CSV 已按当前筛选导出。");
     } catch (error) {
       setStatusMessage(
-        mutationFailureMessage(error, "导出失败，请检查后台 API 与会话后重试。"),
+        mutationFailureMessage(error, "导出失败，请稍后重试。"),
       );
     } finally {
       setIsExporting(false);
@@ -525,7 +525,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
       return;
     }
     if (!profiles) {
-      setProfileError("未连接后台 API，资料未提交。");
+      setProfileError("后台服务未连接，资料没有提交。");
       return;
     }
 
@@ -609,8 +609,8 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
               isExporting
                 ? "正在生成 CSV"
                 : !canExport
-                  ? "仅管理员及以上可导出用户 CSV（后端动作 admin:users:delete）"
-                  : "按当前搜索与筛选导出全部匹配用户（服务端 CSV）"
+                  ? "只有管理员或超级管理员可以导出用户数据。"
+                  : "按当前搜索与筛选导出全部匹配用户。"
             }
             onClick={() => void handleExport()}
           >
@@ -673,7 +673,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
             ))}
           </Select>
         </label>
-        <div className="flex h-9 items-center border-l border-hairline pl-3 font-mono text-[10px] text-muted max-md:hidden">
+        <div className="flex h-9 items-center border-l border-hairline pl-3 font-ui text-[10px] text-muted max-md:hidden">
           {`${visibleUsers.length} 条 / 第 ${pageIndex + 1} 页`}
         </div>
       </AdminFilterBar>
@@ -684,7 +684,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          分析员可查看全部用户数据，但所有破坏性操作保持可见且禁用。
+          分析员只能查看用户数据，不能修改或删除。
         </div>
       ) : null}
 
@@ -698,7 +698,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
               variant="ghost"
               size="sm"
               disabled={!canRestore || !bulkUsers.some((user) => user.status === "suspended")}
-              title={canRestore ? "批量恢复所选账户" : "当前平台角色不可恢复账户"}
+              title={canRestore ? "批量恢复所选账户" : "你没有恢复账户的权限。"}
               onClick={() => openAction({ kind: "bulk-restore", users: bulkUsers })}
             >
               批量恢复
@@ -707,7 +707,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
               variant="ghost"
               size="sm"
               disabled={!canSuspend || !bulkUsers.every((user) => user.status === "active")}
-              title={canSuspend ? "批量暂停所选账户" : "当前平台角色不可暂停账户"}
+              title={canSuspend ? "批量暂停所选账户" : "你没有暂停账户的权限。"}
               onClick={() => openAction({ kind: "bulk-suspend", users: bulkUsers })}
             >
               批量暂停
@@ -716,7 +716,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
               variant="danger"
               size="sm"
               disabled={!canDelete}
-              title={canDelete ? "批量软删除所选账户" : "当前平台角色不可删除账户"}
+              title={canDelete ? "批量移入已删除" : "你没有删除账户的权限。"}
               onClick={() => openAction({ kind: "bulk-delete", users: bulkUsers })}
             >
               批量删除
@@ -730,7 +730,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
           <div>
             <h2 className="text-[13px] font-medium text-ink">平台账户</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              用户 / 服务端分页 第 {pageIndex + 1} 页
+              账户 · 第 {pageIndex + 1} 页
             </p>
           </div>
         </div>
@@ -740,7 +740,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
             <p className="type-eyebrow text-accent-red">加载失败</p>
             <p className="mt-1 text-[12px] text-body">加载失败，请稍后重试</p>
             <details className="mt-2 font-mono text-[9px] text-muted">
-              <summary className="cursor-pointer select-none">错误详情</summary>
+              <summary className="cursor-pointer select-none">技术详情</summary>
               <p className="mt-1 break-all">
                 {api.error.code} · HTTP {api.error.status || "network"} · {api.error.detail}
               </p>
@@ -764,7 +764,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
             <table className="w-full min-w-[1040px] border-collapse text-left text-[12px]">
               <caption className="sr-only">平台用户列表</caption>
               <thead>
-                <tr className="border-b border-hairline text-mono text-[9px] uppercase tracking-[0.1em] text-muted">
+              <tr className="border-b border-hairline font-ui text-[10px] font-semibold tracking-[0.04em] text-muted">
                   <th scope="col" className="w-10 px-3 py-2.5">
                     <Checkbox
                       aria-label="全选当前用户"
@@ -876,7 +876,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                           size="sm"
                           aria-label="修改平台角色"
                           disabled={!canChangeRole || user.status === "deleted"}
-                          title={canChangeRole ? "修改平台角色" : "仅超级管理员可修改平台角色"}
+                          title={canChangeRole ? "修改平台角色" : "你没有修改平台角色的权限。"}
                           onClick={() => openAction({ kind: "change-role", user })}
                         >
                           <MoreHorizontal aria-hidden="true" />
@@ -889,10 +889,10 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                             user.status === "active"
                               ? canSuspend
                                 ? "暂停账户"
-                                : "当前平台角色不可暂停账户"
+                                : "你没有暂停账户的权限。"
                               : canRestore
                                 ? "恢复账户"
-                                : "当前平台角色不可恢复账户"
+                                : "你没有恢复账户的权限。"
                           }
                           disabled={
                             user.status === "active"
@@ -913,18 +913,18 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                         <Button
                           variant="danger"
                           size="sm"
-                          aria-label="删除用户"
+                          aria-label="移入已删除"
                           title={
                             canDelete
                               ? user.status === "deleted"
                                 ? "用户已删除"
-                                : "软删除用户"
-                              : "当前平台角色不可删除用户"
+                                : "移入已删除"
+                              : "你没有删除账户的权限。"
                           }
                           disabled={!canDelete || user.status === "deleted"}
                           onClick={() => openAction({ kind: "delete", user })}
                         >
-                          删除
+                          移入已删除
                         </Button>
                       </div>
                     </td>
@@ -936,7 +936,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-2.5">
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
+            <p className="font-ui text-[10px] tracking-[0.03em] text-muted">
               第 {pageIndex + 1} 页 · 本页 {visibleUsers.length} 条
               {api.data?.hasMore ? " · 还有更多" : " · 已到最后一页"}
             </p>
@@ -965,7 +965,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
         </div>
       </section>
 
-      <div role="status" aria-live="polite" className="min-h-4 font-mono text-[10px] text-muted">
+      <div role="status" aria-live="polite" className="min-h-4 font-ui text-[10px] text-muted">
         {statusMessage}
       </div>
 
@@ -1138,7 +1138,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                       : EMAIL_VERIFICATION_STATUS_LABELS.pending,
                   ],
                   [
-                    "2FA",
+                    "两步验证",
                     detailLoading ? (
                       "…"
                     ) : detailData?.twoFactorEnabled === undefined ? (
@@ -1287,7 +1287,7 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                   <Button
                     variant="ghost"
                     disabled={!canForceLogout}
-                    title={canForceLogout ? "撤销全部会话" : "当前角色不可执行"}
+                    title={canForceLogout ? "撤销全部会话" : "你没有执行此操作的权限。"}
                     onClick={() => {
                       openAction({ kind: "force-logout", user: detailUser });
                     }}
@@ -1297,16 +1297,16 @@ export function UsersView({ role, mutations, exportCsv, profiles }: UsersViewPro
                   <Button
                     variant="ghost"
                     disabled={!canResetTwoFactor}
-                    title={canResetTwoFactor ? "重置双因素认证" : "仅管理员及以上可重置 2FA"}
+                    title={canResetTwoFactor ? "重置两步验证" : "你没有重置两步验证的权限。"}
                     onClick={() => {
                       openAction({ kind: "reset-2fa", user: detailUser });
                     }}
                   >
-                    重置 2FA
+                    重置两步验证
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  操作会提交到后台并写入审计；成功后列表与详情会自动刷新。
+                  操作完成会记录到审计日志；成功后列表与详情会自动刷新。
                 </p>
               </div>
             </>

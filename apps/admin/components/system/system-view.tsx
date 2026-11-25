@@ -40,12 +40,61 @@ const workerTones = {
 } as const;
 
 const signalSources = {
-  "consumer-clients": "Redis CLIENT LIST（阻塞消费者）+ 队列计数",
+  "consumer-clients": "后台任务进程活跃连接与队列计数",
   "activity-derived": "最近一次任务完成/失败时间 + 队列运行数",
   unavailable: "无可用的推导信号",
 } as const;
 
 const UNCONFIGURED = "unconfigured";
+
+const CHECK_LABELS: Readonly<Record<string, string>> = {
+  database: "数据库",
+  postgresql: "数据库",
+  redis: "缓存服务",
+  storage: "文件存储",
+  s3: "文件存储",
+  resend: "邮件服务",
+  mail: "邮件服务",
+  queue: "任务队列",
+};
+
+const QUEUE_LABELS: Readonly<Record<string, string>> = {
+  "media-processing": "媒体处理",
+  "email-delivery": "邮件发送",
+  "archive-export": "档案导出",
+  "trip-reminders": "行程提醒",
+};
+
+function friendlyCheckName(name: string): string {
+  const normalized = name.toLowerCase();
+  if (normalized.includes("postgres") || normalized.includes("database")) {
+    return CHECK_LABELS.database!;
+  }
+  if (normalized.includes("redis") || normalized.includes("cache")) {
+    return CHECK_LABELS.redis!;
+  }
+  if (
+    normalized.includes("s3") ||
+    normalized.includes("minio") ||
+    normalized.includes("storage")
+  ) {
+    return CHECK_LABELS.storage!;
+  }
+  if (normalized.includes("resend") || normalized.includes("mail")) {
+    return CHECK_LABELS.mail!;
+  }
+  return CHECK_LABELS[normalized] ?? name;
+}
+
+function queueLabel(name: string): string {
+  return QUEUE_LABELS[name.toLowerCase()] ?? name;
+}
+
+function checkAction(status: "up" | "degraded" | "down"): string {
+  if (status === "up") return "服务正常";
+  if (status === "degraded") return "服务响应变慢，请稍后重试";
+  return "服务不可用，请检查服务连接";
+}
 
 /** `null`-able operational values render as an explicit "not wired" state. */
 function notWired(value: string | null | undefined): boolean {
@@ -88,11 +137,11 @@ export function SystemView({
 
       <section aria-label="版本与运行时间" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminMetricCard
-          label="API 版本"
+          label="接口服务版本"
           value={notWired(snapshot.apiVersion) ? "未上报" : snapshot.apiVersion}
           detail={
             notWired(snapshot.apiVersion)
-              ? "后端未上报版本号"
+              ? "服务未上报版本号"
               : `任务进程版本 ${
                   notWired(snapshot.workerVersion) ? "未上报" : snapshot.workerVersion
                 }`
@@ -101,9 +150,9 @@ export function SystemView({
           icon={ServerCog}
         />
         <AdminMetricCard
-          label="Node.js"
+          label="运行环境"
           value={snapshot.nodeVersion}
-          detail="服务器运行时"
+          detail="服务器运行时版本"
           tone="neutral"
           icon={GitCommitHorizontal}
         />
@@ -119,7 +168,7 @@ export function SystemView({
           value={notWired(snapshot.buildTime) ? "未上报" : formatDateTime(snapshot.buildTime)}
           detail={
             notWired(snapshot.buildTime)
-              ? "后端未上报构建时间（不再用容器启动时间替代）"
+              ? "服务未上报构建时间"
               : "构建元数据"
           }
           tone="orange"
@@ -131,9 +180,9 @@ export function SystemView({
         <section className="rounded-card border border-hairline-strong bg-surface-1">
           <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
             <div>
-              <h2 className="text-[13px] font-medium text-ink">依赖健康检查</h2>
+              <h2 className="text-[13px] font-medium text-ink">依赖服务状态</h2>
               <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                就绪探针
+                服务健康检查
               </p>
             </div>
             <Badge tone={upChecks === snapshot.checks.length ? "green" : "yellow"}>
@@ -146,13 +195,23 @@ export function SystemView({
             {snapshot.checks.map((check) => (
               <article key={check.name} className="bg-surface-1 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-[12px] font-medium text-ink">{check.name}</h3>
+                  <h3 className="text-[12px] font-medium text-ink">
+                    {friendlyCheckName(check.name)}
+                  </h3>
                   <Badge tone={checkTones[check.status]}>{HEALTH_STATUS_LABELS[check.status]}</Badge>
                 </div>
-                <p className="mt-3 font-serif text-2xl leading-none text-ink">
+                <p className="mt-3 font-display text-2xl font-semibold leading-none tracking-[-0.02em] text-ink">
                   {check.latencyMs === null ? "—" : `${check.latencyMs} ms`}
                 </p>
-                <p className="mt-2 font-mono text-[9px] leading-4 text-muted">{check.detail}</p>
+                <p className="mt-2 text-[10px] leading-4 text-muted">
+                  {checkAction(check.status)}
+                </p>
+                {check.detail ? (
+                  <details className="mt-2 font-mono text-[9px] leading-4 text-muted">
+                    <summary className="cursor-pointer select-none">技术详情</summary>
+                    <p className="mt-1 break-all">{check.detail}</p>
+                  </details>
+                ) : null}
               </article>
             ))}
           </div>
@@ -160,8 +219,8 @@ export function SystemView({
 
         <aside className="space-y-4">
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
-            <p className="type-eyebrow">任务进程 / 观测信号</p>
-            <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">后台任务进程</h2>
+            <p className="type-eyebrow">后台任务状态</p>
+            <h2 className="mt-2 font-display text-xl font-semibold text-ink">后台任务进程</h2>
             <dl className="mt-3 space-y-2 text-[11px]">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted">版本</dt>
@@ -170,7 +229,7 @@ export function SystemView({
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted">阻塞消费者</dt>
+                <dt className="text-muted">活跃任务数</dt>
                 <dd className="font-mono text-[10px] text-body">{snapshot.workerConsumers}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -197,15 +256,14 @@ export function SystemView({
               </div>
             </dl>
             <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
-              推导口径：{workerDerivation}
+              状态来源：{workerDerivation}
               {workerSignal?.lastJobStatus
-                ? ` · 最近${JOB_STATUS_LABELS[workerSignal.lastJobStatus]} @ ${workerSignal.lastJobQueue ?? "?"}`
+                ? ` · 最近${JOB_STATUS_LABELS[workerSignal.lastJobStatus]} @ ${queueLabel(workerSignal.lastJobQueue ?? "?")}`
                 : ""}
             </p>
             {!workerObservable ? (
               <p className="mt-2 text-[9px] leading-4 text-muted">
-                任务进程未写入心跳，也没有可观测的阻塞消费者或近期任务；需要在任务进程侧补上
-                心跳上报，才能给出可信的健康判定。
+                当前没有足够的任务进程信号，无法确认它是否在线。请确认后台任务进程已启动。
               </p>
             ) : null}
           </section>
@@ -213,27 +271,32 @@ export function SystemView({
           <section className="rounded-card border border-hairline-strong bg-surface-1 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="type-eyebrow">队列 / Redis 发现</p>
-                <h2 className="mt-2 font-serif text-xl tracking-[-0.025em] text-ink">队列注册</h2>
+                <p className="type-eyebrow">任务队列</p>
+                <h2 className="mt-2 font-display text-xl font-semibold text-ink">任务队列</h2>
               </div>
               <Layers aria-hidden="true" className="size-4 text-accent-blue" />
             </div>
             <div className="mt-3 space-y-2 text-[11px]">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">已发现队列</span>
+                <span className="text-muted">已登记队列</span>
                 <span className="font-mono text-[10px] text-body">
                   {`${queues.length} 个`}
                 </span>
               </div>
               {queues.length === 0 ? (
                 <p className="text-[10px] leading-4 text-muted">
-                  {"Redis 中没有可识别的队列状态键：当前没有已注册队列，或 Redis 不可达。"}
+                  "没有发现队列。请确认后台任务进程已经启动；如果持续为空，请联系平台管理员。"
                 </p>
               ) : (
                 <ul className="space-y-1.5">
                   {queues.map((queue) => (
                     <li key={queue.name} className="flex items-center justify-between gap-2">
-                      <span className="truncate font-mono text-[10px] text-body">{queue.name}</span>
+                      <span
+                        className="truncate text-[10px] text-body"
+                        title={`技术标识：${queue.name}`}
+                      >
+                        {queueLabel(queue.name)}
+                      </span>
                       <span className="flex items-center gap-2 font-mono text-[9px] text-muted">
                         <span>等待 {queue.waiting}</span>
                         <span>运行 {queue.active}</span>
@@ -247,7 +310,7 @@ export function SystemView({
               )}
             </div>
             <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
-              来源：扫描 Redis 中的队列状态键。
+              来源：扫描后台任务队列状态。
             </p>
           </section>
         </aside>
@@ -258,7 +321,7 @@ export function SystemView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">数据库迁移</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              Prisma 迁移状态
+              数据库升级状态
             </p>
           </div>
           <Badge tone={snapshot.migrations.length > 0 ? "green" : "yellow"}>

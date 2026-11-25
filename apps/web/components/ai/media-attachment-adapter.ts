@@ -182,7 +182,7 @@ export function createMediaAttachmentAdapter({
         read.status === "ready"
           ? "上传完成但无法生成预览地址。"
           : "图片还在处理中，请稍后重试。",
-        read.status === "ready" ? "请重新选择图片。" : "服务器的图片处理还没有完成。",
+        read.status === "ready" ? "请重新选择图片。" : "图片还在处理中，请稍后再试。",
       );
     }
     mediaIds.set(id, read.id);

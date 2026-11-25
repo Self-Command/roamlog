@@ -182,7 +182,7 @@ function renderEditor(
 
 async function fillRequiredCreateFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/名称/), "DeepSeek 主账号");
-  await user.type(screen.getByLabelText(/API Key/), "sk-test");
+  await user.type(screen.getByLabelText(/接口密钥/), "sk-test");
 }
 
 describe("ProviderEditor", () => {
@@ -193,14 +193,14 @@ describe("ProviderEditor", () => {
     expect(screen.getByRole("heading", { name: "添加服务商" })).toBeInTheDocument();
     expect(screen.getByLabelText(/名称/)).toBeInTheDocument();
     expect(screen.getByLabelText(/类型/)).toHaveValue("openai-chat::deepseek");
-    expect(screen.getByLabelText(/Base URL/)).toHaveValue("https://api.deepseek.com/v1");
+    expect(screen.getByLabelText(/服务地址/)).toHaveValue("https://api.deepseek.com/v1");
     expect(screen.getByLabelText("默认模型")).toHaveValue("");
     expect(screen.getByLabelText("超时（毫秒）")).toHaveValue(60_000);
 
     await user.click(screen.getByRole("button", { name: "保存服务商" }));
 
     expect(screen.getByText("请输入服务商名称。")).toBeInTheDocument();
-    expect(screen.getByText("API Key不能为空。")).toBeInTheDocument();
+    expect(screen.getByText("接口密钥不能为空。")).toBeInTheDocument();
     expect(api.create).not.toHaveBeenCalled();
   });
 
@@ -240,7 +240,7 @@ describe("ProviderEditor", () => {
 
     await screen.findByText("名称已被占用。");
     expect(screen.getByLabelText(/名称/)).toHaveValue("DeepSeek 主账号");
-    expect(screen.getByLabelText(/API Key/)).toHaveValue("sk-test");
+    expect(screen.getByLabelText(/接口密钥/)).toHaveValue("sk-test");
     expect(onSaved).not.toHaveBeenCalled();
     expect(api.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -301,7 +301,7 @@ describe("ProviderEditor", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("测试超时");
     expect(screen.getByLabelText(/名称/)).toHaveValue("DeepSeek 主账号");
-    expect(screen.getByLabelText(/API Key/)).toHaveValue("sk-test");
+    expect(screen.getByLabelText(/接口密钥/)).toHaveValue("sk-test");
     expect(api.create).not.toHaveBeenCalled();
   });
 
@@ -312,7 +312,7 @@ describe("ProviderEditor", () => {
     const name = screen.getByLabelText(/名称/);
     await user.clear(name);
     await user.type(name, "DeepSeek 主账号（更新）");
-    await user.type(screen.getByLabelText(/API Key/), "sk-new");
+    await user.type(screen.getByLabelText(/接口密钥/), "sk-new");
     await user.click(screen.getByRole("button", { name: "保存服务商" }));
 
     await waitFor(() => expect(api.update).toHaveBeenCalledTimes(1));

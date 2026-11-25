@@ -1,4 +1,5 @@
 import type { INestApplication } from "@nestjs/common";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 
@@ -31,6 +32,12 @@ export function configureApp(app: INestApplication, options: ConfigureAppOptions
 
   app.setGlobalPrefix("v1");
   app.useLogger(logger);
+  // AI message persistence carries assistant-ui parts (long plan Markdown,
+  // reasoning and tool results), which routinely exceed Express's 100 kB
+  // default. Register the parser before Nest's default so `jsonParser` is
+  // considered applied and the global 100 kB limit cannot reject a valid
+  // conversation turn after the model has already finished.
+  (app as NestExpressApplication).useBodyParser("json", { limit: "2mb" });
   if (options.shutdownHooks !== false) {
     app.enableShutdownHooks();
   }

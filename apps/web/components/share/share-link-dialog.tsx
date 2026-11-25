@@ -94,7 +94,7 @@ export function ShareLinkDialog({
         return;
       }
       if (response.status === 403) {
-        setError("当前角色不能创建分享链接。Viewer 只能阅读和评论。");
+        setError("你没有创建分享链接的权限。只读成员只能阅读和评论。");
         return;
       }
       if (response.status === 400) {
@@ -128,7 +128,7 @@ export function ShareLinkDialog({
         size="sm"
         disabled={!canShare}
         onClick={() => setOpen(true)}
-        title={canShare ? undefined : "Viewer 不能创建分享链接"}
+        title={canShare ? undefined : "只读成员不能创建分享链接"}
       >
         <Share2 aria-hidden="true" />
         分享

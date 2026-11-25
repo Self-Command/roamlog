@@ -16,33 +16,37 @@ export function TripDetailOverview({ trip, itinerary, itineraryLoading }: TripDe
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
       <div className="space-y-4">
-        <section className="rounded-card border border-hairline-strong bg-surface-1 p-5">
+        <section className="surface-card p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow">TRIP NOTE</p>
-              <h2 className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">这趟旅行</h2>
+              <p className="type-eyebrow">旅行摘要</p>
+              <h2 className="mt-1.5 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                这趟旅行
+              </h2>
             </div>
-            <Badge tone="neutral">TRIP FILE</Badge>
+            <Badge tone="neutral">旅行资料</Badge>
           </div>
           <p className="mt-4 text-sm leading-7 text-body">{trip.summary}</p>
           <div className="mt-5 grid gap-3 border-t border-hairline pt-4 sm:grid-cols-3">
             <TripFact
-              label="DURATION"
+              label="旅行天数"
               value={`${tripDurationDays(trip.startDate, trip.endDate)} 天`}
             />
-            <TripFact label="STOPS" value={`${trip.destinations.length} 站`} />
+            <TripFact label="停靠点" value={`${trip.destinations.length} 站`} />
             <TripFact
-              label="BUDGET"
+              label="预算"
               value={formatBudget(trip.budgetAmountMinor, trip.budgetCurrency)}
             />
           </div>
         </section>
 
-        <section className="rounded-card border border-hairline-strong bg-surface-1 p-5">
+        <section className="surface-card p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="type-eyebrow">ITINERARY PREVIEW</p>
-              <h2 className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">接下来</h2>
+              <p className="type-eyebrow">行程预览</p>
+              <h2 className="mt-1.5 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                接下来
+              </h2>
             </div>
             <Badge tone="blue">{itinerary.length} ITEMS</Badge>
           </div>
@@ -60,9 +64,11 @@ export function TripDetailOverview({ trip, itinerary, itineraryLoading }: TripDe
       </div>
 
       <div className="space-y-4">
-        <section className="rounded-card border border-hairline-strong bg-surface-1 p-5">
-          <p className="type-eyebrow">ROUTE</p>
-          <h2 className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">路线</h2>
+        <section className="surface-card p-5">
+          <p className="type-eyebrow">路线</p>
+          <h2 className="mt-1.5 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+            路线
+          </h2>
           <ol className="mt-4 space-y-3">
             {[trip.origin, ...trip.destinations].map((place, index) => (
               <li key={`${place}-${index}`} className="flex gap-3">
@@ -78,7 +84,7 @@ export function TripDetailOverview({ trip, itinerary, itineraryLoading }: TripDe
                 <span className="min-w-0 pb-1">
                   <span className="block text-sm text-ink">{place}</span>
                   <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-                    {index === 0 ? "ORIGIN" : `STOP 0${index}`}
+                    {index === 0 ? "出发地" : `停靠点 0${index}`}
                   </span>
                 </span>
               </li>
@@ -86,12 +92,12 @@ export function TripDetailOverview({ trip, itinerary, itineraryLoading }: TripDe
           </ol>
         </section>
 
-        <section className="rounded-card border border-hairline-strong bg-surface-1 p-5">
+        <section className="surface-card p-5">
           <div className="flex items-center gap-2">
             <WalletCards aria-hidden="true" className="size-4 text-accent-orange" />
-            <p className="type-eyebrow">BUDGET</p>
+            <p className="type-eyebrow">预算</p>
           </div>
-          <p className="mt-3 font-serif text-3xl tracking-[-0.03em] text-ink">
+          <p className="mt-2 font-display text-2xl font-semibold tracking-[-0.02em] text-ink">
             {formatBudget(trip.budgetAmountMinor, trip.budgetCurrency)}
           </p>
           <p className="mt-2 text-xs leading-5 text-muted">

@@ -178,7 +178,7 @@ function StopRow({
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <p className="font-serif text-lg leading-tight tracking-[-0.02em] text-ink">
+          <p className="font-display text-base font-semibold leading-tight tracking-[-0.01em] text-ink">
             {stop.city}
           </p>
           <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
@@ -205,7 +205,7 @@ function StopRow({
           <p className="mt-1.5 text-xs leading-5 text-body">{stop.notes}</p>
         ) : null}
         <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-          ORDER {stop.order} · VERSION {stop.version}
+          第 {stop.order} 站
         </p>
       </div>
       <div className="flex items-center gap-1">
@@ -391,7 +391,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
           assertMutationOk(response, `/v1/stops/${target.id}`);
           return response;
         },
-        forbidden: "当前角色不能编辑行程节点。",
+        forbidden: "你没有编辑行程节点的权限。请联系工作区所有者或管理员。",
         failure: "行程节点没有保存。",
       });
       if (saved) {
@@ -409,7 +409,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/trips/${tripId}/stops`);
         return response;
       },
-      forbidden: "当前角色不能添加行程节点。",
+      forbidden: "你没有添加行程节点的权限。请联系工作区所有者或管理员。",
       failure: "行程节点没有创建成功。",
     });
     if (created) {
@@ -428,7 +428,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
         assertMutationOk(response, `/v1/stops/${target.id}`);
         return response;
       },
-      forbidden: "当前角色不能删除行程节点。",
+      forbidden: "你没有删除行程节点的权限。请联系工作区所有者或管理员。",
       failure: "行程节点没有删除。",
     });
     if (deleted) setDeleteTarget(null);
@@ -514,7 +514,7 @@ export function StopsTab({ tripId }: { tripId: string }) {
               <DialogTitle>{editTarget ? "编辑行程节点" : "添加行程节点"}</DialogTitle>
               <DialogDescription>
                 {editTarget
-                  ? "修改这趟停留的城市、日期与备注；保存时会检查是否与最新修改冲突，冲突会打开版本冲突对话框。"
+                  ? "修改这趟停留的城市、日期与备注；如果其他成员同时修改，会请你选择保留哪一版。"
                   : "记录停留的城市、国家、日期与坐标，可补充备注；不确定坐标时可以留空。"}
               </DialogDescription>
             </DialogHeader>

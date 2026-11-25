@@ -15,7 +15,7 @@ describe("AuthShell", () => {
 
     expect(screen.getByText("auth form slot")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("把旅行写成");
-    expect(screen.getByText("SHARED, NOT SOCIAL")).toBeInTheDocument();
+    expect(screen.getByText("协作优先，不做信息流")).toBeInTheDocument();
   });
 
   it("never invents workspace activity for anonymous visitors", () => {
@@ -44,6 +44,7 @@ describe("AuthShell", () => {
     );
 
     expect(container.textContent).not.toMatch(IMPLEMENTATION_DETAILS);
-    expect(screen.getByText("A HOME FOR SHARED JOURNEYS")).toBeInTheDocument();
+    expect(screen.getByText("共享旅行档案")).toBeInTheDocument();
+    expect(screen.getByText("所有者 / 管理员 / 编辑者 / 只读成员")).toBeInTheDocument();
   });
 });

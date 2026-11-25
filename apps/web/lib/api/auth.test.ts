@@ -58,7 +58,7 @@ describe("twoFactorErrorMessage", () => {
 
     expect(error).toBeInstanceOf(ApiError);
     const message = error instanceof Error ? error.message : "";
-    expect(message).toContain("验证器密钥");
+    expect(message).toContain("登录验证暂时没有完成");
     expectUserFacingCopy(message);
     expect(twoFactorErrorMessage(error)).toBe(message);
   });

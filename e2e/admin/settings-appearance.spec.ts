@@ -28,21 +28,17 @@ const runId = uniqueRunId();
 const superAdmin = createSuperAdminAccount(runId);
 
 const SKINS = [
-  { id: "editorial-noir", label: "编辑黑" },
-  { id: "catppuccin", label: "猫咖" },
-  { id: "tokyo-night", label: "东京夜" },
-  { id: "rose-pine", label: "玫瑰松" },
-  { id: "kanagawa", label: "神奈川" },
-  { id: "everforest", label: "常青林" },
+  { id: "porcelain", label: "Porcelain 原生瓷白" },
+  { id: "fluent", label: "Fluent 2 原生企业" },
+  { id: "carbon", label: "IBM Carbon" },
+  { id: "carbon-soft", label: "Carbon 柔和灰阶" },
 ] as const;
 
 const FONT_PAIRINGS = [
-  { id: "editorial-classic", label: "经典编辑" },
-  { id: "literary-warm", label: "文学暖调" },
-  { id: "modern-editorial", label: "现代编辑" },
-  { id: "expressive-serif", label: "表达衬线" },
-  { id: "cjk-editorial", label: "中文编辑" },
-  { id: "swiss-modern", label: "瑞士现代" },
+  { id: "primer-system", label: "Primer 系统" },
+  { id: "primer-cjk", label: "Primer 中文" },
+  { id: "fluent-native", label: "Fluent 原生" },
+  { id: "carbon-plex", label: "Carbon Plex" },
 ] as const;
 
 interface ThemeSettingItem {
@@ -158,12 +154,21 @@ function isExternalAdminFont(url: string): boolean {
 }
 
 async function loginAsSuperAdmin(pageToUse: Page): Promise<void> {
-  await pageToUse.route("**/v1/auth/sign-in/email", async (route) => {
+  await pageToUse.route("**/v1/auth/**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (
+      pathname !== "/v1/auth/sign-in/email" &&
+      pathname !== "/v1/auth/two-factor/verify-totp"
+    ) {
+      await route.continue();
+      return;
+    }
     const response = await route.fetch({
-      url: `${API_URL}/v1/auth/sign-in/email`,
-      method: "POST",
+      url: `${API_URL}${pathname}`,
+      method: request.method(),
       headers: { "content-type": "application/json", origin: WEB_URL },
-      postData: route.request().postData(),
+      postData: request.postData(),
     });
     await route.fulfill({ response });
   });
@@ -225,7 +230,7 @@ test.describe("admin appearance defaults", () => {
       page.getByRole("radiogroup", { name: "默认外观" }).locator('[role="radio"]'),
     ).toHaveCount(3);
     await expect(
-      page.getByRole("radiogroup", { name: "默认皮肤" }).locator('[role="radio"]'),
+      page.getByRole("radiogroup", { name: "默认主题" }).locator('[role="radio"]'),
     ).toHaveCount(SKINS.length);
     await expect(
       page.getByRole("radiogroup", { name: "默认字体" }).locator('[role="radio"]'),
@@ -243,8 +248,8 @@ test.describe("admin appearance defaults", () => {
     expect(evidence.shellBefore.colorScheme).toContain("dark");
 
     await chooseRadio(page, "默认外观", "浅色");
-    await chooseRadio(page, "默认皮肤", "猫咖");
-    await chooseRadio(page, "默认字体", "文学暖调");
+    await chooseRadio(page, "默认主题", "Fluent 2");
+    await chooseRadio(page, "默认字体", "Primer 中文");
 
     await page.getByRole("button", { name: "保存外观", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "外观默认值已保存" })).toBeVisible({
@@ -261,8 +266,8 @@ test.describe("admin appearance defaults", () => {
     };
     expect(evidence.savedDefaults).toMatchObject({
       mode: "light",
-      skin: "catppuccin",
-      font: "literary-warm",
+      skin: "fluent",
+      font: "primer-cjk",
     });
 
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -274,15 +279,15 @@ test.describe("admin appearance defaults", () => {
     ).toHaveAttribute("aria-checked", "true");
     await expect(
       page
-        .getByRole("radiogroup", { name: "默认皮肤" })
+        .getByRole("radiogroup", { name: "默认主题" })
         .locator('[role="radio"]')
-        .filter({ hasText: "猫咖" }),
+        .filter({ hasText: "Fluent 2" }),
     ).toHaveAttribute("aria-checked", "true");
     await expect(
       page
         .getByRole("radiogroup", { name: "默认字体" })
         .locator('[role="radio"]')
-        .filter({ hasText: "文学暖调" }),
+        .filter({ hasText: "Primer 中文" }),
     ).toHaveAttribute("aria-checked", "true");
 
     evidence.shellAfter = await page.locator("html").evaluate((element) => ({

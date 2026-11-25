@@ -3,7 +3,7 @@
 import type { MediaRead, Trip, TripCover } from "@roamlog/contracts";
 import { Button, Progress, Skeleton } from "@roamlog/ui";
 import { ImageUp, RefreshCw, Trash2 } from "lucide-react";
-import { useId, useRef, useState, type DragEvent } from "react";
+import { useEffect, useId, useRef, useState, type DragEvent } from "react";
 
 import {
   COVER_ACCEPT_ATTRIBUTE,
@@ -98,7 +98,7 @@ function describeLiveText(input: {
     case "completing":
       return "正在确认上传…";
     case "processing":
-      return "服务器正在处理图片，完成后会自动应用为封面。";
+      return "图片正在处理，完成后会自动应用为封面。";
     case "applying":
       return input.operation === "clear" ? "正在移除封面…" : "正在应用封面…";
     case "ready":
@@ -137,6 +137,7 @@ export function CoverUploader({
   const [dragging, setDragging] = useState(false);
   const [dropNotice, setDropNotice] = useState<string | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [coverFailed, setCoverFailed] = useState(false);
   const titleId = useId();
   // Read once per render from the shared 30s public-settings cache; the
   // resolved values flow into validation and the compressor for this upload.
@@ -185,20 +186,33 @@ export function CoverUploader({
     : tripCover;
 
   const coverImageUrl = serverCover?.url ?? serverCover?.thumbUrl ?? null;
-  const hasCoverImage = Boolean(coverImageUrl);
-  const isProcessingCover = Boolean(serverCover) && !hasCoverImage;
+  const hasCoverImage = Boolean(coverImageUrl) && !coverFailed;
+  const isProcessingCover = Boolean(serverCover) && !coverImageUrl;
+  const selectedFileName = upload.file?.name ?? "";
+  const isImageFile =
+    upload.file?.type.startsWith("image/") === true ||
+    /\.(?:jpe?g|png|webp|avif|heic|heif)$/iu.test(selectedFileName);
   const showPreview =
+    isImageFile &&
     Boolean(upload.previewUrl) &&
     (upload.isBusy ||
       upload.phase === "error" ||
       (!hasCoverImage && upload.phase === "ready"));
-  const displayUrl = showPreview ? upload.previewUrl : coverImageUrl;
+  const displayUrl = showPreview
+    ? upload.previewUrl
+    : hasCoverImage
+      ? coverImageUrl
+      : null;
   // Browsers cannot decode HEIC/HEIF previews; tell the truth instead of showing
   // a broken image, while keeping the upload fully functional.
   const showPreviewFallback = showPreview && previewFailed && !coverImageUrl;
   const isPhoto = size === "photo";
   const aspectClass = isPhoto ? "aspect-[4/3]" : "aspect-[16/9]";
   const canAcceptInput = !disabled && !upload.isBusy;
+
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [coverImageUrl]);
 
   const openPicker = () => {
     if (!canAcceptInput) return;
@@ -237,17 +251,21 @@ export function CoverUploader({
 
   const liveText =
     dropNotice ??
-    describeLiveText({
-      phase: upload.phase,
-      progress: upload.progress,
-      hasCover: Boolean(serverCover),
-      operation: upload.lastOperation,
-      hasTrip: Boolean(trip),
-    });
+    (coverFailed
+      ? "封面图片链接已失效，请替换或移除。"
+      : describeLiveText({
+          phase: upload.phase,
+          progress: upload.progress,
+          hasCover: Boolean(serverCover),
+          operation: upload.lastOperation,
+          hasTrip: Boolean(trip),
+        }));
 
   const statusChip = upload.isBusy
     ? "上传中"
-    : serverCover
+    : coverFailed
+      ? "链接失效"
+      : serverCover
       ? isProcessingCover
         ? "处理中"
         : "已设置"
@@ -268,13 +286,10 @@ export function CoverUploader({
       aria-labelledby={titleId}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <h3
-          id={titleId}
-          className="font-mono text-[10px] uppercase tracking-[0.13em] text-muted"
-        >
+        <h3 id={titleId} className="type-eyebrow">
           {isPhoto ? "照片" : "封面"}
         </h3>
-        <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
+        <span className="text-[11px] text-stone">
           {statusChip}
         </span>
       </div>
@@ -308,7 +323,8 @@ export function CoverUploader({
             className={cx("w-full object-cover", aspectClass)}
             loading={coverImageUrl ? "lazy" : "eager"}
             onError={() => {
-              if (!coverImageUrl) setPreviewFailed(true);
+              if (coverImageUrl) setCoverFailed(true);
+              else setPreviewFailed(true);
             }}
           />
         ) : showPreviewFallback ? (
@@ -325,10 +341,10 @@ export function CoverUploader({
               <ImageUp className="size-4" />
             </span>
             <p className="text-sm text-body">
-              已选择 {upload.file?.name ?? "图片"}，浏览器无法预览此格式
+              已选择 {upload.file?.name ?? "图片"}，浏览器无法显示这个图片格式
             </p>
             <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-              上传时会尝试转换为 WebP
+              上传后会转换为兼容格式
             </p>
           </div>
         ) : isProcessingCover ? (
@@ -338,7 +354,7 @@ export function CoverUploader({
               aspectClass,
             )}
           >
-            <p className="text-sm text-body">封面正在服务器处理中…</p>
+            <p className="text-sm text-body">封面正在处理中…</p>
             <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
               处理完成后会自动显示
             </p>
@@ -395,14 +411,14 @@ export function CoverUploader({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {displayUrl || isProcessingCover ? (
+        {displayUrl || isProcessingCover || coverFailed ? (
           <Button
             variant="ghost"
             size="sm"
             onClick={openPicker}
             disabled={disabled || upload.isBusy}
           >
-            {coverImageUrl || isProcessingCover ? "替换" : "重新选择"}
+            {coverImageUrl || isProcessingCover || coverFailed ? "替换" : "重新选择"}
           </Button>
         ) : null}
         {serverCover && trip ? (
@@ -448,11 +464,6 @@ export function CoverUploader({
           className="rounded-control border border-accent-red/30 bg-accent-red/10 px-3 py-2 text-xs leading-5 text-accent-red"
         >
           <p>{upload.error.message}</p>
-          {upload.error.detail && upload.error.detail !== upload.error.message ? (
-            <p className="mt-1 font-mono text-[10px] leading-4 text-accent-red/80">
-              {upload.error.detail}
-            </p>
-          ) : null}
         </div>
       ) : null}
 

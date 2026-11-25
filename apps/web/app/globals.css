@@ -8,8 +8,7 @@
 
 @layer base {
   body {
-    background:
-      radial-gradient(circle at 84% 0%, var(--glow-blue), transparent 26rem), var(--canvas);
+    background: var(--canvas);
   }
 }
 

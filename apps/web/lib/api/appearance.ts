@@ -6,6 +6,8 @@ import {
 import {
   AppearanceCookieSchema,
   ResolvedAppearanceSchema,
+  normalizeFontPairingId,
+  normalizeSkinId,
   type AppearanceCookie,
   type AppearanceMode,
   type FontPairingId,
@@ -50,8 +52,8 @@ export function applyAppearanceToDocument(appearance: AppearanceDraft): void {
   const root = document.documentElement;
   root.dataset.theme = appearance.mode;
   root.dataset.mode = appearance.mode;
-  root.dataset.skin = appearance.skin;
-  root.dataset.font = appearance.fontPairing;
+  root.dataset.skin = normalizeSkinId(appearance.skin);
+  root.dataset.font = normalizeFontPairingId(appearance.fontPairing);
   root.style.colorScheme = appearance.mode === "system" ? "light dark" : appearance.mode;
 }
 
@@ -80,8 +82,10 @@ export function writeAppearancePreviewCookie(appearance: AppearanceDraft): void 
   const next: AppearanceCookie = AppearanceCookieSchema.parse({
     v: 1,
     ...(appearance.mode ? { mode: appearance.mode } : {}),
-    ...(appearance.skin ? { skin: appearance.skin } : {}),
-    ...(appearance.fontPairing ? { fontPairing: appearance.fontPairing } : {}),
+    ...(appearance.skin ? { skin: normalizeSkinId(appearance.skin) } : {}),
+    ...(appearance.fontPairing
+      ? { fontPairing: normalizeFontPairingId(appearance.fontPairing) }
+      : {}),
     ...(previous?.uid ? { uid: previous.uid } : {}),
     ...(previous?.updatedAt ? { updatedAt: previous.updatedAt } : {}),
   });

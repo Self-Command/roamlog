@@ -202,7 +202,7 @@ export function CommandPalette({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl gap-0 p-0">
         <DialogHeader className="border-b border-hairline px-5 py-4 pr-14">
-          <DialogTitle className="font-serif text-2xl">搜索与快捷命令</DialogTitle>
+          <DialogTitle className="font-display text-xl font-semibold">搜索与快捷命令</DialogTitle>
           <DialogDescription>
             同时搜索旅行、日志、评论与成员，或直接跳转到常用页面。
           </DialogDescription>

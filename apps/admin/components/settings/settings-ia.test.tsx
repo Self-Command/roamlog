@@ -114,7 +114,7 @@ describe("settings information architecture", () => {
       string: "文本",
       number: "数字",
       boolean: "开关",
-      json: "JSON",
+      json: "高级数据（JSON）",
       secret: "密钥",
     });
     expect(SETTING_OPTION_LABELS.dark).toBe("深色");

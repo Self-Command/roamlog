@@ -100,7 +100,7 @@ function invalidResponse(status: number, detail: string): AdminMutationError {
   return new AdminMutationError({
     code: "ADMIN_RESPONSE_INVALID",
     status,
-    title: "后台 API 响应不符合契约",
+    title: "后台服务返回了无法识别的数据",
     detail,
     degraded: [],
   });
@@ -136,7 +136,7 @@ async function requestJson<T>(
     throw failureFromResponse(response.status, payload, response.headers);
   }
   if (payload === null) {
-    throw invalidResponse(response.status, "后台 API 返回了空响应或非 JSON 响应。");
+    throw invalidResponse(response.status, "后台服务没有返回可读取的数据。");
   }
 
   try {
@@ -144,7 +144,7 @@ async function requestJson<T>(
   } catch (error) {
     throw invalidResponse(
       response.status,
-      error instanceof Error ? error.message : "无法解析后台 API 响应。",
+      error instanceof Error ? error.message : "无法读取后台服务返回的数据。",
     );
   }
 }

@@ -7,6 +7,7 @@
  */
 import type { StreamAiChatBodyAttachmentsItem } from "./streamAiChatBodyAttachmentsItem";
 import type { StreamAiChatBodyHints } from "./streamAiChatBodyHints";
+import type { StreamAiChatBodyHumanToolResult } from "./streamAiChatBodyHumanToolResult";
 import type { StreamAiChatBodyReasoningEffort } from "./streamAiChatBodyReasoningEffort";
 
 export type StreamAiChatBody = {
@@ -14,7 +15,7 @@ export type StreamAiChatBody = {
    * @minLength 1
    * @maxLength 2000
    */
-  message: string;
+  message?: string;
   hints?: StreamAiChatBodyHints;
   /** Sortable UUIDv7 identifier. */
   conversationId?: string;
@@ -45,4 +46,5 @@ export type StreamAiChatBody = {
    * @maxItems 5
    */
   attachments?: StreamAiChatBodyAttachmentsItem[];
+  humanToolResult?: StreamAiChatBodyHumanToolResult;
 };

@@ -64,7 +64,7 @@ export function registerAiPaths(registry: OpenAPIRegistry): void {
       "Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. " +
       "The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: " +
       "`meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, streamId?, provider {protocol,model}), " +
-      "`text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), " +
+      "`text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, subjects?, details?, expiresAt }), " +
       "`usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and " +
       "`done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). " +
       '`done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: "error"`. ' +

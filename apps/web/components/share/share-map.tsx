@@ -87,11 +87,11 @@ export function ShareMap({
         />
       </div>
       <figcaption className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline px-3 py-2 font-mono text-[8px] uppercase tracking-[0.1em] text-stone">
-        <span>ROUTE MAP / {points.length} MAPPED STOPS</span>
+        <span>路线地图 / {points.length} 个已定位停靠点</span>
         <span>
           {photoPoints.length > 0
-            ? `${photoPoints.length} GEOTAGGED PHOTOS`
-            : "NO EXACT PHOTO LOCATIONS"}
+            ? `${photoPoints.length} 张带定位照片`
+            : "没有照片精确位置"}
         </span>
       </figcaption>
     </figure>

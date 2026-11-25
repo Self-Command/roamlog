@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe("root layout runtime theme", () => {
-  it("writes theme.accent and theme.defaultMode onto <html> during SSR", async () => {
+  it("writes the enterprise theme and mode onto <html> during SSR", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -68,15 +68,15 @@ describe("root layout runtime theme", () => {
 
     expect(html.props["data-theme"]).toBe("dark");
     expect(html.props["data-mode"]).toBe("dark");
-    expect(html.props["data-skin"]).toBe("tokyo-night");
-    expect(html.props["data-font"]).toBe("editorial-classic");
+    expect(html.props["data-skin"]).toBe("carbon");
+    expect(html.props["data-font"]).toBe("fluent-native");
     expect(html.props["data-accent"]).toBe("blue");
-    expect(html.props.style?.["--accent-primary"]).toBe("#3b9eff");
+    expect(html.props.style?.["--accent-primary"]).toBeUndefined();
     expect(html.props.style?.colorScheme).toBe("dark");
     expect(html.props.lang).toBe("zh-CN");
   });
 
-  it("changes the rendered style when the accent setting changes", async () => {
+  it("does not let a legacy accent override the skin palette", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => settingsResponse({ "theme.accent": "white" })),
@@ -91,9 +91,8 @@ describe("root layout runtime theme", () => {
     const second = await renderLayout();
     const roseAccent = second.props.style?.["--accent-primary"];
 
-    expect(whiteAccent).toBe("#fcfdff");
-    expect(roseAccent).toBe("#ff2047");
-    expect(roseAccent).not.toBe(whiteAccent);
+    expect(whiteAccent).toBeUndefined();
+    expect(roseAccent).toBeUndefined();
   });
 
   it("renders an explicit light mode truthfully", async () => {
@@ -142,7 +141,7 @@ describe("root layout runtime theme", () => {
     );
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "light",
-      themeColor: "#f9f9f8",
+      themeColor: "#f6f5f2",
     });
 
     vi.stubGlobal(
@@ -152,8 +151,8 @@ describe("root layout runtime theme", () => {
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "light dark",
       themeColor: [
-        { media: "(prefers-color-scheme: light)", color: "#f9f9f8" },
-        { media: "(prefers-color-scheme: dark)", color: "#000000" },
+        { media: "(prefers-color-scheme: light)", color: "#f6f5f2" },
+        { media: "(prefers-color-scheme: dark)", color: "#141416" },
       ],
     });
 
@@ -163,7 +162,7 @@ describe("root layout runtime theme", () => {
     );
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "dark",
-      themeColor: "#000000",
+      themeColor: "#141416",
     });
   });
 
@@ -179,11 +178,11 @@ describe("root layout runtime theme", () => {
 
     expect(html.props["data-theme"]).toBe("system");
     expect(html.props["data-mode"]).toBe("system");
-    expect(html.props["data-skin"]).toBe("editorial-noir");
-    expect(html.props["data-font"]).toBe("editorial-classic");
+    expect(html.props["data-skin"]).toBe("porcelain");
+    expect(html.props["data-font"]).toBe("fluent-native");
     expect(html.props["data-accent"]).toBe("white");
     expect(html.props.style?.colorScheme).toBe("light dark");
-    expect(html.props.style?.["--accent-primary"]).toBe("#fcfdff");
+    expect(html.props.style?.["--accent-primary"]).toBeUndefined();
     expect(JSON.stringify(html.props)).not.toMatch(/error|失败|异常|unavailable|加载失败/i);
   });
 });

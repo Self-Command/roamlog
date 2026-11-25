@@ -68,7 +68,7 @@ describe("行程节点对话框文案", () => {
 
     expect(
       within(dialog).getByText(
-        "修改这趟停留的城市、日期与备注；保存时会检查是否与最新修改冲突，冲突会打开版本冲突对话框。",
+        "修改这趟停留的城市、日期与备注；如果其他成员同时修改，会请你选择保留哪一版。",
       ),
     ).toBeInTheDocument();
     expect(dialog).not.toHaveTextContent(DEVELOPER_COPY);

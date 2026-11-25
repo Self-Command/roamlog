@@ -19,8 +19,7 @@ interface LoginErrors {
   password?: string;
 }
 
-const DEFAULT_LOGIN_TAGLINE =
-  "登录后会进入你的旅行总览。登录状态会安全保留在当前浏览器中。";
+const DEFAULT_LOGIN_TAGLINE = "登录后进入你的旅行总览，行程与日志会留在同一个工作区。";
 
 type LoginStep = "credentials" | "challenge";
 type ChallengeFactor = "totp" | "backup-code";
@@ -141,8 +140,8 @@ export function LoginFormView({
     return (
       <div>
         <div className="mb-8">
-          <p className="type-eyebrow">SECURITY CHECK</p>
-          <h1 className="mt-3 font-serif text-[clamp(2rem,1.5rem+1vw,2.75rem)] leading-none tracking-[-0.035em] text-ink">
+          <p className="type-eyebrow">安全验证</p>
+          <h1 className="mt-2 font-display text-[clamp(1.75rem,1.5rem+0.7vw,2.25rem)] leading-tight font-semibold tracking-[-0.02em] text-ink">
             再确认一次是你
           </h1>
           <p className="mt-4 text-sm leading-6 text-muted">
@@ -279,9 +278,9 @@ export function LoginFormView({
   return (
     <div>
       <div className="mb-8">
-        <p className="type-eyebrow">WELCOME BACK</p>
-        <h1 className="mt-3 font-serif text-[clamp(2rem,1.5rem+1vw,2.75rem)] leading-none tracking-[-0.035em] text-ink">
-          回到你的旅行档案
+        <p className="type-eyebrow">欢迎回来</p>
+        <h1 className="mt-2 font-display text-[clamp(1.75rem,1.5rem+0.7vw,2.25rem)] leading-tight font-semibold tracking-[-0.02em] text-ink">
+          登录 Roamlog
         </h1>
         <p className="mt-4 text-sm leading-6 text-muted">
           {tagline?.trim() ? tagline : DEFAULT_LOGIN_TAGLINE}
@@ -324,7 +323,7 @@ export function LoginFormView({
           >
             忘记密码
           </a>
-          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-stone">
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-stone">
             <LockKeyhole aria-hidden="true" className="size-3" />
             安全登录
           </span>
@@ -358,7 +357,7 @@ export function LoginFormView({
       <p className="mt-6 text-center text-xs text-muted">
         还没有账号？{" "}
         <a href="/register" className="text-ink underline-offset-4 hover:underline">
-          创建旅行档案
+          创建账号
         </a>
       </p>
       <p className="mt-3 text-center text-[11px] text-stone">

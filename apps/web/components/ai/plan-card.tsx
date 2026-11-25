@@ -2,7 +2,7 @@
 
 import type { AiToolCall, AiToolResult } from "@roamlog/contracts";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
-import { Badge, Button, Checkbox } from "@roamlog/ui";
+import { Badge, Checkbox } from "@roamlog/ui";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleCheck,
-  ListChecks,
   Map as MapIcon,
   MapPin,
   NotebookPen,
@@ -51,6 +50,16 @@ import {
   type PlanRow as PlanReviewRow,
   type PlanSubjectMap,
 } from "./plan-preview";
+import {
+  Confirmation,
+  ConfirmationAccepted,
+  ConfirmationAction,
+  ConfirmationActions,
+  ConfirmationRejected,
+  ConfirmationRequest,
+  ConfirmationTitle,
+} from "./confirmation";
+import { PlanSurface, type PlanDetails } from "./plan-surface";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./tool-card-primitives";
 import {
   EXECUTE_TOOL_NAME,
@@ -61,6 +70,8 @@ import {
   type PlanToolArgs,
   type PlanToolResult,
 } from "./chat-model-adapter";
+import { PlanDraftEditor, usePlanDraft } from "./workflow/plan-draft";
+import { planDetailsForSurface } from "./workflow/plan-draft-state";
 
 /**
  * The plan confirmation card, rendered *inside* the assistant message as the
@@ -256,8 +267,11 @@ function PlanRowItem({
   );
 }
 
-/** `subjects` is additive on the plan event; the adapter type catches up with the contract. */
-type PlanWithSubjects = PlanToolArgs["plan"] & { subjects?: PlanSubjectMap };
+/** Additive fields carried after the workflow migration. */
+type PlanWithSubjects = PlanToolArgs["plan"] & {
+  subjects?: PlanSubjectMap;
+  details?: PlanDetails;
+};
 
 /**
  * The plan review card: one summary header, one foldable group per entity, and
@@ -274,6 +288,7 @@ export function PlanConfirmationCard({
   args,
   result,
   addResult,
+  toolCallId,
 }: ToolCallMessagePartProps<PlanToolArgs, PlanToolResult>) {
   const { canWrite } = useWorkspaceChat();
   const plan = args?.plan as PlanWithSubjects | undefined;
@@ -283,18 +298,25 @@ export function PlanConfirmationCard({
     () => buildPlanReview(calls, plan?.subjects),
     [calls, plan?.subjects],
   );
-  const [selected, setSelected] = useState<boolean[]>(() => calls.map(() => true));
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const draftSeed = useMemo(
+    () => ({
+      runId: plan?.runId ?? "missing-plan",
+      message: plan?.message ?? "",
+      details: plan?.details ?? null,
+      plannedCalls: calls,
+    }),
+    [calls, plan?.details, plan?.message, plan?.runId],
+  );
+  const planDraft = usePlanDraft({
+    seed: draftSeed,
+    toolCallId: toolCallId ?? "missing-tool-call",
+  });
+  const selected = planDraft.draft.selected;
+  const openGroups = planDraft.draft.openGroups;
   const [armed, setArmed] = useState(false);
   const [expired, setExpired] = useState(() =>
     plan?.expiresAt ? Date.parse(plan.expiresAt) <= Date.now() : false,
   );
-
-  useEffect(() => {
-    setSelected((current) =>
-      calls.length === current.length ? current : calls.map(() => true),
-    );
-  }, [calls.length]);
 
   useEffect(() => {
     if (!plan?.expiresAt) return;
@@ -318,9 +340,18 @@ export function PlanConfirmationCard({
   const createIndex = calls.findIndex((call) => call.tool === "trips.create");
   const disabled = confirmed || expired || !canWrite;
   const expiresAt = plan?.expiresAt ? formatExpiry(plan.expiresAt) : null;
+  const discardDraft = planDraft.discard;
+  const discardedRun = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!plan || (!confirmed && !expired)) return;
+    if (discardedRun.current === plan.runId) return;
+    discardedRun.current = plan.runId;
+    void discardDraft();
+  }, [confirmed, discardDraft, expired, plan]);
 
   const applySelection = (next: boolean[]) => {
-    setSelected(normalizeSelection(calls, next));
+    planDraft.setSelected(normalizeSelection(calls, next));
     setArmed(false);
   };
 
@@ -356,249 +387,265 @@ export function PlanConfirmationCard({
       ].filter((part): part is string => Boolean(part))
     : [];
 
-  return (
-    <section
-      aria-label="计划确认卡"
-      className="mt-1 overflow-hidden rounded-card border border-hairline-strong bg-surface-1"
+  const summaryStatus = review.empty ? undefined : (
+    <div className="text-right">
+      <p data-testid="plan-selection-summary" className="type-meta">
+        {confirmation
+          ? `${confirmation.calls.length} 项已确认`
+          : `已选 ${selectedCount} / ${calls.length}`}
+      </p>
+      <p
+        data-testid="plan-summary-counts"
+        className="mt-1 flex flex-wrap items-center justify-end gap-x-2 type-meta"
+      >
+        <span>共 {review.summary.total} 项</span>
+        {review.summary.add > 0 ? (
+          <span className="text-accent-green">新增 {review.summary.add}</span>
+        ) : null}
+        {review.summary.change > 0 ? (
+          <span className="text-accent-yellow">修改 {review.summary.change}</span>
+        ) : null}
+        {review.summary.remove > 0 ? (
+          <span className="text-accent-red">移除 {review.summary.remove}</span>
+        ) : null}
+      </p>
+    </div>
+  );
+
+  const footerContent = review.empty ? null : (
+    <Confirmation
+      approval={
+        expired || !canWrite
+          ? { id: plan.runId, approved: false }
+          : confirmed
+            ? { id: plan.runId, approved: true }
+            : { id: plan.runId }
+      }
+      className="border-0 bg-transparent p-0"
+      state={
+        expired || !canWrite
+          ? "output-denied"
+          : confirmed
+            ? "approval-responded"
+            : "approval-requested"
+      }
     >
-      <header className="border-b border-hairline px-4 py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="type-meta flex items-center gap-1.5">
-              <ListChecks aria-hidden="true" className="size-3.5 shrink-0" />
-              方案预览
+      <ConfirmationTitle className="sr-only">计划确认状态</ConfirmationTitle>
+      <ConfirmationRequest>
+        <div className="flex w-full flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <p className="text-xs leading-5 text-muted">
+              确认后写入 {selectedCount} 项，不会自动撤销。
+              {review.hasDestructive
+                ? `其中移除 ${review.summary.remove} 项，删除后无法恢复。`
+                : ""}
+              {review.orphanCount > 0 ? `其中 ${review.orphanCount} 项将无法执行。` : ""}
             </p>
-            <h3
-              data-testid="plan-summary-title"
-              className="mt-1 font-serif text-lg leading-tight tracking-[-0.02em] text-ink"
-            >
-              {review.headerTitle}
-            </h3>
-            {tripMeta.length > 0 ? (
-              <p
-                data-testid="plan-summary-meta"
-                className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-body"
-              >
-                {tripMeta.map((part, index) => (
-                  <span key={`${part}-${index}`} className="flex items-center gap-2">
-                    {index > 0 ? (
-                      <span aria-hidden="true" className="text-stone">
-                        ·
-                      </span>
-                    ) : null}
-                    <span>{part}</span>
-                  </span>
-                ))}
+            {review.orphanCount > 0 ? (
+              <p className="text-xs leading-5 text-accent-amber">
+                「无法归属」里的操作会失败；建议取消勾选后再执行。
               </p>
             ) : null}
+            {armed ? (
+              <p className="text-xs leading-5 text-accent-red">
+                再次点击按钮会移除 {review.summary.remove} 项，且无法撤销。
+              </p>
+            ) : null}
+            {expiresAt ? <p className="type-meta">计划在 {expiresAt} 前有效。</p> : null}
+            {selectedCount === 0 ? (
+              <p className="text-xs leading-5 text-accent-amber">至少选择 1 项才能执行。</p>
+            ) : null}
           </div>
-          {review.empty ? null : (
-            <div className="shrink-0 text-right">
-              <p className="type-meta">
-                {confirmation
-                  ? `${confirmation.calls.length} 项已确认`
-                  : `已选 ${selectedCount} / ${calls.length}`}
-              </p>
-              <p
-                data-testid="plan-summary-counts"
-                className="mt-1 flex flex-wrap items-center justify-end gap-x-2 type-meta"
-              >
-                <span>共 {review.summary.total} 项</span>
-                {review.summary.add > 0 ? (
-                  <span className="text-accent-green">新增 {review.summary.add}</span>
-                ) : null}
-                {review.summary.change > 0 ? (
-                  <span className="text-accent-yellow">修改 {review.summary.change}</span>
-                ) : null}
-                {review.summary.remove > 0 ? (
-                  <span className="text-accent-red">移除 {review.summary.remove}</span>
-                ) : null}
-              </p>
-            </div>
-          )}
+          <ConfirmationActions className="shrink-0">
+            <ConfirmationAction
+              data-testid="plan-confirm"
+              variant={review.hasDestructive ? "danger" : "primary"}
+              size="sm"
+              disabled={selectedCount === 0}
+              onClick={() => {
+                if (review.hasDestructive && !armed) {
+                  setArmed(true);
+                  return;
+                }
+                void planDraft.discard();
+                rememberConfirmedRun(plan.runId);
+                addResult({
+                  status: "confirmed",
+                  runId: plan.runId,
+                  calls: selectedCalls,
+                  idempotencyKey: createAiIdempotencyKey(),
+                });
+              }}
+            >
+              {armed
+                ? `再次点击确认移除 ${review.summary.remove} 项`
+                : `执行选中的 ${selectedCount} 项`}
+            </ConfirmationAction>
+          </ConfirmationActions>
         </div>
-      </header>
+      </ConfirmationRequest>
+      <ConfirmationAccepted>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p data-testid="plan-receipt" className="text-xs leading-5 text-muted">
+            已确认，正在执行选中的 {confirmation?.calls.length ?? selectedCount} 项操作。
+          </p>
+          <Badge tone="neutral">已确认</Badge>
+        </div>
+      </ConfirmationAccepted>
+      <ConfirmationRejected>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p
+            role="status"
+            data-testid="plan-receipt"
+            className="text-xs leading-5 text-accent-amber"
+          >
+            {expired
+              ? "计划已过期，未执行任何操作。请重新发送这条需求。"
+              : planFailureCopy("forbidden").description}
+          </p>
+          <div className="flex items-center gap-2">
+            <Badge tone="slate">{expired ? "已过期" : "只读"}</Badge>
+            {!expired && !canWrite ? (
+              <ConfirmationAction
+                data-testid="plan-confirm"
+                disabled
+                size="sm"
+                variant="outline"
+              >
+                执行选中的 {selectedCount} 项
+              </ConfirmationAction>
+            ) : null}
+          </div>
+        </div>
+      </ConfirmationRejected>
+    </Confirmation>
+  );
 
-      {warnings.length > 0 ? <PlanWarnings warnings={warnings} /> : null}
-      <TraceDetails trace={plan.readOnlyTrace ?? []} />
-
+  return (
+    <PlanSurface
+      title={review.headerTitle}
+      meta={tripMeta}
+      message={planDraft.draft.message}
+      details={planDetailsForSurface(planDraft.draft.details)}
+      detailsEditor={
+        <PlanDraftEditor
+          disabled={disabled}
+          draft={planDraft.draft}
+          error={planDraft.error}
+          id={planDraft.id}
+          isPending={planDraft.isPending}
+          onChangeDetails={planDraft.patchDetails}
+          onChangeMessage={planDraft.setMessage}
+          onRestoreOriginal={planDraft.restoreOriginal}
+          onRestoreState={planDraft.restoreState}
+          onSave={() => void planDraft.flush()}
+        />
+      }
+      status={summaryStatus}
+      warnings={warnings.length > 0 ? <PlanWarnings warnings={warnings} /> : null}
+      trace={<TraceDetails trace={plan.readOnlyTrace ?? []} />}
+      footer={footerContent}
+    >
       {review.empty ? (
         <p data-testid="plan-empty" className="px-4 py-4 text-sm leading-6 text-muted">
           这次没有需要写入的操作。可以把需求写得更具体一些（目的地、时间、预算、同行人）再试一次。
         </p>
       ) : (
-        <>
-          <div aria-label="操作分组" className="divide-y divide-hairline">
-            {review.groups.map((group) => {
-              const Icon = BUCKET_ICONS[group.bucket];
-              const states = group.rows.map((row) => selected[row.callIndex] === true);
-              const all = states.length > 0 && states.every(Boolean);
-              const some = states.some(Boolean);
-              const open = openGroups[group.bucket] ?? group.defaultOpen;
+        <div aria-label="操作分组" className="divide-y divide-hairline">
+          {review.groups.map((group) => {
+            const Icon = BUCKET_ICONS[group.bucket];
+            const states = group.rows.map((row) => selected[row.callIndex] === true);
+            const all = states.length > 0 && states.every(Boolean);
+            const some = states.some(Boolean);
+            const open = openGroups[group.bucket] ?? group.defaultOpen;
 
-              return (
-                <section key={group.bucket} aria-label={`${group.title} ${group.rows.length} 项`} data-testid="plan-group" data-group-bucket={group.bucket} data-group-count={group.rows.length}>
-                  <Collapsible
-                    open={open}
-                    onOpenChange={(next) =>
-                      setOpenGroups((current) => ({ ...current, [group.bucket]: next }))
-                    }
-                    className="min-w-0"
-                  >
-                    {/* The header row owns the select-all box and the fold trigger, so
-                        the box stays aligned with the title instead of centring on the
-                        whole expanded group. */}
-                    <div className="flex items-center gap-2 px-4 py-2">
-                      <Checkbox
-                        checked={all ? true : some ? "indeterminate" : false}
-                        disabled={disabled}
-                        onCheckedChange={() => toggleGroup(group, !all)}
-                        aria-label={`选择「${group.title}」全部 ${group.rows.length} 项`}
-                      />
-                      <CollapsibleTrigger
-                        data-testid="plan-group-trigger"
-                        data-group-bucket={group.bucket}
-                        className="flex min-w-0 flex-1 items-center gap-2 rounded-control py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1"
-                      >
-                        <Icon aria-hidden="true" className="size-3.5 shrink-0 text-muted" />
-                        <span className="min-w-0 truncate text-sm font-medium text-ink">
-                          {group.title}
-                        </span>
-                        <span className="shrink-0 type-meta">{group.rows.length} 项</span>
-                        <span className="ml-auto flex shrink-0 items-center gap-x-2 type-meta">
-                          {group.counts.add > 0 ? (
-                            <span className="text-accent-green">新增 {group.counts.add}</span>
-                          ) : null}
-                          {group.counts.change > 0 ? (
-                            <span className="text-accent-yellow">修改 {group.counts.change}</span>
-                          ) : null}
-                          {group.counts.remove > 0 ? (
-                            <span className="text-accent-red">移除 {group.counts.remove}</span>
-                          ) : null}
-                        </span>
-                        <ChevronDown
-                          aria-hidden="true"
-                          className={cn(
-                            "size-3.5 shrink-0 text-muted transition-transform",
-                            open && "rotate-180",
-                          )}
-                        />
-                      </CollapsibleTrigger>
-                    </div>
-                    <CollapsibleContent>
-                      <ul
-                        aria-label={`${group.title}操作`}
-                        data-testid="plan-group-list"
-                        className="divide-y divide-hairline border-t border-hairline"
-                      >
-                        {group.rows.map((row) => (
-                          <PlanRowItem
-                            key={row.key}
-                            row={row}
-                            checked={selected[row.callIndex] === true}
-                            onToggle={toggle}
-                            disabled={disabled}
-                            dependencyCleared={
-                              row.dependsOnCreate &&
-                              createIndex >= 0 &&
-                              selected[createIndex] !== true
-                            }
-                          />
-                        ))}
-                      </ul>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </section>
-              );
-            })}
-          </div>
-
-          <footer className="border-t border-hairline px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                {expired ? (
-                  <p
-                    role="status"
-                    data-testid="plan-receipt"
-                    className="text-xs leading-5 text-accent-amber"
-                  >
-                    计划已过期，未执行任何操作。请重新发送这条需求。
-                  </p>
-                ) : confirmed ? (
-                  <p data-testid="plan-receipt" className="text-xs leading-5 text-muted">
-                    已确认，正在执行选中的 {confirmation?.calls.length ?? selectedCount} 项操作。
-                  </p>
-                ) : !canWrite ? (
-                  <p className="text-xs leading-5 text-muted">
-                    {planFailureCopy("forbidden").description}
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-xs leading-5 text-muted">
-                      确认后写入 {selectedCount} 项，不会自动撤销。
-                      {review.hasDestructive
-                        ? `其中移除 ${review.summary.remove} 项，删除后无法恢复。`
-                        : ""}
-                      {review.orphanCount > 0
-                        ? `其中 ${review.orphanCount} 项将无法执行。`
-                        : ""}
-                    </p>
-                    {review.orphanCount > 0 ? (
-                      <p className="text-xs leading-5 text-accent-amber">
-                        「无法归属」里的操作会失败；建议取消勾选后再执行。
-                      </p>
-                    ) : null}
-                    {armed ? (
-                      <p className="text-xs leading-5 text-accent-red">
-                        再次点击按钮会移除 {review.summary.remove} 项，且无法撤销。
-                      </p>
-                    ) : null}
-                    {expiresAt ? (
-                      <p className="type-meta">计划在 {expiresAt} 前有效。</p>
-                    ) : null}
-                    {selectedCount === 0 ? (
-                      <p className="text-xs leading-5 text-accent-amber">
-                        至少选择 1 项才能执行。
-                      </p>
-                    ) : null}
-                  </>
-                )}
-              </div>
-              {expired ? (
-                <Badge tone="slate">已过期</Badge>
-              ) : confirmed ? (
-                <Badge tone="neutral">已确认</Badge>
-              ) : (
-                <Button
-                  type="button"
-                  data-testid="plan-confirm"
-                  variant={review.hasDestructive ? "danger" : "primary"}
-                  size="sm"
-                  disabled={disabled || selectedCount === 0}
-                  onClick={() => {
-                    if (review.hasDestructive && !armed) {
-                      setArmed(true);
-                      return;
-                    }
-                    rememberConfirmedRun(plan.runId);
-                    addResult({
-                      status: "confirmed",
-                      runId: plan.runId,
-                      calls: selectedCalls,
-                      idempotencyKey: createAiIdempotencyKey(),
-                    });
-                  }}
+            return (
+              <section
+                key={group.bucket}
+                aria-label={`${group.title} ${group.rows.length} 项`}
+                data-testid="plan-group"
+                data-group-bucket={group.bucket}
+                data-group-count={group.rows.length}
+              >
+                <Collapsible
+                  open={open}
+                  onOpenChange={(next) =>
+                    planDraft.setOpenGroups((current) => ({
+                      ...current,
+                      [group.bucket]: next,
+                    }))
+                  }
+                  className="min-w-0"
                 >
-                  {armed
-                    ? `再次点击确认移除 ${review.summary.remove} 项`
-                    : `执行选中的 ${selectedCount} 项`}
-                </Button>
-              )}
-            </div>
-          </footer>
-        </>
+                  {/* The header row owns the select-all box and the fold trigger, so
+                      the box stays aligned with the title instead of centring on the
+                      whole expanded group. */}
+                  <div className="flex items-center gap-2 px-4 py-2">
+                    <Checkbox
+                      checked={all ? true : some ? "indeterminate" : false}
+                      disabled={disabled}
+                      onCheckedChange={() => toggleGroup(group, !all)}
+                      aria-label={`选择「${group.title}」全部 ${group.rows.length} 项`}
+                    />
+                    <CollapsibleTrigger
+                      data-testid="plan-group-trigger"
+                      data-group-bucket={group.bucket}
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-control py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1"
+                    >
+                      <Icon aria-hidden="true" className="size-3.5 shrink-0 text-muted" />
+                      <span className="min-w-0 truncate text-sm font-medium text-ink">
+                        {group.title}
+                      </span>
+                      <span className="shrink-0 type-meta">{group.rows.length} 项</span>
+                      <span className="ml-auto flex shrink-0 items-center gap-x-2 type-meta">
+                        {group.counts.add > 0 ? (
+                          <span className="text-accent-green">新增 {group.counts.add}</span>
+                        ) : null}
+                        {group.counts.change > 0 ? (
+                          <span className="text-accent-yellow">修改 {group.counts.change}</span>
+                        ) : null}
+                        {group.counts.remove > 0 ? (
+                          <span className="text-accent-red">移除 {group.counts.remove}</span>
+                        ) : null}
+                      </span>
+                      <ChevronDown
+                        aria-hidden="true"
+                        className={cn(
+                          "size-3.5 shrink-0 text-muted transition-transform",
+                          open && "rotate-180",
+                        )}
+                      />
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsibleContent>
+                    <ul
+                      aria-label={`${group.title}操作`}
+                      data-testid="plan-group-list"
+                      className="divide-y divide-hairline border-t border-hairline"
+                    >
+                      {group.rows.map((row) => (
+                        <PlanRowItem
+                          key={row.key}
+                          row={row}
+                          checked={selected[row.callIndex] === true}
+                          onToggle={toggle}
+                          disabled={disabled}
+                          dependencyCleared={
+                            row.dependsOnCreate &&
+                            createIndex >= 0 &&
+                            selected[createIndex] !== true
+                          }
+                        />
+                      ))}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              </section>
+            );
+          })}
+        </div>
       )}
-    </section>
+    </PlanSurface>
   );
 }
 
@@ -720,7 +767,7 @@ export function ExecutionResultCard({
     >
       <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline px-4 py-3">
         <div className="flex flex-wrap items-baseline gap-3">
-          <h3 className="font-serif text-base leading-tight tracking-[-0.02em] text-ink">
+          <h3 className="font-display text-base leading-tight tracking-[-0.02em] text-ink">
             执行结果
           </h3>
           <p className="type-meta">{response.results.length} 项</p>

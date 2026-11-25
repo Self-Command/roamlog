@@ -186,7 +186,7 @@ function ArtifactHeader() {
     <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-hairline px-3 py-2 md:px-4">
       <div className="flex min-w-0 items-center gap-2">
         <Button
-          aria-label="关闭 Artifact"
+          aria-label="关闭文档"
           className="size-8 shrink-0 px-0"
           onClick={closeArtifact}
           size="sm"
@@ -197,7 +197,7 @@ function ArtifactHeader() {
         </Button>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-ink">
-            {artifact?.title ?? "正在载入 Artifact"}
+            {artifact?.title ?? "正在加载文档"}
           </p>
           <p className="truncate type-meta text-stone">
             {status === "loading"
@@ -267,7 +267,7 @@ function ArtifactContent() {
   if (!artifact) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted" role="status">
-        正在载入 Artifact…
+        正在加载文档…
       </div>
     );
   }
@@ -418,7 +418,7 @@ export function ArtifactPanel() {
 
   const panel = (
     <aside
-      aria-label="Artifact 面板"
+      aria-label="文档面板"
       className={
         portalTarget
           ? "fixed inset-0 z-[100] flex h-dvh w-dvw flex-col overflow-hidden border-hairline-strong bg-surface-1"

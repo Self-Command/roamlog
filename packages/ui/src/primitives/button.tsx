@@ -11,11 +11,13 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-ink text-canvas hover:bg-ink/90",
+        primary:
+          "border border-accent-solid bg-accent-solid text-accent-contrast shadow-sm hover:bg-accent-solid/90",
         ghost:
-          "border border-hairline-strong bg-surface-2 text-ink hover:border-ink/25 hover:bg-surface-1",
-        outline: "border border-hairline-strong bg-transparent text-ink hover:bg-surface-1",
-        subtle: "bg-surface-1 text-body hover:bg-surface-2 hover:text-ink",
+          "border border-transparent bg-transparent text-body hover:bg-surface-1 hover:text-ink",
+        outline:
+          "border border-hairline-strong bg-surface-1 text-ink hover:border-ink/25 hover:bg-surface-2",
+        subtle: "bg-surface-2 text-body hover:bg-surface-deep hover:text-ink",
         link: "h-auto rounded-none p-0 text-accent-blue underline-offset-4 hover:underline",
         danger: "border border-danger/30 bg-danger/10 text-danger hover:bg-danger/15",
       },

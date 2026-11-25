@@ -134,12 +134,12 @@ test("工区设置：Logo、周起始日、可见性、密度、强调色保存�
     const removal = expectPatch(page);
     await removeLogo.click();
     expect((await removal).status()).toBe(200);
-    await expect(page.getByText("工作区 Logo 已移除。")).toBeVisible();
+    await expect(page.getByText("工作区标志已移除。")).toBeVisible();
     await expect(logoSection.locator("img")).toHaveCount(0, { timeout: 15_000 });
   }
 
   const logoPatch = expectPatch(page);
-  await page.getByLabel("选择工作区 Logo").setInputFiles({
+  await page.getByLabel("选择工作区标志").setInputFiles({
     name: "roamlog-crew-logo.png",
     mimeType: "image/png",
     buffer: LOGO_PNG,
@@ -147,7 +147,7 @@ test("工区设置：Logo、周起始日、可见性、密度、强调色保存�
   const logoResponse = await logoPatch;
   expect(logoResponse.status(), await logoResponse.text()).toBe(200);
 
-  await expect(page.getByText("工作区 Logo 已更新。")).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText("工作区标志已更新。")).toBeVisible({ timeout: 90_000 });
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "工作区设置" })).toBeVisible();

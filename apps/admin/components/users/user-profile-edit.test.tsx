@@ -159,8 +159,8 @@ describe("UsersView profile editing", () => {
 
     await events.click(screen.getByRole("button", { name: "保存资料" }));
 
-    expect(screen.getByText(/语言使用 BCP 47/)).toBeInTheDocument();
-    expect(screen.getByText(/时区使用 IANA/)).toBeInTheDocument();
+    expect(screen.getByText(/请输入语言代码/)).toBeInTheDocument();
+    expect(screen.getByText(/请输入时区/)).toBeInTheDocument();
     expect(updateProfile).not.toHaveBeenCalled();
   });
 
@@ -188,6 +188,6 @@ describe("UsersView profile editing", () => {
     await events.type(nameInput, "未提交");
     await events.click(screen.getByRole("button", { name: "保存资料" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("未连接后台 API");
+    expect(await screen.findByRole("alert")).toHaveTextContent("后台服务未连接");
   });
 });

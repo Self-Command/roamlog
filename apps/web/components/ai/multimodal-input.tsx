@@ -48,7 +48,6 @@ import {
   type SlashCommand,
   type SlashCommandHandlers,
 } from "./slash-commands";
-import { SuggestedActions, TRAVEL_SUGGESTIONS } from "./suggested-actions";
 import { useCurrentChatModel, VisionNote, VISION_UNAVAILABLE_NOTE } from "./vision-note";
 
 const DRAFT_STORAGE_KEY = "input";
@@ -60,7 +59,8 @@ export interface MultimodalInputProps {
   editingMessage?: boolean;
   onCancelEdit?: () => void;
   commands?: SlashCommandHandlers;
-  suggestions?: readonly string[];
+  modelSelectorOpen?: boolean;
+  onModelSelectorOpenChange?: (open: boolean) => void;
 }
 
 function StopButton() {
@@ -89,14 +89,14 @@ export function MultimodalInput({
   editingMessage = false,
   onCancelEdit,
   commands,
-  suggestions = TRAVEL_SUGGESTIONS,
+  modelSelectorOpen,
+  onModelSelectorOpenChange,
 }: MultimodalInputProps) {
   const aui = useAui();
   const text = useAuiState((state) => state.composer.text);
   const attachments = useAuiState((state) => state.composer.attachments);
   const canSend = useAuiState((state) => state.composer.canSend);
   const running = useAuiState((state) => state.thread.isRunning);
-  const messageCount = useAuiState((state) => state.thread.messages.length);
   const currentModel = useCurrentChatModel(workspaceId);
   const visionUnavailable = currentModel !== null && !currentModel.vision;
   const uploading = attachments.some((attachment) => attachment.status.type === "running");
@@ -317,23 +317,6 @@ export function MultimodalInput({
     [failed, running, selectCommand, slashOpen, text, uploading],
   );
 
-  const sendSuggestion = useCallback(
-    (suggestion: string) => {
-      if (running) return;
-      setError(null);
-      aui.composer.setText(suggestion);
-      aui.composer.send();
-    },
-    [aui, running],
-  );
-
-  const showSuggestions =
-    !editingMessage &&
-    !running &&
-    messageCount === 0 &&
-    text.trim().length === 0 &&
-    attachments.length === 0;
-
   return (
     <div className={cn("relative mx-auto flex w-full max-w-3xl flex-col gap-3", className)}>
       {editingMessage && onCancelEdit ? (
@@ -348,10 +331,6 @@ export function MultimodalInput({
             取消
           </button>
         </div>
-      ) : null}
-
-      {showSuggestions ? (
-        <SuggestedActions disabled={running} onSelect={sendSuggestion} suggestions={suggestions} />
       ) : null}
 
       <input
@@ -381,7 +360,8 @@ export function MultimodalInput({
         onDropCapture={handleDropCapture}
       >
         <ComposerPrimitive.Root
-          className="flex w-full flex-col gap-2 rounded-card border border-hairline-strong bg-surface-1 px-2 py-2 focus-within:border-ink/40"
+          className="flex w-full flex-col gap-1.5 rounded-card border border-hairline-strong bg-surface-1 px-2 py-1.5 focus-within:border-ink/40"
+          data-testid="composer-root"
           onSubmit={handleSubmit}
         >
           {attachments.length > 0 ? (
@@ -405,7 +385,7 @@ export function MultimodalInput({
             addAttachmentOnPaste={false}
             aria-label="给 AI 助手发消息"
             autoFocus
-            className="max-h-48 min-h-24 w-full resize-none bg-transparent px-2 pb-1.5 pt-3 text-[13px] leading-relaxed text-ink outline-none placeholder:text-stone"
+            className="max-h-48 min-h-10 w-full resize-none bg-transparent px-2 py-2 text-[13px] leading-relaxed text-ink outline-none placeholder:text-stone"
             data-testid="multimodal-input"
             maxRows={8}
             onChange={handleInputChange}
@@ -414,14 +394,14 @@ export function MultimodalInput({
             placeholder={
               editingMessage
                 ? "编辑你的消息…"
-                : "想去哪里？说一句就行（Enter 发送，Shift+Enter 换行）"
+                : "描述你的目标、约束和期望结果"
             }
             ref={textareaRef}
             rows={1}
             submitMode="enter"
           />
 
-          <div className="flex flex-wrap items-center gap-1 px-1">
+          <div className="flex min-w-0 items-center gap-1 px-1">
             <Button
               aria-label="添加图片附件"
               className="shrink-0"
@@ -436,8 +416,14 @@ export function MultimodalInput({
               <Paperclip aria-hidden="true" className="size-4" />
             </Button>
 
-            <ModelSelectorCompact workspaceId={workspaceId} />
-            <ReasoningSelectorCompact workspaceId={workspaceId} />
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+              <ModelSelectorCompact
+                workspaceId={workspaceId}
+                open={modelSelectorOpen}
+                onOpenChange={onModelSelectorOpenChange}
+              />
+              <ReasoningSelectorCompact workspaceId={workspaceId} />
+            </div>
 
             <div className="ml-auto flex shrink-0 items-center gap-1.5">
               {running ? (

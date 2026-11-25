@@ -36,7 +36,11 @@ import type {
   ProviderSettingsApi,
   ProviderUpdateInput,
 } from "../../lib/provider-settings-api";
-import { providerMutationErrorMessage } from "../../lib/provider-settings";
+import {
+  providerFieldHelp,
+  providerFieldLabel,
+  providerMutationErrorMessage,
+} from "../../lib/provider-settings";
 import { ProviderCatalogField } from "./provider-catalog-field";
 import { ProviderModelPicker } from "./provider-model-picker";
 import { ProviderProbePanel } from "./provider-probe-panel";
@@ -228,34 +232,35 @@ function isEmpty(value: unknown): boolean {
 }
 
 function validateConfigField(field: ProviderConfigField, value: unknown): string | null {
+  const label = providerFieldLabel(field);
   if (field.required && isEmpty(value)) {
-    return `${field.label}不能为空。`;
+    return `${label}不能为空。`;
   }
   if (isEmpty(value)) {
     return null;
   }
   if (field.type === "integer" || field.type === "number") {
     if (typeof value !== "number" || !Number.isFinite(value)) {
-      return `${field.label}必须是数字。`;
+      return `${label}必须是数字。`;
     }
     if (field.type === "integer" && !Number.isInteger(value)) {
-      return `${field.label}必须是整数。`;
+      return `${label}必须是整数。`;
     }
     if (field.min !== undefined && value < field.min) {
-      return `${field.label}不能小于 ${field.min}。`;
+      return `${label}不能小于 ${field.min}。`;
     }
     if (field.max !== undefined && value > field.max) {
-      return `${field.label}不能大于 ${field.max}。`;
+      return `${label}不能大于 ${field.max}。`;
     }
   }
   if (field.type === "url" && typeof value === "string") {
     try {
       const url = new URL(value);
       if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
-        return `${field.label}必须是有效的 http(s) 地址，且不能包含凭据。`;
+        return `${label}必须是有效的 http(s) 地址，且不能包含凭据。`;
       }
     } catch {
-      return `${field.label}必须是有效的 URL。`;
+      return `${label}必须是有效的 URL。`;
     }
   }
   if (
@@ -264,7 +269,7 @@ function validateConfigField(field: ProviderConfigField, value: unknown): string
     typeof value === "string" &&
     !field.options.some((option) => option.value === value)
   ) {
-    return `${field.label}的取值无效。`;
+    return `${label}的取值无效。`;
   }
   return null;
 }
@@ -449,7 +454,7 @@ export function ProviderEditor({
     for (const field of adapter.secretFields) {
       const saved = savedSecrets.get(field.key)?.hasValue === true;
       if (field.required && !saved && !selectedSecrets[field.key]) {
-        next[`secret:${field.key}`] = `${field.label}不能为空。`;
+        next[`secret:${field.key}`] = `${providerFieldLabel(field)}不能为空。`;
       }
     }
     return next;
@@ -653,7 +658,7 @@ export function ProviderEditor({
         <DialogHeader>
           <DialogTitle>{provider ? "编辑服务商" : "添加服务商"}</DialogTitle>
           <DialogDescription>
-            填写连接、凭据和运行参数。密钥保存后只显示末四位，不会再次返回明文。
+            填写连接信息、凭据和运行参数。保存后，密钥只显示末四位。
           </DialogDescription>
         </DialogHeader>
 
@@ -690,7 +695,11 @@ export function ProviderEditor({
                 }}
               />
             </FormField>
-            <FormField label="类型" required hint="类型决定需要填写的连接参数和密钥字段。">
+            <FormField
+              label="类型"
+              required
+              hint="选择服务商类型后，这里会显示需要填写的信息。"
+            >
               <Select
                 id={typeId}
                 value={type}
@@ -758,8 +767,8 @@ export function ProviderEditor({
                       providerId={provider?.id}
                       expectedVersion={provider ? providerVersion : undefined}
                       value={typeof modelValue === "string" ? modelValue : ""}
-                      label={field.label}
-                      help={field.help}
+                      label={providerFieldLabel(field)}
+                      help={providerFieldHelp(field) ?? undefined}
                       error={fieldErrors[field.key]}
                       disabled={saving || probing}
                       onChange={(modelId) => changeConfig(field, modelId)}
@@ -867,7 +876,7 @@ export function ProviderEditor({
                   </dd>
                 </div>
                 <div>
-                  <dt>Provider ID</dt>
+                  <dt>服务商标识</dt>
                   <dd className="mt-0.5 break-all text-body">{provider?.id ?? "未保存"}</dd>
                 </div>
                 <div>

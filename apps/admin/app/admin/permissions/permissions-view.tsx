@@ -28,6 +28,19 @@ import { PLATFORM_ROLE_LABELS } from "../../../lib/labels";
 
 const LOCKED_TOOLTIP = "安全敏感，界面不可授予";
 
+const ACTION_DESCRIPTION_OVERRIDES: Readonly<Record<string, string>> = {
+  "admin:users:delete": "将用户移入已删除（可恢复）",
+  "admin:users:force-logout": "强制退出用户的所有登录",
+  "admin:users:reset-2fa": "重置用户两步验证",
+  "admin:workspaces:delete": "将工作区移入已删除（可恢复）",
+  "admin:media:read": "读取媒体文件",
+  "admin:media:delete": "删除媒体文件",
+};
+
+function actionDescription(action: string, fallback: string): string {
+  return ACTION_DESCRIPTION_OVERRIDES[action] ?? fallback;
+}
+
 function cellKey(role: PlatformRole, action: string): string {
   return `${role}:${action}`;
 }
@@ -113,7 +126,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
       <AdminPageHeader
         eyebrow="信任与安全 / 权限"
         title="权限矩阵"
-        description="平台角色 × 管理员动作的可视化矩阵。代码矩阵是默认值，数据库只保存差异；安全敏感动作保持锁定，不能通过界面授予。"
+        description="按平台角色分配管理动作。锁定项属于安全敏感操作，不能在此修改。"
         readOnly={!canWrite}
       />
 
@@ -122,7 +135,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           <ShieldCheck aria-hidden="true" className="size-4 text-muted" />
           <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
             {data
-              ? `${roles.length} 个角色 · ${actions.length} 项动作 · 代码矩阵 + 数据库差异`
+              ? `${roles.length} 个角色 · ${actions.length} 项动作 · 变更会记录到审计日志`
               : "读取平台权限矩阵"}
           </p>
         </div>
@@ -141,7 +154,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           <Button
             size="sm"
             disabled={!canWrite || changes.length === 0 || saving}
-            title={canWrite ? "保存权限矩阵变更" : "仅超级管理员可修改权限矩阵"}
+            title={canWrite ? "保存权限矩阵变更" : "只有超级管理员可以修改权限矩阵。"}
             onClick={() => setConfirmOpen(true)}
           >
             {saving ? "保存中…" : "保存变更"}
@@ -155,7 +168,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <Lock aria-hidden="true" className="size-4" />
-          当前平台角色为只读：仅超级管理员可修改权限矩阵。
+          只有超级管理员可以修改权限矩阵。
         </div>
       ) : null}
 
@@ -168,7 +181,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
               : "读取权限矩阵失败，请稍后重试。"}
           </p>
           <details className="mt-2 font-mono text-[9px] text-muted">
-            <summary className="cursor-pointer select-none">错误详情</summary>
+            <summary className="cursor-pointer select-none">技术详情</summary>
             <p className="mt-1 break-all">
               {resource.error.code} · HTTP {resource.error.status || "网络错误"} ·{" "}
               {resource.error.detail}
@@ -190,7 +203,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
             <div>
               <h2 className="text-[13px] font-medium text-ink">角色 × 动作</h2>
               <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-                不可授予 → 显示锁图标，界面不可授予
+                锁定项不能在此修改
               </p>
             </div>
           </div>
@@ -225,16 +238,16 @@ export function PermissionsView({ role }: PermissionsViewProps) {
                     <tr key={actionEntry.action} className="align-top">
                       <th scope="row" className="px-4 py-3 text-left font-normal">
                         <div className="flex flex-wrap items-center gap-2">
-                          <code className="font-mono text-[10px] text-ink">
-                            {actionEntry.action}
-                          </code>
+                          <span className="text-[12px] font-medium text-ink">
+                            {actionDescription(actionEntry.action, actionEntry.description)}
+                          </span>
                           {!actionEntry.grantable ? (
                             <Badge tone="yellow">锁定</Badge>
                           ) : null}
                         </div>
-                        <p className="mt-1 text-[11px] leading-5 text-muted">
-                          {actionEntry.description}
-                        </p>
+                        <code className="mt-1 block font-mono text-[9px] text-muted">
+                          {actionEntry.action}
+                        </code>
                       </th>
                       {roles.map((roleEntry) => {
                         const key = cellKey(roleEntry.role, actionEntry.action);
@@ -274,7 +287,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
                               title={
                                 canWrite
                                   ? "切换后需二次确认并保存"
-                                  : "仅超级管理员可修改权限矩阵"
+                                  : "只有超级管理员可以修改权限矩阵。"
                               }
                               onCheckedChange={(checked) =>
                                 toggle(roleEntry.role, actionEntry.action, checked === true)
@@ -291,7 +304,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
           </div>
           <div className="border-t border-hairline px-4 py-2.5">
             <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              默认值来自 packages/contracts/src/permissions.ts；保存只写 diff，删除 diff 即回到代码默认值。
+              保存后立即生效，并记录本次操作。
             </p>
           </div>
         </section>
@@ -307,7 +320,7 @@ export function PermissionsView({ role }: PermissionsViewProps) {
             <p className="type-eyebrow text-accent-red">二次确认 / 权限写入</p>
             <DialogTitle>保存权限矩阵变更</DialogTitle>
             <DialogDescription>
-              将写入 {changes.length} 项覆盖并记录审计。安全敏感动作不在可编辑范围内。
+              将保存 {changes.length} 项变更，并记录到审计日志。锁定项不会改变。
             </DialogDescription>
           </DialogHeader>
           <ul className="max-h-64 space-y-1.5 overflow-y-auto font-mono text-[10px] text-body">

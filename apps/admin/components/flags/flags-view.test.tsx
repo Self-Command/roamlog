@@ -19,7 +19,7 @@ describe("FlagsView", () => {
     );
 
     const flagRow = screen.getByRole("article", { name: /share-password-v1/ });
-    const slider = within(flagRow).getByLabelText("share-password-v1 灰度比例");
+    const slider = within(flagRow).getByLabelText("share-password-v1 开放比例");
     fireEvent.change(slider, { target: { value: "40" } });
     expect(within(flagRow).getByText("40%")).toBeInTheDocument();
 
@@ -57,7 +57,7 @@ describe("FlagsView", () => {
     const dialog = screen.getByRole("dialog", { name: "新建功能开关" });
     await user.type(within(dialog).getByLabelText(/开关标识/), "share.password.v2");
     await user.type(within(dialog).getByLabelText(/^描述/), "分享密码 v2");
-    fireEvent.change(within(dialog).getByLabelText("灰度比例（0-100）"), {
+    fireEvent.change(within(dialog).getByLabelText("开放比例（0–100）"), {
       target: { value: "20" },
     });
     await user.click(within(dialog).getByRole("button", { name: "创建开关" }));
@@ -141,7 +141,7 @@ describe("FlagsView", () => {
     );
 
     const flagRow = screen.getByRole("article", { name: /share-password-v1/ });
-    fireEvent.change(within(flagRow).getByLabelText("share-password-v1 灰度比例"), {
+    fireEvent.change(within(flagRow).getByLabelText("share-password-v1 开放比例"), {
       target: { value: "45" },
     });
 

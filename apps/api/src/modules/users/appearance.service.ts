@@ -7,8 +7,12 @@ import {
 import {
   AppearanceCookieSchema,
   AppearanceDefaultsSchema,
+  DEFAULT_FONT_PAIRING_ID,
+  DEFAULT_SKIN_ID,
   ResolvedAppearanceSchema,
   UpdateAppearancePreferenceSchema,
+  normalizeFontPairingId,
+  normalizeSkinId,
   type AppearanceCookie,
   type AppearanceDefaults,
   type ResolvedAppearance,
@@ -50,8 +54,10 @@ function cookieFor(row: AppearanceRow): AppearanceCookie {
   return AppearanceCookieSchema.parse({
     v: 1,
     ...(row.mode ? { mode: row.mode } : {}),
-    ...(row.skin ? { skin: row.skin } : {}),
-    ...(row.fontPairing ? { fontPairing: row.fontPairing } : {}),
+    ...(row.skin ? { skin: normalizeSkinId(row.skin) } : {}),
+    ...(row.fontPairing
+      ? { fontPairing: normalizeFontPairingId(row.fontPairing) }
+      : {}),
     uid: row.userId,
     updatedAt: row.updatedAt.toISOString(),
   });
@@ -181,8 +187,16 @@ export class AppearanceService {
     const group = await this.settings.getGroup("theme");
     const defaults = AppearanceDefaultsSchema.parse({
       mode: group["theme.defaultMode"],
-      skin: group["theme.defaultSkin"],
-      fontPairing: group["theme.defaultFont"],
+      skin: normalizeSkinId(
+        typeof group["theme.defaultSkin"] === "string"
+          ? group["theme.defaultSkin"]
+          : DEFAULT_SKIN_ID,
+      ),
+      fontPairing: normalizeFontPairingId(
+        typeof group["theme.defaultFont"] === "string"
+          ? group["theme.defaultFont"]
+          : DEFAULT_FONT_PAIRING_ID,
+      ),
     });
     return {
       defaults,
@@ -207,8 +221,10 @@ export class AppearanceService {
     const effectiveRow = platform.canOverride ? row : null;
     const appearance = ResolvedAppearanceSchema.parse({
       mode: effectiveRow?.mode ?? platform.defaults.mode,
-      skin: effectiveRow?.skin ?? platform.defaults.skin,
-      fontPairing: effectiveRow?.fontPairing ?? platform.defaults.fontPairing,
+      skin: normalizeSkinId(effectiveRow?.skin ?? platform.defaults.skin),
+      fontPairing: normalizeFontPairingId(
+        effectiveRow?.fontPairing ?? platform.defaults.fontPairing,
+      ),
       source: hasOverride(effectiveRow) ? "user" : "platform",
       canOverride: platform.canOverride,
       updatedAt: effectiveRow?.updatedAt.toISOString() ?? null,

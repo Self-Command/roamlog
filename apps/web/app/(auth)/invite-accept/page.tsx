@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function InviteAcceptPage() {
   return (
     <AuthShell>
-      <InviteAccept workspaceName="共享旅行档案" inviterName="你的同行者" role="editor" />
+      <InviteAccept workspaceName="共享旅行档案" inviterName="邀请人" role="editor" />
     </AuthShell>
   );
 }

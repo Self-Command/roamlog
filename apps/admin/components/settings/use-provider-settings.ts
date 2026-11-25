@@ -17,9 +17,9 @@ export interface ProviderSettingsState {
 
 function errorLabel(error: unknown): string {
   if (error instanceof AdminMutationError) {
-    return error.failure.detail?.trim() || error.failure.title || error.failure.code;
+    return "无法加载服务商配置，请稍后重试；如果持续失败，请联系平台管理员。";
   }
-  return error instanceof Error ? error.message : "无法加载服务商配置。";
+  return "无法加载服务商配置，请稍后重试。";
 }
 
 export function useProviderSettings(

@@ -117,7 +117,7 @@ function RowActions({
         size="sm"
         disabled={!canWrite}
         aria-label={`测试 ${provider.label}`}
-        title={canWrite ? `测试 ${provider.label}` : "当前角色不可测试服务商"}
+        title={canWrite ? `测试 ${provider.label}` : "你没有测试服务商的权限。"}
         onClick={onProbe}
       >
         <Play aria-hidden="true" />
@@ -128,7 +128,7 @@ function RowActions({
         size="sm"
         disabled={!canWrite}
         aria-label={`编辑 ${provider.label}`}
-        title={canWrite ? `编辑 ${provider.label}` : "当前角色不可编辑服务商"}
+        title={canWrite ? `编辑 ${provider.label}` : "你没有编辑服务商的权限。"}
         onClick={onEdit}
       >
         <Pencil aria-hidden="true" />
@@ -139,7 +139,7 @@ function RowActions({
         size="sm"
         disabled={!canWrite}
         aria-label={`删除 ${provider.label}`}
-        title={canWrite ? `删除 ${provider.label}` : "当前角色不可删除服务商"}
+        title={canWrite ? `删除 ${provider.label}` : "你没有删除服务商的权限。"}
         onClick={onDelete}
       >
         <Trash2 aria-hidden="true" />

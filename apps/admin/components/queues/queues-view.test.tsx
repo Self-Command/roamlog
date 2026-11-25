@@ -186,7 +186,7 @@ describe("QueuesView", () => {
 
     // 12.4 + 8.1 + 0.7 + 3.6 = 24.8 任务/分钟，并展示四个队列。
     expect(screen.getAllByText("24.8 任务/分钟").length).toBeGreaterThan(0);
-    expect(screen.getByText("跨 4 个队列（Redis 发现）")).toBeInTheDocument();
+    expect(screen.getByText("共 4 个任务队列")).toBeInTheDocument();
   });
 
   it("shows 暂不可用 instead of 0.0 when the throughput window is unavailable", () => {
@@ -204,6 +204,6 @@ describe("QueuesView", () => {
     renderWithClient(<QueuesView role="super_admin" queues={[]} failedJobs={[]} />);
 
     expect(screen.getByText("未发现队列")).toBeInTheDocument();
-    expect(screen.getByText("Redis 中未发现已注册队列")).toBeInTheDocument();
+    expect(screen.getByText("当前没有已注册的任务队列")).toBeInTheDocument();
   });
 });

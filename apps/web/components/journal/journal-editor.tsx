@@ -202,7 +202,7 @@ export function JournalEditor({
     });
 
     if (!media.url) {
-      throw new Error("图片已上传，但服务器没有返回可访问的地址。");
+      throw new Error("图片已上传，但暂时无法显示，请重试。");
     }
 
     return {
@@ -334,7 +334,7 @@ export function JournalEditor({
       if (controller.signal.aborted || editor.isDestroyed) return;
       const src = media.url;
       if (!src) {
-        throw new Error("图片已上传，但服务器没有返回可访问的地址。");
+        throw new Error("图片已上传，但暂时无法显示，请重试。");
       }
       editor
         .chain()

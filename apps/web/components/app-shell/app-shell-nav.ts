@@ -54,6 +54,11 @@ export function buildShellNavigation(
 } {
   const isSectionActive = (section: string) =>
     pathname === `${workspaceRoot}${section}` || pathname.startsWith(`${workspaceRoot}${section}/`);
+  const mobilePrimaryActive =
+    pathname === workspaceRoot ||
+    isSectionActive("/trips") ||
+    isSectionActive("/journal") ||
+    isSectionActive("/map");
 
   return {
     primaryNav: [
@@ -149,6 +154,7 @@ export function buildShellNavigation(
         href: `${pathname}#navigation`,
         label: "更多",
         icon: Menu,
+        active: !mobilePrimaryActive,
       },
     ],
   };

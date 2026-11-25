@@ -39,10 +39,6 @@ function AdminShellFrame({ activePath, children }: AdminShellProps) {
         跳至主要内容
       </a>
 
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-[360px] overflow-hidden">
-        <div className="admin-atmosphere absolute inset-0" />
-      </div>
-
       <div className="fixed inset-y-0 left-0 z-40 hidden lg:block">
         <AdminSidebar activePath={activePath} />
       </div>

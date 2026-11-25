@@ -13,6 +13,11 @@ export type UpdateMyAppearanceBodySkin =
   (typeof UpdateMyAppearanceBodySkin)[keyof typeof UpdateMyAppearanceBodySkin] | null;
 
 export const UpdateMyAppearanceBodySkin = {
+  porcelain: "porcelain",
+  fluent: "fluent",
+  carbon: "carbon",
+  "carbon-soft": "carbon-soft",
+  primer: "primer",
   "editorial-noir": "editorial-noir",
   catppuccin: "catppuccin",
   "tokyo-night": "tokyo-night",

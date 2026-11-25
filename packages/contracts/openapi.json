@@ -24994,6 +24994,11 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "porcelain",
+                        "fluent",
+                        "carbon",
+                        "carbon-soft",
+                        "primer",
                         "editorial-noir",
                         "catppuccin",
                         "tokyo-night",
@@ -25005,6 +25010,10 @@
                     "fontPairing": {
                       "type": "string",
                       "enum": [
+                        "fluent-native",
+                        "primer-system",
+                        "primer-cjk",
+                        "carbon-plex",
                         "editorial-classic",
                         "literary-warm",
                         "modern-editorial",
@@ -25047,6 +25056,11 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "porcelain",
+                            "fluent",
+                            "carbon",
+                            "carbon-soft",
+                            "primer",
                             "editorial-noir",
                             "catppuccin",
                             "tokyo-night",
@@ -25058,6 +25072,10 @@
                         "fontPairing": {
                           "type": "string",
                           "enum": [
+                            "fluent-native",
+                            "primer-system",
+                            "primer-cjk",
+                            "carbon-plex",
                             "editorial-classic",
                             "literary-warm",
                             "modern-editorial",
@@ -25164,6 +25182,11 @@
                       "null"
                     ],
                     "enum": [
+                      "porcelain",
+                      "fluent",
+                      "carbon",
+                      "carbon-soft",
+                      "primer",
                       "editorial-noir",
                       "catppuccin",
                       "tokyo-night",
@@ -25179,6 +25202,10 @@
                       "null"
                     ],
                     "enum": [
+                      "fluent-native",
+                      "primer-system",
+                      "primer-cjk",
+                      "carbon-plex",
                       "editorial-classic",
                       "literary-warm",
                       "modern-editorial",
@@ -25213,6 +25240,11 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "porcelain",
+                        "fluent",
+                        "carbon",
+                        "carbon-soft",
+                        "primer",
                         "editorial-noir",
                         "catppuccin",
                         "tokyo-night",
@@ -25224,6 +25256,10 @@
                     "fontPairing": {
                       "type": "string",
                       "enum": [
+                        "fluent-native",
+                        "primer-system",
+                        "primer-cjk",
+                        "carbon-plex",
                         "editorial-classic",
                         "literary-warm",
                         "modern-editorial",
@@ -25266,6 +25302,11 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "porcelain",
+                            "fluent",
+                            "carbon",
+                            "carbon-soft",
+                            "primer",
                             "editorial-noir",
                             "catppuccin",
                             "tokyo-night",
@@ -25277,6 +25318,10 @@
                         "fontPairing": {
                           "type": "string",
                           "enum": [
+                            "fluent-native",
+                            "primer-system",
+                            "primer-cjk",
+                            "carbon-plex",
                             "editorial-classic",
                             "literary-warm",
                             "modern-editorial",
@@ -25397,6 +25442,11 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "porcelain",
+                        "fluent",
+                        "carbon",
+                        "carbon-soft",
+                        "primer",
                         "editorial-noir",
                         "catppuccin",
                         "tokyo-night",
@@ -25408,6 +25458,10 @@
                     "fontPairing": {
                       "type": "string",
                       "enum": [
+                        "fluent-native",
+                        "primer-system",
+                        "primer-cjk",
+                        "carbon-plex",
                         "editorial-classic",
                         "literary-warm",
                         "modern-editorial",
@@ -25450,6 +25504,11 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "porcelain",
+                            "fluent",
+                            "carbon",
+                            "carbon-soft",
+                            "primer",
                             "editorial-noir",
                             "catppuccin",
                             "tokyo-night",
@@ -25461,6 +25520,10 @@
                         "fontPairing": {
                           "type": "string",
                           "enum": [
+                            "fluent-native",
+                            "primer-system",
+                            "primer-cjk",
+                            "carbon-plex",
                             "editorial-classic",
                             "literary-warm",
                             "modern-editorial",
@@ -36103,11 +36166,188 @@
                     },
                     "minItems": 1,
                     "maxItems": 5
+                  },
+                  "humanToolResult": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "toolCallId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "name": {
+                            "type": "string",
+                            "enum": [
+                              "ask_user"
+                            ]
+                          },
+                          "result": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "answers": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "object",
+                                      "properties": {
+                                        "values": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "maxLength": 200
+                                          },
+                                          "maxItems": 20
+                                        },
+                                        "text": {
+                                          "type": "string",
+                                          "maxLength": 4000
+                                        }
+                                      },
+                                      "required": [
+                                        "values"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "answers"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "approved": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      false
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "approved"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "toolCallId",
+                          "name",
+                          "result"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "toolCallId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "name": {
+                            "type": "string",
+                            "enum": [
+                              "confirm_brief"
+                            ]
+                          },
+                          "result": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "approved": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      true
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "approved"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "approved": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      false
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "approved"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "decision": {
+                                    "type": "string",
+                                    "enum": [
+                                      "confirmed"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "decision"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "decision": {
+                                    "type": "string",
+                                    "enum": [
+                                      "revise"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "decision",
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "toolCallId",
+                          "name",
+                          "result"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
                   }
                 },
-                "required": [
-                  "message"
-                ],
                 "additionalProperties": false
               }
             }
@@ -36128,7 +36368,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "maxLength": 4000
+                      "maxLength": 16000
                     },
                     "plannedCalls": {
                       "type": "array",
@@ -36283,6 +36523,171 @@
                         "additionalProperties": false
                       }
                     },
+                    "details": {
+                      "type": "object",
+                      "properties": {
+                        "objective": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4000
+                        },
+                        "constraints": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "maxItems": 30
+                        },
+                        "assumptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "maxItems": 30
+                        },
+                        "openQuestions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "maxItems": 20
+                        },
+                        "days": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "date": {
+                                "type": "string",
+                                "format": "date",
+                                "description": "Calendar date in YYYY-MM-DD form, without a timezone."
+                              },
+                              "title": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 180
+                              },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "time": {
+                                      "type": "string",
+                                      "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$/u"
+                                    },
+                                    "title": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 180
+                                    },
+                                    "location": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 200
+                                    },
+                                    "transport": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 400
+                                    },
+                                    "notes": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 1500
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "transit",
+                                        "food",
+                                        "activity",
+                                        "stay",
+                                        "note"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "title"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "minItems": 1,
+                                "maxItems": 8
+                              }
+                            },
+                            "required": [
+                              "date",
+                              "items"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 30
+                        },
+                        "budget": {
+                          "type": "object",
+                          "properties": {
+                            "amountMinor": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$/u"
+                            },
+                            "breakdown": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              },
+                              "maxItems": 20
+                            }
+                          },
+                          "required": [
+                            "amountMinor",
+                            "currency"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "logistics": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "maxItems": 30
+                        },
+                        "risks": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "maxItems": 30
+                        },
+                        "alternatives": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "maxItems": 30
+                        }
+                      },
+                      "additionalProperties": false
+                    },
                     "usage": {
                       "type": "object",
                       "properties": {
@@ -36390,7 +36795,7 @@
           "AI"
         ],
         "summary": "Stream one AI chat turn as Server-Sent Events",
-        "description": "Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, streamId?, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: \"error\"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.",
+        "description": "Runs the model tool loop and returns a v1 SSE stream. Each frame is `id: <n>` + `event: <type>` + `data: <single-line JSON>` followed by a blank line. The frozen event protocol has exactly six events, all validated by `AiStreamEventSchema`: `meta` (always first; contract version `v: 1`, conversationId, userMessageId, assistantMessageId, streamId?, provider {protocol,model}), `text.delta` ({ delta }), `plan` ({ runId, message, plannedCalls, readOnlyTrace, warnings?, subjects?, details?, expiresAt }), `usage` ({ usage }), `error` ({ code, message, retryable, runId? }) and `done` ({ messageId, finishReason: stop|tool-calls|length|aborted|error, usage? }). `done` is exactly once and always the last frame; `error` is always followed by `done` with `finishReason: \"error\"`. Heartbeats are SSE comment frames (`: hb <ISO8601>`). Errors before the first frame (validation, auth, quota, another active stream) are RFC 7807 problem details.",
         "parameters": [
           {
             "schema": {
@@ -36558,11 +36963,188 @@
                     },
                     "minItems": 1,
                     "maxItems": 5
+                  },
+                  "humanToolResult": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "toolCallId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "name": {
+                            "type": "string",
+                            "enum": [
+                              "ask_user"
+                            ]
+                          },
+                          "result": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "answers": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "object",
+                                      "properties": {
+                                        "values": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "maxLength": 200
+                                          },
+                                          "maxItems": 20
+                                        },
+                                        "text": {
+                                          "type": "string",
+                                          "maxLength": 4000
+                                        }
+                                      },
+                                      "required": [
+                                        "values"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "answers"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "approved": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      false
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "approved"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "toolCallId",
+                          "name",
+                          "result"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "toolCallId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "name": {
+                            "type": "string",
+                            "enum": [
+                              "confirm_brief"
+                            ]
+                          },
+                          "result": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "approved": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      true
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "approved"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "approved": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      false
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "approved"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "decision": {
+                                    "type": "string",
+                                    "enum": [
+                                      "confirmed"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "decision"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "decision": {
+                                    "type": "string",
+                                    "enum": [
+                                      "revise"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "decision",
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "toolCallId",
+                          "name",
+                          "result"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
                   }
                 },
-                "required": [
-                  "message"
-                ],
                 "additionalProperties": false
               }
             }

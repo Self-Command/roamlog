@@ -22,10 +22,10 @@ async function loginAsSuperAdmin(page: Page, fixture: StagingFixture): Promise<v
   await page.goto("/login");
   await page.getByLabel("管理员邮箱").fill(fixture.admin.email);
   await page.getByLabel("密码").fill(fixture.admin.password);
-  await page.getByRole("button", { name: "继续验证" }).click();
-  await expect(page.getByRole("heading", { name: "双因素认证" })).toBeVisible();
+  await page.getByRole("button", { name: "登录" }).click();
+  await expect(page.getByRole("heading", { name: "两步验证" })).toBeVisible();
   await page.getByLabel("6 位验证码").fill(currentTotp(fixture.admin.totpSecret));
-  await page.getByRole("button", { name: "进入控制台" }).click();
+  await page.getByRole("button", { name: "验证并进入控制台" }).click();
   await page.waitForURL("**/admin");
 }
 

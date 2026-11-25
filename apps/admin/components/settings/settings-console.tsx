@@ -137,7 +137,7 @@ export function SettingsConsole({ role, api }: SettingsConsoleProps) {
       <AdminPageHeader
         eyebrow="平台 / 系统设置"
         title="系统设置"
-        description="通用、SEO、外观与字体、限流四组系统级配置。四组共用一次读取，切换分组不会丢失草稿；每个分区独立保存并重新读取确认。"
+        description="管理通用、SEO、外观与字体、限流设置。每组独立保存，切换分组会保留未保存的草稿。"
         readOnly={!canWrite}
       />
 
@@ -147,7 +147,7 @@ export function SettingsConsole({ role, api }: SettingsConsoleProps) {
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          系统设置需要超级管理员权限；当前角色只能查看，保存按钮保持禁用。
+          只有超级管理员可以修改系统设置；当前账号只能查看。
         </div>
       ) : null}
 

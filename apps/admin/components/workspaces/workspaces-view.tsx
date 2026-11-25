@@ -164,46 +164,45 @@ const actionCopy: Record<
   },
   restore: {
     title: "恢复工作区",
-    description: "工作区将重新对成员开放，操作由后端执行并写入审计。",
+    description: "工作区会重新对成员开放。本次操作会记录到审计日志。",
     confirmLabel: "确认恢复",
     action: "admin.workspace.restore",
   },
   delete: {
     title: "删除工作区",
-    description: "工作区进入软删除状态，管理员可在后续运营页恢复。",
-    confirmLabel: "确认删除",
+    description: "工作区将移入已删除，成员暂时无法访问；管理员之后可以恢复。本次操作会记录到审计日志。",
+    confirmLabel: "确认移入已删除",
     action: "admin.workspace.delete",
   },
   "change-plan": {
     title: "变更套餐",
-    description:
-      "套餐由后端写入数据库并记录审计。当前权限模型以 admin:workspaces:delete 动作约束该变更。",
+    description: "变更后立即对该工作区生效，并会记录本次操作。",
     confirmLabel: "确认变更",
     action: "admin.workspace.change-plan",
   },
   "transfer-owner": {
     title: "转移所有权",
     description:
-      "新所有者必须是当前活跃成员；后端会在同一事务内调整双方工作区角色并写入审计。",
+      "新所有者必须是当前活跃成员；转移后，新所有者获得全部管理权限，原所有者会降为管理员。本次操作会记录到审计日志。",
     confirmLabel: "确认转移",
     action: "admin.workspace.transfer-owner",
   },
   "bulk-suspend": {
     title: "批量暂停工作区",
-    description: "所选工作区会暂停访问，操作由后端执行并写入审计。",
+    description: "所选工作区将暂停访问，数据会保留，之后可以恢复。本次操作会记录到审计日志。",
     confirmLabel: "确认批量暂停",
     action: "admin.workspace.bulk-suspend",
   },
   "bulk-restore": {
     title: "批量恢复工作区",
-    description: "所选工作区会恢复访问，操作由后端执行并写入审计。",
+    description: "所选工作区会恢复访问。本次操作会记录到审计日志。",
     confirmLabel: "确认批量恢复",
     action: "admin.workspace.bulk-restore",
   },
   "bulk-delete": {
     title: "批量删除工作区",
-    description: "所选工作区进入软删除状态，操作由后端执行并写入审计。",
-    confirmLabel: "确认批量删除",
+    description: "所选工作区将移入已删除，需要时可由管理员恢复。本次操作会记录到审计日志。",
+    confirmLabel: "确认批量移入已删除",
     action: "admin.workspace.bulk-delete",
   },
 };
@@ -344,7 +343,7 @@ export function WorkspacesView({
 
   function mutationFailureMessage(error: unknown, fallback: string): string {
     return error instanceof AdminMutationError
-      ? `操作失败：${error.failure.code} · ${error.failure.detail}`
+      ? "操作没有完成，请稍后重试；如果持续失败，请联系平台管理员。"
       : fallback;
   }
 
@@ -381,7 +380,7 @@ export function WorkspacesView({
         }
       } catch (error) {
         setStatusMessage(
-          mutationFailureMessage(error, "操作失败，请检查 API 与权限后重试。"),
+          mutationFailureMessage(error, "操作没有完成，请稍后重试。"),
         );
         setPendingAction(null);
         return;
@@ -392,11 +391,11 @@ export function WorkspacesView({
         setDetailWorkspace(null);
       }
       setSelectedIds(new Set());
-      setStatusMessage(`已提交：${copy.action}（审计由后端写入）`);
+      setStatusMessage(`${copy.action}已完成，并记录到审计日志。`);
       return;
     }
 
-    setStatusMessage("未连接后台 API，操作未提交。");
+    setStatusMessage("后台服务未连接，本次操作没有提交。");
     setPendingAction(null);
   }
 
@@ -418,7 +417,7 @@ export function WorkspacesView({
       setStatusMessage("工作区 CSV 已按当前筛选导出。");
     } catch (error) {
       setStatusMessage(
-        mutationFailureMessage(error, "导出失败，请检查后台 API 与会话后重试。"),
+        mutationFailureMessage(error, "导出失败，请稍后重试。"),
       );
     } finally {
       setIsExporting(false);
@@ -498,7 +497,7 @@ export function WorkspacesView({
       <AdminPageHeader
         eyebrow="信任与安全 / 工作区"
         title="工作区"
-        description="按服务端搜索与筛选读取租户体量、成员、套餐与所有权，并执行受平台角色约束的运营操作。"
+        description="查找工作区，查看成员、套餐和所有权，并执行你有权限的运营操作。"
         readOnly={readOnly}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -510,8 +509,8 @@ export function WorkspacesView({
                 isExporting
                   ? "正在生成 CSV"
                   : !canExport
-                    ? "仅管理员及以上可导出工作区 CSV（后端动作 admin:workspaces:delete）"
-                    : "按当前搜索与筛选导出全部匹配工作区（服务端 CSV）"
+                    ? "只有管理员或超级管理员可以导出工作区数据。"
+                    : "按当前搜索与筛选导出全部匹配工作区。"
               }
               onClick={() => void handleExport()}
             >
@@ -582,7 +581,7 @@ export function WorkspacesView({
             ))}
           </Select>
         </label>
-        <span className="flex h-9 items-center border-l border-hairline pl-3 font-mono text-[10px] text-muted max-md:hidden">
+        <span className="flex h-9 items-center border-l border-hairline pl-3 font-ui text-[10px] text-muted max-md:hidden">
           {`${visibleWorkspaces.length} 条 / 第 ${pageIndex + 1} 页`}
         </span>
       </AdminFilterBar>
@@ -593,7 +592,7 @@ export function WorkspacesView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          分析员只能查看工作区数据；暂停、套餐与所有权操作保持可见但不可用。
+          分析员只能查看工作区数据，不能暂停、变更套餐或转移所有权。
         </div>
       ) : null}
 
@@ -609,7 +608,7 @@ export function WorkspacesView({
               disabled={
                 !canRestore || !bulkWorkspaces.some((workspace) => workspace.status === "suspended")
               }
-              title={canRestore ? "批量恢复所选工作区" : "当前平台角色不可恢复工作区"}
+              title={canRestore ? "批量恢复所选工作区" : "你没有恢复工作区的权限。"}
               onClick={() => setPendingAction({ kind: "bulk-restore", workspaces: bulkWorkspaces })}
             >
               批量恢复
@@ -620,7 +619,7 @@ export function WorkspacesView({
               disabled={
                 !canSuspend || !bulkWorkspaces.every((workspace) => workspace.status === "active")
               }
-              title={canSuspend ? "批量暂停所选工作区" : "当前平台角色不可暂停工作区"}
+              title={canSuspend ? "批量暂停所选工作区" : "你没有暂停工作区的权限。"}
               onClick={() => setPendingAction({ kind: "bulk-suspend", workspaces: bulkWorkspaces })}
             >
               批量暂停
@@ -629,7 +628,7 @@ export function WorkspacesView({
               variant="danger"
               size="sm"
               disabled={!canDelete}
-              title={canDelete ? "批量软删除所选工作区" : "当前平台角色不可删除工作区"}
+              title={canDelete ? "批量移入已删除" : "你没有删除工作区的权限。"}
               onClick={() => setPendingAction({ kind: "bulk-delete", workspaces: bulkWorkspaces })}
             >
               批量删除
@@ -643,7 +642,7 @@ export function WorkspacesView({
           <div>
             <h2 className="text-[13px] font-medium text-ink">工作区列表</h2>
             <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
-              租户 / 服务端分页 第 {pageIndex + 1} 页
+              工作区 · 第 {pageIndex + 1} 页
             </p>
           </div>
         </div>
@@ -653,7 +652,7 @@ export function WorkspacesView({
             <p className="type-eyebrow text-accent-red">加载失败</p>
             <p className="mt-1 text-[12px] text-body">加载失败，请稍后重试</p>
             <details className="mt-2 font-mono text-[9px] text-muted">
-              <summary className="cursor-pointer select-none">错误详情</summary>
+              <summary className="cursor-pointer select-none">技术详情</summary>
               <p className="mt-1 break-all">
                 {api.error.code} · HTTP {api.error.status || "network"} · {api.error.detail}
               </p>
@@ -677,7 +676,7 @@ export function WorkspacesView({
             <table className="w-full min-w-[1140px] border-collapse text-left text-[12px]">
               <caption className="sr-only">工作区平台列表</caption>
               <thead>
-                <tr className="border-b border-hairline font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
+                <tr className="border-b border-hairline font-ui text-[10px] font-semibold tracking-[0.04em] text-muted">
                   <th scope="col" className="w-10 px-3 py-2.5">
                     <Checkbox
                       aria-label="全选当前工作区"
@@ -835,10 +834,10 @@ export function WorkspacesView({
                             workspace.status === "active"
                               ? canSuspend
                                 ? "暂停工作区"
-                                : "当前平台角色不可暂停工作区"
+                                : "你没有暂停工作区的权限。"
                               : canRestore
                                 ? "恢复工作区"
-                                : "当前平台角色不可恢复工作区"
+                                : "你没有恢复工作区的权限。"
                           }
                           onClick={() =>
                             setPendingAction({
@@ -852,14 +851,14 @@ export function WorkspacesView({
                         <Button
                           variant="danger"
                           size="sm"
-                          aria-label="删除工作区"
+                          aria-label="移入已删除"
                           disabled={!canDelete || workspace.status === "deleted"}
                           title={
-                            canDelete ? "软删除工作区" : "当前平台角色不可删除工作区"
+                            canDelete ? "移入已删除" : "你没有删除工作区的权限。"
                           }
                           onClick={() => setPendingAction({ kind: "delete", workspace })}
                         >
-                          删除
+                          移入已删除
                         </Button>
                       </div>
                     </td>
@@ -871,7 +870,7 @@ export function WorkspacesView({
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-2.5">
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
+            <p className="font-ui text-[10px] tracking-[0.03em] text-muted">
               第 {pageIndex + 1} 页 · 本页 {visibleWorkspaces.length} 条
               {api.data?.hasMore ? " · 还有更多" : " · 已到最后一页"}
             </p>
@@ -900,7 +899,7 @@ export function WorkspacesView({
         </div>
       </section>
 
-      <div role="status" aria-live="polite" className="min-h-4 font-mono text-[10px] text-muted">
+      <div role="status" aria-live="polite" className="min-h-4 font-ui text-[10px] text-muted">
         {statusMessage}
       </div>
 
@@ -1102,7 +1101,7 @@ export function WorkspacesView({
                 </div>
                 {trips.error ? (
                   <p role="alert" className="mt-2 text-[11px] text-accent-red">
-                    最近旅行读取失败（{trips.error.code}），请稍后重试。
+                    最近旅行暂时无法读取，请稍后重试。
                   </p>
                 ) : recentTrips === undefined ? (
                   <p className="mt-2 text-[11px] leading-5 text-muted">
@@ -1156,8 +1155,8 @@ export function WorkspacesView({
                     disabled={!canManageContract}
                     title={
                       canManageContract
-                        ? "变更套餐并写入审计"
-                        : "仅管理员及以上可变更套餐（后端动作 admin:workspaces:delete）"
+                        ? "变更套餐并记录到审计日志"
+                        : "你没有变更套餐的权限。"
                     }
                     onClick={() => openPlanAction(detailWorkspace)}
                   >
@@ -1168,7 +1167,7 @@ export function WorkspacesView({
                     disabled={!canTransfer || !transferCandidates?.length}
                     title={
                       !canTransfer
-                        ? "仅管理员及以上可转移所有权（后端动作 admin:workspaces:transfer）"
+                        ? "你没有转移所有权的权限。"
                         : transferCandidates?.length
                           ? "转移给活跃成员"
                           : "需要成员详情中存在其他活跃成员"
@@ -1179,7 +1178,7 @@ export function WorkspacesView({
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  套餐与所有权的变更会直接提交后台，后端校验成员资格并在同一事务内写入审计。
+                  套餐与所有权变更会立即生效，并记录到审计日志。
                 </p>
               </div>
             </>

@@ -5,6 +5,7 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateAiChat201Details } from "./createAiChat201Details";
 import type { CreateAiChat201PlannedCallsItem } from "./createAiChat201PlannedCallsItem";
 import type { CreateAiChat201Provider } from "./createAiChat201Provider";
 import type { CreateAiChat201ReadOnlyTraceItem } from "./createAiChat201ReadOnlyTraceItem";
@@ -18,7 +19,7 @@ export type CreateAiChat201 = {
    * @pattern ^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
    */
   runId: string;
-  /** @maxLength 4000 */
+  /** @maxLength 16000 */
   message: string;
   /** @maxItems 20 */
   plannedCalls: CreateAiChat201PlannedCallsItem[];
@@ -27,6 +28,7 @@ export type CreateAiChat201 = {
   /** @maxItems 20 */
   warnings?: CreateAiChat201WarningsItem[];
   subjects?: CreateAiChat201Subjects;
+  details?: CreateAiChat201Details;
   usage: CreateAiChat201Usage;
   provider: CreateAiChat201Provider;
   /** ISO 8601 timestamp with an explicit UTC offset. */

@@ -29,11 +29,13 @@ export function DashboardRecent({
 
   return (
     <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-      <section className="rounded-card border border-hairline-strong bg-surface-1">
+      <section className="surface-card">
         <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
           <div>
-            <p className="type-eyebrow">RECENTLY UPDATED</p>
-            <h2 className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">最近整理</h2>
+            <p className="type-eyebrow">最近更新</p>
+            <h2 className="mt-1.5 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+              最近更新
+            </h2>
           </div>
           <Link
             href={`/w/${workspaceSlug}/trips`}
@@ -73,11 +75,13 @@ export function DashboardRecent({
         </div>
       </section>
 
-      <section className="rounded-card border border-hairline-strong bg-surface-1 p-5">
+      <section className="surface-card p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="type-eyebrow">BUDGET SNAPSHOT</p>
-            <h2 className="mt-1.5 font-serif text-2xl tracking-[-0.025em] text-ink">预算分布</h2>
+            <p className="type-eyebrow">预算概览</p>
+            <h2 className="mt-1.5 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+              预算分布
+            </h2>
           </div>
           <Badge tone="slate">预算</Badge>
         </div>
@@ -100,7 +104,7 @@ export function DashboardRecent({
                       className={
                         index % 2 === 0
                           ? "h-full rounded-pill bg-accent-orange/70"
-                          : "h-full rounded-pill bg-accent-blue/70"
+                          : "h-full rounded-pill bg-accent-solid/70"
                       }
                       style={{ width: `${Math.max(6, ratio)}%` }}
                     />

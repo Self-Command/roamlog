@@ -73,7 +73,7 @@ export function ArtifactTextEditor({
       attributes: {
         class:
           "artifact-prose min-h-[calc(100dvh-18rem)] px-4 py-6 outline-none md:px-10 md:py-8",
-        "aria-label": "Artifact 正文",
+        "aria-label": "文档正文",
       },
     },
     onUpdate: ({ editor: current }) => {

@@ -6,7 +6,6 @@ import {
   EmptyState,
   ErrorState,
   Input,
-  PageGlow,
   PageHeader,
   Select,
   Skeleton,
@@ -77,7 +76,7 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
     return (
       <ErrorState
         title="旅行库暂时不可用"
-        description="Workspace 或旅行列表没有返回。请稍后重试。"
+        description="工作区或旅行列表暂时无法加载，请稍后重试。"
         retryAction={
           <Button type="button" variant="primary" onClick={() => void tripsQuery.refetch()}>
             重新加载
@@ -108,10 +107,9 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
   }
 
   return (
-    <div className="relative">
-      <PageGlow accent="blue" className="opacity-35" />
+    <div>
       <PageHeader
-        eyebrow={`${workspace.name.toUpperCase()} / TRIP LIBRARY`}
+        eyebrow={`${workspace.name} / 旅行库`}
         title="旅行库"
         description={`按状态、地点和标签整理 ${trips.length} 趟旅行。卡片展示旅行已保存的封面、预算与天数。`}
         actions={
@@ -124,8 +122,8 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
         }
       />
 
-      <section className="mt-8 rounded-card border border-hairline-strong bg-surface-1 p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <section className="mt-5 rounded-card border border-hairline-strong bg-surface-1 p-3">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <label htmlFor="trip-search" className="sr-only">
               搜索旅行
@@ -171,7 +169,7 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
           </div>
         </div>
 
-        <div className="mt-3 overflow-x-auto border-t border-hairline pt-3">
+        <div className="mt-2.5 overflow-x-auto border-t border-hairline pt-2.5">
           <div role="group" aria-label="按旅行状态筛选" className="flex w-max gap-1">
             {statusTabs.map((tab) => (
               <button
@@ -192,8 +190,8 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
       </section>
 
       <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
-          SHOWING {filteredTrips.length} OF {trips.length}
+        <p className="text-xs text-muted">
+          显示 {filteredTrips.length} / {trips.length} 趟旅行
           {tripsQuery.data?.hasMore ? " · 前 100 趟" : ""}
         </p>
         {filtersActive ? (
@@ -204,7 +202,7 @@ export function TripsLibrary({ workspaceSlug }: TripsLibraryProps) {
       </div>
 
       {filteredTrips.length > 0 ? (
-        <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredTrips.map((trip, index) => (
             <TripCard
               key={trip.id}

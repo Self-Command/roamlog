@@ -301,7 +301,7 @@ export function AiThreadList({
     if (!deleteTarget || busy) return;
     const remoteId = remoteIdFor(deleteTarget.id);
     if (!remoteId) {
-      setActionError("这个会话尚未同步到服务器，请刷新后重试。");
+      setActionError("这个会话还没有保存，请刷新页面后重试。");
       return;
     }
     setBusy(true);
@@ -328,7 +328,7 @@ export function AiThreadList({
     }
     const remoteId = remoteIdFor(renameTarget.id);
     if (!remoteId) {
-      setActionError("这个会话尚未同步到服务器，请刷新后重试。");
+      setActionError("这个会话还没有保存，请刷新页面后重试。");
       return;
     }
     setBusy(true);

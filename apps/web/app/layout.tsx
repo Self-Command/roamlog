@@ -15,6 +15,7 @@ import { Providers } from "../components/providers";
 import "@fontsource-variable/geist/wght.css";
 import "@fontsource-variable/geist-mono/wght.css";
 import "@fontsource/instrument-serif/latin-400.css";
+import "@fontsource-variable/mona-sans/wght.css";
 import "@fontsource-variable/noto-sans-sc/wght.css";
 import "@fontsource-variable/noto-serif-sc/wght.css";
 import "./globals.css";

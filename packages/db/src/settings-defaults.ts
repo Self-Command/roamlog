@@ -19,23 +19,23 @@ export type SettingDefaultValue =
  */
 export const DEFAULT_SETTINGS = Object.freeze({
   "site.title": "Roamlog",
-  "site.description": "A collaborative travel journal for the trips you take together.",
+  "site.description": "和同行者一起规划行程、记录旅途，把每一次出发留存下来。",
   "general.defaultLanguage": "zh-CN",
   "general.defaultTimeZone": "Asia/Shanghai",
   "general.registrationEnabled": true,
 
   "seo.titleTemplate": "%s · Roamlog",
-  "seo.descriptionTemplate": "Plan trips, keep a journal, and remember every stop together.",
+  "seo.descriptionTemplate": "规划行程、记录日志，和同行者一起收藏每一段旅途。",
   "seo.ogImageUrl": null,
   "seo.robots": "index,follow",
   "seo.sitemapEnabled": true,
 
   "theme.accent": "white",
-  "theme.defaultSkin": "editorial-noir",
+  "theme.defaultSkin": "porcelain",
   "theme.defaultMode": "system",
-  "theme.defaultFont": "editorial-classic",
+  "theme.defaultFont": "fluent-native",
   "theme.allowUserOverride": true,
-  "theme.loginTagline": "Every trip deserves a memory.",
+  "theme.loginTagline": "把每次旅行留下来。",
 
   "mail.provider": "smtp",
   "mail.from": "Roamlog <hello@roamlog.local>",
@@ -61,6 +61,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   "media.maxUploadBytes": 25_000_000,
 
   "ai.defaultProvider": "openai-chat",
+  "ai.defaultReasoningEffort": "high",
+  // Keep this list in sync with AI_DEFAULT_SUGGESTED_PROMPTS in contracts.
+  // The prompts are editable in Admin and are intentionally user goals rather
+  // than implementation instructions.
+  "ai.suggestedPrompts": [
+    "帮我规划一次旅行",
+    "比较几个目的地",
+    "整理行程和预算",
+    "写一篇旅行日志",
+  ],
   "ai.timeoutMs": 30_000,
   "ai.maxOutputTokens": 4_096,
   "ai.dailyQuota": 1_000,

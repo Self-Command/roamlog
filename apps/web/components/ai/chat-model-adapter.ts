@@ -1,9 +1,11 @@
 import type {
+  AiHumanToolResult,
   AiPlanWarning,
   AiRunExecuteResponse,
   AiStreamEvent,
   AiToolCall,
 } from "@roamlog/contracts";
+import { AiHumanToolResultSchema, isHumanToolName } from "@roamlog/contracts";
 import type {
   ChatModelAdapter,
   ChatModelRunOptions,
@@ -21,6 +23,7 @@ import {
   toAiRequestError,
   type AiStreamRecord,
 } from "@/lib/api/ai";
+import { listConversationMessages } from "@/lib/api/ai-conversations";
 
 import { executionFailureCopy, planFailureCopy } from "./copy";
 import { aiChatSelectionStore } from "./chat-selection";
@@ -82,7 +85,14 @@ type PlanEvent = Extract<AiStreamEvent, { type: "plan" }>;
  */
 export type PlanCardPlan = Pick<
   PlanEvent,
-  "runId" | "message" | "plannedCalls" | "readOnlyTrace" | "warnings" | "expiresAt"
+  | "runId"
+  | "message"
+  | "plannedCalls"
+  | "readOnlyTrace"
+  | "warnings"
+  | "subjects"
+  | "details"
+  | "expiresAt"
 > & { warnings?: AiPlanWarning[] };
 
 export interface PlanToolArgs {
@@ -144,6 +154,49 @@ export function executionOutcomeText(outcome: ExecutionOutcome): string {
 
 type Content = NonNullable<ChatModelRunResult["content"]>;
 type ToolPart = Extract<Content[number], { type: "tool-call" }>;
+type ReasoningPart = Extract<Content[number], { type: "reasoning" }>;
+
+/**
+ * A dropped SSE body can end after the server has already persisted the
+ * assistant turn. In that case the producer is gone, so the resume endpoint
+ * correctly answers 204 — but the browser must not replace a successful plan
+ * with a network-error bubble. Read the persisted terminal message once and
+ * let the normal assistant-ui renderer draw its plan/result parts.
+ *
+ * This is a transport recovery path, not a second planning path: only a
+ * complete or requires-action message is accepted, and no request is replayed.
+ */
+async function recoverPersistedAssistantMessage(
+  workspaceId: string,
+  conversationId: string,
+  clientId: string | undefined,
+): Promise<{ content: Content; status: ChatModelRunResult["status"] } | null> {
+  if (!clientId) return null;
+  try {
+    const page = await listConversationMessages(workspaceId, conversationId);
+    const message = page.messages
+      .map((entry) => entry.message)
+      .find((entry) => entry.clientId === clientId);
+    if (!message || message.role !== "assistant" || !Array.isArray(message.content)) {
+      return null;
+    }
+    const status = message.status as
+      | { type?: unknown; reason?: unknown; error?: unknown }
+      | undefined;
+    if (
+      !status ||
+      (status.type !== "complete" && status.type !== "requires-action")
+    ) {
+      return null;
+    }
+    return {
+      content: message.content as Content,
+      status: status as ChatModelRunResult["status"],
+    };
+  } catch {
+    return null;
+  }
+}
 
 function textPart(text: string): Content[number] {
   return { type: "text", text };
@@ -177,6 +230,111 @@ function toolPart(
     ...(extra.providerMetadata ? { providerMetadata: extra.providerMetadata } : {}),
   };
   return part;
+}
+
+/** Append one provider reasoning delta to its stable assistant-ui part. */
+function appendReasoningDelta(content: Content, partId: string, delta: string): Content {
+  const index = content.findIndex((part) => part.type === "reasoning" && part.id === partId);
+  const startedAt = Date.now();
+  if (index === -1) {
+    return [
+      ...content,
+      {
+        type: "reasoning",
+        id: partId,
+        text: delta,
+        status: { type: "running" },
+        timing: { startedAt },
+      },
+    ];
+  }
+  const existing = content[index];
+  if (!existing || existing.type !== "reasoning") return content;
+  const next: ReasoningPart = {
+    ...existing,
+    text: existing.text + delta,
+    status: { type: "running" },
+  };
+  return [...content.slice(0, index), next, ...content.slice(index + 1)];
+}
+
+/** Mark one reasoning part complete and retain the server-measured duration. */
+function finishReasoningPart(content: Content, partId: string, durationMs: number): Content {
+  const index = content.findIndex((part) => part.type === "reasoning" && part.id === partId);
+  const existing = index === -1 ? undefined : content[index];
+  if (index === -1 || !existing || existing.type !== "reasoning") return content;
+  const completedAt =
+    existing.timing?.startedAt === undefined
+      ? Date.now()
+      : existing.timing.startedAt + Math.max(0, durationMs);
+  const next: ReasoningPart = {
+    ...existing,
+    status: { type: "complete" },
+    timing: {
+      startedAt: existing.timing?.startedAt ?? completedAt,
+      completedAt,
+    },
+  };
+  return [...content.slice(0, index), next, ...content.slice(index + 1)];
+}
+
+function settleReasoning(
+  content: Content,
+  status: { type: "complete" } | { type: "incomplete"; reason: "cancelled" | "error" },
+): Content {
+  return content.map((part) =>
+    part.type === "reasoning" && part.status?.type === "running"
+      ? {
+          ...part,
+          status,
+          ...(part.timing
+            ? { timing: { ...part.timing, completedAt: part.timing.completedAt ?? Date.now() } }
+            : {}),
+        }
+      : part,
+  );
+}
+
+/**
+ * Upsert a tool-call card while the provider is still streaming its JSON.
+ * `args` remains `{}` until `tool.start` supplies the validated object; the
+ * raw fragments are accumulated in assistant-ui's `argsText`.
+ */
+function appendToolArgsDelta(
+  content: Content,
+  toolCallId: string,
+  name: string,
+  delta: string,
+): Content {
+  const index = content.findIndex(
+    (part) => part.type === "tool-call" && part.toolCallId === toolCallId,
+  );
+  if (index === -1) {
+    const next: ToolPart = {
+      type: "tool-call",
+      toolCallId,
+      toolName: name,
+      args: {} as never,
+      argsText: delta,
+      timing: { startedAt: Date.now() },
+      providerMetadata: { roamlog: { name, streamed: true } },
+    };
+    return [...content, next];
+  }
+  const existing = content[index];
+  if (!existing || existing.type !== "tool-call") return content;
+  const next: ToolPart = {
+    ...existing,
+    toolName: existing.toolName || name,
+    argsText: existing.argsText + delta,
+    timing: existing.timing ?? { startedAt: Date.now() },
+    providerMetadata: withRoamlogMetadata(existing, {
+      ...roamlogMetadata(existing),
+      name,
+      streamed: true,
+    }),
+  };
+  return [...content.slice(0, index), next, ...content.slice(index + 1)];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -270,6 +428,39 @@ function planConfirmationFrom(message: {
     if (part.type !== "tool-call" || part.toolName !== PLAN_TOOL_NAME) continue;
     const result = part.result as ConfirmedPlanResult | undefined;
     if (result && result.status === "confirmed") return result;
+  }
+  return null;
+}
+
+/**
+ * Finds the completed human-tool part that triggered this resumed run.
+ * assistant-ui calls `ChatModelAdapter.run` again after `addResult`; the
+ * completed part lives on `unstable_getMessage()`, not in `messages` (which
+ * stops at the parent user turn).
+ */
+function humanToolResultFrom(message: { content: readonly unknown[] }): AiHumanToolResult | null {
+  for (let index = message.content.length - 1; index >= 0; index -= 1) {
+    const part = message.content[index] as {
+      type?: string;
+      toolName?: string;
+      toolCallId?: string;
+      result?: unknown;
+    };
+    if (
+      part.type !== "tool-call" ||
+      typeof part.toolName !== "string" ||
+      !isHumanToolName(part.toolName) ||
+      typeof part.toolCallId !== "string" ||
+      part.result === undefined
+    ) {
+      continue;
+    }
+    const parsed = AiHumanToolResultSchema.safeParse({
+      toolCallId: part.toolCallId,
+      name: part.toolName,
+      result: part.result,
+    });
+    return parsed.success ? parsed.data : null;
   }
   return null;
 }
@@ -393,6 +584,11 @@ export function createAiChatModelAdapter({
         }
       }
 
+      // Round 2 of a human-input tool: `addResult` completed an ask_user or
+      // confirm_brief part. This is not a new user turn; send only the typed
+      // tool result so the server can validate it against the durable pause.
+      const humanResume = assistant ? humanToolResultFrom(assistant) : null;
+
       // Round 1: plan only. `streamAiPlan` is read-only by contract; the
       // blocking endpoint is kept solely as a 404/405 deployment fallback.
       const request = [...messages].reverse().find((message) => message.role === "user");
@@ -420,9 +616,19 @@ export function createAiChatModelAdapter({
       let doneEvent: Extract<AiStreamEvent, { type: "done" }> | undefined;
       /** True after a progress frame was surfaced to the UI. */
       let progressShown = false;
+      /** True after at least one provider reasoning delta was surfaced. */
+      let reasoningShown = false;
       let streamId: string | undefined;
       let lastEventId = 0;
       const conversationId = unstable_threadId;
+      if (humanResume && !conversationId) {
+        const copy = planFailureCopy("invalid_request");
+        yield {
+          content: [textPart(`${copy.title}\n\n${copy.description}`)],
+          status: { type: "incomplete", reason: "error" },
+        };
+        return;
+      }
 
       /**
        * The transport-level reconnect port of upstream `use-auto-resume`.
@@ -443,12 +649,12 @@ export function createAiChatModelAdapter({
               for await (const event of streamAiPlan(
                 workspaceId,
                 {
-                  message: prompt,
+                  ...(humanResume ? { humanToolResult: humanResume } : { message: prompt }),
                   // `useLocalRuntime` seeds this with
                   // `threadListItem.remoteId`, i.e. the persisted conversation
                   // id, so follow-up turns keep context.
                   ...(conversationId ? { conversationId } : {}),
-                  ...(request?.id ? { clientMessageId: request.id } : {}),
+                  ...(!humanResume && request?.id ? { clientMessageId: request.id } : {}),
                   ...(unstable_assistantMessageId
                     ? { assistantMessageId: unstable_assistantMessageId }
                     : {}),
@@ -456,7 +662,7 @@ export function createAiChatModelAdapter({
                   ...(selection.reasoningEffort === undefined
                     ? {}
                     : { reasoningEffort: selection.reasoningEffort }),
-                  ...(attachments.length > 0 ? { attachments } : {}),
+                  ...(!humanResume && attachments.length > 0 ? { attachments } : {}),
                 },
                 abortSignal,
               )) {
@@ -510,6 +716,34 @@ export function createAiChatModelAdapter({
                 metadata: { custom: { progress: event } },
               };
               break;
+            case "reasoning.delta":
+              reasoningShown = true;
+              content = appendReasoningDelta(content, event.partId, event.delta);
+              yield {
+                content: [...content],
+                status: { type: "running" },
+              };
+              break;
+            case "reasoning.end":
+              content = finishReasoningPart(content, event.partId, event.durationMs);
+              yield {
+                content: [...content],
+                status: { type: "running" },
+              };
+              break;
+            case "human.request":
+              content = upsertToolPart(
+                content,
+                toolPart(event.name, event.toolCallId, event.args, {
+                  timing: { startedAt: toMillis(event.startedAt) },
+                  providerMetadata: { roamlog: { name: event.name, human: true } },
+                }),
+              );
+              yield {
+                content: [...content],
+                status: { type: "running" },
+              };
+              break;
             case "text.delta":
               content = appendTextDelta(content, event.delta);
               // Each delta yields the full content so far; assistant-ui
@@ -517,6 +751,18 @@ export function createAiChatModelAdapter({
               // The existing progress metadata is intentionally left untouched:
               // removing it here would blank the status line for the rest of a
               // long tool round.
+              yield {
+                content: [...content],
+                status: { type: "running" },
+              };
+              break;
+            case "tool.args.delta":
+              content = appendToolArgsDelta(
+                content,
+                event.toolCallId,
+                event.name,
+                event.argsTextDelta,
+              );
               yield {
                 content: [...content],
                 status: { type: "running" },
@@ -603,7 +849,7 @@ export function createAiChatModelAdapter({
         }
 
         const failure = toAiRequestError(error);
-        if (failure.status === 404 || failure.status === 405) {
+        if (!humanResume && (failure.status === 404 || failure.status === 405)) {
           // The streaming endpoint is not deployed yet: fall back to the old
           // blocking plan endpoint. Any other failure must not silently retry.
           try {
@@ -622,6 +868,22 @@ export function createAiChatModelAdapter({
             };
           }
           return;
+        }
+
+        if (conversationId) {
+          const recovered = await recoverPersistedAssistantMessage(
+            workspaceId,
+            conversationId,
+            unstable_assistantMessageId,
+          );
+          if (recovered) {
+            yield {
+              content: recovered.content,
+              status: recovered.status,
+              ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+            };
+            return;
+          }
         }
 
         const copy = planFailureCopy(failure.kind);
@@ -646,6 +908,21 @@ export function createAiChatModelAdapter({
       }
 
       if (!doneEvent) {
+        if (conversationId) {
+          const recovered = await recoverPersistedAssistantMessage(
+            workspaceId,
+            conversationId,
+            unstable_assistantMessageId,
+          );
+          if (recovered) {
+            yield {
+              content: recovered.content,
+              status: recovered.status,
+              ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+            };
+            return;
+          }
+        }
         const copy = planFailureCopy("network");
         yield {
           content: appendFailureCopy(content, copy.title, copy.description),
@@ -660,6 +937,10 @@ export function createAiChatModelAdapter({
       if (finishReason === "aborted" || errorEvent?.code === "AI_ABORTED") {
         // The message is `incomplete/cancelled`; `message.tsx` renders the
         // single 「已停止」 label, so no duplicate text part is added here.
+        content = settleReasoning(content, {
+          type: "incomplete",
+          reason: "cancelled",
+        });
         yield {
           content: [...content],
           status: { type: "incomplete", reason: "cancelled" },
@@ -671,6 +952,7 @@ export function createAiChatModelAdapter({
       if (errorEvent || finishReason === "error") {
         const kind = errorEvent ? aiFailureKind(200, errorEvent.code) : "invalid_response";
         const copy = planFailureCopy(kind);
+        content = settleReasoning(content, { type: "incomplete", reason: "error" });
         yield {
           content: appendFailureCopy(content, copy.title, copy.description),
           status: { type: "incomplete", reason: "error" },
@@ -683,6 +965,7 @@ export function createAiChatModelAdapter({
         if (!content.some((part) => part.type === "text" && part.text.trim().length > 0)) {
           content = appendTextDelta(content, planEvent.message);
         }
+        content = settleReasoning(content, { type: "complete" });
         content = [...content, toolPart(PLAN_TOOL_NAME, toolCallId, { plan: planEvent })];
         yield {
           content: [...content],
@@ -692,7 +975,18 @@ export function createAiChatModelAdapter({
         return;
       }
 
+      if (finishReason === "requires-action") {
+        content = settleReasoning(content, { type: "complete" });
+        yield {
+          content: [...content],
+          status: { type: "requires-action", reason: "tool-calls" },
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+        };
+        return;
+      }
+
       if (finishReason === "length") {
+        content = settleReasoning(content, { type: "complete" });
         yield {
           content: [...content],
           status: { type: "incomplete", reason: "length" },
@@ -704,7 +998,8 @@ export function createAiChatModelAdapter({
       // Text-only reply: the last running snapshot is enough for the text; an
       // explicit terminal snapshot is only required when a progress line was
       // shown, because `done` is otherwise what ends the status line.
-      if (progressShown) {
+      if (progressShown || reasoningShown) {
+        content = settleReasoning(content, { type: "complete" });
         yield {
           content: [...content],
           status: { type: "complete", reason: "stop" },
@@ -739,6 +1034,7 @@ export function createAiResumeStream({
     let errorEvent: Extract<AiStreamEvent, { type: "error" }> | undefined;
     let doneEvent: Extract<AiStreamEvent, { type: "done" }> | undefined;
     let progressShown = false;
+    let reasoningShown = false;
     let streamId: string | undefined;
 
     try {
@@ -763,8 +1059,36 @@ export function createAiResumeStream({
               metadata: { custom: { progress: event } },
             };
             break;
+          case "reasoning.delta":
+            reasoningShown = true;
+            content = appendReasoningDelta(content, event.partId, event.delta);
+            yield { content: [...content], status: { type: "running" } };
+            break;
+          case "reasoning.end":
+            content = finishReasoningPart(content, event.partId, event.durationMs);
+            yield { content: [...content], status: { type: "running" } };
+            break;
+          case "human.request":
+            content = upsertToolPart(
+              content,
+              toolPart(event.name, event.toolCallId, event.args, {
+                timing: { startedAt: toMillis(event.startedAt) },
+                providerMetadata: { roamlog: { name: event.name, human: true } },
+              }),
+            );
+            yield { content: [...content], status: { type: "running" } };
+            break;
           case "text.delta":
             content = appendTextDelta(content, event.delta);
+            yield { content: [...content], status: { type: "running" } };
+            break;
+          case "tool.args.delta":
+            content = appendToolArgsDelta(
+              content,
+              event.toolCallId,
+              event.name,
+              event.argsTextDelta,
+            );
             yield { content: [...content], status: { type: "running" } };
             break;
           case "tool.start":
@@ -835,6 +1159,19 @@ export function createAiResumeStream({
         }
         return;
       }
+      const recovered = await recoverPersistedAssistantMessage(
+        workspaceId,
+        conversationId,
+        options.unstable_assistantMessageId,
+      );
+      if (recovered) {
+        yield {
+          content: recovered.content,
+          status: recovered.status,
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+        };
+        return;
+      }
       const copy = planFailureCopy(toAiRequestError(error).kind);
       yield {
         content: appendFailureCopy(content, copy.title, copy.description),
@@ -852,6 +1189,19 @@ export function createAiResumeStream({
     }
 
     if (!doneEvent) {
+      const recovered = await recoverPersistedAssistantMessage(
+        workspaceId,
+        conversationId,
+        options.unstable_assistantMessageId,
+      );
+      if (recovered) {
+        yield {
+          content: recovered.content,
+          status: recovered.status,
+          ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+        };
+        return;
+      }
       const copy = planFailureCopy("network");
       yield {
         content: appendFailureCopy(content, copy.title, copy.description),
@@ -863,6 +1213,10 @@ export function createAiResumeStream({
 
     const finishReason = doneEvent.finishReason;
     if (finishReason === "aborted" || errorEvent?.code === "AI_ABORTED") {
+      content = settleReasoning(content, {
+        type: "incomplete",
+        reason: "cancelled",
+      });
       yield {
         content: [...content],
         status: { type: "incomplete", reason: "cancelled" },
@@ -874,6 +1228,7 @@ export function createAiResumeStream({
       const copy = planFailureCopy(
         errorEvent ? aiFailureKind(200, errorEvent.code) : "invalid_response",
       );
+      content = settleReasoning(content, { type: "incomplete", reason: "error" });
       yield {
         content: appendFailureCopy(content, copy.title, copy.description),
         status: { type: "incomplete", reason: "error" },
@@ -885,10 +1240,20 @@ export function createAiResumeStream({
       if (!content.some((part) => part.type === "text" && part.text.trim().length > 0)) {
         content = appendTextDelta(content, planEvent.message);
       }
+      content = settleReasoning(content, { type: "complete" });
       content = [
         ...content,
         toolPart(PLAN_TOOL_NAME, `plan-${planEvent.runId}`, { plan: planEvent }),
       ];
+      yield {
+        content: [...content],
+        status: { type: "requires-action", reason: "tool-calls" },
+        ...(progressShown ? { metadata: { custom: { progress: undefined } } } : {}),
+      };
+      return;
+    }
+    if (finishReason === "requires-action") {
+      content = settleReasoning(content, { type: "complete" });
       yield {
         content: [...content],
         status: { type: "requires-action", reason: "tool-calls" },
@@ -904,7 +1269,8 @@ export function createAiResumeStream({
       };
       return;
     }
-    if (progressShown) {
+    if (progressShown || reasoningShown) {
+      content = settleReasoning(content, { type: "complete" });
       yield {
         content: [...content],
         status: { type: "complete", reason: "stop" },

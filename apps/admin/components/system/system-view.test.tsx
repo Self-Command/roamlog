@@ -12,8 +12,9 @@ describe("SystemView", () => {
     expect(screen.getByText("1.0.0-rc.1")).toBeInTheDocument();
     expect(screen.getByText("24.4.1")).toBeInTheDocument();
     expect(screen.getByText("0003_export_cleanup")).toBeInTheDocument();
-    expect(screen.getByText("Redis")).toBeInTheDocument();
-    expect(screen.getByText("S3 / MinIO")).toBeInTheDocument();
+    expect(screen.getByText("缓存服务")).toBeInTheDocument();
+    expect(screen.getByText("文件存储")).toBeInTheDocument();
+    expect(screen.getByText("数据库")).toBeInTheDocument();
     expect(screen.getByText("后台任务进程")).toBeInTheDocument();
     expect(screen.getByText("健康")).toBeInTheDocument();
     expect(screen.getByText("3 / 4 正常")).toBeInTheDocument();
@@ -25,7 +26,7 @@ describe("SystemView", () => {
     expect(screen.queryByText("Up · 2 ms")).not.toBeInTheDocument();
     expect(screen.queryByText("4 queues")).not.toBeInTheDocument();
     expect(screen.queryByText("maxRetriesPerRequest")).not.toBeInTheDocument();
-    expect(screen.getByText("队列注册")).toBeInTheDocument();
+    expect(screen.getAllByText("任务队列").length).toBeGreaterThan(0);
   });
 
   it("renders not-wired states instead of DOWN when the worker cannot be observed", () => {
@@ -52,12 +53,12 @@ describe("SystemView", () => {
     expect(screen.queryByText("不可用")).not.toBeInTheDocument();
     // Values the backend did not report stay explicit instead of being invented.
     expect(screen.getAllByText("未上报").length).toBeGreaterThan(1);
-    expect(screen.getByText(/需要在任务进程侧补上/)).toBeInTheDocument();
+    expect(screen.getByText(/没有足够的任务进程信号/)).toBeInTheDocument();
     // Unprovable worker liveness is "无法确认", never DOWN and never "未接入".
     expect(screen.getByText("无法确认")).toBeInTheDocument();
-    expect(screen.getByText(/后端未上报版本号/)).toBeInTheDocument();
-    expect(screen.getByText(/后端未上报构建时间/)).toBeInTheDocument();
-    expect(screen.getByText(/可识别的队列状态键/)).toBeInTheDocument();
+    expect(screen.getByText(/服务未上报版本号/)).toBeInTheDocument();
+    expect(screen.getByText(/服务未上报构建时间/)).toBeInTheDocument();
+    expect(screen.getByText(/没有发现队列/)).toBeInTheDocument();
     // No endpoint paths or env var names may leak into the console copy.
     expect(screen.queryByText(/\/v1\//)).not.toBeInTheDocument();
     expect(screen.queryByText(/ROAMLOG_/)).not.toBeInTheDocument();
@@ -86,8 +87,8 @@ describe("SystemView", () => {
     render(<SystemView role="admin" snapshot={snapshot} />);
 
     expect(screen.getByText("健康")).toBeInTheDocument();
-    expect(screen.getAllByText(/阻塞消费者/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Redis CLIENT LIST/)).toBeInTheDocument();
+    expect(screen.getAllByText(/活跃任务数/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/后台任务进程活跃连接与队列计数/)).toBeInTheDocument();
     expect(screen.getByText("email")).toBeInTheDocument();
   });
 });

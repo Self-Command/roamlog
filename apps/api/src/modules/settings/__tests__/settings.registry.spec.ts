@@ -49,6 +49,8 @@ describe("SETTINGS_REGISTRY", () => {
         "theme.defaultFont",
         "theme.allowUserOverride",
         "theme.loginTagline",
+        "ai.defaultReasoningEffort",
+        "ai.suggestedPrompts",
         "media.maxEdge",
         "media.quality",
         "media.targetBytes",

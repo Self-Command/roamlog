@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { HardDrive, ImageIcon, ShieldAlert, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { HardDrive, ImageIcon, ImageOff, ShieldAlert, Trash2 } from "lucide-react";
 
 import { canPlatform } from "@roamlog/contracts";
 import type { MediaStatus } from "@roamlog/contracts";
@@ -22,6 +22,8 @@ interface MediaViewProps {
   role: AdminConsoleRole;
   media: readonly AdminMediaItem[];
   mutations?: AdminMutationPort;
+  /** Re-reads the admin media page so expired signed thumbnail URLs are refreshed. */
+  onRefresh?: () => void;
 }
 
 const mediaStatusTones: Record<MediaStatus, "neutral" | "blue" | "green" | "red"> = {
@@ -38,9 +40,37 @@ const previewGradients = [
   "from-accent-slate/15 via-surface-2 to-surface-deep",
 ];
 
-function MediaThumbnail({ item, index }: { item: AdminMediaItem; index: number }) {
+function MediaThumbnail({
+  item,
+  index,
+  onRefresh,
+}: {
+  item: AdminMediaItem;
+  index: number;
+  onRefresh?: (force?: boolean) => void;
+}) {
   const [failed, setFailed] = useState(false);
+  const autoRetriedRef = useRef(false);
   const showImage = Boolean(item.thumbnailUrl) && !failed;
+
+  useEffect(() => {
+    autoRetriedRef.current = false;
+    setFailed(false);
+  }, [item.thumbnailUrl]);
+
+  const handleError = () => {
+    setFailed(true);
+    if (!autoRetriedRef.current) {
+      autoRetriedRef.current = true;
+      onRefresh?.();
+    }
+  };
+
+  const retryPreview = () => {
+    autoRetriedRef.current = false;
+    setFailed(false);
+    onRefresh?.(true);
+  };
 
   return (
     <div
@@ -55,13 +85,31 @@ function MediaThumbnail({ item, index }: { item: AdminMediaItem; index: number }
           alt=""
           loading="lazy"
           decoding="async"
-          onError={() => setFailed(true)}
+          onError={handleError}
           className="absolute inset-0 size-full object-cover"
         />
       ) : null}
+      {failed ? (
+        <div
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface-1/85 px-4 text-center text-muted"
+          data-testid={`media-preview-error-${item.id}`}
+        >
+          <ImageOff aria-hidden="true" className="size-5 text-stone" />
+          <p className="text-[11px] leading-4">预览加载失败</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={retryPreview}
+            className="h-7 px-2 text-[11px]"
+          >
+            重新加载
+          </Button>
+        </div>
+      ) : null}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-gradient-to-t from-canvas/70 via-transparent to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-canvas/70 via-transparent to-transparent"
       />
       <span className="relative font-mono text-[8px] uppercase tracking-[0.12em] text-ink/70">
         {item.mimeType}
@@ -70,13 +118,27 @@ function MediaThumbnail({ item, index }: { item: AdminMediaItem; index: number }
   );
 }
 
-export function MediaView({ role, media, mutations }: MediaViewProps) {
+export function MediaView({ role, media, mutations, onRefresh }: MediaViewProps) {
   const [records, setRecords] = useState<readonly AdminMediaItem[]>(media);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | MediaStatus>("all");
   const [orphansOnly, setOrphansOnly] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<AdminMediaItem | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+  const lastRefreshAtRef = useRef(0);
+
+  useEffect(() => {
+    setRecords(media);
+  }, [media]);
+
+  // A stale signed URL affects every card in the same page. Collapse the
+  // on-error refreshes into one query so one viewport cannot stampede the API.
+  const refreshMedia = useCallback((force = false) => {
+    const now = Date.now();
+    if (!force && now - lastRefreshAtRef.current < 1_500) return;
+    lastRefreshAtRef.current = now;
+    onRefresh?.();
+  }, [onRefresh]);
 
   const canDelete = canPlatform(role, "admin:media:delete");
   const readOnly = role === "analyst";
@@ -113,8 +175,8 @@ export function MediaView({ role, media, mutations }: MediaViewProps) {
       } catch (error) {
         setStatusMessage(
           error instanceof AdminMutationError
-            ? `删除失败：${error.failure.code} · ${error.failure.detail}`
-            : "删除失败，请检查 API 与权限后重试。",
+            ? "删除失败，请稍后重试；如果持续失败，请联系平台管理员。"
+            : "删除失败，请稍后重试。",
         );
         setPendingDelete(null);
         return;
@@ -130,7 +192,7 @@ export function MediaView({ role, media, mutations }: MediaViewProps) {
       <AdminPageHeader
         eyebrow="内容与资产 / 媒体"
         title="媒体库"
-        description={"检查存储用量、处理状态与孤儿对象。"}
+        description="查看文件用量、处理状态和未引用文件。"
         readOnly={readOnly}
         actions={
           <div className="rounded-control border border-hairline bg-surface-1 px-3 py-2">
@@ -142,7 +204,7 @@ export function MediaView({ role, media, mutations }: MediaViewProps) {
 
       <section aria-label="媒体指标" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminMetricCard
-          label="对象总量"
+          label="文件总数"
           value={String(records.length)}
           detail={`存储用量 ${formatBytes(totalBytes)}`}
           tone="blue"
@@ -156,16 +218,16 @@ export function MediaView({ role, media, mutations }: MediaViewProps) {
           icon={ImageIcon}
         />
         <AdminMetricCard
-          label="孤儿对象"
+          label="未引用文件"
           value={String(orphanCount)}
-          detail="可安全清理的未引用文件"
+          detail="可以安全清理的未引用文件"
           tone={orphanCount > 0 ? "orange" : "neutral"}
           icon={ShieldAlert}
         />
         <AdminMetricCard
           label="处理中 / 失败"
           value={`${records.filter((item) => item.status === "processing").length} / ${records.filter((item) => item.status === "failed").length}`}
-          detail="media-processing 队列"
+          detail="媒体处理队列"
           tone="neutral"
           icon={HardDrive}
         />
@@ -215,7 +277,7 @@ export function MediaView({ role, media, mutations }: MediaViewProps) {
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          分析员可查看媒体用量与孤儿检测结果；删除操作保持可见但不可用。
+          分析员只能查看文件用量和未引用文件，不能删除。
         </div>
       ) : null}
 
@@ -234,7 +296,7 @@ export function MediaView({ role, media, mutations }: MediaViewProps) {
               aria-label={`媒体 ${item.fileName}`}
               className="overflow-hidden rounded-card border border-hairline-strong bg-surface-1"
             >
-              <MediaThumbnail item={item} index={index} />
+              <MediaThumbnail item={item} index={index} onRefresh={refreshMedia} />
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -263,7 +325,7 @@ export function MediaView({ role, media, mutations }: MediaViewProps) {
                     className="ml-auto"
                     aria-label={`删除媒体 ${item.fileName}`}
                     disabled={!canDelete}
-                    title={canDelete ? "删除媒体对象" : "当前角色不可删除媒体"}
+                    title={canDelete ? "删除文件" : "你没有删除文件的权限。"}
                     onClick={() => setPendingDelete(item)}
                   >
                     <Trash2 aria-hidden="true" />
@@ -283,8 +345,8 @@ export function MediaView({ role, media, mutations }: MediaViewProps) {
       <DestructiveActionDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
-        title="删除媒体"
-        description="媒体对象进入软删除状态；后续清理任务会处理派生版本。"
+        title="删除文件"
+        description="文件会移入已删除，相关缩略图等临时文件会稍后清理。"
         targetName={pendingDelete?.fileName ?? ""}
         confirmationLabel="输入文件名确认"
         confirmActionLabel="确认删除"

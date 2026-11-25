@@ -136,8 +136,8 @@ export function QueuesView({
         } catch (error) {
           setStatusMessage(
             error instanceof AdminMutationError
-              ? `重试失败：${error.failure.code} · ${error.failure.detail}`
-              : "重试失败，请检查 API 与权限后重试。",
+              ? "重试失败，请稍后重试；如果持续失败，请联系平台管理员。"
+              : "重试失败，请稍后重试。",
           );
           setPendingAction(null);
           return;
@@ -158,8 +158,8 @@ export function QueuesView({
         } catch (error) {
           setStatusMessage(
             error instanceof AdminMutationError
-              ? `清空失败：${error.failure.code} · ${error.failure.detail}`
-              : "清空失败，请检查 API 与权限后重试。",
+              ? "清理失败，请稍后重试；如果持续失败，请联系平台管理员。"
+              : "清理失败，请稍后重试。",
           );
           setPendingAction(null);
           return;
@@ -182,8 +182,8 @@ export function QueuesView({
         } catch (error) {
           setStatusMessage(
             error instanceof AdminMutationError
-              ? `${kind === "pause" ? "暂停" : "恢复"}失败：${error.failure.code} · ${error.failure.detail}`
-              : `${kind === "pause" ? "暂停" : "恢复"}失败，请检查 API 与权限后重试。`,
+              ? `${kind === "pause" ? "暂停" : "恢复"}失败，请稍后重试；如果持续失败，请联系平台管理员。`
+              : `${kind === "pause" ? "暂停" : "恢复"}失败，请稍后重试。`,
           );
           setPendingAction(null);
           return;
@@ -202,8 +202,8 @@ export function QueuesView({
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        eyebrow="投递 / BullMQ"
-        title="队列"
+        eyebrow="投递 / 任务队列"
+        title="任务队列"
         description="检查各队列等待、运行与失败任务，查看失败原因；暂停、恢复与清空仅超级管理员可执行。"
         readOnly={readOnly}
         actions={
@@ -223,8 +223,8 @@ export function QueuesView({
           value={String(totalWaiting)}
           detail={
             queueRecords.length === 0
-              ? "Redis 中未发现已注册队列"
-              : `跨 ${queueRecords.length} 个队列（Redis 发现）`
+              ? "当前没有已注册的任务队列"
+              : `共 ${queueRecords.length} 个任务队列`
           }
           tone="blue"
           icon={RotateCcw}
@@ -239,7 +239,7 @@ export function QueuesView({
         <AdminMetricCard
           label="已暂停"
           value={String(pausedQueues)}
-          detail="任务进程不消费已暂停队列"
+          detail="已暂停的队列不会接收新任务"
           tone={pausedQueues > 0 ? "orange" : "neutral"}
           icon={Pause}
         />
@@ -248,8 +248,8 @@ export function QueuesView({
           value={Number.isFinite(throughput) ? throughput.toFixed(1) : "暂不可用"}
           detail={
             Number.isFinite(throughput)
-              ? "5 分钟窗口内 BullMQ 完成时间戳推算 · 任务/分钟"
-              : "Redis 无法提供完成窗口"
+              ? "最近 5 分钟平均每分钟完成的任务数"
+              : "暂时无法计算完成速度"
           }
           tone="green"
           icon={Gauge}
@@ -264,7 +264,7 @@ export function QueuesView({
           className="flex items-center gap-2 rounded-control border border-accent-slate/25 bg-accent-slate/5 px-3 py-2 text-[12px] text-accent-slate"
         >
           <ShieldAlert aria-hidden="true" className="size-4" />
-          失败任务读取与重试按角色权限开放；暂停、恢复与清空队列仅超级管理员可执行。
+          你可以查看并重试失败任务；暂停、恢复与清空队列仅超级管理员可执行。
         </div>
       ) : null}
 
@@ -273,7 +273,7 @@ export function QueuesView({
           <EmptyState
             icon={RotateCcw}
             title="未发现队列"
-            description="Redis 中没有可识别的队列状态键。队列列表来自 Redis 扫描；任务进程尚未注册队列时这里保持为空。"
+            description="当前没有已注册的任务队列。后台任务进程启动后会自动显示在这里。"
             className="sm:col-span-2"
           />
         ) : null}
@@ -450,7 +450,7 @@ export function QueuesView({
                           size="sm"
                           aria-label="重试任务"
                           disabled={!canRetry}
-                          title={canRetry ? "重试任务" : "当前角色不可重试队列任务"}
+                          title={canRetry ? "重试任务" : "你没有重试任务的权限。"}
                           onClick={() => setPendingAction({ kind: "retry", job })}
                         >
                           <RotateCcw aria-hidden="true" />
@@ -550,7 +550,7 @@ const workerTones = {
 } as const;
 
 const signalSources = {
-  "consumer-clients": "Redis CLIENT LIST 中阻塞在 BullMQ BZPOPMIN 的消费者 + 队列计数",
+  "consumer-clients": "后台任务进程连接 + 队列计数",
   "activity-derived": "最近一次任务完成/失败时间 + 队列运行数",
   unavailable: "无可用的推导信号",
 } as const;
@@ -602,8 +602,10 @@ function QueueWorkerPanel() {
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="type-eyebrow">任务进程 / 观测信号</p>
-          <h2 className="mt-1 font-serif text-lg tracking-[-0.02em] text-ink">任务进程消费端</h2>
+          <p className="type-eyebrow">后台任务进程</p>
+          <h2 className="mt-1 font-display text-lg font-semibold tracking-[-0.02em] text-ink">
+            任务进程状态
+          </h2>
         </div>
         {observable ? (
           <Badge tone={workerTones[snapshot.workerStatus]}>
@@ -618,7 +620,7 @@ function QueueWorkerPanel() {
 
       <dl className="mt-3 grid gap-2 text-[11px] sm:grid-cols-2">
         <div className="flex items-center justify-between gap-3">
-          <dt className="text-muted">阻塞消费者</dt>
+          <dt className="text-muted">活跃任务数</dt>
           <dd className="font-mono text-[10px] text-body">{snapshot.workerConsumers}</dd>
         </div>
         <div className="flex items-center justify-between gap-3">
@@ -630,15 +632,15 @@ function QueueWorkerPanel() {
       </dl>
 
       <p className="mt-3 border-t border-hairline pt-3 font-mono text-[9px] leading-4 text-muted">
-        推导口径：{signal ? signalSources[signal.signal] : "无可用的推导信号"}
+        状态来源：{signal ? signalSources[signal.signal] : "暂无可用的状态信号"}
         {signal?.lastJobStatus
           ? ` · 最近${JOB_STATUS_LABELS[signal.lastJobStatus]} @ ${signal.lastJobQueue ?? "?"}`
           : ""}
       </p>
       {!observable ? (
         <p className="mt-2 text-[9px] leading-4 text-muted">
-          队列健康不由计数推导：需要任务进程写入心跳，或由任务进程侧暴露自身连接信息
-          （当前版本的任务进程不标记连接名，按连接名匹配会永久误报不可用）。
+          当前只能确认队列计数，无法确认任务进程是否在线。请确认后台任务进程已启动；
+          如果持续异常，请联系平台管理员。
         </p>
       ) : null}
     </section>

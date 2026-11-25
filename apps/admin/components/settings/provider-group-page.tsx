@@ -410,7 +410,7 @@ export function ProviderGroupPage({ group, role, api }: ProviderGroupPageProps) 
           }
         }}
         title="删除服务商"
-        description="该操作会软删除服务商并立即停止将其用于新的运行时请求；已有审计记录会保留。"
+        description="服务商会移入已删除，并停止接收新的请求；已有审计记录会保留。"
         targetName={deleteTarget?.label ?? ""}
         confirmationLabel="输入服务商名称确认"
         confirmActionLabel="确认删除"

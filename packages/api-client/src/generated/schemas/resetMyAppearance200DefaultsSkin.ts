@@ -10,6 +10,11 @@ export type ResetMyAppearance200DefaultsSkin =
   (typeof ResetMyAppearance200DefaultsSkin)[keyof typeof ResetMyAppearance200DefaultsSkin];
 
 export const ResetMyAppearance200DefaultsSkin = {
+  porcelain: "porcelain",
+  fluent: "fluent",
+  carbon: "carbon",
+  "carbon-soft": "carbon-soft",
+  primer: "primer",
   "editorial-noir": "editorial-noir",
   catppuccin: "catppuccin",
   "tokyo-night": "tokyo-night",

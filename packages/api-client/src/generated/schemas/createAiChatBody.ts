@@ -7,6 +7,7 @@
  */
 import type { CreateAiChatBodyAttachmentsItem } from "./createAiChatBodyAttachmentsItem";
 import type { CreateAiChatBodyHints } from "./createAiChatBodyHints";
+import type { CreateAiChatBodyHumanToolResult } from "./createAiChatBodyHumanToolResult";
 import type { CreateAiChatBodyReasoningEffort } from "./createAiChatBodyReasoningEffort";
 
 export type CreateAiChatBody = {
@@ -14,7 +15,7 @@ export type CreateAiChatBody = {
    * @minLength 1
    * @maxLength 2000
    */
-  message: string;
+  message?: string;
   hints?: CreateAiChatBodyHints;
   /** Sortable UUIDv7 identifier. */
   conversationId?: string;
@@ -45,4 +46,5 @@ export type CreateAiChatBody = {
    * @maxItems 5
    */
   attachments?: CreateAiChatBodyAttachmentsItem[];
+  humanToolResult?: CreateAiChatBodyHumanToolResult;
 };

@@ -23,7 +23,7 @@ export function shareScreenFromResponse(status: number, data: unknown): ShareScr
       return {
         kind: "error",
         title: "暂时无法读取分享",
-        description: "分享服务返回了无法识别的内容，请稍后重试。",
+        description: "分享内容暂时无法加载，请稍后重试。",
         retryable: true,
       };
     }
@@ -50,7 +50,7 @@ export function shareScreenFromResponse(status: number, data: unknown): ShareScr
   return {
     kind: "error",
     title: "暂时无法读取分享",
-    description: "分享服务没有正常响应，请稍后重试。",
+    description: "分享内容暂时无法加载，请稍后重试。",
     retryable: true,
   };
 }

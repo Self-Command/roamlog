@@ -60,10 +60,10 @@ describe("DashboardPage data truthfulness", () => {
     renderWithQuery(<DashboardPage workspaceSlug="roamlog-crew" />);
 
     expect(
-      await screen.findByText("2 趟旅行，2 个国家，2 个城市。下一段行程、预算和最近整理的旅行都在这里。"),
+      await screen.findByText("2 趟旅行，2 个国家，2 个城市。下一段行程、预算和最近更新的旅行都在这里。"),
     ).toBeInTheDocument();
-    expect(screen.getByText("TOTAL JOURNEYS")).toBeInTheDocument();
-    expect(screen.getByText("DAYS ON THE ROAD")).toBeInTheDocument();
+    expect(screen.getByText("旅行总数")).toBeInTheDocument();
+    expect(screen.getByText("累计天数")).toBeInTheDocument();
     expect(screen.getByText("8")).toBeInTheDocument();
     expect(screen.getAllByText(/12,345/).length).toBeGreaterThan(0);
   });

@@ -109,7 +109,7 @@ describe("JournalEditorSheet", () => {
     fireEvent.change(screen.getByRole("textbox", { name: /标题/ }), {
       target: { value: "覆盖后的标题" },
     });
-    await user.click(screen.getByRole("button", { name: "保存" }));
+    await user.click(screen.getByRole("button", { name: "立即保存" }));
 
     const dialog = await screen.findByRole("dialog", { name: "有人先保存了" });
     expect(dialog).toBeInTheDocument();

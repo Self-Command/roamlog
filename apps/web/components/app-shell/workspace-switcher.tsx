@@ -6,6 +6,19 @@ import { ChevronDown } from "lucide-react";
 
 const DefaultLink = "a" as ShellLinkComponent;
 
+const roleLabels: Record<string, string> = {
+  owner: "所有者",
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "只读成员",
+};
+
+const planLabels: Record<string, string> = {
+  free: "免费版",
+  team: "团队版",
+  business: "企业版",
+};
+
 interface WorkspaceSwitcherProps {
   currentWorkspace: WorkspaceWithRole;
   workspaces: WorkspaceWithRole[];
@@ -27,8 +40,9 @@ export function WorkspaceSwitcher({
           <span className="block truncate text-xs font-medium text-ink">
             {currentWorkspace.name}
           </span>
-          <span className="block font-mono text-[9px] uppercase tracking-[0.1em] text-muted">
-            {currentWorkspace.role} · {currentWorkspace.plan}
+          <span className="block text-[11px] leading-4 text-muted">
+            {roleLabels[currentWorkspace.role] ?? currentWorkspace.role} ·{" "}
+            {planLabels[currentWorkspace.plan] ?? currentWorkspace.plan}
           </span>
         </span>
         <ChevronDown
@@ -38,7 +52,7 @@ export function WorkspaceSwitcher({
       </summary>
 
       <div className="absolute inset-x-0 top-[calc(100%+6px)] z-30 rounded-card border border-hairline-strong bg-surface-2 p-1">
-        <p className="px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
+        <p className="px-2.5 py-1.5 text-[11px] text-muted">
           切换工作区
         </p>
         {workspaces.map((workspace) => (
@@ -50,8 +64,8 @@ export function WorkspaceSwitcher({
           >
             <Avatar name={workspace.name} size={24} />
             <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-            <span className="font-mono text-[9px] uppercase tracking-wider text-stone">
-              {workspace.role}
+            <span className="text-[10px] text-stone">
+              {roleLabels[workspace.role] ?? workspace.role}
             </span>
           </Link>
         ))}

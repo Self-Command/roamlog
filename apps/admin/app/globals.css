@@ -8,36 +8,36 @@
 html,
 body {
   background: var(--canvas);
+  font-family: var(--roamlog-font-ui);
 }
 
 body {
   min-width: 320px;
 }
 
+/*
+ * The Admin console is an operational surface, never an editorial page.
+ * Existing screens still carry the shared `font-serif` utility; this Admin-only
+ * override maps it to the Carbon Plex UI stack without changing the Web app's
+ * journal typography.
+ */
+body .font-serif,
+body .type-page-title,
+body .type-trip-title {
+  font-family: var(--roamlog-font-display);
+}
+
+body .type-eyebrow {
+  font-family: var(--roamlog-font-ui);
+  letter-spacing: 0.08em;
+}
+
 .admin-atmosphere {
-  background:
-    radial-gradient(
-      ellipse 34% 42% at 55% -10%,
-      color-mix(in srgb, var(--accent-blue) 11%, transparent),
-      transparent 72%
-    ),
-    radial-gradient(
-      ellipse 24% 36% at 84% -6%,
-      color-mix(in srgb, var(--accent-orange) 5.5%, transparent),
-      transparent 74%
-    );
-  mask-image: linear-gradient(to bottom, black 0%, black 32%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 32%, transparent 100%);
+  display: none;
 }
 
 .admin-login-glow {
-  background: radial-gradient(
-    ellipse 44% 48% at 32% 0%,
-    color-mix(in srgb, var(--accent-blue) 9%, transparent),
-    transparent 72%
-  );
-  mask-image: linear-gradient(to bottom, black, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, black, transparent);
+  display: none;
 }
 
 html[data-mode="dark"] {

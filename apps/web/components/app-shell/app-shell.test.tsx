@@ -92,6 +92,9 @@ describe("Web application shell", () => {
     }
 
     expect(screen.getAllByText("Roamlog Crew").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/所有者 · 团队版/u).length).toBeGreaterThan(0);
+    expect(container.textContent).not.toMatch(/\bOwner\b/);
+    expect(container.textContent).not.toMatch(/\bWorkspace\b/);
     expect(screen.getByRole("button", { name: "搜索或运行命令 ⌘K" })).toBeInTheDocument();
     expect(container.querySelectorAll("button.bg-ink").length).toBeLessThanOrEqual(1);
   });
@@ -108,12 +111,37 @@ describe("Web application shell", () => {
     renderShell({ pathname: `/w/${currentWorkspace.slug}/trips` });
 
     const mobileNavigation = screen.getByRole("navigation", { name: "移动端主导航" });
+    expect(mobileNavigation.className).toContain("bg-surface-1/95");
+    expect(mobileNavigation.className).not.toContain("bg-black");
 
     for (const label of ["总览", "旅行", "日志", "地图", "更多"]) {
       expect(within(mobileNavigation).getByRole("link", { name: label })).toBeInTheDocument();
     }
 
     expect(within(mobileNavigation).getByRole("link", { name: "旅行" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("marks the map tab active and keeps current-page state off More", () => {
+    renderShell({ pathname: `/w/${currentWorkspace.slug}/map` });
+    const mobileNavigation = screen.getByRole("navigation", { name: "移动端主导航" });
+
+    expect(within(mobileNavigation).getByRole("link", { name: "地图" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(mobileNavigation).getByRole("link", { name: "更多" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("marks More active on AI so the mobile navigation always has a current item", () => {
+    renderShell({ pathname: `/w/${currentWorkspace.slug}/ai` });
+    const mobileNavigation = screen.getByRole("navigation", { name: "移动端主导航" });
+
+    expect(within(mobileNavigation).getByRole("link", { name: "更多" })).toHaveAttribute(
       "aria-current",
       "page",
     );

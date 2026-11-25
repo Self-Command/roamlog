@@ -17,6 +17,7 @@ export default function AdminMediaPage() {
               role={role}
               media={media}
               mutations={mutations}
+              onRefresh={resource.refetch}
             />
           )}
         </AdminDataBoundary>

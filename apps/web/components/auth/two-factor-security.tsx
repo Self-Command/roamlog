@@ -5,7 +5,6 @@ import {
   Button,
   FormField,
   Input,
-  PageGlow,
   Separator,
   Skeleton,
   Switch,
@@ -211,7 +210,7 @@ export function TwoFactorSecurityView({
       setCopied(kind);
       setNotice(kind === "secret" ? "验证器密钥已复制。" : "备用码已复制。");
     } catch {
-      setError("浏览器没有允许剪贴板访问，请手动选择并复制。");
+      setError("无法访问剪贴板，请手动选择并复制。");
     }
   }
 
@@ -242,8 +241,10 @@ export function TwoFactorSecurityView({
     return (
       <SecurityFrame>
         <div className="surface-card max-w-xl p-6">
-          <p className="type-eyebrow">SECURITY / LOAD ERROR</p>
-          <h1 className="mt-2 font-serif text-4xl tracking-[-0.03em] text-ink">无法读取安全状态</h1>
+          <p className="type-eyebrow">账号安全 / 加载失败</p>
+          <h1 className="mt-2 font-display text-2xl font-semibold tracking-[-0.02em] text-ink">
+            无法读取安全状态
+          </h1>
           <p role="alert" className="mt-3 text-sm leading-6 text-accent-red">
             {loadError}
           </p>
@@ -260,12 +261,12 @@ export function TwoFactorSecurityView({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <p className="type-eyebrow">ACCOUNT / SECURITY</p>
+            <p className="type-eyebrow">账号安全</p>
             <Badge tone={enabled ? "green" : "neutral"}>
               {enabled ? "两步验证已开启" : "两步验证未开启"}
             </Badge>
           </div>
-          <h1 className="mt-3 font-serif text-[clamp(2.1rem,1.7rem+1.2vw,3.25rem)] leading-none tracking-[-0.04em] text-ink">
+          <h1 className="type-page-title mt-2">
             账号安全
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-muted">
@@ -287,9 +288,9 @@ export function TwoFactorSecurityView({
         <section className="surface-card max-w-2xl p-6">
           <div className="flex items-center gap-2">
             <LockKeyhole aria-hidden="true" className="size-4 text-muted" />
-            <p className="type-eyebrow">SIGN IN REQUIRED</p>
+            <p className="type-eyebrow">需要登录</p>
           </div>
-          <h2 className="mt-3 font-serif text-3xl tracking-[-0.03em] text-ink">
+          <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.02em] text-ink">
             先登录再管理两步验证
           </h2>
           <p className="mt-3 text-sm leading-6 text-muted">
@@ -329,8 +330,8 @@ export function TwoFactorSecurityView({
                     <ShieldCheck aria-hidden="true" className="size-4" />
                   </span>
                   <div>
-                    <p className="type-eyebrow">AUTHENTICATOR APP</p>
-                    <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">
+                    <p className="type-eyebrow">验证器应用</p>
+                  <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
                       两步验证
                     </h2>
                     <p className="mt-1 text-[11px] leading-5 text-muted">
@@ -343,7 +344,7 @@ export function TwoFactorSecurityView({
                 <div className="flex items-center gap-3 sm:pl-4">
                   <div className="text-right">
                     <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                      {enabled ? "ENABLED" : "DISABLED"}
+                      {enabled ? "已启用" : "未启用"}
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted">
                       {enabled ? "需要验证码" : "仅密码登录"}
@@ -372,10 +373,10 @@ export function TwoFactorSecurityView({
                 {panel === "enroll-password" ? (
                   <form onSubmit={startEnrollment} className="max-w-md space-y-4">
                     <div>
-                      <p className="type-eyebrow">STEP 1 / CONFIRM PASSWORD</p>
+                      <p className="type-eyebrow">第 1 步：确认密码</p>
                       <h3 className="mt-1 text-sm font-medium text-ink">确认当前密码</h3>
                       <p className="mt-1 text-[11px] leading-5 text-muted">
-                        密码只用于本次确认，不会保存在浏览器中。
+                        密码只用于本次确认，不会保存。
                       </p>
                     </div>
                     <FormField
@@ -412,19 +413,19 @@ export function TwoFactorSecurityView({
                   <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
                     <div className="rounded-control border border-hairline bg-black/20 p-4">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="type-eyebrow">SCAN QR</p>
-                        <Badge tone="green">QR CODE</Badge>
+                        <p className="type-eyebrow">扫描二维码</p>
+                        <Badge tone="green">验证器二维码</Badge>
                       </div>
                       <div className="mt-3">
                         <TotpQr uri={enrollment.totpURI} label="验证器二维码" />
                       </div>
                       <p className="mt-3 text-[10px] leading-5 text-muted">
-                        二维码在浏览器本地生成，验证器密钥不会发送给第三方二维码服务。
+                        二维码只在本设备生成，验证器密钥不会发送给第三方二维码服务。
                       </p>
                       {secret ? (
                         <div className="mt-3 border-t border-hairline pt-3">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="type-eyebrow">MANUAL KEY</p>
+                            <p className="type-eyebrow">手动输入密钥</p>
                             <button
                               type="button"
                               onClick={() => void copyText("secret", secret)}
@@ -480,7 +481,7 @@ export function TwoFactorSecurityView({
                           onSubmit={verifyEnrollment}
                           className="rounded-control border border-hairline-strong bg-surface-1 p-4"
                         >
-                          <p className="type-eyebrow">STEP 2 / VERIFY CODE</p>
+                          <p className="type-eyebrow">第 2 步：验证动态码</p>
                           <h3 className="mt-1 text-sm font-medium text-ink">
                             输入验证器中的 6 位数字
                           </h3>
@@ -529,7 +530,7 @@ export function TwoFactorSecurityView({
                 {panel === "disable" ? (
                   <form onSubmit={disable} className="max-w-md space-y-4">
                     <div>
-                      <p className="type-eyebrow">DISABLE / VERIFY FIRST</p>
+                      <p className="type-eyebrow">关闭前先验证</p>
                       <h3 className="mt-1 text-sm font-medium text-ink">关闭前验证密码和动态码</h3>
                       <p className="mt-1 text-[11px] leading-5 text-muted">
                         关闭后所有备用码立即失效。若验证码连续错误，账号会临时锁定。
@@ -597,7 +598,7 @@ export function TwoFactorSecurityView({
                     ) : (
                       <form onSubmit={regenerateBackupCodes} className="space-y-4">
                         <div>
-                          <p className="type-eyebrow">REGENERATE / REPLACE ALL</p>
+                          <p className="type-eyebrow">重新生成备用码</p>
                           <h3 className="mt-1 text-sm font-medium text-ink">生成一组新的备用码</h3>
                           <p className="mt-1 text-[11px] leading-5 text-muted">
                             新备用码会替换旧备用码。确认当前密码后生成，并立即离线保存。
@@ -638,8 +639,8 @@ export function TwoFactorSecurityView({
                   <KeyRound aria-hidden="true" className="size-4" />
                 </span>
                 <div>
-                  <p className="type-eyebrow">RECOVERY / ONE-TIME CODES</p>
-                  <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">
+                  <p className="type-eyebrow">备用码与恢复</p>
+                  <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
                     备用码与恢复
                   </h2>
                   <p className="mt-2 text-[11px] leading-5 text-muted">
@@ -655,12 +656,14 @@ export function TwoFactorSecurityView({
 
           <aside className="space-y-4 xl:sticky xl:top-6">
             <section className="surface-card p-5">
-              <p className="type-eyebrow">ACCOUNT</p>
-              <h2 className="mt-1 font-serif text-2xl tracking-[-0.02em] text-ink">当前账号</h2>
+              <p className="type-eyebrow">账号</p>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.015em] text-ink">
+                当前账号
+              </h2>
               <div className="mt-4 space-y-3">
                 <div>
                   <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-stone">
-                    EMAIL
+                    邮箱
                   </p>
                   <p className="mt-1 break-all text-[12px] text-ink">{session?.email ?? "—"}</p>
                 </div>
@@ -686,7 +689,7 @@ export function TwoFactorSecurityView({
             <section className="surface-card p-5">
               <div className="flex items-center gap-2">
                 <LockKeyhole aria-hidden="true" className="size-3.5 text-muted" />
-                <p className="type-eyebrow">LOCKOUT</p>
+                <p className="type-eyebrow">临时锁定</p>
               </div>
               <p className="mt-2 text-[11px] leading-5 text-muted">
                 连续输错验证码会触发临时锁定。尝试过于频繁时请停止重试，等待约 15
@@ -697,10 +700,10 @@ export function TwoFactorSecurityView({
             <section className="surface-card p-5">
               <div className="flex items-center gap-2">
                 <ShieldCheck aria-hidden="true" className="size-3.5 text-accent-green" />
-                <p className="type-eyebrow">PRIVACY</p>
+                <p className="type-eyebrow">隐私说明</p>
               </div>
               <p className="mt-2 text-[11px] leading-5 text-muted">
-                二维码、验证器密钥和备用码只在当前页面中处理，不会上传到二维码服务，也不会保存在浏览器本地。
+                二维码只在本设备生成；验证器密钥和备用码不会上传到第三方二维码服务，也不会保存到浏览器存储。
               </p>
             </section>
           </aside>
@@ -713,19 +716,18 @@ export function TwoFactorSecurityView({
 function SecurityFrame({ children }: { children: React.ReactNode }) {
   return (
     <main className="relative min-h-dvh overflow-hidden bg-canvas">
-      <PageGlow accent="green" className="opacity-60" />
       <div className="relative mx-auto max-w-[1180px] px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
         <header className="flex items-center justify-between gap-4">
           <a
             href="/"
             className="inline-flex items-baseline gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
           >
-            <span className="font-serif text-[25px] leading-none tracking-[-0.03em] text-ink">
+            <span className="font-display text-xl leading-none font-semibold tracking-[-0.02em] text-ink">
               Roamlog
             </span>
-            <span className="type-eyebrow text-[8px]">account security</span>
+            <span className="type-eyebrow text-[8px]">账号安全</span>
           </a>
-          <Badge tone="neutral">ACCOUNT SECURITY</Badge>
+          <Badge tone="neutral">账号安全</Badge>
         </header>
         <div className="mt-10">{children}</div>
       </div>
@@ -736,7 +738,7 @@ function SecurityFrame({ children }: { children: React.ReactNode }) {
 function EnabledSummary({ enabled, onRegenerate }: { enabled: boolean; onRegenerate: () => void }) {
   if (!enabled) {
     return (
-      <div className="rounded-control border border-hairline bg-black/20 p-4">
+      <div className="rounded-control border border-hairline bg-surface-2 p-4">
         <p className="text-[12px] text-ink">两步验证当前未启用</p>
         <p className="mt-1 text-[11px] leading-5 text-muted">
           打开开关，确认当前密码后生成验证器密钥与备用码。完成 6 位验证码验证后才会启用。
@@ -774,7 +776,7 @@ function BackupCodesPanel({
     <div className="rounded-control border border-hairline bg-black/20 p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="type-eyebrow">BACKUP CODES</p>
+          <p className="type-eyebrow">备用码</p>
           <h3 className="mt-1 text-sm font-medium text-ink">剩余备用码（本次生成）</h3>
           <p className="mt-1 text-[10px] leading-5 text-muted">
             本组共 {codes.length} 个，只在当前页面显示。每个码只能成功使用一次。

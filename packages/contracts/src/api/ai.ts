@@ -76,6 +76,223 @@ export const AI_TOOL_NAMES = [
 export const AiToolNameSchema = z.enum(AI_TOOL_NAMES);
 export type AiToolName = z.infer<typeof AiToolNameSchema>;
 
+/**
+ * Human-in-the-loop tools are model tools, but they are never executed by the
+ * server. The model calls one of them when it needs a decision or information
+ * from the user; the stream pauses with a `requires-action` result and resumes
+ * only after the user's answer is persisted as a tool result.
+ *
+ * Ported from assistant-ui's `humanTool` / `unstable_humanToolNames` contract
+ * (`assistant-ui@4a0d2a5b9f04c8fb7ff9cd224827a958096b52dc`, MIT).
+ */
+export const AI_HUMAN_TOOL_NAMES = ["ask_user", "confirm_brief"] as const;
+export const AiHumanToolNameSchema = z.enum(AI_HUMAN_TOOL_NAMES);
+export type AiHumanToolName = z.infer<typeof AiHumanToolNameSchema>;
+export function isHumanToolName(value: string): value is AiHumanToolName {
+  return (AI_HUMAN_TOOL_NAMES as readonly string[]).includes(value);
+}
+
+export const AI_HUMAN_QUESTION_KINDS = ["text", "single", "multi", "date", "number"] as const;
+export const AiHumanQuestionKindSchema = z.enum(AI_HUMAN_QUESTION_KINDS);
+export type AiHumanQuestionKind = z.infer<typeof AiHumanQuestionKindSchema>;
+
+export const AiHumanQuestionOptionSchema = z
+  .object({
+    label: z.string().min(1).max(200),
+    value: z.string().min(1).max(200),
+    description: z.string().max(500).optional(),
+  })
+  .strict();
+export type AiHumanQuestionOption = z.infer<typeof AiHumanQuestionOptionSchema>;
+
+const humanQuestionId = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/u, "Use letters, digits, '_' or '-' only.");
+
+/**
+ * One generic question. The fields deliberately describe a form control, not
+ * a travel field: the model chooses what to ask from the user's current task.
+ */
+export const AiHumanQuestionSchema = z
+  .object({
+    id: humanQuestionId,
+    prompt: z.string().min(1).max(500),
+    description: z.string().max(1000).optional(),
+    kind: AiHumanQuestionKindSchema,
+    required: z.boolean().optional(),
+    allowOther: z.boolean().optional(),
+    options: z.array(AiHumanQuestionOptionSchema).min(1).max(20).optional(),
+    placeholder: z.string().max(500).optional(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    minDate: DateOnlySchema.optional(),
+    maxDate: DateOnlySchema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if ((value.kind === "single" || value.kind === "multi") && !value.options?.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Choice questions require at least one option.",
+      });
+    }
+    if (value.options) {
+      const seen = new Set<string>();
+      for (const option of value.options) {
+        if (seen.has(option.value)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["options"],
+            message: "Option values must be unique.",
+          });
+          break;
+        }
+        seen.add(option.value);
+      }
+    }
+    if (value.min !== undefined && value.max !== undefined && value.min > value.max) {
+      ctx.addIssue({ code: "custom", path: ["max"], message: "max must be >= min." });
+    }
+    if (
+      value.minDate !== undefined &&
+      value.maxDate !== undefined &&
+      value.minDate > value.maxDate
+    ) {
+      ctx.addIssue({ code: "custom", path: ["maxDate"], message: "maxDate must be >= minDate." });
+    }
+  });
+export type AiHumanQuestion = z.infer<typeof AiHumanQuestionSchema>;
+
+export const AiAskUserArgsSchema = z
+  .object({
+    title: z.string().min(1).max(160),
+    intro: z.string().max(1000).optional(),
+    questions: z.array(AiHumanQuestionSchema).min(1).max(8),
+  })
+  .strict();
+export type AiAskUserArgs = z.infer<typeof AiAskUserArgsSchema>;
+
+export const AiHumanAnswerSchema = z
+  .object({
+    values: z.array(z.string().max(200)).max(20),
+    text: z.string().max(4000).optional(),
+  })
+  .strict();
+export type AiHumanAnswer = z.infer<typeof AiHumanAnswerSchema>;
+
+/**
+ * The stable reason used when the user dismisses a pending human request.
+ *
+ * assistant-ui models a dismissal as `{ approved: false }` (optionally with a
+ * reason). `confirm_brief` also uses `approved: false` with a free-form reason
+ * for a revision request, so the reserved value below distinguishes "stop and
+ * wait for a new request" from "change the brief and ask again".
+ */
+export const AI_HUMAN_CANCEL_REASON = "user_cancelled" as const;
+
+export const AiHumanCancellationSchema = z
+  .object({
+    approved: z.literal(false),
+    reason: z.string().trim().min(1).max(4000).optional(),
+  })
+  .strict();
+export type AiHumanCancellation = z.infer<typeof AiHumanCancellationSchema>;
+
+export const AiAskUserResultSchema = z.union([
+  z
+    .object({
+      answers: z.record(humanQuestionId, AiHumanAnswerSchema),
+    })
+    .strict(),
+  AiHumanCancellationSchema,
+]);
+export type AiAskUserResult = z.infer<typeof AiAskUserResultSchema>;
+
+export const AiConfirmBriefArgsSchema = z
+  .object({
+    title: z.string().min(1).max(160),
+    summary: z.string().min(1).max(8000),
+    constraints: z.array(z.string().max(1000)).max(30).optional(),
+    assumptions: z.array(z.string().max(1000)).max(30).optional(),
+    openQuestions: z.array(z.string().max(1000)).max(20).optional(),
+  })
+  .strict();
+export type AiConfirmBriefArgs = z.infer<typeof AiConfirmBriefArgsSchema>;
+
+/**
+ * New writes use assistant-ui's `approved` boolean. The two `decision` branches
+ * remain readable so conversations persisted before this migration replay
+ * correctly; no new legacy value may be written.
+ */
+export const AiConfirmBriefResultSchema = z.union([
+  z.object({ approved: z.literal(true) }).strict(),
+  AiHumanCancellationSchema,
+  z.object({ decision: z.literal("confirmed") }).strict(),
+  z.object({ decision: z.literal("revise"), text: z.string().trim().min(1).max(4000) }).strict(),
+]);
+export type AiConfirmBriefResult = z.infer<typeof AiConfirmBriefResultSchema>;
+
+/**
+ * `true` when the user explicitly dismissed the pending request. An omitted
+ * reason and the reserved `user_cancelled` value both mean dismissal; a
+ * non-reserved reason on `confirm_brief` is a revision request instead.
+ */
+export function isHumanToolCancellation(
+  result: AiAskUserResult | AiConfirmBriefResult,
+): result is AiHumanCancellation {
+  return (
+    "approved" in result &&
+    result.approved === false &&
+    (result.reason === undefined || result.reason === AI_HUMAN_CANCEL_REASON)
+  );
+}
+
+export function isConfirmBriefConfirmed(result: AiConfirmBriefResult): boolean {
+  return (
+    ("approved" in result && result.approved === true) ||
+    ("decision" in result && result.decision === "confirmed")
+  );
+}
+
+export function isConfirmBriefRevision(result: AiConfirmBriefResult): boolean {
+  if (isConfirmBriefConfirmed(result) || isHumanToolCancellation(result)) return false;
+  if ("decision" in result) return true;
+  return "reason" in result && typeof result.reason === "string" && result.reason.trim().length > 0;
+}
+
+/** The revision instruction for either the new or legacy result shape. */
+export function confirmBriefRevisionText(result: AiConfirmBriefResult): string | null {
+  if (!isConfirmBriefRevision(result)) return null;
+  if ("decision" in result) return result.decision === "revise" ? result.text : null;
+  return "reason" in result ? (result.reason?.trim() ?? null) : null;
+}
+
+/**
+ * Typed result sent back to the server after a human tool pauses the stream.
+ * The name/result pair is discriminated so a client cannot send an ask_user
+ * payload to a confirm_brief call (or vice versa).
+ */
+export const AiHumanToolResultSchema = z.discriminatedUnion("name", [
+  z
+    .object({
+      toolCallId: z.string().min(1).max(128),
+      name: z.literal("ask_user"),
+      result: AiAskUserResultSchema,
+    })
+    .strict(),
+  z
+    .object({
+      toolCallId: z.string().min(1).max(128),
+      name: z.literal("confirm_brief"),
+      result: AiConfirmBriefResultSchema,
+    })
+    .strict(),
+]);
+export type AiHumanToolResult = z.infer<typeof AiHumanToolResultSchema>;
+
 /** Tools the planner may execute while it is still collecting context. */
 export const AI_READ_ONLY_TOOLS = [
   "places.search",
@@ -193,6 +410,40 @@ export const AI_REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high"]
 export const AiReasoningEffortSchema = z.enum(AI_REASONING_EFFORTS);
 export type AiReasoningEffort = z.infer<typeof AiReasoningEffortSchema>;
 
+/**
+ * Platform defaults for the prompt suggestions shown before a conversation
+ * starts. They are user goals, not internal workflow steps: an operator may
+ * replace the list, but the code default must still be understandable without
+ * any knowledge of the planner.
+ */
+export const AI_DEFAULT_REASONING_EFFORT = "high" satisfies AiReasoningEffort;
+export const AI_DEFAULT_SUGGESTED_PROMPTS = [
+  "帮我规划一次旅行",
+  "比较几个目的地",
+  "整理行程和预算",
+  "写一篇旅行日志",
+] as const;
+export const AI_SUGGESTED_PROMPTS_MIN = 4;
+export const AI_SUGGESTED_PROMPTS_MAX = 8;
+export const AI_SUGGESTED_PROMPT_MAX_CHARS = 120;
+
+/** The platform-editable first-screen prompt list. */
+export const AiSuggestedPromptsSchema = z
+  .array(
+    z
+      .string({ error: "每条首页提示词必须是文本。" })
+      .trim()
+      .min(1, "首页提示词不能为空。")
+      .max(
+        AI_SUGGESTED_PROMPT_MAX_CHARS,
+        `每条首页提示词不能超过 ${String(AI_SUGGESTED_PROMPT_MAX_CHARS)} 字。`,
+      ),
+    { error: "首页提示词必须是字符串数组。" },
+  )
+  .min(AI_SUGGESTED_PROMPTS_MIN, `首页提示词至少需要 ${String(AI_SUGGESTED_PROMPTS_MIN)} 条。`)
+  .max(AI_SUGGESTED_PROMPTS_MAX, `首页提示词最多 ${String(AI_SUGGESTED_PROMPTS_MAX)} 条。`);
+export type AiSuggestedPrompts = z.infer<typeof AiSuggestedPromptsSchema>;
+
 /** A gateway model id, for example `openai/gpt-4o-mini`. 1..200 chars. */
 export const AiChatModelIdSchema = z.string().min(1).max(200);
 export type AiChatModelId = z.infer<typeof AiChatModelIdSchema>;
@@ -240,7 +491,7 @@ export type AiChatModelsResponse = z.infer<typeof AiChatModelsResponseSchema>;
 
 export const AiChatRequestSchema = z
   .object({
-    message: z.string().min(1).max(2000),
+    message: z.string().min(1).max(2000).optional(),
     hints: AiPlanHintSchema.optional(),
     /**
      * Existing conversation. When omitted the server creates a new conversation
@@ -279,8 +530,38 @@ export const AiChatRequestSchema = z
     reasoningEffort: AiReasoningEffortSchema.optional(),
     /** Media already uploaded through the media presign→PUT→complete pipeline. */
     attachments: AiChatAttachmentsSchema.optional(),
+    /**
+     * Resumes a paused human-in-the-loop tool. This is not a new user turn:
+     * the server loads the pending tool call from the conversation, validates
+     * the answer, appends it as a tool result, and continues the same model
+     * trajectory. `message` must be omitted on this path.
+     */
+    humanToolResult: AiHumanToolResultSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (!value.message && !value.humanToolResult) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["message"],
+        message: "message is required unless resuming a human tool.",
+      });
+    }
+    if (value.message && value.humanToolResult) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["humanToolResult"],
+        message: "humanToolResult cannot be combined with a new message.",
+      });
+    }
+    if (value.humanToolResult && !value.conversationId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["conversationId"],
+        message: "conversationId is required when resuming a human tool.",
+      });
+    }
+  });
 export type AiChatRequest = z.infer<typeof AiChatRequestSchema>;
 
 /**
@@ -336,6 +617,62 @@ export const AiPlanWarningSchema = z
 export type AiPlanWarning = z.infer<typeof AiPlanWarningSchema>;
 
 /**
+ * Structured display facts for the plan the user reviews before confirming.
+ *
+ * This is deliberately separate from `plannedCalls`: the details can explain
+ * what the plan means, but only `plannedCalls` may ever be executed. Fields
+ * are optional and bounded so an older client can ignore the whole object and
+ * a model cannot turn the display surface into an unbounded payload.
+ */
+export const AiPlanDetailItemSchema = z
+  .object({
+    time: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/u)
+      .optional(),
+    title: z.string().trim().min(1).max(180),
+    location: z.string().trim().min(1).max(200).optional(),
+    transport: z.string().trim().min(1).max(400).optional(),
+    notes: z.string().trim().min(1).max(1500).optional(),
+    type: z.enum(["transit", "food", "activity", "stay", "note"]).optional(),
+  })
+  .strict();
+export type AiPlanDetailItem = z.infer<typeof AiPlanDetailItemSchema>;
+
+export const AiPlanDetailDaySchema = z
+  .object({
+    date: DateOnlySchema,
+    title: z.string().trim().min(1).max(180).optional(),
+    items: z.array(AiPlanDetailItemSchema).min(1).max(8),
+  })
+  .strict();
+export type AiPlanDetailDay = z.infer<typeof AiPlanDetailDaySchema>;
+
+export const AiPlanDetailsBudgetSchema = z
+  .object({
+    amountMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    currency: z.string().regex(/^[A-Z]{3}$/u),
+    breakdown: z.array(z.string().trim().min(1).max(300)).max(20).optional(),
+  })
+  .strict();
+export type AiPlanDetailsBudget = z.infer<typeof AiPlanDetailsBudgetSchema>;
+
+export const AiPlanDetailsSchema = z
+  .object({
+    objective: z.string().trim().min(1).max(4_000).optional(),
+    constraints: z.array(z.string().trim().min(1).max(500)).max(30).optional(),
+    assumptions: z.array(z.string().trim().min(1).max(500)).max(30).optional(),
+    openQuestions: z.array(z.string().trim().min(1).max(500)).max(20).optional(),
+    days: z.array(AiPlanDetailDaySchema).max(30).optional(),
+    budget: AiPlanDetailsBudgetSchema.optional(),
+    logistics: z.array(z.string().trim().min(1).max(500)).max(30).optional(),
+    risks: z.array(z.string().trim().min(1).max(500)).max(30).optional(),
+    alternatives: z.array(z.string().trim().min(1).max(500)).max(30).optional(),
+  })
+  .strict();
+export type AiPlanDetails = z.infer<typeof AiPlanDetailsSchema>;
+
+/**
  * One human-readable name for an entity id referenced by `plannedCalls`.
  *
  * Additive and optional: a `stops.delete` call only carries `stopId`, so
@@ -363,7 +700,7 @@ export type AiPlanSubjects = z.infer<typeof AiPlanSubjectsSchema>;
 export const AiChatResponseSchema = z
   .object({
     runId: AiRunIdSchema,
-    message: z.string().max(4000),
+    message: z.string().max(16_000),
     /** Write calls the model proposed. Nothing has been written yet. */
     plannedCalls: z.array(AiToolCallSchema).max(20),
     /** Read-only calls the server actually executed while planning. */
@@ -376,6 +713,8 @@ export const AiChatResponseSchema = z
     warnings: z.array(AiPlanWarningSchema).max(20).optional(),
     /** Human labels for ids referenced by `plannedCalls`; absent when none resolved. */
     subjects: AiPlanSubjectsSchema.optional(),
+    /** Readable facts extracted from the confirmed brief and planned calls. */
+    details: AiPlanDetailsSchema.optional(),
     usage: AiUsageSchema,
     provider: AiProviderSchema,
     expiresAt: IsoTimestampSchema,
@@ -573,6 +912,8 @@ export const AI_ERROR_CODES = {
   invalidOutput: "AI_SCHEMA_INVALID",
   quota: "AI_QUOTA",
   loopLimit: "AI_LOOP_LIMIT",
+  /** The model answered, but not with a complete plan safe to confirm. */
+  planIncomplete: "AI_PLAN_INCOMPLETE",
   runNotFound: "AI_RUN_NOT_FOUND",
   runConsumed: "AI_RUN_CONSUMED",
   callNotPlanned: "AI_RUN_CALL_NOT_PLANNED",
@@ -626,12 +967,16 @@ export const AiErrorCodeSchema = z.enum(
 export const AiStreamEventTypeSchema = z.enum([
   "meta",
   "text.delta",
+  "reasoning.delta",
+  "reasoning.end",
+  "human.request",
   "plan",
   "usage",
   "error",
   "done",
   "progress",
   "tool.start",
+  "tool.args.delta",
   "tool.progress",
   "tool.end",
 ]);
@@ -640,6 +985,7 @@ export type AiStreamEventType = z.infer<typeof AiStreamEventTypeSchema>;
 export const AiStreamFinishReasonSchema = z.enum([
   "stop",
   "tool-calls",
+  "requires-action",
   "length",
   "aborted",
   "error",
@@ -705,14 +1051,66 @@ export const ResumeAiStreamQuerySchema = z
   .strict();
 export type ResumeAiStreamQuery = z.infer<typeof ResumeAiStreamQuerySchema>;
 
+/**
+ * Hard protocol cap for one append-only stream delta. Providers may coalesce
+ * chunks, so this is intentionally much larger than a normal model delta while
+ * still bounding a single SSE frame. The API splits larger upstream deltas
+ * across multiple valid events before writing them.
+ */
+export const AI_STREAM_DELTA_MAX_CHARS = 32_000;
+
 /** One upstream text delta per event (small coalescing windows are allowed). */
 export const AiStreamTextDeltaEventSchema = z
   .object({
     type: z.literal("text.delta"),
-    delta: z.string(),
+    delta: z.string().max(AI_STREAM_DELTA_MAX_CHARS),
   })
   .strict();
 export type AiStreamTextDeltaEvent = z.infer<typeof AiStreamTextDeltaEventSchema>;
+
+/**
+ * One upstream reasoning/thinking delta per event. This is an append-only
+ * extension of the frozen v1 stream, ported from assistant-ui's
+ * `ReasoningMessagePart` and AI Elements' chain-of-thought stream. Adapters
+ * must emit it only when the provider actually supplies reasoning text; an
+ * empty `progress` label is never promoted to fake reasoning.
+ */
+export const AiStreamReasoningDeltaEventSchema = z
+  .object({
+    type: z.literal("reasoning.delta"),
+    /** Stable id for one reasoning part within the assistant turn. */
+    partId: z.string().min(1).max(128),
+    delta: z.string().min(1).max(AI_STREAM_DELTA_MAX_CHARS),
+  })
+  .strict();
+export type AiStreamReasoningDeltaEvent = z.infer<typeof AiStreamReasoningDeltaEventSchema>;
+
+/** Marks one reasoning part complete and carries its measured duration. */
+export const AiStreamReasoningEndEventSchema = z
+  .object({
+    type: z.literal("reasoning.end"),
+    partId: z.string().min(1).max(128),
+    durationMs: z.number().int().nonnegative(),
+  })
+  .strict();
+export type AiStreamReasoningEndEvent = z.infer<typeof AiStreamReasoningEndEventSchema>;
+
+/**
+ * A model requested human input. The stream ends after this event and a
+ * `done(finishReason:"requires-action")`; the answer is supplied later through
+ * the next `/ai/chat/stream` request (`humanToolResult`), not by a normal tool
+ * execution.
+ */
+export const AiStreamHumanRequestEventSchema = z
+  .object({
+    type: z.literal("human.request"),
+    toolCallId: z.string().min(1).max(128),
+    name: AiHumanToolNameSchema,
+    args: JsonObjectSchema,
+    startedAt: IsoTimestampSchema,
+  })
+  .strict();
+export type AiStreamHumanRequestEvent = z.infer<typeof AiStreamHumanRequestEventSchema>;
 
 /**
  * Tool-call plan, emitted once at the end of a planning round. The payload is
@@ -723,12 +1121,14 @@ export const AiStreamPlanEventSchema = z
   .object({
     type: z.literal("plan"),
     runId: AiRunIdSchema,
-    message: z.string().max(4000),
+    message: z.string().max(16_000),
     plannedCalls: z.array(AiToolCallSchema).max(20),
     readOnlyTrace: z.array(AiToolCallSchema).max(40),
     warnings: z.array(AiPlanWarningSchema).max(20).optional(),
     /** Human labels for ids referenced by `plannedCalls`; absent when none resolved. */
     subjects: AiPlanSubjectsSchema.optional(),
+    /** The same bounded display facts carried by the blocking response. */
+    details: AiPlanDetailsSchema.optional(),
     expiresAt: IsoTimestampSchema,
   })
   .strict();
@@ -808,6 +1208,21 @@ export const AiStreamToolStartEventSchema = z
   .strict();
 export type AiStreamToolStartEvent = z.infer<typeof AiStreamToolStartEventSchema>;
 
+/**
+ * Raw JSON argument text from a model tool call, emitted while the provider is
+ * still streaming the call. `tool.start` remains the execution lifecycle event
+ * and later replaces the partial card with the validated argument object.
+ */
+export const AiStreamToolArgsDeltaEventSchema = z
+  .object({
+    type: z.literal("tool.args.delta"),
+    toolCallId: z.string().min(1).max(128),
+    name: z.string().min(1).max(100),
+    argsTextDelta: z.string().max(AI_STREAM_DELTA_MAX_CHARS),
+  })
+  .strict();
+export type AiStreamToolArgsDeltaEvent = z.infer<typeof AiStreamToolArgsDeltaEventSchema>;
+
 /** Optional progress for one running tool; `percent` is 0–100. */
 export const AiStreamToolProgressEventSchema = z
   .object({
@@ -837,12 +1252,16 @@ export type AiStreamToolEndEvent = z.infer<typeof AiStreamToolEndEventSchema>;
 export const AiStreamEventSchema = z.discriminatedUnion("type", [
   AiStreamMetaEventSchema,
   AiStreamTextDeltaEventSchema,
+  AiStreamReasoningDeltaEventSchema,
+  AiStreamReasoningEndEventSchema,
+  AiStreamHumanRequestEventSchema,
   AiStreamPlanEventSchema,
   AiStreamUsageEventSchema,
   AiStreamErrorEventSchema,
   AiStreamDoneEventSchema,
   AiStreamProgressEventSchema,
   AiStreamToolStartEventSchema,
+  AiStreamToolArgsDeltaEventSchema,
   AiStreamToolProgressEventSchema,
   AiStreamToolEndEventSchema,
 ]);

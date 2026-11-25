@@ -19,11 +19,11 @@ import {
 export const SETTINGS_GROUP_SUMMARIES: Record<SystemSettingGroup, string> = {
   general: "站点身份、默认语言与时区，以及注册策略。",
   seo: "搜索引擎与社交分享使用的默认元数据。",
-  theme: "平台默认外观、6 套皮肤、6 套字体与用户覆盖策略。",
+  theme: "设置平台默认主题、字体和显示模式，以及是否允许成员自行调整。",
   mail: "事务邮件提供商与发信凭据。",
-  storage: "S3 兼容对象存储端点、桶与签名凭据。",
+  storage: "文件存储的服务地址、存储桶和访问凭据。",
   media: "客户端压缩目标与上传边界。",
-  ai: "AI 规划调用的提供商、超时与配额。",
+  ai: "AI 规划调用的提供商、默认思考强度、首屏提示词、超时与配额。",
   places: "地点搜索提供商、语言、缓存与配额。",
   limits: "账户级请求速率限制。",
 };
@@ -43,12 +43,12 @@ export const SERVICE_SETTINGS_PAGES = {
   ai: {
     group: "ai",
     title: "AI 服务",
-    description: "配置 AI 规划调用的服务商、基础地址、模型、超时与配额。",
+    description: "配置 AI 规划调用的服务商、服务地址、模型、超时与配额。",
   },
   storage: {
     group: "storage",
     title: "存储服务",
-    description: "配置 S3 兼容对象存储的端点、桶、区域与签名凭据。",
+    description: "配置文件存储的服务地址、存储桶、区域和访问凭据。",
   },
   places: {
     group: "places",
@@ -76,7 +76,7 @@ export const SETTING_TYPE_LABELS: Record<SystemSettingValueType, string> = {
   string: "文本",
   number: "数字",
   boolean: "开关",
-  json: "JSON",
+  json: "高级数据（JSON）",
   secret: "密钥",
 };
 
@@ -99,6 +99,11 @@ export const SETTING_OPTION_LABELS: Readonly<Record<string, string>> = {
   tencent: "腾讯地图",
   local: "本地数据",
   map_pin: "手动选点",
+  none: "关闭",
+  minimal: "极低",
+  low: "低",
+  medium: "中",
+  high: "高",
 };
 
 export function settingOptionLabel(option: string): string {
@@ -106,6 +111,28 @@ export function settingOptionLabel(option: string): string {
 }
 
 export type SettingsConsumptionStatus = "frontend" | "backend" | "unwired";
+
+/**
+ * Presentation-only help overrides for server-provided settings whose original
+ * copy exposes implementation vocabulary. Stored keys, labels and values are
+ * untouched; only the operator-facing explanation changes.
+ */
+export const SETTING_HELP_OVERRIDES: Readonly<Record<string, string>> = {
+  "general.defaultTimeZone": "用于新账户和日期显示的时区，例如 Asia/Shanghai。",
+  "media.maxEdge": "浏览器压缩图片时保留的最长边，限制在 500–4000 像素。",
+  "media.targetBytes":
+    "浏览器在上传前尽量压缩到的文件大小，限制在 100 KB–5 MB。",
+  "media.maxUploadBytes":
+    "单个文件允许的最大上传体积，上限 25 MB；系统会在写入前检查，浏览器也会提前拦截。",
+  "limits.searchPerMinute": "每个账户每分钟允许发起的地点搜索请求数。",
+  "limits.uploadPerMinute": "每个账户每分钟允许发起的上传请求数。",
+  "limits.uploadMaxFilesPerBatch":
+    "一次批量上传最多可包含多少张照片（1–100 张，默认 20 张）。超过上限时整批不会写入；该限制也用于上传队列与提示文案。",
+};
+
+export function settingHelp(item: AdminSettingItem): string | null {
+  return SETTING_HELP_OVERRIDES[item.key] ?? item.help ?? null;
+}
 
 export interface SettingsConsumption {
   status: SettingsConsumptionStatus;
@@ -134,31 +161,31 @@ export interface SettingsConsumption {
  * field-level exceptions.
  */
 export const SETTINGS_CONSUMPTION: Record<SystemSettingGroup, SettingsConsumption> = {
-  general: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
-  seo: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
-  theme: { status: "frontend", label: "前端已消费（标题/描述/主题）" },
-  mail: { status: "backend", label: "后端已消费，任务进程仍读环境变量" },
+  general: { status: "frontend", label: "已由用户端使用" },
+  seo: { status: "frontend", label: "已由用户端使用" },
+  theme: { status: "frontend", label: "已由用户端使用" },
+  mail: { status: "backend", label: "已由主服务读取；后台任务仍使用部署配置" },
   storage: {
     status: "backend",
-    label: "后端已消费（API 运行期读取；保存前会跑连通性探测）",
+    label: "已由服务读取；保存前会检查连接",
   },
   media: {
     status: "frontend",
     label:
-      "前端已消费 4/6 个键（最长边、质量、目标字节、最大上传字节）；保留原图与实况照片未接入（不生效）",
+      "已使用最长边、质量、目标字节和最大上传字节；保留原图与实况照片暂未接入",
   },
-  ai: { status: "backend", label: "后端已消费（AI 模块运行期读取）" },
-  places: { status: "backend", label: "后端已消费（地点模块运行期读取）" },
+  ai: { status: "backend", label: "已由 AI 服务读取" },
+  places: { status: "backend", label: "已由地点服务读取" },
   limits: {
     status: "unwired",
-    label: "部分接入（搜索限流已生效；上传限流在部署配置中固定，在此修改不生效）",
+    label: "部分接入：搜索限流已生效；上传限流仍由部署配置决定",
   },
 };
 
 export const SETTINGS_SOURCE_LABELS = {
   default: "代码默认",
   database: "数据库",
-  environment: "环境变量",
+  environment: "部署配置",
 } as const;
 export type SettingsValueSource = keyof typeof SETTINGS_SOURCE_LABELS;
 

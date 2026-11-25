@@ -73,7 +73,7 @@ describe("ModelSelectorCompact", () => {
     expect(screen.getByText("OpenAI")).toBeInTheDocument();
     expect(screen.getByTestId("model-option-openai/gpt-5")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("搜索模型"), "gpt");
+    await user.type(screen.getByLabelText("搜索 AI 模型"), "gpt");
     await waitFor(() => {
       expect(screen.getByTestId("model-option-openai/gpt-5")).toBeInTheDocument();
       expect(screen.queryByTestId("model-option-deepseek/deepseek-chat")).not.toBeInTheDocument();
@@ -106,7 +106,7 @@ describe("ModelSelectorCompact", () => {
     render(<ModelSelectorCompact workspaceId={WORKSPACE_ID} />);
 
     await user.click(await screen.findByTestId("model-selector"));
-    const search = await screen.findByLabelText("搜索模型");
+    const search = await screen.findByLabelText("搜索 AI 模型");
     await user.type(search, "gpt");
     await user.keyboard("{ArrowDown}{Enter}");
 
@@ -124,7 +124,7 @@ describe("ModelSelectorCompact", () => {
     render(<ModelSelectorCompact workspaceId={WORKSPACE_ID} />);
     await user.click(await screen.findByTestId("model-selector"));
 
-    expect(await screen.findByText("模型列表加载失败。")).toBeInTheDocument();
+    expect(await screen.findByText("暂时无法获取可用模型。")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "重新加载" }));
 
     expect(await screen.findByText("DeepSeek")).toBeInTheDocument();

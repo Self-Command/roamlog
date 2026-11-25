@@ -5,6 +5,12 @@ import { useId } from "react";
 import type { ProviderConfigField } from "@roamlog/contracts";
 import { Checkbox, FormField, Input, Label, Select, Switch } from "@roamlog/ui";
 
+import {
+  providerFieldHelp,
+  providerFieldLabel,
+  providerOptionLabel,
+} from "../../lib/provider-settings";
+
 interface ProviderCatalogFieldProps {
   field: ProviderConfigField;
   value: unknown;
@@ -25,6 +31,7 @@ function MultiSelectField({ field, value, error, onChange }: ProviderCatalogFiel
   const selected = Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string")
     : [];
+  const help = providerFieldHelp(field);
 
   function toggle(option: string, checked: boolean) {
     onChange(checked ? [...selected, option] : selected.filter((entry) => entry !== option));
@@ -34,11 +41,11 @@ function MultiSelectField({ field, value, error, onChange }: ProviderCatalogFiel
     <fieldset
       id={id}
       className="w-full"
-      aria-describedby={error ? `${id}-error` : field.help ? `${id}-hint` : undefined}
+      aria-describedby={error ? `${id}-error` : help ? `${id}-hint` : undefined}
       aria-invalid={error ? true : undefined}
     >
       <legend className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
-        {field.label}
+        {providerFieldLabel(field)}
         {field.required ? (
           <span aria-hidden="true" className="ml-1 text-accent-red">
             *
@@ -49,17 +56,17 @@ function MultiSelectField({ field, value, error, onChange }: ProviderCatalogFiel
         {(field.options ?? []).map((option) => (
           <label key={option.value} className="flex items-center gap-2 text-xs text-body">
             <Checkbox
-              aria-label={option.label}
+              aria-label={providerOptionLabel(option)}
               checked={selected.includes(option.value)}
               onCheckedChange={(checked) => toggle(option.value, checked === true)}
             />
-            {option.label}
+            {providerOptionLabel(option)}
           </label>
         ))}
       </div>
-      {field.help ? (
+      {help ? (
         <p id={`${id}-hint`} className="mt-1.5 text-xs leading-5 text-muted">
-          {field.help}
+          {help}
         </p>
       ) : null}
       {error ? (
@@ -73,21 +80,22 @@ function MultiSelectField({ field, value, error, onChange }: ProviderCatalogFiel
 
 function BooleanField({ field, value, error, onChange }: ProviderCatalogFieldProps) {
   const id = useId();
+  const help = providerFieldHelp(field);
   return (
     <div className="w-full">
-      <Label htmlFor={id}>{field.label}</Label>
+      <Label htmlFor={id}>{providerFieldLabel(field)}</Label>
       <div className="flex min-h-10 items-center gap-3 rounded-control border border-hairline-strong bg-surface-1 px-3">
         <Switch
           id={id}
           checked={value === true}
           onCheckedChange={(checked) => onChange(checked)}
-          aria-describedby={error ? `${id}-error` : field.help ? `${id}-hint` : undefined}
+          aria-describedby={error ? `${id}-error` : help ? `${id}-hint` : undefined}
         />
         <span className="text-xs text-body">{value === true ? "启用" : "关闭"}</span>
       </div>
-      {field.help ? (
+      {help ? (
         <p id={`${id}-hint`} className="mt-1.5 text-xs leading-5 text-muted">
-          {field.help}
+          {help}
         </p>
       ) : null}
       {error ? (
@@ -109,13 +117,19 @@ export function ProviderCatalogField({ field, value, error, onChange }: Provider
   }
 
   if (field.type === "select") {
+    const help = providerFieldHelp(field);
     return (
-      <FormField label={field.label} required={field.required} hint={field.help} error={error}>
+      <FormField
+        label={providerFieldLabel(field)}
+        required={field.required}
+        hint={help ?? undefined}
+        error={error}
+      >
         <Select value={textValue(value)} onChange={(event) => onChange(event.currentTarget.value)}>
           <option value="">请选择</option>
           {(field.options ?? []).map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {providerOptionLabel(option)}
             </option>
           ))}
         </Select>
@@ -125,7 +139,12 @@ export function ProviderCatalogField({ field, value, error, onChange }: Provider
 
   if (field.type === "integer" || field.type === "number") {
     return (
-      <FormField label={field.label} required={field.required} hint={field.help} error={error}>
+      <FormField
+        label={providerFieldLabel(field)}
+        required={field.required}
+        hint={providerFieldHelp(field) ?? undefined}
+        error={error}
+      >
         <Input
           type="number"
           min={field.min}
@@ -143,7 +162,12 @@ export function ProviderCatalogField({ field, value, error, onChange }: Provider
 
   const inputType = field.type === "url" ? "url" : "text";
   return (
-    <FormField label={field.label} required={field.required} hint={field.help} error={error}>
+    <FormField
+      label={providerFieldLabel(field)}
+      required={field.required}
+      hint={providerFieldHelp(field) ?? undefined}
+      error={error}
+    >
       <Input
         type={inputType}
         value={textValue(value)}

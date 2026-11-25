@@ -10,6 +10,7 @@ import type {
 import { Button, FormField, Input } from "@roamlog/ui";
 
 import { AdminMutationError } from "../../lib/admin-api-error";
+import { providerFieldLabel } from "../../lib/provider-settings";
 
 const REVEAL_DURATION_MS = 10_000;
 
@@ -32,18 +33,14 @@ function revealErrorMessage(error: unknown): string {
   if (error instanceof AdminMutationError) {
     switch (error.failure.code) {
       case "ADMIN_2FA_REQUIRED":
-        return "需要完成 TOTP 两步验证后才能显示明文。";
+        return "请先完成两步验证，再显示密钥。";
       case "ADMIN_ACCESS_DENIED":
         return "只有超级管理员可以显示服务商明文密钥。";
       case "SETTINGS_ENCRYPTION_UNAVAILABLE":
       case "PROVIDER_SECRETS_UNAVAILABLE":
-        return "密钥服务不可用，请检查服务端加密配置后重试。";
+        return "密钥服务暂时不可用，请稍后重试；如果持续失败，请联系平台管理员。";
       default:
-        return (
-          error.failure.detail?.trim() ||
-          error.failure.title ||
-          `显示失败（${error.failure.code}）。`
-        );
+        return "显示失败，请稍后重试；如果持续失败，请联系平台管理员。";
     }
   }
   return error instanceof Error ? error.message : "显示失败，请重试。";
@@ -122,7 +119,12 @@ export function ProviderSecretField({
 
   return (
     <div className="space-y-2">
-      <FormField label={field.label} required={field.required} hint={hintFor(saved)} error={error}>
+      <FormField
+        label={providerFieldLabel(field)}
+        required={field.required}
+        hint={hintFor(saved)}
+        error={error}
+      >
         <Input
           type={revealed ? "text" : "password"}
           autoComplete="off"
@@ -173,7 +175,7 @@ export function ProviderSecretField({
         >
           <p className="text-[12px] font-medium text-ink">确认显示这个密钥？</p>
           <p className="mt-1 text-[11px] leading-5 text-muted">
-            此操作需要已完成的 TOTP 会话，并会写入审计日志。明文只保留 10 秒。
+            查看密钥需要完成两步验证，并会记录到审计日志；密钥只显示 10 秒。
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button

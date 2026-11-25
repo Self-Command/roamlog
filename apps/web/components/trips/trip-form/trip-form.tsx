@@ -471,7 +471,7 @@ export function TripForm(props: TripFormProps) {
         tone: "error",
         conflict: true,
         message:
-          "保存失败：旅行已被其他人更新（409 版本冲突）。请重新加载最新版本，再重新提交你的修改。",
+          "保存失败：有其他成员先更新了这趟旅行。请重新加载最新版本后再提交。",
       });
       return;
     }
@@ -491,7 +491,7 @@ export function TripForm(props: TripFormProps) {
       if (isForbidden(error)) {
         setBanner({
           tone: "error",
-          message: "保存失败：你没有编辑此旅行的权限（Viewer 角色或被移出工作区）。",
+          message: "保存失败：你没有编辑这趟旅行的权限，或已经被移出工作区。",
         });
         return;
       }
@@ -535,7 +535,7 @@ export function TripForm(props: TripFormProps) {
       const alreadyCustom =
         props.mode === "edit" && props.initialTrip.visibility === "custom";
       if (!alreadyCustom) {
-        return "只有行程创建者或工作区 Owner/Admin 可以设置指定可见范围。";
+        return "只有行程创建者、工作区所有者或管理员可以设置指定可见范围。";
       }
       return null;
     }
@@ -550,10 +550,10 @@ export function TripForm(props: TripFormProps) {
     if (error.stage === "updated") setTripState(error.trip);
 
     const reason = isForbidden(error.reason)
-      ? "当前角色没有管理可见范围的权限。"
+      ? "你没有管理可见范围的权限。请联系工作区所有者或管理员。"
       : isApiError(error.reason)
         ? error.reason.code === "INVALID_RESPONSE"
-          ? "可见范围已提交，但返回的数据无法识别。"
+          ? "可见范围已提交，但暂时无法确认保存结果，请刷新页面后查看。"
           : "保存可见范围失败，请稍后重试。"
         : "网络异常，保存可见范围失败。";
     setBanner({
@@ -684,7 +684,7 @@ export function TripForm(props: TripFormProps) {
   return (
     <div className="mx-auto w-full max-w-6xl">
       <PageHeader
-        eyebrow={isCreate ? "TRIPS / NEW" : "TRIPS / EDIT"}
+        eyebrow={isCreate ? "旅行 / 新建" : "旅行 / 编辑"}
         title={pageTitle}
         description={pageDescription}
         titleSize="page"
@@ -851,7 +851,7 @@ export function TripForm(props: TripFormProps) {
               <p className="type-meta leading-5 text-stone">
                 支持 JPEG、PNG、WebP、AVIF、HEIC、HEIF，最大 25 MB。
                 {isCreate
-                  ? "新建时先完成上传，创建请求会带上 coverMediaId；上传失败可重试且不会丢失已上传的媒体。"
+                  ? "新建旅行时请先完成封面上传；上传失败可以重试，已上传的图片不会丢失。"
                   : "已有旅行会立即保存封面；替换或移除封面不会改动其它字段。"}
               </p>
             </section>
@@ -1122,7 +1122,7 @@ export function TripForm(props: TripFormProps) {
                 aria-disabled={pending || undefined}
                 tabIndex={pending ? -1 : undefined}
               >
-                取消
+                放弃修改
               </Link>
               <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
                 {pending ? (

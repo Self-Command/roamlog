@@ -30,7 +30,7 @@ describe("probeCopyFor", () => {
     });
 
     expect(copy.headline).toBe(
-      "存储服务无法连接：检查 endpoint 与网络（当前 endpoint: http://127.0.0.1:19999）",
+      "存储服务无法连接：请检查服务地址与网络（当前地址：http://127.0.0.1:19999）",
     );
     expect(copy.eyebrow).toBe("保存被拦截 · 存储");
     expect(copy.headline).not.toContain("STORAGE_ENDPOINT_UNREACHABLE");
@@ -40,16 +40,16 @@ describe("probeCopyFor", () => {
   it("says 未配置 instead of an empty endpoint placeholder", () => {
     const copy = probeCopyFor(probeOf("storage", "STORAGE_ENDPOINT_UNREACHABLE"));
 
-    expect(copy.headline).toContain("当前 endpoint: 未配置");
+    expect(copy.headline).toContain("当前地址：未配置");
   });
 
   it("asks for the storage credential pair when nothing is configured", () => {
     const copy = probeCopyFor(probeOf("storage", "MISSING_CREDENTIALS"));
 
-    expect(copy.headline).toBe("缺少访问凭据：请先填写 Access Key 与 Secret Key");
+    expect(copy.headline).toBe("缺少访问凭据：请填写访问密钥与私有密钥");
     expect(copy.credentialNotes).toMatchObject({
-      "storage.accessKey": expect.stringContaining("Access Key"),
-      "storage.secretKey": expect.stringContaining("Secret Key"),
+      "storage.accessKey": expect.stringContaining("访问密钥"),
+      "storage.secretKey": expect.stringContaining("私有密钥"),
     });
   });
 
@@ -61,7 +61,7 @@ describe("probeCopyFor", () => {
     );
 
     expect(copy.headline).toBe(
-      "对外访问地址不可达：浏览器可能无法加载图片，检查 publicEndpoint 与 CORS",
+      "公开访问地址不可达：图片可能无法加载，请检查公开地址与跨域访问设置",
     );
     expect(copy.failedAt).toBe("PresignedGet");
   });
@@ -75,7 +75,7 @@ describe("probeCopyFor", () => {
       detail: "The probe object could not be written.",
     });
 
-    expect(copy.headline).toBe("Bucket 不存在或无权访问：检查 bucket 名称与权限");
+    expect(copy.headline).toBe("存储桶不存在或无权访问：请检查存储桶名称与访问权限");
     expect(copy.failedAt).toBe("PutObject");
     expect(copy.body).toContain("The probe object could not be written.");
     expect(copy.headline).not.toContain("STORAGE_READ_MISMATCH");
@@ -88,7 +88,7 @@ describe("probeCopyFor", () => {
       ]),
     );
 
-    expect(copy.headline).toBe("Bucket 不存在或无权访问：检查 bucket 名称与权限");
+    expect(copy.headline).toBe("存储桶不存在或无权访问：请检查存储桶名称与访问权限");
     expect(copy.failedAt).toBe("HeadBucket");
   });
 
@@ -96,7 +96,7 @@ describe("probeCopyFor", () => {
     const copy = probeCopyFor(probeOf("mail", "CONNECTION_FAILED"));
 
     expect(copy.headline).toBe(
-      "无法连接邮件服务器：检查 host 与 port（465 用隐式 TLS，587 用 STARTTLS）",
+      "无法连接邮件服务器：请检查服务器地址与端口（465 使用隐式加密，587 使用 STARTTLS）",
     );
     expect(copy.eyebrow).toBe("保存被拦截 · 邮件");
   });
@@ -116,7 +116,7 @@ describe("probeCopyFor", () => {
       provider: "resend",
     });
 
-    expect(copy.headline).toBe("缺少 mail.from 或凭据配置");
+    expect(copy.headline).toBe("缺少发件地址或访问凭据");
     expect(Object.keys(copy.credentialNotes).sort()).toEqual([
       "mail.from",
       "mail.resendApiKey",
@@ -150,13 +150,17 @@ describe("probeCopyFor", () => {
 
     expect(copy.headline).toBe(detail);
     expect(copy.headline).not.toContain("SMTP_TIMEOUT_UNKNOWN");
-    expect(copy.body).toBe("邮件探测未通过：检查 host、端口、用户名与密码");
+    expect(copy.body).toBe(
+      "邮件连接检查未通过：请检查服务器地址、端口、用户名与密码",
+    );
   });
 
   it("never leaks an unknown code into the headline when the server sent no detail", () => {
     const copy = probeCopyFor(probeOf("mail", "SOME_FUTURE_CODE"));
 
-    expect(copy.headline).toBe("邮件探测未通过：检查 host、端口、用户名与密码");
+    expect(copy.headline).toBe(
+      "邮件连接检查未通过：请检查服务器地址、端口、用户名与密码",
+    );
     expect(copy.headline).not.toContain("SOME_FUTURE_CODE");
     expect(copy.credentialNotes).toEqual({});
   });

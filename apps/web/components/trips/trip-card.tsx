@@ -1,7 +1,10 @@
+"use client";
+
 import type { Trip } from "@roamlog/contracts";
 import { AvatarGroup, Badge } from "@roamlog/ui";
 import { ArrowUpRight, Heart, MapPin } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import {
   formatBudget,
@@ -19,6 +22,7 @@ interface TripCardProps {
 
 export function TripCard({ trip, workspaceSlug, ownerName }: TripCardProps) {
   const coverUrl = trip.cover?.url ?? trip.cover?.thumbUrl ?? null;
+  const [coverFailed, setCoverFailed] = useState(false);
   const hasBudget = trip.budgetAmountMinor !== null && trip.budgetCurrency !== null;
   const participants = [
     { id: "owner", name: ownerName },
@@ -28,21 +32,26 @@ export function TripCard({ trip, workspaceSlug, ownerName }: TripCardProps) {
     })),
   ];
 
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [coverUrl]);
+
   return (
     <Link
       href={`/w/${workspaceSlug}/trips/${trip.id}`}
-      className="group block overflow-hidden rounded-card border border-hairline-strong bg-surface-1 outline-none transition-colors hover:border-white/20 focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+      className="surface-card group block overflow-hidden outline-none transition-[border-color,box-shadow] hover:border-ink/20 hover:shadow-overlay focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       <div className="relative aspect-[16/8] overflow-hidden border-b border-hairline bg-surface-2">
-        {coverUrl ? (
+        {coverUrl && !coverFailed ? (
           <img
             src={coverUrl}
             alt=""
             loading="lazy"
             className="size-full object-cover"
+            onError={() => setCoverFailed(true)}
           />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         <div className="relative flex h-full flex-col justify-between p-4">
           <div className="flex items-start justify-between gap-2">
             <Badge tone={getTripStatusTone(trip.status)}>{getTripStatusLabel(trip.status)}</Badge>
@@ -55,7 +64,7 @@ export function TripCard({ trip, workspaceSlug, ownerName }: TripCardProps) {
               </span>
             ) : null}
           </div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.13em] text-white/60">
+          <p className="text-[11px] font-medium text-white/75">
             {trip.origin}
             {trip.destinations.length > 0 ? ` → ${trip.destinations.join(" · ")}` : ""}
           </p>
@@ -65,7 +74,7 @@ export function TripCard({ trip, workspaceSlug, ownerName }: TripCardProps) {
       <div className="p-4">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="font-serif text-2xl leading-tight tracking-[-0.025em] text-ink transition-colors group-hover:text-white">
+            <h2 className="font-display text-xl leading-tight font-semibold tracking-[-0.015em] text-ink">
               {trip.title}
             </h2>
             {trip.summary ? (
@@ -78,7 +87,7 @@ export function TripCard({ trip, workspaceSlug, ownerName }: TripCardProps) {
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-hairline pt-3 font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
+        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-hairline pt-3 text-[11px] text-muted">
           <span>{formatDateRange(trip.startDate, trip.endDate)}</span>
           <span className="text-right">{trip.durationDays} 天</span>
           <span className="flex items-center gap-1">

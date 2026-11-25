@@ -31,10 +31,12 @@ import {
 
 import { cn } from "./cn";
 import { Markdown } from "./markdown";
+import { Collapsible, CollapsibleTrigger } from "./tool-card-primitives";
 import {
-  Collapsible,
-  CollapsibleTrigger,
-} from "./tool-card-primitives";
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+} from "./elements/chain-of-thought";
 
 interface ReasoningContextValue {
   isStreaming: boolean;
@@ -230,38 +232,36 @@ export type ReasoningContentProps = HTMLAttributes<HTMLDivElement> & {
   children: string;
 };
 
-export const ReasoningContent = memo(
-  ({ className, children, ...props }: ReasoningContentProps) => {
-    const { isStreaming, isOpen } = useReasoning();
-    const scrollRef = useRef<HTMLDivElement>(null);
+export const ReasoningContent = memo(({ className, children, ...props }: ReasoningContentProps) => {
+  const { isStreaming, isOpen } = useReasoning();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-      if (isStreaming && scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
-    }, [children, isStreaming]);
+  useEffect(() => {
+    if (isStreaming && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [children, isStreaming]);
 
-    if (!isOpen) return null;
+  if (!isOpen) return null;
 
-    return (
+  return (
+    <div
+      className={cn(
+        "mt-2 text-[11px] leading-relaxed text-muted [overflow-anchor:none]",
+        className,
+      )}
+      {...props}
+    >
       <div
-        className={cn(
-          "mt-2 text-[11px] leading-relaxed text-muted [overflow-anchor:none]",
-          className,
-        )}
-        {...props}
+        className="max-h-[200px] overflow-y-auto rounded-card border border-hairline bg-surface-2 px-3 py-2"
+        ref={scrollRef}
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        <div
-          className="max-h-[200px] overflow-y-auto rounded-card border border-hairline bg-surface-2 px-3 py-2"
-          ref={scrollRef}
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        >
-          <Markdown text={children} />
-        </div>
+        <Markdown text={children} />
       </div>
-    );
-  },
-);
+    </div>
+  );
+});
 
 ReasoningContent.displayName = "ReasoningContent";
 
@@ -271,22 +271,45 @@ export type MessageReasoningProps = {
 };
 
 export function MessageReasoning({ isLoading, reasoning }: MessageReasoningProps) {
-  const [hasBeenStreaming, setHasBeenStreaming] = useState(isLoading);
+  // Reasoning is model-provided diagnostic copy, not the answer. Keep it
+  // available but collapsed by default so a long English reasoning trace does
+  // not dominate an enterprise conversation before the user asks for it.
+  const [open, setOpen] = useState(false);
+  const startRef = useRef<number | null>(isLoading ? Date.now() : null);
+  const [duration, setDuration] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (isLoading) {
-      setHasBeenStreaming(true);
+      startRef.current ??= Date.now();
+      return;
+    }
+    if (startRef.current !== null) {
+      setDuration(Math.max(1, Math.ceil((Date.now() - startRef.current) / 1000)));
+      startRef.current = null;
     }
   }, [isLoading]);
 
+  const languageNote = /[\u3400-\u9fff]/u.test(reasoning)
+    ? "模型原始思考"
+    : "模型原始思考（英文原文，未翻译）";
+
   return (
-    <Reasoning
-      data-testid="message-reasoning"
-      defaultOpen={hasBeenStreaming}
-      isStreaming={isLoading}
-    >
-      <ReasoningTrigger />
-      <ReasoningContent>{reasoning}</ReasoningContent>
-    </Reasoning>
+    <ChainOfThought open={open} onOpenChange={setOpen} data-testid="message-reasoning">
+      <ChainOfThoughtHeader>
+        {isLoading
+          ? "模型原始思考（生成中）"
+          : duration === undefined
+            ? languageNote
+            : `${languageNote} · 已思考 ${String(duration)} 秒`}
+      </ChainOfThoughtHeader>
+      <ChainOfThoughtContent aria-busy={isLoading}>
+        <p className="px-1 text-[11px] leading-5 text-stone">
+          以下是模型返回的原始思考，不是最终答案，也不会被翻译或改写。
+        </p>
+        <div className="max-h-[240px] overflow-y-auto rounded-card border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-relaxed text-muted">
+          <Markdown text={reasoning} />
+        </div>
+      </ChainOfThoughtContent>
+    </ChainOfThought>
   );
 }

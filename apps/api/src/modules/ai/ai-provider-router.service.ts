@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Inject, Injectable } from "@nestjs/common";
 import {
+  AI_DEFAULT_REASONING_EFFORT,
   UuidV7Schema,
   type AiChatModel,
   type AiChatModelsResponse,
@@ -67,6 +68,8 @@ interface ProviderCatalogEntry {
   readonly models: readonly AiProviderModel[];
   readonly defaultModel: string | null;
   readonly legacySettings: AiSettings | null;
+  /** Platform fallback when this provider has no explicit reasoning choice. */
+  readonly platformReasoningEffort?: AiReasoningEffort;
 }
 
 interface ProviderModelRow {
@@ -421,6 +424,7 @@ export class AiProviderRouter {
     if (group.providers.length === 0) {
       return Object.freeze([]);
     }
+    const platformDefaults = await this.legacySettings.resolve();
 
     const databaseIds = group.providers
       .map((provider) => provider.id)
@@ -458,7 +462,7 @@ export class AiProviderRouter {
       }
       const config = runtime.config;
       const defaultModel = safeString(config.defaultModel);
-      const legacy = runtime.id === "legacy:ai" ? await this.legacySettings.resolve() : null;
+      const legacy = runtime.id === "legacy:ai" ? platformDefaults : null;
       const stored = byProvider.get(runtime.id) ?? [];
       const models = stored.map((row) => providerModel(row, defaultModel));
       if (models.length === 0 && defaultModel) {
@@ -483,10 +487,19 @@ export class AiProviderRouter {
           models: legacyModels.length > 0 ? legacyModels : models,
           defaultModel: legacy.model || defaultModel,
           legacySettings: legacy,
+          platformReasoningEffort:
+            legacy.reasoningEffort ?? AI_DEFAULT_REASONING_EFFORT,
         });
         continue;
       }
-      entries.push({ runtime, models, defaultModel, legacySettings: null });
+      entries.push({
+        runtime,
+        models,
+        defaultModel,
+        legacySettings: null,
+        platformReasoningEffort:
+          platformDefaults.reasoningEffort ?? AI_DEFAULT_REASONING_EFFORT,
+      });
     }
     return Object.freeze(entries);
   }
@@ -540,9 +553,10 @@ export class AiProviderRouter {
       dailyQuota: 0,
       vision: selected.capabilities.vision === true,
       configured: Boolean(safeString(config.baseUrl) && model),
-      ...(reasoningEffort(config.reasoningEffort)
-        ? { reasoningEffort: reasoningEffort(config.reasoningEffort) }
-        : {}),
+      reasoningEffort:
+        reasoningEffort(config.reasoningEffort) ??
+        entry.platformReasoningEffort ??
+        AI_DEFAULT_REASONING_EFFORT,
     };
   }
 

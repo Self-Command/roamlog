@@ -1,8 +1,10 @@
 import {
   APPEARANCE_MODES,
-  FONT_PAIRING_IDS,
+  DEFAULT_FONT_PAIRING_ID,
+  DEFAULT_SKIN_ID,
   PublicSettingsResponseSchema,
-  SKIN_IDS,
+  normalizeFontPairingId,
+  normalizeSkinId,
   type AppearanceMode,
   type FontPairingId,
   type PublicSettingsResponse,
@@ -255,17 +257,17 @@ export type ThemeFont = FontPairingId;
 export type ThemeAccent = "white" | "amber" | "blue" | "emerald" | "rose";
 
 export const DEFAULT_THEME_MODE: ThemeMode = "system";
-export const DEFAULT_THEME_SKIN: ThemeSkin = "editorial-noir";
-export const DEFAULT_THEME_FONT: ThemeFont = "editorial-classic";
+export const DEFAULT_THEME_SKIN: ThemeSkin = DEFAULT_SKIN_ID;
+export const DEFAULT_THEME_FONT: ThemeFont = DEFAULT_FONT_PAIRING_ID;
 export const DEFAULT_THEME_ACCENT: ThemeAccent = "white";
 
 /** Legacy accent -> skin compatibility mapping; explicit skin always wins. */
 export const LEGACY_THEME_ACCENT_TO_SKIN: Record<ThemeAccent, ThemeSkin> = {
-  white: "editorial-noir",
-  amber: "catppuccin",
-  blue: "tokyo-night",
-  emerald: "everforest",
-  rose: "rose-pine",
+  white: "porcelain",
+  amber: "porcelain",
+  blue: "carbon",
+  emerald: "carbon-soft",
+  rose: "porcelain",
 };
 
 /**
@@ -308,16 +310,14 @@ export function resolveDefaultSkin(input: {
   storedSkin?: unknown;
   legacyAccent?: unknown;
 }): ThemeSkin {
-  if (SKIN_IDS.includes(input.storedSkin as SkinId)) {
-    return input.storedSkin as ThemeSkin;
+  if (typeof input.storedSkin === "string") {
+    return normalizeSkinId(input.storedSkin);
   }
   return LEGACY_THEME_ACCENT_TO_SKIN[resolveThemeAccent(input.legacyAccent)];
 }
 
 export function resolveThemeFont(value: unknown): ThemeFont {
-  return FONT_PAIRING_IDS.includes(value as FontPairingId)
-    ? (value as ThemeFont)
-    : DEFAULT_THEME_FONT;
+  return typeof value === "string" ? normalizeFontPairingId(value) : DEFAULT_THEME_FONT;
 }
 
 export interface ThemePresentation {
@@ -342,14 +342,16 @@ export function resolveThemePresentation(
 ): ThemePresentation {
   const mode = appearance?.mode ?? resolveThemeMode(settings["theme.defaultMode"]);
   const accent = resolveThemeAccent(settings["theme.accent"]);
-  const skin =
+  const skin = normalizeSkinId(
     appearance?.skin ??
-    resolveDefaultSkin({
-      storedSkin: settings["theme.defaultSkin"],
-      legacyAccent: settings["theme.accent"],
-    });
-  const fontPairing = appearance?.fontPairing ?? resolveThemeFont(settings["theme.defaultFont"]);
-  const tokens = THEME_ACCENT_TOKENS[accent];
+      resolveDefaultSkin({
+        storedSkin: settings["theme.defaultSkin"],
+        legacyAccent: settings["theme.accent"],
+      }),
+  );
+  const fontPairing = normalizeFontPairingId(
+    appearance?.fontPairing ?? resolveThemeFont(settings["theme.defaultFont"]),
+  );
   const colorScheme = mode === "system" ? "light dark" : mode;
 
   return {
@@ -361,12 +363,7 @@ export function resolveThemePresentation(
     dataSkin: skin,
     dataFont: fontPairing,
     colorScheme,
-    style: {
-      "--accent-primary": tokens.primary,
-      "--accent-primary-soft": tokens.soft,
-      "--accent-primary-glow": tokens.glow,
-      colorScheme,
-    },
+    style: { colorScheme },
   };
 }
 

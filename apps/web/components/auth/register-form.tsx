@@ -51,12 +51,12 @@ export function RegisterForm() {
 
   return (
     <div>
-      <p className="type-eyebrow">CREATE YOUR ARCHIVE</p>
-      <h1 className="mt-3 font-serif text-[clamp(2rem,1.5rem+1vw,2.75rem)] leading-none tracking-[-0.035em] text-ink">
-        创建旅行档案
+      <p className="type-eyebrow">开始使用</p>
+      <h1 className="mt-2 font-display text-[clamp(1.75rem,1.5rem+0.7vw,2.25rem)] leading-tight font-semibold tracking-[-0.02em] text-ink">
+        创建账号
       </h1>
       <p className="mt-4 text-sm leading-6 text-muted">
-        注册后会发送验证邮件。完成邮箱验证后即可创建工作区或接受邀请。
+        注册后会发送验证邮件。完成邮箱验证后，即可创建工作区或接受邀请。
       </p>
 
       <form noValidate onSubmit={handleSubmit} className="mt-8 space-y-5">

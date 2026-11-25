@@ -98,20 +98,19 @@ type ApiQuery<T> = {
   refetch: () => unknown;
 };
 
-function networkFailure(error: unknown): AdminApiFailure {
+function networkFailure(): AdminApiFailure {
   return {
     code: "ADMIN_API_NETWORK",
     status: 0,
-    title: "后台 API 不可用",
-    detail:
-      error instanceof Error ? error.message : "无法完成后台 API 请求。",
+    title: "后台服务暂时不可用",
+    detail: "后台服务暂时没有响应，请稍后重试。",
     degraded: [],
   };
 }
 
 function failureFromQuery<T>(query: ApiQuery<T>): AdminApiFailure | null {
   if (query.error) {
-    return networkFailure(query.error);
+    return networkFailure();
   }
   if (query.data && query.data.status >= 400) {
     return toAdminApiFailure(query.data.status, query.data.data, query.data.headers);
@@ -175,7 +174,7 @@ function queryResource<T>(
   const error = query.error
     ? query.error instanceof AdminMutationError
       ? query.error.failure
-      : networkFailure(query.error)
+      : networkFailure()
     : null;
 
   return {
@@ -226,20 +225,20 @@ async function adminJsonRequest<T>(
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "后台 API 响应不是 JSON",
-      detail: "后台 API 返回了空响应或格式错误的响应。",
+      title: "后台服务返回了无法识别的数据",
+      detail: "后台服务没有返回可读取的数据，请稍后重试。",
       degraded: [],
     });
   }
 
   try {
     return schema.parse(data);
-  } catch (error) {
+  } catch {
     throw new AdminMutationError({
       code: "ADMIN_RESPONSE_INVALID",
       status: response.status,
-      title: "后台 API 响应不符合契约",
-      detail: error instanceof Error ? error.message : "无法解析后台 API 响应。",
+      title: "后台服务返回了无法识别的数据",
+      detail: "后台服务返回的数据格式不正确，请稍后重试。",
       degraded: [],
     });
   }
@@ -810,14 +809,14 @@ export function mapAdminSystem(system: AdminSystem): AdminSystemSnapshotDetail {
     name,
     status: value.status as "up" | "down",
     latencyMs: value.latencyMs,
-    detail: `${name} readiness probe`,
+    detail: `${name} 服务健康检查`,
   }));
   const migrations =
     system.migration.version && system.migration.appliedAt
       ? [
           {
             version: system.migration.version,
-            name: "latest applied migration",
+            name: "最近应用的迁移",
             appliedAt: system.migration.appliedAt,
             status: "applied" as const,
           },

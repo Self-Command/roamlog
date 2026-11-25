@@ -11,7 +11,7 @@ export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLab
   return (
     <label
       className={cn(
-        "mb-1.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted",
+        "mb-1.5 block text-xs font-medium leading-5 text-body",
         className,
       )}
       {...props}
@@ -20,7 +20,7 @@ export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLab
 }
 
 const controlClassName =
-  "w-full rounded-control border border-hairline-strong bg-surface-1 text-sm text-ink outline-none transition-colors placeholder:text-stone hover:border-white/20 focus-visible:border-ink focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas aria-[invalid=true]:border-accent-red aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-accent-red/40 disabled:cursor-not-allowed disabled:opacity-50";
+  "w-full rounded-control border border-hairline-strong bg-surface-1 text-sm text-ink outline-none transition-colors placeholder:text-stone hover:border-ink/30 focus-visible:border-focus-ring focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas aria-[invalid=true]:border-accent-red aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-accent-red/40 disabled:cursor-not-allowed disabled:opacity-50";
 
 export const Input = React.forwardRef<
   HTMLInputElement,
@@ -72,7 +72,7 @@ export const Checkbox = React.forwardRef<
   <CheckboxPrimitive.Root
     ref={ref}
     className={cn(
-      "peer relative size-6 shrink-0 rounded-[4px] border border-hairline-strong bg-surface-1 text-black outline-none transition-colors before:absolute before:-inset-2.5 before:content-[''] data-[state=checked]:border-ink data-[state=checked]:bg-ink focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50 md:size-5",
+      "peer relative size-6 shrink-0 rounded-[4px] border border-hairline-strong bg-surface-1 text-accent-contrast outline-none transition-colors before:absolute before:-inset-2.5 before:content-[''] data-[state=checked]:border-accent-solid data-[state=checked]:bg-accent-solid focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50 md:size-5",
       className,
     )}
     {...props}
@@ -92,12 +92,12 @@ export const Switch = React.forwardRef<
   <SwitchPrimitive.Root
     ref={ref}
     className={cn(
-      "relative h-6 w-11 shrink-0 rounded-pill border border-hairline-strong bg-surface-2 outline-none transition-colors before:absolute before:-inset-2.5 before:content-[''] data-[state=checked]:border-ink data-[state=checked]:bg-ink focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50",
+      "relative h-6 w-11 shrink-0 rounded-pill border border-hairline-strong bg-surface-2 outline-none transition-colors before:absolute before:-inset-2.5 before:content-[''] data-[state=checked]:border-accent-solid data-[state=checked]:bg-accent-solid focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50",
       className,
     )}
     {...props}
   >
-    <SwitchPrimitive.Thumb className="pointer-events-none block size-5 translate-x-0.5 rounded-full bg-body transition-transform duration-150 data-[state=checked]:translate-x-[20px] data-[state=checked]:bg-black" />
+    <SwitchPrimitive.Thumb className="pointer-events-none block size-5 translate-x-0.5 rounded-full bg-body transition-transform duration-150 data-[state=checked]:translate-x-[20px] data-[state=checked]:bg-accent-contrast" />
   </SwitchPrimitive.Root>
 ));
 

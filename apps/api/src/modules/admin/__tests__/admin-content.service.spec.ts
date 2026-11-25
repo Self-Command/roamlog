@@ -188,6 +188,18 @@ describe("AdminMediaService", () => {
     expect(query.where).toMatchObject({ workspaceId: WORKSPACE_A_ID, status: "ready" });
   });
 
+  it("lists only active media when no status filter is provided", async () => {
+    const { prisma, service } = setup();
+    prisma.client.media.findMany.mockResolvedValue([]);
+
+    await service.list(makeActor(USER_ADMIN_ID, { platformRole: "admin" }), {});
+
+    const query = prisma.client.media.findMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+    };
+    expect(query.where).toMatchObject({ deletedAt: null });
+  });
+
   it("signs every admin media variant for the moderation preview", async () => {
     const { prisma, mediaUrls, service } = setup();
     const record = mediaRecord({

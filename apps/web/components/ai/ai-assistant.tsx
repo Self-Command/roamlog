@@ -2,7 +2,7 @@
 
 import { Button, ErrorState, PageHeader, Skeleton } from "@roamlog/ui";
 
-import { useWorkspaceBySlug } from "@/lib/query";
+import { useSessionQuery, useWorkspaceBySlug } from "@/lib/query";
 
 import { AiChat } from "./ai-chat";
 
@@ -20,24 +20,37 @@ export function AiAssistant({
   initialConversationId?: string | undefined;
 }) {
   const { workspace, workspacesQuery } = useWorkspaceBySlug(workspaceSlug);
+  const sessionQuery = useSessionQuery();
+  const userId = sessionQuery.data?.user.id;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="AI / 先计划，后写入"
+        eyebrow="AI 助手 / 先确认，再执行"
         title="AI 旅行助手"
         titleSize="trip"
-        description="用一句话描述目的地、时间和预算。助手先只读搜索并列出准备执行的操作；只有你勾选并确认后，才会写入工作区。"
+        description="先描述你的目标和约束。助手会询问缺少的信息，并在生成计划前让你确认需求摘要；确认后才允许写入工作区。"
       />
 
-      {workspacesQuery.isLoading ? (
+      {workspacesQuery.isLoading || sessionQuery.isLoading ? (
         <Skeleton className="h-[560px] rounded-card" />
-      ) : !workspace ? (
+      ) : !workspace || !userId ? (
         <ErrorState
-          title="无法载入 Workspace"
-          description="当前账号不是这个 Workspace 的成员，或链接中的 slug 已失效。"
+          title="无法载入 AI 助手"
+          description={
+            !userId
+              ? "无法确认当前登录账号，请重新登录后再试。"
+              : "当前账号不是这个工作区的成员，或工作区地址已失效。"
+          }
           retryAction={
-            <Button type="button" variant="outline" onClick={() => void workspacesQuery.refetch()}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void sessionQuery.refetch();
+                void workspacesQuery.refetch();
+              }}
+            >
               重新加载
             </Button>
           }
@@ -46,6 +59,7 @@ export function AiAssistant({
         <AiChat
           workspaceId={workspace.id}
           workspaceSlug={workspaceSlug}
+          userId={userId}
           role={workspace.role}
           {...(initialConversationId ? { initialConversationId } : {})}
         />

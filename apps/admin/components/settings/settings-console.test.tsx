@@ -380,11 +380,11 @@ describe("SettingsConsole", () => {
     expect(screen.getByRole("switch", { name: "Registration open" })).not.toBeChecked();
     expect(
       within(screen.getByRole("article", { name: "设置项 Registration open" })).getByLabelText(
-        "Registration open 消费状态",
+        "Registration open 生效范围",
       ),
     ).toHaveTextContent("未接入（不生效）");
     expect(screen.getByLabelText("Default time zone")).toBeDisabled();
-    expect(screen.getByText("由环境变量锁定，界面不可改。")).toBeInTheDocument();
+    expect(screen.getByText("由部署配置锁定，界面不可修改。")).toBeInTheDocument();
     expect(screen.getByLabelText("Metadata JSON 键 1")).toHaveValue("theme");
     expect(screen.getByLabelText("Metadata JSON 值 1")).toHaveValue('"dark"');
     expect(screen.getByText("Shown in the browser tab and public header.")).toBeInTheDocument();
@@ -395,11 +395,22 @@ describe("SettingsConsole", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps internal setting keys behind a technical disclosure", async () => {
+    await renderConsole("general");
+
+    const field = screen.getByRole("article", { name: "设置项 Site title" });
+    const technicalSummary = within(field).getByText("技术标识");
+    const internalKey = within(field).getByText("site.title");
+
+    expect(technicalSummary).toBeVisible();
+    expect(internalKey).not.toBeVisible();
+  });
+
   it("marks the wired mail group as backend and keeps the worker limit visible", async () => {
     await renderConsole("mail");
 
     expect(screen.getByRole("heading", { name: SETTINGS_GROUP_LABELS.mail })).toBeInTheDocument();
-    const status = screen.getByText("后端已消费，任务进程仍读环境变量");
+    const status = screen.getByText("已由主服务读取；后台任务仍使用部署配置");
     expect(status).toHaveAttribute("data-consumption-status", "backend");
     expect(status.className).toContain("text-accent-blue");
     expect(status.className).not.toContain("text-accent-yellow");
@@ -407,10 +418,10 @@ describe("SettingsConsole", () => {
 
     for (const label of ["Mail provider", "SMTP port", "Resend API key", "SMTP password"]) {
       const field = screen.getByRole("article", { name: `设置项 ${label}` });
-      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
-        "后端已消费",
+      expect(within(field).getByLabelText(`${label} 生效范围`)).toHaveTextContent(
+        "已由主服务读取",
       );
-      expect(within(field).getByText(/任务进程导出通知不生效/)).toBeInTheDocument();
+      expect(within(field).getByText(/后台任务仍未接入/)).toBeInTheDocument();
     }
     expect(screen.getByLabelText("SMTP port")).toHaveValue(587);
 
@@ -425,7 +436,9 @@ describe("SettingsConsole", () => {
   it("shows places as backend-consumed and labels all six keys", async () => {
     await renderConsole("places");
 
-    const status = screen.getByText("后端已消费（地点模块运行期读取）");
+    const status = screen.getByText("已由地点服务读取", {
+      selector: 'p[data-consumption-status="backend"]',
+    });
     expect(status).toHaveAttribute("data-consumption-status", "backend");
     expect(status.className).toContain("text-accent-blue");
     expect(status.className).not.toContain("text-accent-green");
@@ -439,8 +452,8 @@ describe("SettingsConsole", () => {
       "Daily quota",
     ]) {
       const field = screen.getByRole("article", { name: `设置项 ${label}` });
-      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
-        "后端已消费",
+      expect(within(field).getByLabelText(`${label} 生效范围`)).toHaveTextContent(
+        "已由地点服务读取",
       );
     }
   });
@@ -449,7 +462,9 @@ describe("SettingsConsole", () => {
     await renderConsole("ai");
 
     expect(screen.getByRole("heading", { name: SETTINGS_GROUP_LABELS.ai })).toBeInTheDocument();
-    const status = screen.getByText("后端已消费（AI 模块运行期读取）");
+    const status = screen.getByText("已由 AI 服务读取", {
+      selector: 'p[data-consumption-status="backend"]',
+    });
     expect(status).toHaveAttribute("data-consumption-status", "backend");
     expect(status.className).toContain("text-accent-blue");
     expect(status.textContent).not.toContain("不生效");
@@ -462,8 +477,8 @@ describe("SettingsConsole", () => {
       "Daily quota",
     ]) {
       const field = screen.getByRole("article", { name: `设置项 ${label}` });
-      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
-        "后端已消费",
+      expect(within(field).getByLabelText(`${label} 生效范围`)).toHaveTextContent(
+        "已由 AI 服务读取",
       );
     }
   });
@@ -472,9 +487,11 @@ describe("SettingsConsole", () => {
     await renderConsole("media");
 
     expect(
-      screen.getByText(/前端已消费 4\/6 个键（最长边、质量、目标字节、最大上传字节）/),
+      screen.getByText("已使用最长边、质量、目标字节和最大上传字节；保留原图与实况照片暂未接入", {
+        selector: 'p[data-consumption-status="frontend"]',
+      }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/保留原图与实况照片未接入（不生效）/)).toBeInTheDocument();
+    expect(screen.getByText(/保留原图与实况照片暂未接入/)).toBeInTheDocument();
 
     for (const label of [
       "Max edge (px)",
@@ -483,14 +500,14 @@ describe("SettingsConsole", () => {
       "Max upload bytes",
     ]) {
       const field = screen.getByRole("article", { name: `设置项 ${label}` });
-      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
-        "前端已消费",
+      expect(within(field).getByLabelText(`${label} 生效范围`)).toHaveTextContent(
+        "已由用户端使用",
       );
     }
 
     for (const label of ["Keep originals", "Live Photos"]) {
       const field = screen.getByRole("article", { name: `设置项 ${label}` });
-      expect(within(field).getByLabelText(`${label} 消费状态`)).toHaveTextContent(
+      expect(within(field).getByLabelText(`${label} 生效范围`)).toHaveTextContent(
         "未接入（不生效）",
       );
     }
@@ -605,7 +622,7 @@ describe("SettingsConsole", () => {
       screen.getByRole("button", { name: "显示 Resend API key（记入审计）" }),
     );
     const dialog = screen.getByRole("dialog", { name: "显示敏感值" });
-    expect(within(dialog).getByText(/这是一次带审计的操作/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/本次查看会记录到审计日志/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "确认显示（记入审计）" }));
 
     expect(fake.reveal).toHaveBeenCalledWith("mail.resendApiKey");
@@ -635,7 +652,7 @@ describe("SettingsConsole", () => {
       }),
     );
 
-    expect(await screen.findByText(/需要完成 TOTP 2FA 验证后才能显示敏感值/)).toBeInTheDocument();
+    expect(await screen.findByText(/请先完成两步验证，再显示密钥/)).toBeInTheDocument();
     expect(screen.getByLabelText("Resend API key 当前值")).toHaveValue("••••abcd");
   });
 
@@ -695,7 +712,7 @@ describe("SettingsConsole", () => {
     const field = screen.getByRole("article", { name: "设置项 SMTP port" });
     expect(await within(field).findByText(/Number must be less than or equal to 65535/)).toBeInTheDocument();
     expect(port).toHaveValue(70000);
-    expect(screen.getByText("有字段未通过服务端校验")).toBeInTheDocument();
+    expect(screen.getByText("有字段没有通过校验")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /保存更改/ })).toBeEnabled();
   });
 
@@ -747,7 +764,9 @@ describe("SettingsConsole", () => {
     await renderConsole("general", "analyst");
 
     expect(screen.getByRole("button", { name: /保存更改/ })).toBeDisabled();
-    expect(screen.getByText(/后台设置需要超级管理员权限/)).toBeInTheDocument();
+    expect(
+      screen.getByText("只有超级管理员可以修改后台设置；当前账号只能查看。"),
+    ).toBeInTheDocument();
   });
 
   it("shows the database source and updatedAt after a save re-read", async () => {
@@ -796,7 +815,7 @@ describe("SettingsConsole", () => {
     const alert = await screen.findByRole("alert");
     const headline = alert.querySelector("[data-probe-headline]");
     expect(headline).toHaveTextContent(
-      "存储服务无法连接：检查 endpoint 与网络（当前 endpoint: http://127.0.0.1:19999）",
+      "存储服务无法连接：请检查服务地址与网络（当前地址：http://127.0.0.1:19999）",
     );
     expect(headline?.textContent).not.toContain("STORAGE_ENDPOINT_UNREACHABLE");
     expect(screen.queryByText("Configuration rejected")).not.toBeInTheDocument();
@@ -815,10 +834,12 @@ describe("SettingsConsole", () => {
     ).toBeInTheDocument();
     expect(within(technical as HTMLElement).getByText("HeadBucket")).toBeInTheDocument();
 
-    // The retry action stays ghost/outline; the save button is the only white primary.
+    // The retry action stays ghost/outline; the save button is the enterprise action.
     const retry = within(alert).getByRole("button", { name: "重试保存" });
-    expect(retry.className).not.toContain("bg-ink");
-    expect(screen.getByRole("button", { name: /保存更改/ }).className).toContain("bg-ink");
+    expect(retry.className).not.toContain("bg-accent-solid");
+    expect(screen.getByRole("button", { name: /保存更改/ }).className).toContain(
+      "bg-accent-solid",
+    );
 
     // Nothing was reset: the draft that failed is still on screen.
     expect(endpoint).toHaveValue("http://127.0.0.1:19999");
@@ -853,7 +874,9 @@ describe("SettingsConsole", () => {
     ).not.toBeNull();
 
     // Unknown storage code falls back to the bucket/permission hint.
-    expect(alert).toHaveTextContent("Bucket 不存在或无权访问：检查 bucket 名称与权限");
+    expect(alert).toHaveTextContent(
+      "存储桶不存在或无权访问：请检查存储桶名称与访问权限",
+    );
   });
 
   it("marks missing credentials inline and clears the note once the field is filled", async () => {
@@ -867,15 +890,15 @@ describe("SettingsConsole", () => {
     await user.click(screen.getByRole("button", { name: /保存更改/ }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("缺少访问凭据：请先填写 Access Key 与 Secret Key");
+    expect(alert).toHaveTextContent("缺少访问凭据：请填写访问密钥与私有密钥");
 
     const accessField = screen.getByRole("article", { name: "设置项 Access key" });
     const secretField = screen.getByRole("article", { name: "设置项 Secret key" });
     expect(within(accessField).getByRole("note")).toHaveTextContent(
-      "保存探测缺少访问凭据：请填写 Access Key。",
+      "缺少访问凭据，请填写访问密钥。",
     );
     expect(within(secretField).getByRole("note")).toHaveTextContent(
-      "保存探测缺少访问凭据：请填写 Secret Key。",
+      "缺少访问凭据，请填写私有密钥。",
     );
 
     await user.type(screen.getByLabelText("设置新值 Secret key"), "sk_test_value");

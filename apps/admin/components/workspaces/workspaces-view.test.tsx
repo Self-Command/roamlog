@@ -149,7 +149,7 @@ describe("WorkspacesView", () => {
     renderWithClient(<WorkspacesView role="support" />);
 
     const firstRow = await screen.findByRole("row", { name: /Roamlog Crew/ });
-    expect(within(firstRow).getByRole("button", { name: "删除工作区" })).toBeDisabled();
+    expect(within(firstRow).getByRole("button", { name: "移入已删除" })).toBeDisabled();
     await user.click(within(firstRow).getByRole("button", { name: "暂停工作区" }));
 
     const dialog = screen.getByRole("dialog", { name: "暂停工作区" });
@@ -160,7 +160,7 @@ describe("WorkspacesView", () => {
     await user.click(confirm);
 
     // Without a mutation port the console refuses the write instead of faking it.
-    expect(screen.getByRole("status")).toHaveTextContent("未连接后台 API");
+    expect(screen.getByRole("status")).toHaveTextContent("后台服务未连接");
   });
 
   it("keeps workspace destructive actions disabled for analysts", async () => {
@@ -169,7 +169,7 @@ describe("WorkspacesView", () => {
 
     const firstRow = await screen.findByRole("row", { name: /Roamlog Crew/ });
     expect(within(firstRow).getByRole("button", { name: "暂停工作区" })).toBeDisabled();
-    expect(within(firstRow).getByRole("button", { name: "删除工作区" })).toBeDisabled();
+    expect(within(firstRow).getByRole("button", { name: "移入已删除" })).toBeDisabled();
     expect(screen.getByText("只读分析模式")).toBeInTheDocument();
   });
 

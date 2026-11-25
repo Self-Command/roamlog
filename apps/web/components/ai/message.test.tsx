@@ -160,6 +160,34 @@ describe("AssistantMessage part ordering", () => {
     expect(screen.getByText("完成")).toBeInTheDocument();
   });
 
+  it("renders streamed reasoning content in the chain-of-thought disclosure", async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        content={[
+          {
+            type: "reasoning",
+            id: "reasoning-round-1",
+            text: "先确认用户真正缺的是哪几项信息。",
+            status: { type: "running" },
+            timing: { startedAt: Date.now() },
+          },
+        ]}
+      />,
+    );
+
+    const disclosure = await screen.findByTestId("message-reasoning");
+    const trigger = disclosure.querySelector("button");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(disclosure).toHaveTextContent("模型原始思考");
+    await user.click(trigger!);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(disclosure).toHaveTextContent(
+      "以下是模型返回的原始思考，不是最终答案，也不会被翻译或改写。",
+    );
+    expect(disclosure).toHaveTextContent("先确认用户真正缺的是哪几项信息。");
+  });
+
   it("renders an unknown tool through the Fallback card instead of returning null", async () => {
     const content: ThreadAssistantMessagePart[] = [
       {

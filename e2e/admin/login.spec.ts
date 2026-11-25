@@ -9,11 +9,11 @@ test("admin login placeholder completes the local two-step flow", async ({ page 
   await expect(page.getByText("NOT CONNECTED")).toBeVisible();
 
   await page.getByLabel("密码").fill("local-only-password");
-  await page.getByRole("button", { name: "继续验证" }).click();
+  await page.getByRole("button", { name: "登录" }).click();
 
-  await expect(page.getByRole("heading", { name: "双因素认证" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "两步验证" })).toBeVisible();
   await page.getByLabel("6 位验证码").fill("123456");
-  await page.getByRole("button", { name: "进入控制台" }).click();
+  await page.getByRole("button", { name: "验证并进入控制台" }).click();
 
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("heading", { name: "平台总览" })).toBeVisible();

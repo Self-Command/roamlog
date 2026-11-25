@@ -29,17 +29,22 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <div
-      className={cn("flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between", className)}
+      className={cn(
+        "flex flex-col gap-3 border-b border-hairline pb-5 sm:flex-row sm:items-start sm:justify-between",
+        className,
+      )}
       {...props}
     >
-      <div className="min-w-0 max-w-3xl">
+      <div className="min-w-0 max-w-2xl">
         {eyebrow ? <p className="type-eyebrow">{eyebrow}</p> : null}
-        <Title className={cn(titleClasses[titleSize], eyebrow ? "mt-3" : "mt-0")}>{title}</Title>
+        <Title className={cn(titleClasses[titleSize], eyebrow ? "mt-2" : "mt-0")}>{title}</Title>
         {description ? (
-          <p className="mt-3 max-w-xl text-sm leading-6 text-muted">{description}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-5 text-muted">{description}</p>
         ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">{actions}</div>
+      ) : null}
     </div>
   );
 }

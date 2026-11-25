@@ -105,7 +105,7 @@ describe("行程 tab（真实 stops）", () => {
     expect(screen.getByText("京都 · 日本")).toBeInTheDocument();
     expect(screen.getByText(/35\.0116, 135\.7681/)).toBeInTheDocument();
     expect(screen.getByText("Photon 搜索")).toBeInTheDocument();
-    expect(screen.getByText(/ORDER 0 · VERSION 1/)).toBeInTheDocument();
+    expect(screen.getByText("第 0 站")).toBeInTheDocument();
     expect(calls).toEqual([{ method: "GET", url: `/v1/trips/${TRIP_ID}/stops`, body: undefined }]);
   });
 
@@ -190,7 +190,7 @@ describe("费用 tab（真实 expenses / 多币种不折算）", () => {
     expect(screen.getByText(/JPY · 1 笔/)).toBeInTheDocument();
     expect(screen.getAllByText(formatMinor(123_400, "CNY")).length).toBeGreaterThan(0);
     expect(screen.getAllByText(formatMinor(200_000, "JPY")).length).toBeGreaterThan(0);
-    expect(screen.getByText(/123400 MINOR · V2/)).toBeInTheDocument();
+    expect(screen.getByText(/版本 2/)).toBeInTheDocument();
   });
 
   it("空状态是真实空态", async () => {
@@ -246,7 +246,7 @@ describe("照片 tab（真实 media 签名 URL）", () => {
     const { container } = renderTab(<PhotosTab tripId={TRIP_ID} />, { trip: TRIP, workspace: EDITOR });
 
     expect(await screen.findByText("图片还在处理中")).toBeInTheDocument();
-    expect(screen.getAllByText("服务器处理中").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("图片处理中").length).toBeGreaterThan(0);
     expect(container.querySelectorAll("img")).toHaveLength(0);
   });
 
@@ -391,7 +391,7 @@ describe("照片 tab（真实 media 签名 URL）", () => {
     expect(await screen.findByText(/公开页显示精确位置：开启/)).toBeInTheDocument();
     expect(screen.queryByRole("switch")).toBeNull();
     expect(screen.queryByRole("link", { name: "编辑旅行" })).toBeNull();
-    expect(screen.getByText("当前角色不能修改行程设置。")).toBeInTheDocument();
+    expect(screen.getByText("你没有修改行程设置的权限。")).toBeInTheDocument();
   });
 });
 
@@ -456,7 +456,7 @@ describe("权限：viewer 只读", () => {
 
     renderTab(<ShareTab tripId={TRIP_ID} />, { trip: TRIP, workspace: VIEWER });
 
-    expect(await screen.findByText("当前角色不能查看分享链接")).toBeInTheDocument();
+    expect(await screen.findByText("你没有查看分享链接的权限")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /创建链接/ })).not.toBeInTheDocument();
   });
 
@@ -471,18 +471,18 @@ describe("权限：viewer 只读", () => {
     const addButton = await screen.findByRole("button", { name: /添加节点/ });
     expect(addButton).toBeDisabled();
     await screen.findByText("京都");
-    expect(addButton.getAttribute("title")).toContain("Viewer 只能阅读和评论");
+    expect(addButton.getAttribute("title")).toContain("你是只读成员，只能阅读和评论");
 
     const deleteButton = screen.getByRole("button", { name: "删除行程节点 京都" });
     expect(deleteButton).toBeDisabled();
-    expect(deleteButton.getAttribute("title")).toContain("Viewer 只能阅读和评论");
+    expect(deleteButton.getAttribute("title")).toContain("你是只读成员，只能阅读和评论");
 
     unmount();
 
     renderTab(<ExpensesTab tripId={TRIP_ID} />, { trip: TRIP, workspace: VIEWER });
     const addExpense = await screen.findByRole("button", { name: /记一笔/ });
     expect(addExpense).toBeDisabled();
-    expect(addExpense.getAttribute("title")).toContain("Viewer 只能阅读和评论");
+    expect(addExpense.getAttribute("title")).toContain("你是只读成员，只能阅读和评论");
   });
 });
 

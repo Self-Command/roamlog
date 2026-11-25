@@ -212,20 +212,24 @@ export function putObjectToSignedUrl(request: PutObjectRequest): Promise<void> {
         reject(
           new SignedUrlUploadError(
             "http",
-            `对象存储拒绝了上传（HTTP ${xhr.status}）。`,
+            "图片服务没有接受这次上传，请重试。",
             xhr.status,
           ),
         ),
       );
     };
     xhr.onerror = () => {
-      settle(() => reject(new SignedUrlUploadError("network", "无法连接对象存储。")));
+      settle(() =>
+        reject(new SignedUrlUploadError("network", "无法连接图片服务，请检查网络后重试。")),
+      );
     };
     xhr.onabort = () => {
       settle(() => reject(new SignedUrlUploadError("aborted", "上传已取消。")));
     };
     xhr.ontimeout = () => {
-      settle(() => reject(new SignedUrlUploadError("network", "上传对象存储超时。")));
+      settle(() =>
+        reject(new SignedUrlUploadError("network", "图片上传超时，请检查网络后重试。")),
+      );
     };
 
     xhr.send(request.file);

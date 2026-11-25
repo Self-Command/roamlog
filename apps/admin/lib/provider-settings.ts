@@ -10,8 +10,53 @@ const HEALTH_LABELS = {
   unhealthy: "异常",
 } as const;
 
+const PROVIDER_FIELD_LABELS: Readonly<Record<string, string>> = {
+  baseUrl: "服务地址",
+  endpoint: "存储服务地址",
+  publicEndpoint: "公开访问地址",
+  bucket: "存储桶",
+  region: "区域",
+  forcePathStyle: "兼容路径访问",
+  host: "服务器地址",
+  port: "端口",
+  user: "用户名",
+  secure: "加密连接",
+  from: "发件地址",
+  apiKey: "接口密钥",
+  accessKey: "访问密钥",
+  secretKey: "私有密钥",
+  password: "密码",
+  maxOutputTokens: "最大输出长度（tokens）",
+};
+
+const PROVIDER_FIELD_HELP: Readonly<Record<string, string>> = {
+  baseUrl: "服务的网址根路径，例如 https://api.openai.com/v1。",
+};
+
+const PROVIDER_OPTION_LABELS: Readonly<Record<string, string>> = {
+  none: "不推理",
+  minimal: "极低",
+  low: "低",
+  medium: "中",
+  high: "高",
+};
+
+export function providerFieldLabel(field: { key: string; label: string }): string {
+  return PROVIDER_FIELD_LABELS[field.key] ?? field.label;
+}
+
+export function providerFieldHelp(
+  field: { key: string; help?: string | null },
+): string | null {
+  return PROVIDER_FIELD_HELP[field.key] ?? field.help ?? null;
+}
+
+export function providerOptionLabel(option: { value: string; label: string }): string {
+  return PROVIDER_OPTION_LABELS[option.value] ?? option.label;
+}
+
 const MUTATION_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
-  SETTINGS_ENCRYPTION_UNAVAILABLE: "密钥存储未就绪，配置没有保存。请先修复服务端密钥配置后重试。",
+  SETTINGS_ENCRYPTION_UNAVAILABLE: "密钥服务暂时不可用，配置没有保存。请稍后重试。",
   PROVIDER_SECRETS_UNAVAILABLE: "密钥服务不可用，密钥没有保存。请稍后重试。",
   PROVIDER_VERSION_CONFLICT: "这个服务商已被其他运营修改。请载入最新版本后再保存，当前草稿会保留。",
   PROVIDER_ORDER_CONFLICT: "服务商顺序已变化。请载入最新顺序，或保留当前顺序后重试。",
@@ -22,7 +67,7 @@ const MUTATION_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
   PROVIDER_MODEL_DEFAULT_REQUIRED: "请为这个服务商选择一个默认模型。",
   PROVIDER_MODELS_DISCOVERY_TIMEOUT: "获取模型超时，请检查服务商网络后重试。",
   PROVIDER_MODELS_DISCOVERY_UNSUPPORTED: "这个服务商不支持自动模型目录，请手动填写模型 ID。",
-  ADMIN_2FA_REQUIRED: "需要完成 TOTP 两步验证后才能修改服务商配置。",
+  ADMIN_2FA_REQUIRED: "请先完成两步验证，再修改服务商配置。",
   ADMIN_ACCESS_DENIED: "需要超级管理员权限才能修改服务商配置。",
 });
 
@@ -111,15 +156,12 @@ export function providerMutationErrorMessage(error: unknown): string {
     if (error.failure.status === 403) {
       return "当前账号没有修改服务商配置的权限。";
     }
-    return (
-      error.failure.detail?.trim() || error.failure.title?.trim() || "服务商操作失败，请稍后重试。"
-    );
+    return "服务商操作失败，请稍后重试；如果持续失败，请联系平台管理员。";
   }
   if (error instanceof Error) {
-    const message = error.message.trim();
-    return /fetch|network|load failed|failed to load/i.test(message)
-      ? "无法连接后台 API，请保留当前配置后重试。"
-      : message || "服务商操作失败，请稍后重试。";
+    return /fetch|network|load failed|failed to load/i.test(error.message)
+      ? "无法连接后台服务，请保留当前配置后重试。"
+      : "服务商操作失败，请稍后重试。";
   }
   return "服务商操作失败，请稍后重试。";
 }

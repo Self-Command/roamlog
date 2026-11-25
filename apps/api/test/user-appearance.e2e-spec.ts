@@ -137,8 +137,8 @@ describe("user appearance routes", () => {
       .expect(200);
     expect(initial.body).toMatchObject({
       mode: "system",
-      skin: "editorial-noir",
-      fontPairing: "editorial-classic",
+      skin: "fluent",
+      fontPairing: "fluent-native",
       source: "platform",
     });
 
@@ -149,7 +149,7 @@ describe("user appearance routes", () => {
       .expect(200);
     expect(updated.body).toMatchObject({
       mode: "light",
-      skin: "kanagawa",
+      skin: "carbon-soft",
       source: "user",
     });
     expect(String(updated.headers["set-cookie"])).toContain("roamlog_appearance=");
@@ -159,7 +159,7 @@ describe("user appearance routes", () => {
       .get("/v1/me/appearance")
       .set("x-test-auth", "1")
       .expect(200);
-    expect(persisted.body).toMatchObject({ mode: "light", skin: "kanagawa", source: "user" });
+    expect(persisted.body).toMatchObject({ mode: "light", skin: "carbon-soft", source: "user" });
 
     const reset = await request(app.getHttpServer())
       .delete("/v1/me/appearance")
@@ -225,7 +225,7 @@ databaseDescribe("user appearance PostgreSQL persistence", () => {
     const updated = await service.update(actor, { mode: "light", skin: "kanagawa" });
     expect(updated.appearance).toMatchObject({
       mode: "light",
-      skin: "kanagawa",
+      skin: "carbon-soft",
       source: "user",
     });
 
@@ -243,12 +243,12 @@ databaseDescribe("user appearance PostgreSQL persistence", () => {
     const persisted = await service.get(actor);
     expect(persisted.appearance).toMatchObject({
       mode: "light",
-      skin: "kanagawa",
+      skin: "carbon-soft",
       source: "user",
     });
 
     const cleared = await service.update(actor, { mode: null });
-    expect(cleared.appearance).toMatchObject({ mode: "system", skin: "kanagawa" });
+    expect(cleared.appearance).toMatchObject({ mode: "system", skin: "carbon-soft" });
 
     const reset = await service.reset(actor);
     expect(reset.appearance).toMatchObject({ source: "platform" });

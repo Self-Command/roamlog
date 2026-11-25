@@ -326,6 +326,8 @@ describe("admin settings routes", () => {
         "media.quality",
         "media.targetBytes",
         "media.maxUploadBytes",
+        "ai.defaultReasoningEffort",
+        "ai.suggestedPrompts",
       ]),
     );
     for (const key of ["media.keepOriginal", "media.livePhotoEnabled"]) {

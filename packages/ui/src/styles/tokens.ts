@@ -13,9 +13,12 @@ export const designTokens = {
   hairlineStrong: "var(--hairline-strong)",
   divider: "var(--divider)",
   accentSolid: "var(--accent-solid)",
+  accentPrimary: "var(--accent-primary)",
   accentSoft: "var(--accent-soft)",
   accentContrast: "var(--accent-contrast)",
   focusRing: "var(--focus-ring)",
+  focusRingOuter: "var(--focus-ring-outer)",
+  focusRingInner: "var(--focus-ring-inner)",
   success: "var(--success)",
   warning: "var(--warning)",
   danger: "var(--danger)",
@@ -38,9 +41,13 @@ export const designTokens = {
     slate: "var(--accent-slate)",
   },
   radii: {
-    card: "12px",
-    control: "8px",
+    card: "var(--roamlog-radius-card)",
+    control: "var(--roamlog-radius-control)",
     pill: "9999px",
+  },
+  shadows: {
+    card: "var(--shadow-card)",
+    overlay: "var(--shadow-overlay)",
   },
 } as const;
 

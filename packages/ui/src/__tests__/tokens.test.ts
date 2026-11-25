@@ -26,11 +26,11 @@ describe("Roamlog design tokens", () => {
       danger: "var(--danger)",
     });
 
-    expect(tokenCss).toContain("--canvas: #000000;");
-    expect(tokenCss).toContain("--surface-1: #0a0a0c;");
-    expect(tokenCss).toContain("--surface-2: #101012;");
-    expect(tokenCss).toContain("--surface-deep: #06060a;");
-    expect(tokenCss).toContain("--ink: #fcfdff;");
+    expect(tokenCss).toContain("--canvas: light-dark(#ffffff, #292929);");
+    expect(tokenCss).toContain("--surface-1: light-dark(#fafafa, #1f1f1f);");
+    expect(tokenCss).toContain("--surface-2: light-dark(#f5f5f5, #141414);");
+    expect(tokenCss).toContain("--surface-deep: light-dark(#f0f0f0, #0a0a0a);");
+    expect(tokenCss).toContain("--ink: light-dark(#242424, #ffffff);");
   });
 
   it("publishes semantic accent references for restrained glows and data emphasis", () => {
@@ -43,39 +43,40 @@ describe("Roamlog design tokens", () => {
       slate: "var(--accent-slate)",
     });
 
-    expect(tokenCss).toContain("--accent-orange: #ff801f;");
-    expect(tokenCss).toContain("--accent-blue: #3b9eff;");
-    expect(tokenCss).toContain("--accent-green: #11ff99;");
-    expect(tokenCss).toContain("--accent-red: #ff2047;");
-    expect(tokenCss).toContain("--accent-yellow: #ffc53d;");
-    expect(tokenCss).toContain("--accent-slate: #94a3b8;");
+    expect(tokenCss).toContain("--accent-orange: light-dark(#0f6cbd, #115ea3);");
+    expect(tokenCss).toContain("--accent-blue: light-dark(#115ea3, #479ef5);");
+    expect(tokenCss).toContain("--accent-green: light-dark(#0e700e, #54b054);");
+    expect(tokenCss).toContain("--accent-red: light-dark(#b10e1c, #dc626d);");
+    expect(tokenCss).toContain("--accent-yellow: light-dark(#bc4b09, #faa06b);");
+    expect(tokenCss).toContain("--accent-slate: light-dark(#707070, #999999);");
   });
 
   it("keeps the shared radii and font channels contract explicit", () => {
     expect(designTokens.radii).toEqual({
-      card: "12px",
-      control: "8px",
+      card: "var(--roamlog-radius-card)",
+      control: "var(--roamlog-radius-control)",
       pill: "9999px",
     });
-    expect(tokenCss).toContain("--roamlog-radius-card: 12px;");
-    expect(tokenCss).toContain("--roamlog-radius-control: 8px;");
+    expect(tokenCss).toContain("--roamlog-radius-card: 8px;");
+    expect(tokenCss).toContain("--roamlog-radius-control: 4px;");
     expect(tokenCss).toContain("--roamlog-radius-pill: 9999px;");
     expect(tokenCss).toContain("--font-serif:");
     expect(tokenCss).toContain("--font-sans:");
+    expect(tokenCss).toContain("--font-display:");
+    expect(tokenCss).toContain("--font-ui:");
+    expect(tokenCss).toContain("--font-prose:");
     expect(tokenCss).toContain("--font-mono:");
   });
 
   it("caps title sizes and respects both reduced-motion signals", () => {
     expect(pageTitleMaximumPx).toEqual({
-      page: 56,
-      trip: 48,
-      journal: 36,
+      page: 32,
+      trip: 32,
+      journal: 28,
     });
-    expect(tokenCss).toContain("--roamlog-text-page-title: clamp(2.75rem, 2rem + 2vw, 3.5rem);");
-    expect(tokenCss).toContain("--roamlog-text-trip-title: clamp(2.5rem, 1.75rem + 1.8vw, 3rem);");
-    expect(tokenCss).toContain(
-      "--roamlog-text-journal-title: clamp(1.75rem, 1.25rem + 1.1vw, 2.25rem);",
-    );
+    expect(tokenCss).toContain("--roamlog-text-page-title: 2rem;");
+    expect(tokenCss).toContain("--roamlog-text-trip-title: 2rem;");
+    expect(tokenCss).toContain("--roamlog-text-journal-title: 1.75rem;");
     expect(tokenCss).toContain("@media (prefers-reduced-motion: reduce)");
     expect(tokenCss).toContain("html.reduce-motion");
   });

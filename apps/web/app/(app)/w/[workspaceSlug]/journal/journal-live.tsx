@@ -54,8 +54,8 @@ export function JournalEditorChunkLoading() {
       aria-busy="true"
       className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto border-l border-hairline-strong bg-canvas p-6 sm:p-8"
     >
-      <p className="type-eyebrow">JOURNAL EDITOR</p>
-      <h2 className="mt-2 font-serif text-2xl text-ink">正在准备日志编辑器…</h2>
+      <p className="type-eyebrow">编辑日志</p>
+      <h2 className="mt-2 font-display text-xl font-semibold text-ink">正在准备日志编辑器…</h2>
       <p className="mt-2 text-sm leading-6 text-muted">
         首次打开会加载排版与图片工具，之后会从缓存恢复。
       </p>
@@ -74,8 +74,8 @@ export function JournalEditorChunkError() {
       role="alert"
       className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto border-l border-hairline-strong bg-canvas p-6 sm:p-8"
     >
-      <p className="type-eyebrow">JOURNAL EDITOR</p>
-      <h2 className="mt-2 font-serif text-2xl text-ink">编辑器加载失败</h2>
+      <p className="type-eyebrow">编辑日志</p>
+      <h2 className="mt-2 font-display text-xl font-semibold text-ink">编辑器加载失败</h2>
       <p className="mt-2 text-sm leading-6 text-muted">
         网络可能中断，或新版本刚刚发布。刷新页面后重试即可。
       </p>
@@ -179,7 +179,7 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
     return (
       <ErrorState
         title="日志不可用"
-        description="Workspace 或日志列表没有返回。请稍后重试。"
+        description="日志暂时无法加载，请稍后重试。"
         retryAction={
           <Button type="button" variant="primary" onClick={() => void entriesQuery.refetch()}>
             重新加载
@@ -208,9 +208,9 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow={`JOURNAL / ${entries.length} ENTRIES`}
+        eyebrow={`日志 / ${entries.length} 篇`}
         title="全部日志"
-        description="搜索并筛选日志。Viewer 可以阅读和评论，但不能新建或收藏。"
+        description="搜索并筛选日志。只读成员可以阅读和评论，不能新建或收藏日志。"
         actions={
           canEdit ? (
             <Button
@@ -304,7 +304,7 @@ export function JournalLive({ workspaceSlug }: { workspaceSlug: string }) {
                   </div>
                   <div className="p-4">
                     <p className="type-eyebrow">{trip?.title ?? "未知旅行"}</p>
-                    <h2 className="mt-2 font-serif text-2xl leading-tight tracking-[-0.025em] text-ink">
+                    <h2 className="mt-2 font-prose text-xl leading-tight font-semibold tracking-[-0.01em] text-ink">
                       {entry.title}
                     </h2>
                     <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted">

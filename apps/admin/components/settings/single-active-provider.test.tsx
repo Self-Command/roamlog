@@ -202,26 +202,26 @@ describe("single-active mail and storage providers", () => {
     renderEditor("mail", mailCatalogGroup, activeMail);
 
     expect(screen.getByLabelText(/发件地址/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Resend API Key/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/接口密钥/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/SMTP 主机/)).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/Resend API Key/), "re_test_key");
+    await user.type(screen.getByLabelText(/接口密钥/), "re_test_key");
     await user.selectOptions(screen.getByLabelText(/类型/), "smtp::");
 
-    expect(screen.getByLabelText(/SMTP 主机/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Resend API Key/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/服务器地址/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/接口密钥/)).not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText(/类型/), "resend::");
-    expect(screen.getByLabelText(/Resend API Key/)).toHaveValue("re_test_key");
+    expect(screen.getByLabelText(/接口密钥/)).toHaveValue("re_test_key");
   });
 
   it("renders storage-only fields for the S3 adapter", () => {
     renderEditor("storage", storageCatalogGroup, null);
 
-    expect(screen.getByLabelText(/S3 Endpoint/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Bucket/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Access Key/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Secret Key/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/存储服务地址/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/存储桶/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/访问密钥/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/私有密钥/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/发件地址/)).not.toBeInTheDocument();
   });
 

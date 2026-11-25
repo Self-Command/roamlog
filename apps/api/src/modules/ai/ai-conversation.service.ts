@@ -26,7 +26,7 @@ import type {
   UpdateAiConversationRequest,
   UpsertAiMessageRequest,
 } from "@roamlog/contracts";
-import { PublicAiChatResponseSchema } from "@roamlog/contracts";
+import { isHumanToolName, PublicAiChatResponseSchema } from "@roamlog/contracts";
 
 import { AppConfigService } from "../../config/app-config.service.js";
 import { AI_ADAPTER_FACTORY, type AiAdapterFactory } from "./adapters/index.js";
@@ -81,7 +81,7 @@ export interface AiConversationServiceContract {
     status: Record<string, unknown>;
     modelContext?: readonly unknown[];
     metadata?: Record<string, unknown>;
-    finishReason: "stop" | "tool-calls" | "length" | "aborted" | "error";
+    finishReason: "stop" | "tool-calls" | "requires-action" | "length" | "aborted" | "error";
   }): Promise<void>;
 
   loadContext(input: {
@@ -125,6 +125,23 @@ interface MessageRow {
 interface Turn {
   readonly messages: unknown[];
   readonly createdAt: Date;
+}
+
+export interface PendingHumanTool {
+  readonly toolCallId: string;
+  readonly name: "ask_user" | "confirm_brief";
+  /** Validated tool arguments persisted when the model paused. */
+  readonly args: Readonly<Record<string, unknown>>;
+}
+
+export interface PendingHumanToolMessage {
+  readonly id: string;
+  readonly clientId: string;
+  readonly parentId: string | null;
+  readonly content: readonly unknown[];
+  readonly modelContext: readonly unknown[];
+  readonly metadata: Record<string, unknown>;
+  readonly pending: PendingHumanTool;
 }
 
 const CONVERSATION_SELECT = {
@@ -435,7 +452,7 @@ export class AiConversationService implements AiConversationServiceContract {
     status: Record<string, unknown>;
     modelContext?: readonly unknown[];
     metadata?: Record<string, unknown>;
-    finishReason: "stop" | "tool-calls" | "length" | "aborted" | "error";
+    finishReason: "stop" | "tool-calls" | "requires-action" | "length" | "aborted" | "error";
   }): Promise<void> {
     await this.requireConversation(input.workspaceId, input.conversationId);
     const stream = await this.prisma.client.aiStream.findFirst({
@@ -540,6 +557,132 @@ export class AiConversationService implements AiConversationServiceContract {
       messages,
       facts: extractFacts(rows),
     };
+  }
+
+  /**
+   * Finds the durable assistant message that paused on `ask_user` or
+   * `confirm_brief`. The answer is resumed only against this record, so a
+   * client cannot invent a tool call or attach an answer to another thread.
+   */
+  async findPendingHumanTool(input: {
+    userId: string;
+    workspaceId: string;
+    conversationId: string;
+    toolCallId: string;
+  }): Promise<PendingHumanToolMessage | null> {
+    await this.requireConversation(input.workspaceId, input.conversationId, input.userId);
+    const rows = (await this.prisma.client.aiMessage.findMany({
+      where: { conversationId: input.conversationId, role: "assistant" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 8,
+      select: {
+        id: true,
+        parentId: true,
+        clientId: true,
+        content: true,
+        modelContext: true,
+        metadata: true,
+      },
+    })) as Array<{
+      id: string;
+      parentId: string | null;
+      clientId: string | null;
+      content: unknown;
+      modelContext: unknown;
+      metadata: unknown;
+    }>;
+
+    for (const row of rows) {
+      if (!row.clientId || !Array.isArray(row.content) || !Array.isArray(row.modelContext)) {
+        continue;
+      }
+      const metadata = isRecord(row.metadata) ? row.metadata : null;
+      if (!metadata) {
+        continue;
+      }
+      const pending = isRecord(metadata.pendingHumanTool)
+        ? metadata.pendingHumanTool
+        : null;
+      if (
+        !pending ||
+        typeof pending.toolCallId !== "string" ||
+        typeof pending.name !== "string" ||
+        !isHumanToolName(pending.name) ||
+        !isRecord(pending.args) ||
+        pending.toolCallId !== input.toolCallId
+      ) {
+        continue;
+      }
+      return {
+        id: row.id,
+        clientId: row.clientId,
+        parentId: row.parentId,
+        content: row.content,
+        modelContext: row.modelContext,
+        metadata,
+        pending: {
+          toolCallId: pending.toolCallId,
+          name: pending.name,
+          args: pending.args,
+        },
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Atomically marks one pending human tool as answered and writes the user's
+   * result into its assistant-ui tool part. The JSON-path predicate is the
+   * compare-and-swap: two tabs cannot both resume the same question, even when
+   * both read the pending row before either update commits.
+   *
+   * Returns the updated assistant content, which the stream must carry forward
+   * so the resumed answer never erases the original form. `null` means another
+   * request already answered or the marker no longer matches.
+   */
+  async settlePendingHumanTool(input: {
+    workspaceId: string;
+    conversationId: string;
+    userId: string;
+    toolCallId: string;
+    name: "ask_user" | "confirm_brief";
+    result: Readonly<Record<string, unknown>>;
+  }): Promise<{ content: readonly unknown[]; metadata: Record<string, unknown> } | null> {
+    const pending = await this.findPendingHumanTool(input);
+    if (!pending || pending.pending.name !== input.name) return null;
+
+    let found = false;
+    const content = pending.content.map((part) => {
+      if (!isRecord(part) || part.type !== "tool-call") return part;
+      if (part.toolCallId !== input.toolCallId || part.toolName !== input.name) return part;
+      found = true;
+      return { ...part, result: input.result };
+    });
+    if (!found) return null;
+
+    const metadata: Record<string, unknown> = {
+      ...pending.metadata,
+      finishReason: "tool-calls",
+    };
+    delete metadata.pendingHumanTool;
+
+    const settled = await this.prisma.client.aiMessage.updateMany({
+      where: {
+        id: pending.id,
+        conversationId: input.conversationId,
+        metadata: {
+          path: ["pendingHumanTool", "toolCallId"],
+          equals: input.toolCallId,
+        },
+      },
+      data: {
+        content: json(content),
+        status: json({ type: "complete", reason: "tool-calls" }),
+        metadata: json(metadata),
+      },
+    });
+    if (settled.count === 0) return null;
+    return { content, metadata };
   }
 
   // -------------------------------------------------------------------------
@@ -1370,7 +1513,7 @@ function cleanTitle(raw: string | null): string | null {
 }
 
 function streamStatus(
-  reason: "stop" | "tool-calls" | "length" | "aborted" | "error",
+  reason: "stop" | "tool-calls" | "requires-action" | "length" | "aborted" | "error",
 ): "completed" | "aborted" | "failed" {
   switch (reason) {
     case "aborted":
@@ -1379,6 +1522,7 @@ function streamStatus(
       return "failed";
     case "stop":
     case "tool-calls":
+    case "requires-action":
     case "length":
     default:
       return "completed";

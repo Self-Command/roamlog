@@ -6,6 +6,7 @@ import type {
   AiStepResult,
   AiStreamOptions,
   AiTokenUsage,
+  AiToolCallDelta,
   AiToolCallRequest,
 } from "./adapter.js";
 import {
@@ -139,6 +140,7 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
     let inputTokens: number | undefined;
     let outputTokens: number | undefined;
     const slots = new Map<number, { id: string; name: string; argumentsJson: string }>();
+    const announcedToolCalls = new Set<number>();
 
     for await (const frame of parseSseStream(body, options.signal)) {
       const event = parseJsonRecord(frame.data);
@@ -162,17 +164,31 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
         case "content_block_start": {
           const index = numberValue(event.index);
           const block = asRecord(event.content_block);
+          if (index !== undefined && block?.type === "thinking") {
+            const thinking = textValue(block.thinking);
+            if (thinking !== null && thinking.length > 0) {
+              await emitReasoning(options, thinking);
+            }
+          }
           if (index !== undefined && block?.type === "tool_use") {
             const name = textValue(block.name);
             if (name) {
               const initialInput = asRecord(block.input);
-              slots.set(index, {
+              const slot = {
                 id: textValue(block.id) ?? "",
                 name: toolNames.toInternal(name),
                 argumentsJson:
                   initialInput && Object.keys(initialInput).length > 0
                     ? JSON.stringify(initialInput)
                     : "",
+              };
+              slots.set(index, slot);
+              announcedToolCalls.add(index);
+              await emitToolCallDelta(options, {
+                index,
+                ...(slot.id.length > 0 ? { id: slot.id } : {}),
+                name: slot.name,
+                argumentsDelta: slot.argumentsJson,
               });
             }
           }
@@ -186,12 +202,23 @@ export class AnthropicMessagesAdapter implements AiProtocolAdapter {
               text += chunk;
               await emitDelta(options, chunk);
             }
+          } else if (delta?.type === "thinking_delta") {
+            const chunk = textValue(delta.thinking);
+            if (chunk !== null && chunk.length > 0) {
+              await emitReasoning(options, chunk);
+            }
           } else if (delta?.type === "input_json_delta") {
             const index = numberValue(event.index);
             const slot = index === undefined ? undefined : slots.get(index);
             const partial = textValue(delta.partial_json);
-            if (slot && partial) {
+            if (index !== undefined && slot && partial) {
               slot.argumentsJson += partial;
+              await emitToolCallDelta(options, {
+                index,
+                ...(slot.id.length > 0 ? { id: slot.id } : {}),
+                name: slot.name,
+                argumentsDelta: partial,
+              });
             }
           }
           break;
@@ -252,6 +279,20 @@ function parseJsonRecord(data: string): Record<string, unknown> {
 
 async function emitDelta(options: AiStreamOptions, delta: string): Promise<void> {
   const listener = options.onDelta ?? options.onTextDelta;
+  if (listener) {
+    await listener(delta);
+  }
+}
+
+async function emitReasoning(options: AiStreamOptions, delta: string): Promise<void> {
+  const listener = options.onReasoningDelta;
+  if (listener) {
+    await listener(delta);
+  }
+}
+
+async function emitToolCallDelta(options: AiStreamOptions, delta: AiToolCallDelta): Promise<void> {
+  const listener = options.onToolCallDelta;
   if (listener) {
     await listener(delta);
   }

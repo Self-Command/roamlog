@@ -5,7 +5,7 @@ import { useEffect } from "react";
 
 import { loadFontPairing } from "@/lib/font-pairing-loader";
 
-export function FontPairingLoader({ pairing = "editorial-classic" }: { pairing?: FontPairingId }) {
+export function FontPairingLoader({ pairing = "fluent-native" }: { pairing?: FontPairingId }) {
   useEffect(() => {
     void loadFontPairing(pairing);
   }, [pairing]);

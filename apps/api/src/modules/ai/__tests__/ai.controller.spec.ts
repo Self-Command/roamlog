@@ -208,7 +208,17 @@ describe("POST /v1/workspaces/:workspaceId/ai/chat", () => {
   });
 
   it("plans for an editor and returns the run envelope", async () => {
-    const { app } = await createApp({ role: "editor" });
+    const { app } = await createApp({
+      role: "editor",
+      turns: [
+        {
+          text: null,
+          toolCalls: [{ id: "c1", name: "places.search", input: { q: "Kyoto" } }],
+          usage: { inputTokens: 10, outputTokens: 5 },
+        },
+        { text: "Done.", toolCalls: [], usage: { inputTokens: 2, outputTokens: 1 } },
+      ],
+    });
 
     const response = await request(app.getHttpServer())
       .post(`/v1/workspaces/${WORKSPACE_ID}/ai/chat`)
@@ -216,8 +226,8 @@ describe("POST /v1/workspaces/:workspaceId/ai/chat", () => {
       .expect(201);
 
     expect(response.body).toMatchObject({
-      plannedCalls: [{ tool: "trips.create", args: { title: "Kyoto week" } }],
-      readOnlyTrace: [],
+      plannedCalls: [],
+      readOnlyTrace: [{ tool: "places.search", args: { q: "Kyoto" } }],
       message: "Done.",
       provider: { protocol: "openai-chat" },
       usage: { inputTokens: 12, outputTokens: 6 },

@@ -16,6 +16,40 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ChatStatus = "submitted" | "streaming" | "ready" | "error";
 
+/**
+ * Scrolls one interactive block to the top of the message viewport.
+ *
+ * Human-input forms and plan receipts are taller than a chat bubble. Following
+ * their mutations to the bottom hides the title and the first question, so the
+ * new block must establish its own reading position instead.
+ */
+export function scrollAnchorWithinContainer(
+  container: HTMLDivElement,
+  anchor: Element,
+  topPadding = 12,
+): void {
+  const containerTop = container.getBoundingClientRect().top;
+  const anchorTop = anchor.getBoundingClientRect().top;
+  const nextTop = Math.max(
+    0,
+    container.scrollTop + anchorTop - containerTop - topPadding,
+  );
+  if (typeof container.scrollTo === "function") {
+    container.scrollTo({ behavior: "instant", top: nextTop });
+  } else {
+    container.scrollTop = nextTop;
+  }
+}
+
+/**
+ * The latest unanswered human form. `data-pending` is only emitted while the
+ * tool part is in assistant-ui's `requires-action` state, so submitted receipts
+ * and historical plans are deliberately excluded.
+ */
+export function latestPendingAnchor(root: ParentNode): Element | undefined {
+  return Array.from(root.querySelectorAll('[data-pending="true"]')).at(-1);
+}
+
 export function useScrollToBottom({ autoScroll = true }: { autoScroll?: boolean } = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -169,7 +203,7 @@ export function useMessages({
   const [hasSentMessage, setHasSentMessage] = useState(false);
 
   useEffect(() => {
-    if (status === "submitted") {
+    if (status === "submitted" || status === "streaming") {
       setHasSentMessage(true);
     }
   }, [status]);

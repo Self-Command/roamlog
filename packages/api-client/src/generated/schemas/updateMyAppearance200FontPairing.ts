@@ -10,6 +10,10 @@ export type UpdateMyAppearance200FontPairing =
   (typeof UpdateMyAppearance200FontPairing)[keyof typeof UpdateMyAppearance200FontPairing];
 
 export const UpdateMyAppearance200FontPairing = {
+  "fluent-native": "fluent-native",
+  "primer-system": "primer-system",
+  "primer-cjk": "primer-cjk",
+  "carbon-plex": "carbon-plex",
   "editorial-classic": "editorial-classic",
   "literary-warm": "literary-warm",
   "modern-editorial": "modern-editorial",

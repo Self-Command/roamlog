@@ -150,6 +150,32 @@ describe("AiProviderRouter", () => {
     expect(candidates[1]?.settings.vision).toBe(true);
   });
 
+  it("uses the platform reasoning default and lets a provider override it", async () => {
+    const { router } = harness({
+      providers: [
+        runtime(PROVIDER_A, "openai-chat", 10, {
+          baseUrl: "https://a.example/v1",
+          defaultModel: "a-default",
+        }),
+        runtime(PROVIDER_B, "openai-chat", 20, {
+          baseUrl: "https://b.example/v1",
+          defaultModel: "b-default",
+          reasoningEffort: "medium",
+        }),
+      ],
+      models: [
+        { providerId: PROVIDER_A, modelId: "a-default", isDefault: true },
+        { providerId: PROVIDER_B, modelId: "b-default", isDefault: true },
+      ],
+      legacy: settings({ reasoningEffort: "low" }),
+    });
+
+    const candidates = await router.candidates();
+
+    expect(candidates[0]?.settings.reasoningEffort).toBe("low");
+    expect(candidates[1]?.settings.reasoningEffort).toBe("medium");
+  });
+
   it("routes an explicit model to every provider that offers it", async () => {
     const { router } = harness({
       providers: [

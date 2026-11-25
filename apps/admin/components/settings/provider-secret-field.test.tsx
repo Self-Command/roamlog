@@ -109,7 +109,7 @@ describe("ProviderSecretField", () => {
     await user.click(screen.getByRole("button", { name: "显示明文" }));
     await user.click(screen.getByRole("button", { name: "确认显示" }));
 
-    expect(await screen.findByText(/需要完成 TOTP 两步验证/)).toBeInTheDocument();
+    expect(await screen.findByText("请先完成两步验证，再显示密钥。")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("sk-plain")).not.toBeInTheDocument();
   });
 });
