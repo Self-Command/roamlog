@@ -86,6 +86,72 @@ describe("JournalEditorSheet", () => {
     await waitFor(() => expect(screen.getByText(/已保存/)).toBeInTheDocument());
   }, 10_000);
 
+  it("keeps the editor mounted when autosave returns the submitted content", async () => {
+    const saveEntry = vi.fn(async (_entryId, payload, expectedVersion) => ({
+      ...entry,
+      title: payload.title,
+      date: payload.date,
+      location: payload.location,
+      contentJson: payload.contentJson,
+      contentHtml: payload.contentHtml,
+      version: expectedVersion + 1,
+    }));
+    renderSheet({ repo: repository({ saveEntry }) });
+    await screen.findByRole("toolbar", { name: "日志格式工具栏" });
+    const editorDom = document.querySelector(".journal-prose");
+    expect(editorDom).not.toBeNull();
+
+    fireEvent.change(screen.getByRole("textbox", { name: /标题/ }), {
+      target: { value: "自动保存不重建编辑器" },
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 5_200));
+    });
+
+    await waitFor(() => expect(screen.getByText(/已保存/)).toBeInTheDocument());
+    expect(document.querySelector(".journal-prose")).toBe(editorDom);
+  }, 10_000);
+
+  it("keeps edits made during an in-flight save dirty", async () => {
+    const user = userEvent.setup();
+    let resolveSave: (() => void) | null = null;
+    let submittedTitle = "";
+    const saveEntry = vi.fn(
+      (_entryId, payload, expectedVersion) =>
+        new Promise<JournalEntry>((resolve) => {
+          submittedTitle = payload.title;
+          resolveSave = () =>
+            resolve({
+              ...entry,
+              title: payload.title,
+              contentJson: payload.contentJson,
+              contentHtml: payload.contentHtml,
+              version: expectedVersion + 1,
+            });
+        }),
+    );
+    renderSheet({ repo: repository({ saveEntry }) });
+    await screen.findByRole("toolbar", { name: "日志格式工具栏" });
+
+    fireEvent.change(screen.getByRole("textbox", { name: /标题/ }), {
+      target: { value: "第一次保存" },
+    });
+    await user.click(screen.getByRole("button", { name: "立即保存" }));
+    await waitFor(() => expect(saveEntry).toHaveBeenCalledTimes(1));
+    expect(submittedTitle).toBe("第一次保存");
+
+    fireEvent.change(screen.getByRole("textbox", { name: /标题/ }), {
+      target: { value: "保存期间的新修改" },
+    });
+    await act(async () => {
+      resolveSave?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByText("有未保存修改")).toBeInTheDocument());
+  });
+
   it("opens the version conflict dialog on 409 and overwrites with the latest version", async () => {
     const user = userEvent.setup();
     const latest = { ...entry, version: 7 };

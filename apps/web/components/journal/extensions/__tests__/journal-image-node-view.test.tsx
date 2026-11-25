@@ -332,6 +332,34 @@ describe("JournalImageNodeView", () => {
     expect(screen.getByRole("textbox", { name: "替代文本" })).toHaveValue("晨雾中的鸭川");
   });
 
+  it("keeps the toolbar and settings mounted when the portal clears node selection", async () => {
+    const user = userEvent.setup();
+    const { container, editor } = await renderEditor(`${SETTINGS_IMAGE_HTML}<p>正文</p>`);
+
+    await openImageSettings(editor, container, user);
+    expect(screen.getByRole("toolbar", { name: "图片工具" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "图片设置" })).toBeVisible();
+
+    act(() => {
+      editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+    });
+
+    await waitFor(() =>
+      expect(container.querySelector('figure[data-type="image"]')).not.toHaveAttribute(
+        "data-selected",
+        "true",
+      ),
+    );
+    expect(screen.getByRole("toolbar", { name: "图片工具" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "图片设置" })).toBeVisible();
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "图片设置" })).toBeNull());
+    expect(screen.getByRole("toolbar", { name: "图片工具" })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: "图片设置" })).toHaveFocus());
+  });
+
   it("opens the current image from the toolbar preview and restores button focus on close", async () => {
     const user = userEvent.setup();
     const { container, editor } = await renderEditor(IMAGE_HTML);

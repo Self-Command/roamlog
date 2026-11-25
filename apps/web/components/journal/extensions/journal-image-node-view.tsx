@@ -43,19 +43,68 @@ export function JournalImageNodeView({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [replaceError, setReplaceError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsClosing, setSettingsClosing] = useState(false);
   const attemptedMediaIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const replaceAbortRef = useRef<AbortController | null>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const previewTriggerRef = useRef<HTMLElement | null>(null);
-  const showToolbar = editor.isEditable && selected;
+  const settingsCloseTimerRef = useRef<number | null>(null);
+  // The settings popover lives inside this toolbar. Moving focus into its
+  // portal can temporarily clear Tiptap's node selection, so unmounting the
+  // toolbar on `selected === false` destroys the open form and its focus
+  // restoration. Hold the toolbar across that hand-off instead.
+  const showToolbar = editor.isEditable && (selected || settingsOpen || settingsClosing);
 
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
       replaceAbortRef.current?.abort();
+      if (settingsCloseTimerRef.current !== null) {
+        window.clearTimeout(settingsCloseTimerRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (settingsClosing && selected) {
+      setSettingsClosing(false);
+    }
+  }, [selected, settingsClosing]);
+
+  useEffect(() => {
+    if (!settingsClosing) return;
+
+    settingsCloseTimerRef.current = window.setTimeout(() => {
+      settingsCloseTimerRef.current = null;
+      setSettingsClosing(false);
+    }, 500);
+
+    return () => {
+      if (settingsCloseTimerRef.current !== null) {
+        window.clearTimeout(settingsCloseTimerRef.current);
+        settingsCloseTimerRef.current = null;
+      }
+    };
+  }, [settingsClosing]);
+
+  function handleSettingsOpenChange(open: boolean): void {
+    if (settingsCloseTimerRef.current !== null) {
+      window.clearTimeout(settingsCloseTimerRef.current);
+      settingsCloseTimerRef.current = null;
+    }
+
+    if (open) {
+      setSettingsClosing(false);
+      setSettingsOpen(true);
+      return;
+    }
+
+    restoreImageSelection();
+    setSettingsOpen(false);
+    setSettingsClosing(true);
+  }
 
   async function handleReplaceFile(file: File): Promise<void> {
     const uploadImage = (extension.options as JournalImageOptions).uploadImage;
@@ -326,6 +375,7 @@ export function JournalImageNodeView({
           onApplySettings={handleApplySettings}
           onPreview={(trigger) => openPreview(trigger)}
           onRestoreSelection={restoreImageSelection}
+          onSettingsOpenChange={handleSettingsOpenChange}
           replacing={replacing}
           onReplace={() => {
             setReplaceError(null);

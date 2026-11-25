@@ -159,6 +159,7 @@ export function JournalEditorSheet({
 }: JournalEditorSheetProps) {
   const loadedKey = useRef<string | null>(null);
   const savingRef = useRef(false);
+  const editRevisionRef = useRef(0);
   const suppressBlurSave = useRef(false);
   const conflictRef = useRef(false);
   const [entryId, setEntryId] = useState<string | null>(entry?.id ?? null);
@@ -218,6 +219,20 @@ export function JournalEditorSheet({
     });
     setVersion(next.version);
     setEditorKey((value) => value + 1);
+  }, []);
+
+  /**
+   * Autosave must not re-key the editor. Re-keying recreates Tiptap (and every
+   * open image popover) every five seconds, dropping the user's selection and
+   * focus. The submitted document is already rendered locally; only the
+   * server-owned identity/version change here. Initial load, conflict reload
+   * and revision restore still go through `applyEntry`, because those really
+   * replace the document.
+   */
+  const applySavedEntry = useCallback((next: JournalEntry) => {
+    setEntryId(next.id);
+    setSelectedTripId(next.tripId);
+    setVersion(next.version);
   }, []);
 
   useEffect(() => {
@@ -323,6 +338,7 @@ export function JournalEditorSheet({
       }
       setSaving(true);
       savingRef.current = true;
+      const editRevision = editRevisionRef.current;
       setSaveError(null);
       setSaveState("saving");
       const payload = {
@@ -337,13 +353,19 @@ export function JournalEditorSheet({
         const saved = entryId
           ? await repository.saveEntry(entryId, payload, expectedVersion)
           : await repository.createEntry(activeTripId, payload);
-        applyEntry(saved);
+        applySavedEntry(saved);
         setLastSavedAt(new Date());
-        setDirty(false);
-        setSaveState("saved");
+        const hasNewerEdits = editRevisionRef.current !== editRevision;
+        if (hasNewerEdits) {
+          setDirty(true);
+          setSaveState("dirty");
+        } else {
+          setDirty(false);
+          setSaveState("saved");
+          clearDraft(storageKey);
+        }
         conflictRef.current = false;
         setConflictOpen(false);
-        clearDraft(storageKey);
         onEntrySaved?.(saved);
         if (!entryId) {
           onOpenChange(false);
@@ -366,7 +388,7 @@ export function JournalEditorSheet({
     },
     [
       activeTripId,
-      applyEntry,
+      applySavedEntry,
       canEdit,
       content.contentHtml,
       content.contentJson,
@@ -450,6 +472,7 @@ export function JournalEditorSheet({
 
   function markDirty(state: SaveState = "dirty") {
     if (!canEdit) return;
+    editRevisionRef.current += 1;
     setDirty(true);
     setSaveError(null);
     setSaveState(state);

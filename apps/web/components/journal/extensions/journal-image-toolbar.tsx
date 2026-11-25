@@ -25,6 +25,7 @@ interface JournalImageToolbarProps {
   onApplySettings: (values: JournalImageSettingsValues) => void;
   onPreview: (trigger: HTMLButtonElement) => void;
   onRestoreSelection: () => void;
+  onSettingsOpenChange?: (open: boolean) => void;
   replacing: boolean;
   onReplace: () => void;
   onDelete: () => void;
@@ -91,6 +92,7 @@ export function JournalImageToolbar({
   onApplySettings,
   onPreview,
   onRestoreSelection,
+  onSettingsOpenChange,
   replacing,
   onReplace,
   onDelete,
@@ -141,7 +143,11 @@ export function JournalImageToolbar({
   }, [settingsOpen]);
 
   function handleSettingsOpenChange(open: boolean): void {
+    if (!open) {
+      onRestoreSelection();
+    }
     setSettingsOpen(open);
+    onSettingsOpenChange?.(open);
   }
 
   return (
@@ -208,7 +214,7 @@ export function JournalImageToolbar({
           <JournalImageSettings
             attributes={attributes}
             onApply={onApplySettings}
-            onClose={() => setSettingsOpen(false)}
+            onClose={() => handleSettingsOpenChange(false)}
           />
         </PopoverContent>
       </Popover>
