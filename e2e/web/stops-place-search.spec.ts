@@ -455,7 +455,7 @@ test.describe("stops place search in the real UI", () => {
           await expect(addButton).toBeDisabled();
           await expect(addButton).toHaveAttribute(
             "title",
-            "Viewer 只能阅读和评论，不能添加行程节点",
+            "你是只读成员，只能阅读和评论，不能添加行程节点。请联系工作区所有者或管理员调整权限。",
           );
           await expect(viewerPage.getByRole("combobox", { name: "搜索地点" })).toHaveCount(0);
           await addButton.click({ force: true });
@@ -468,7 +468,7 @@ test.describe("stops place search in the real UI", () => {
           await expect(editButton).toBeDisabled();
           await expect(editButton).toHaveAttribute(
             "title",
-            "Viewer 只能阅读和评论，不能编辑行程节点",
+            "你是只读成员，只能阅读和评论，不能编辑行程节点。请联系工作区所有者或管理员调整权限。",
           );
 
           await viewerPage.screenshot({

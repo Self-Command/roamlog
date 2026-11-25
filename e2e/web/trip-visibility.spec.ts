@@ -276,7 +276,10 @@ test("指定可见：Owner/Admin 授权、成员可见、未授权 404、Viewer 
         const editButton = grantedPage.getByRole("button", { name: "编辑旅行", exact: true });
         await expect(editButton).toBeVisible();
         await expect(editButton).toBeDisabled();
-        await expect(editButton).toHaveAttribute("title", /Viewer 只能阅读和评论/u);
+        await expect(editButton).toHaveAttribute(
+          "title",
+          /你是只读成员，只能阅读和评论/u,
+        );
         await expect(grantedPage.getByRole("link", { name: "编辑旅行", exact: true })).toHaveCount(
           0,
         );
@@ -326,7 +329,12 @@ test("指定可见：Owner/Admin 授权、成员可见、未授权 404、Viewer 
           grantedPage.getByRole("heading", { name: "你没有编辑权限", exact: true }),
         ).toBeVisible({ timeout: 30_000 });
         await expect(
-          grantedPage.getByText("当前工作区角色是 Viewer（只读）。", { exact: false }),
+          grantedPage.getByText("你是只读成员。可以查看", { exact: false }),
+        ).toBeVisible();
+        await expect(
+          grantedPage.getByText("如需编辑，请联系工作区所有者或管理员调整权限。", {
+            exact: false,
+          }),
         ).toBeVisible();
         await grantedPage.screenshot({
           path: resolve(SHOT_DIR, "desktop-1440-granted-edit-denied.png"),

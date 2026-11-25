@@ -145,7 +145,7 @@ async function addMapProvider(pageToUse: Page, label: string, typeLabel: string,
     await region.click();
   }
   await expect(region).toBeChecked();
-  const baseUrl = dialog.getByLabel("Base URL", { exact: false });
+  const baseUrl = dialog.getByLabel("服务地址", { exact: false });
   if ((await baseUrl.count()) > 0 && (await baseUrl.inputValue()) === "") {
     await baseUrl.fill(
       typeLabel === "腾讯地图"
@@ -153,7 +153,7 @@ async function addMapProvider(pageToUse: Page, label: string, typeLabel: string,
         : "https://api.geoapify.com/v1/geocode/autocomplete",
     );
   }
-  await dialog.getByLabel("API Key", { exact: false }).fill(apiKey);
+  await dialog.getByLabel("接口密钥", { exact: false }).fill(apiKey);
   await saveProvider(dialog);
   await waitForDialogClosed(dialog);
   await expect(pageToUse.getByText(label, { exact: true }).first()).toBeVisible({
@@ -358,11 +358,10 @@ test("AI provider discovers models without auto-selecting, saves masked key, and
   const dialog = await openAddProvider(page);
   await dialog.getByLabel("名称", { exact: false }).fill(label);
   await selectProviderType(dialog, "自定义 OpenAI 兼容");
-  await dialog.getByLabel("Base URL", { exact: false }).fill(`${stub.baseUrl}/v1`);
-  await dialog.getByLabel("API Key", { exact: false }).fill(`stub-key-${runId}`);
+  await dialog.getByLabel("服务地址", { exact: false }).fill(`${stub.baseUrl}/v1`);
+  await dialog.getByLabel("接口密钥", { exact: false }).fill(`stub-key-${runId}`);
   evidence.providerLabels.push(label);
 
-  // This assertion intentionally stays red until the model picker task lands.
   await expect(dialog.getByText(/已获取\s*2\s*个模型|2 个模型/)).toBeVisible({
     timeout: 20_000,
   });
@@ -416,7 +415,7 @@ test("mail and storage enforce one active provider", async () => {
   await fillConfig(mailDialog, {
     发件地址: `Roamlog <no-reply+${runId}@example.test>`,
   });
-  await mailDialog.getByLabel("Resend API Key", { exact: false }).fill(`re_${runId}_a`);
+  await mailDialog.getByLabel("接口密钥", { exact: false }).fill(`re_${runId}_a`);
   await saveProvider(mailDialog);
   await waitForDialogClosed(mailDialog);
   evidence.providerLabels.push(mailA);
@@ -430,7 +429,7 @@ test("mail and storage enforce one active provider", async () => {
   await fillConfig(mailConflictDialog, {
     发件地址: `Roamlog <no-reply+${runId}@example.test>`,
   });
-  await mailConflictDialog.getByLabel("Resend API Key", { exact: false }).fill(`re_${runId}_b`);
+  await mailConflictDialog.getByLabel("接口密钥", { exact: false }).fill(`re_${runId}_b`);
   await expect(mailConflictDialog.getByRole("note").filter({ hasText: mailA })).toBeVisible({
     timeout: 30_000,
   });
@@ -460,11 +459,11 @@ test("mail and storage enforce one active provider", async () => {
   await storageDialog.getByLabel("名称", { exact: false }).fill(storageA);
   await selectProviderType(storageDialog, "S3 兼容存储");
   await fillConfig(storageDialog, {
-    "S3 Endpoint": `https://s3-${runId}.example.test`,
-    Bucket: `roamlog-${runId}`,
+    存储服务地址: `https://s3-${runId}.example.test`,
+    存储桶: `roamlog-${runId}`,
   });
-  await storageDialog.getByLabel("Access Key", { exact: false }).fill(`access-${runId}`);
-  await storageDialog.getByLabel("Secret Key", { exact: false }).fill(`secret-${runId}`);
+  await storageDialog.getByLabel("访问密钥", { exact: false }).fill(`access-${runId}`);
+  await storageDialog.getByLabel("私有密钥", { exact: false }).fill(`secret-${runId}`);
   await saveProvider(storageDialog);
   await waitForDialogClosed(storageDialog);
   evidence.providerLabels.push(storageA);
@@ -478,11 +477,11 @@ test("mail and storage enforce one active provider", async () => {
   await storageConflictDialog.getByLabel("名称", { exact: false }).fill(storageB);
   await selectProviderType(storageConflictDialog, "S3 兼容存储");
   await fillConfig(storageConflictDialog, {
-    "S3 Endpoint": `https://s3-${runId}.example.test`,
-    Bucket: `roamlog-${runId}`,
+    存储服务地址: `https://s3-${runId}.example.test`,
+    存储桶: `roamlog-${runId}`,
   });
-  await storageConflictDialog.getByLabel("Access Key", { exact: false }).fill(`access-${runId}`);
-  await storageConflictDialog.getByLabel("Secret Key", { exact: false }).fill(`secret-${runId}`);
+  await storageConflictDialog.getByLabel("访问密钥", { exact: false }).fill(`access-${runId}`);
+  await storageConflictDialog.getByLabel("私有密钥", { exact: false }).fill(`secret-${runId}`);
   await expect(storageConflictDialog.getByRole("note").filter({ hasText: storageA })).toBeVisible({
     timeout: 30_000,
   });
@@ -521,12 +520,12 @@ test("secret reveal is explicit and never survives a reload", async () => {
     .click();
   const dialog = providerDialog(page);
   await expect(dialog.getByText(/••••/)).toBeVisible();
-  await expect(dialog.getByLabel("API Key", { exact: false })).toHaveValue("");
+  await expect(dialog.getByLabel("接口密钥", { exact: false })).toHaveValue("");
 
   await dialog.getByRole("button", { name: "显示明文", exact: true }).click();
   await expect(dialog.getByText("确认显示这个密钥？", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "确认显示", exact: true }).click();
-  await expect(dialog.getByLabel("API Key", { exact: false })).toHaveValue(key);
+  await expect(dialog.getByLabel("接口密钥", { exact: false })).toHaveValue(key);
   await dialog.getByRole("button", { name: "立即隐藏", exact: true }).click();
   await dialog.getByRole("button", { name: "取消", exact: true }).click();
   await page.reload({ waitUntil: "domcontentloaded" });
