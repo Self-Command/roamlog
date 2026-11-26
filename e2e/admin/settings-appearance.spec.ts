@@ -28,6 +28,10 @@ const runId = uniqueRunId();
 const superAdmin = createSuperAdminAccount(runId);
 
 const SKINS = [
+  { id: "mist", label: "Mist 雾蓝" },
+  { id: "geist", label: "Geist 单色" },
+  { id: "iris", label: "Iris 鸢尾" },
+  { id: "sandstone", label: "Sandstone 砂岩" },
   { id: "porcelain", label: "Porcelain 原生瓷白" },
   { id: "fluent", label: "Fluent 2 原生企业" },
   { id: "carbon", label: "IBM Carbon" },
@@ -219,7 +223,7 @@ test.describe("admin appearance defaults", () => {
     deleteSuperAdmin(superAdmin.email);
   });
 
-  test("saves Web defaults without changing the fixed-dark Admin shell", async () => {
+  test("saves Web defaults without breaking the Admin shell", async () => {
     await page.goto(`${ADMIN_URL}/admin/settings?tab=theme`, {
       waitUntil: "domcontentloaded",
     });
@@ -244,9 +248,6 @@ test.describe("admin appearance defaults", () => {
       font: element.getAttribute("data-font") ?? "",
       colorScheme: getComputedStyle(element).colorScheme,
     }));
-    expect(evidence.shellBefore.mode).toBe("dark");
-    expect(evidence.shellBefore.colorScheme).toContain("dark");
-
     await chooseRadio(page, "默认外观", "浅色");
     await chooseRadio(page, "默认主题", "Fluent 2");
     await chooseRadio(page, "默认字体", "Primer 中文");

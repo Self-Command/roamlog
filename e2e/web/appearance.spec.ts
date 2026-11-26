@@ -24,6 +24,10 @@ const MODES = [
 ] as const;
 
 const SKINS = [
+  { id: "mist", label: "Mist 雾蓝" },
+  { id: "geist", label: "Geist 单色" },
+  { id: "iris", label: "Iris 鸢尾" },
+  { id: "sandstone", label: "Sandstone 砂岩" },
   { id: "porcelain", label: "Porcelain 原生瓷白" },
   { id: "fluent", label: "Fluent 2 原生企业" },
   { id: "carbon", label: "IBM Carbon" },
@@ -203,7 +207,7 @@ test.describe("user appearance and public share", () => {
     await context?.close();
   });
 
-  test("four enterprise themes and four local font pairings persist without flash", async () => {
+  test("eight enterprise themes and four local font pairings persist without flash", async () => {
     await page.goto(`${WEB_URL}/w/${workspaceSlug}/settings/appearance`, {
       waitUntil: "domcontentloaded",
     });
