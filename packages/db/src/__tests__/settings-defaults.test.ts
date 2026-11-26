@@ -49,6 +49,11 @@ describe("DEFAULT_SETTINGS", () => {
     }
   });
 
+  it("uses the Mercury enterprise theme with system mode by default", () => {
+    expect(DEFAULT_SETTINGS["theme.defaultSkin"]).toBe("mercury");
+    expect(DEFAULT_SETTINGS["theme.defaultMode"]).toBe("system");
+  });
+
   it("is frozen so a caller cannot mutate the shared baseline", () => {
     expect(Object.isFrozen(DEFAULT_SETTINGS)).toBe(true);
     expect(() => {

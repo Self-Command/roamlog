@@ -6,6 +6,7 @@
  * Admin `<html>` appearance, and that the saved defaults survive a reload.
  */
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { SKIN_CATALOG } from "@roamlog/contracts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -27,16 +28,9 @@ const EVIDENCE_FILE = path.join(EVIDENCE_DIR, "appearance-admin-e2e.json");
 const runId = uniqueRunId();
 const superAdmin = createSuperAdminAccount(runId);
 
-const SKINS = [
-  { id: "mist", label: "Mist 雾蓝" },
-  { id: "geist", label: "Geist 单色" },
-  { id: "iris", label: "Iris 鸢尾" },
-  { id: "sandstone", label: "Sandstone 砂岩" },
-  { id: "porcelain", label: "Porcelain 原生瓷白" },
-  { id: "fluent", label: "Fluent 2 原生企业" },
-  { id: "carbon", label: "IBM Carbon" },
-  { id: "carbon-soft", label: "Carbon 柔和灰阶" },
-] as const;
+const SKINS = SKIN_CATALOG.filter((entry) => entry.status === "active").map(
+  ({ id, label }) => ({ id, label }),
+);
 
 const FONT_PAIRINGS = [
   { id: "primer-system", label: "Primer 系统" },
@@ -223,7 +217,7 @@ test.describe("admin appearance defaults", () => {
     deleteSuperAdmin(superAdmin.email);
   });
 
-  test("saves Web defaults without breaking the Admin shell", async () => {
+  test("saves Mercury as the Web default without breaking the Admin shell", async () => {
     await page.goto(`${ADMIN_URL}/admin/settings?tab=theme`, {
       waitUntil: "domcontentloaded",
     });
@@ -249,7 +243,7 @@ test.describe("admin appearance defaults", () => {
       colorScheme: getComputedStyle(element).colorScheme,
     }));
     await chooseRadio(page, "默认外观", "浅色");
-    await chooseRadio(page, "默认主题", "Fluent 2");
+    await chooseRadio(page, "默认主题", "Mercury 墨紫");
     await chooseRadio(page, "默认字体", "Primer 中文");
 
     await page.getByRole("button", { name: "保存外观", exact: true }).click();
@@ -267,7 +261,7 @@ test.describe("admin appearance defaults", () => {
     };
     expect(evidence.savedDefaults).toMatchObject({
       mode: "light",
-      skin: "fluent",
+      skin: "mercury",
       font: "primer-cjk",
     });
 
@@ -282,7 +276,7 @@ test.describe("admin appearance defaults", () => {
       page
         .getByRole("radiogroup", { name: "默认主题" })
         .locator('[role="radio"]')
-        .filter({ hasText: "Fluent 2" }),
+        .filter({ hasText: "Mercury 墨紫" }),
     ).toHaveAttribute("aria-checked", "true");
     await expect(
       page
@@ -324,8 +318,14 @@ test.describe("admin appearance defaults", () => {
     await page.getByRole("radio", { name: /Porcelain 原生瓷白/u }).click();
     await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
 
+    if (!(await page.getByTestId("quick-appearance-menu").isVisible())) {
+      await page.getByTestId("quick-appearance-trigger").click();
+    }
+    await page.getByRole("radio", { name: /Mercury 墨紫/u }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "mercury");
+
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
-    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "mercury");
   });
 });

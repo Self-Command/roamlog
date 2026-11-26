@@ -10,6 +10,8 @@ vi.mock("@/components/providers", () => ({
 }));
 
 import RootLayout, { generateMetadata, generateViewport } from "@/app/layout";
+import { themeColorsForSkin } from "@/lib/appearance";
+import { DEFAULT_THEME_SKIN } from "@/lib/settings";
 
 interface RenderedHtmlProps {
   lang?: string;
@@ -52,6 +54,8 @@ afterEach(() => {
 });
 
 describe("root layout runtime theme", () => {
+  const defaultColors = themeColorsForSkin(DEFAULT_THEME_SKIN);
+
   it("writes the enterprise theme and mode onto <html> during SSR", async () => {
     vi.stubGlobal(
       "fetch",
@@ -141,7 +145,7 @@ describe("root layout runtime theme", () => {
     );
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "light",
-      themeColor: "#f8fafc",
+      themeColor: defaultColors.light,
     });
 
     vi.stubGlobal(
@@ -151,8 +155,8 @@ describe("root layout runtime theme", () => {
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "light dark",
       themeColor: [
-        { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
-        { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+        { media: "(prefers-color-scheme: light)", color: defaultColors.light },
+        { media: "(prefers-color-scheme: dark)", color: defaultColors.dark },
       ],
     });
 
@@ -162,7 +166,7 @@ describe("root layout runtime theme", () => {
     );
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "dark",
-      themeColor: "#0f172a",
+      themeColor: defaultColors.dark,
     });
   });
 
@@ -178,7 +182,7 @@ describe("root layout runtime theme", () => {
 
     expect(html.props["data-theme"]).toBe("system");
     expect(html.props["data-mode"]).toBe("system");
-    expect(html.props["data-skin"]).toBe("mist");
+    expect(html.props["data-skin"]).toBe(DEFAULT_THEME_SKIN);
     expect(html.props["data-font"]).toBe("fluent-native");
     expect(html.props["data-accent"]).toBe("white");
     expect(html.props.style?.colorScheme).toBe("light dark");

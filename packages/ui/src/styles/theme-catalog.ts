@@ -8,6 +8,7 @@
  */
 
 export const THEME_SKINS = [
+  "mercury",
   "porcelain",
   "mist",
   "geist",
@@ -27,6 +28,7 @@ export const THEME_SKINS = [
 
 export type ThemeSkinId = (typeof THEME_SKINS)[number];
 export type EnterpriseThemeSkinId =
+  | "mercury"
   | "porcelain"
   | "mist"
   | "geist"
@@ -79,6 +81,56 @@ const BASE_SKIN_PALETTES: Record<
   ThemeSkinId,
   Record<ThemeModeId, BaseSkinPalette>
 > = {
+  mercury: {
+    light: {
+      canvas: "#fbfcfd",
+      surface1: "#ffffff",
+      surface2: "#f7f6fd",
+      surfaceDeep: "#f0eff9",
+      overlay: "rgba(255, 255, 255, 0.92)",
+      ink: "#28253b",
+      body: "#554e7b",
+      muted: "#70707d",
+      ash: "#8b8b99",
+      stone: "#70707d",
+      accentWarm: "#5266eb",
+      accentBlue: "#5266eb",
+      accentGreen: "#1d7f3e",
+      accentRed: "#c13d3d",
+      accentYellow: "#9a6a16",
+      accentSlate: "#70707d",
+      accentContrast: "#ffffff",
+      focusRing: "#5266eb",
+      success: "#1d7f3e",
+      warning: "#9a6a16",
+      danger: "#c13d3d",
+      info: "#5266eb",
+    },
+    dark: {
+      canvas: "#171721",
+      surface1: "#1e1e2a",
+      surface2: "#232333",
+      surfaceDeep: "#111119",
+      overlay: "rgba(30, 30, 42, 0.92)",
+      ink: "#ededf3",
+      body: "#c3c3cc",
+      muted: "#9c9cab",
+      ash: "#7f7f91",
+      stone: "#b0b0c0",
+      accentWarm: "#9cb4e8",
+      accentBlue: "#9cb4e8",
+      accentGreen: "#5fd18a",
+      accentRed: "#ff8a8a",
+      accentYellow: "#e5bf78",
+      accentSlate: "#9c9cab",
+      accentContrast: "#171721",
+      focusRing: "#9cb4e8",
+      success: "#5fd18a",
+      warning: "#e5bf78",
+      danger: "#ff8a8a",
+      info: "#9cb4e8",
+    },
+  },
   porcelain: {
     light: {
       canvas: "#f6f5f2",
@@ -852,6 +904,32 @@ const ENTERPRISE_EXTENDED_TOKENS: Record<
   EnterpriseThemeSkinId,
   Record<ThemeModeId, ExtendedSkinTokens>
 > = {
+  mercury: {
+    light: {
+      accentPrimary: "#5266eb",
+      hairline: "rgba(40, 37, 59, 0.08)",
+      hairlineStrong: "rgba(40, 37, 59, 0.14)",
+      radiusCard: "16px",
+      radiusControl: "12px",
+      shadowCard:
+        "0 6px 18px rgba(40, 37, 59, 0.05), 0 1px 2px rgba(40, 37, 59, 0.04)",
+      shadowOverlay: "0 24px 64px rgba(40, 37, 59, 0.18)",
+      focusRingOuter: "#5266eb",
+      focusRingInner: "#ffffff",
+    },
+    dark: {
+      accentPrimary: "#9cb4e8",
+      hairline: "rgba(255, 255, 255, 0.08)",
+      hairlineStrong: "rgba(255, 255, 255, 0.14)",
+      radiusCard: "16px",
+      radiusControl: "12px",
+      shadowCard:
+        "0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06)",
+      shadowOverlay: "0 24px 64px rgba(0, 0, 0, 0.50)",
+      focusRingOuter: "#9cb4e8",
+      focusRingInner: "rgba(23, 23, 33, 0.65)",
+    },
+  },
   porcelain: {
     light: {
       accentPrimary: "#1f2022",
@@ -1102,6 +1180,7 @@ function legacyExtendedTokens(palette: BaseSkinPalette): ExtendedSkinTokens {
 
 function isEnterpriseSkin(skin: ThemeSkinId): skin is EnterpriseThemeSkinId {
   return (
+    skin === "mercury" ||
     skin === "porcelain" ||
     skin === "mist" ||
     skin === "geist" ||
@@ -1192,6 +1271,7 @@ export const THEME_CONTRAST_PAIRS = [
 ] as const;
 
 export const SKIN_LABELS: Record<ThemeSkinId, string> = {
+  mercury: "Mercury 墨紫",
   porcelain: "Porcelain 原生瓷白",
   mist: "Mist 雾蓝",
   geist: "Geist 单色",
@@ -1210,6 +1290,8 @@ export const SKIN_LABELS: Record<ThemeSkinId, string> = {
 };
 
 export const SKIN_SOURCES: Record<ThemeSkinId, string> = {
+  mercury:
+    "awesome-design-md/design-md/mercury/DESIGN.md@fcc70284932276d085f01ef9f83edde90b1258cb; MIT",
   porcelain: "roamlog-porcelain; internal",
   mist: "tweakcn@a3b47b37cba97dd637de517aab52c45ec0f83456 clean-slate; Apache-2.0",
   geist:

@@ -11,11 +11,12 @@ export const AppearanceModeSchema = z.enum(APPEARANCE_MODES);
 export type AppearanceMode = z.infer<typeof AppearanceModeSchema>;
 
 /**
- * Enterprise skins shown in the primary picker. Mist is the current native
+ * Enterprise skins shown in the primary picker. Mercury is the current native
  * default; the other enterprise skins remain available for users who
  * explicitly selected them.
  */
 export const ACTIVE_SKIN_IDS = [
+  "mercury",
   "mist",
   "geist",
   "iris",
@@ -47,7 +48,7 @@ export type LegacySkinId = (typeof LEGACY_SKIN_IDS)[number];
 export const SKIN_IDS = [...ACTIVE_SKIN_IDS, ...LEGACY_SKIN_IDS] as const;
 export const SkinIdSchema = z.enum(SKIN_IDS);
 export type SkinId = z.infer<typeof SkinIdSchema>;
-export const DEFAULT_SKIN_ID: SkinId = "mist";
+export const DEFAULT_SKIN_ID: SkinId = "mercury";
 
 export const LEGACY_SKIN_TARGETS: Readonly<Record<LegacySkinId, ActiveSkinId>> = {
   primer: "fluent",
@@ -136,6 +137,20 @@ export interface SkinCatalogEntry {
  * Porcelain is marked internal because Roamlog owns the approved palette.
  */
 export const SKIN_CATALOG = [
+  // Mercury's design language is transcribed from VoltAgent/awesome-design-md
+  // (MIT, pinned below). No brand logo, photography or proprietary font file
+  // is copied; only the documented color, radius and material tokens are used.
+  {
+    id: "mercury",
+    status: "active",
+    label: "Mercury 墨紫",
+    description: "墨紫中性色、雾蓝紫次级表面与单一靛蓝动作色的高级原生界面。",
+    lightPreview: { canvas: "#fbfcfd", ink: "#28253b", accent: "#5266eb" },
+    darkPreview: { canvas: "#171721", ink: "#ededf3", accent: "#9cb4e8" },
+    sourceId:
+      "awesome-design-md/design-md/mercury/DESIGN.md@fcc70284932276d085f01ef9f83edde90b1258cb",
+    licenseId: "MIT",
+  },
   {
     id: "mist",
     status: "active",

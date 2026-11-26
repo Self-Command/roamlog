@@ -6,6 +6,7 @@
  * fonts and a workspace preview), not a consumer theme store.
  */
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { SKIN_CATALOG } from "@roamlog/contracts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -21,6 +22,7 @@ import { expectNoHorizontalOverflow } from "../support/helpers";
 const OUT_DIR = path.resolve(process.cwd(), ".audit", "theme-enterprise", "admin-appearance");
 const EVIDENCE_FILE = path.join(OUT_DIR, "web-appearance.json");
 const APPEARANCE_URL = process.env.E2E_APPEARANCE_URL ?? WEB_URL;
+const ACTIVE_SKINS = SKIN_CATALOG.filter((entry) => entry.status === "active");
 
 interface SurfaceEvidence {
   name: string;
@@ -112,8 +114,11 @@ test.describe("enterprise appearance picker", () => {
     ).toHaveCount(3);
     await expect(
       page.getByRole("radiogroup", { name: "主题" }).locator('[role="radio"]'),
-    ).toHaveCount(4);
-    await expect(page.getByText("4 个主题", { exact: true })).toBeVisible();
+    ).toHaveCount(ACTIVE_SKINS.length);
+    await expect(
+      page.getByText(`${ACTIVE_SKINS.length} 个主题`, { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("radio", { name: /Mercury 墨紫/u })).toBeVisible();
     await expect(
       page.getByRole("radiogroup", { name: "字体配对" }).locator('[role="radio"]'),
     ).toHaveCount(4);

@@ -21,6 +21,7 @@ describe("appearance contracts", () => {
   it("freezes the active enterprise choices with legacy IDs still parseable", () => {
     expect(APPEARANCE_MODES).toEqual(["system", "light", "dark"]);
     expect(ACTIVE_SKIN_IDS).toEqual([
+      "mercury",
       "mist",
       "geist",
       "iris",
@@ -37,6 +38,7 @@ describe("appearance contracts", () => {
       "carbon-plex",
     ]);
     expect(SKIN_IDS).toEqual([
+      "mercury",
       "mist",
       "geist",
       "iris",
@@ -95,7 +97,8 @@ describe("appearance contracts", () => {
     expect(normalizeSkinId("catppuccin")).toBe("fluent");
     expect(normalizeSkinId("tokyo-night")).toBe("carbon");
     expect(normalizeSkinId("kanagawa")).toBe("carbon-soft");
-    expect(normalizeSkinId("unknown")).toBe("mist");
+    expect(normalizeSkinId("mercury")).toBe("mercury");
+    expect(normalizeSkinId("unknown")).toBe("mercury");
     expect(normalizeFontPairingId("editorial-classic")).toBe("fluent-native");
     expect(normalizeFontPairingId("cjk-editorial")).toBe("fluent-native");
     expect(normalizeFontPairingId("unknown")).toBe("fluent-native");
@@ -158,11 +161,11 @@ describe("appearance contracts", () => {
       updatedAt: null,
       defaults: {
         mode: "system",
-        skin: "mist",
+        skin: "mercury",
         fontPairing: "fluent-native",
       },
     });
     expect(APPEARANCE_SOURCES).toContain(parsed.source);
-    expect(parsed.defaults.skin).toBe("mist");
+    expect(parsed.defaults.skin).toBe("mercury");
   });
 });

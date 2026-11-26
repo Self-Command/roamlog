@@ -12,6 +12,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import RootLayout from "./layout";
+import { ADMIN_FALLBACK_APPEARANCE } from "../lib/appearance";
 
 const globalsCss = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
@@ -32,7 +33,7 @@ describe("admin root layout", () => {
 
     expect(html.props["data-mode"]).toBe("system");
     expect(html.props["data-theme"]).toBe("system");
-    expect(html.props["data-skin"]).toBe("mist");
+    expect(html.props["data-skin"]).toBe(ADMIN_FALLBACK_APPEARANCE.skin);
     expect(html.props["data-font"]).toBe("fluent-native");
     expect(html.props.style?.colorScheme).toBe("light dark");
   });

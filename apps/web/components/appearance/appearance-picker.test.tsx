@@ -1,4 +1,9 @@
-import type { ResolvedAppearance } from "@roamlog/contracts";
+import {
+  ACTIVE_FONT_PAIRING_IDS,
+  ACTIVE_SKIN_IDS,
+  APPEARANCE_MODES,
+  type ResolvedAppearance,
+} from "@roamlog/contracts";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -38,11 +43,14 @@ function renderForm(overrides: Partial<AppearancePickerFormProps> = {}) {
 }
 
 describe("AppearancePickerForm", () => {
-  it("renders the active enterprise themes and four locally bundled font pairings", () => {
+  it("renders every active skin and locally bundled font pairing", () => {
     renderForm();
 
-    expect(screen.getAllByRole("radio")).toHaveLength(15);
+    expect(screen.getAllByRole("radio")).toHaveLength(
+      APPEARANCE_MODES.length + ACTIVE_SKIN_IDS.length + ACTIVE_FONT_PAIRING_IDS.length,
+    );
     expect(screen.queryByRole("radio", { name: /Primer 企业中性/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Mercury/ })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Mist/ })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Geist/ })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Iris/ })).toBeInTheDocument();

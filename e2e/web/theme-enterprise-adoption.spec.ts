@@ -27,6 +27,7 @@ const AUDIT_ACCOUNT: SmokeAccount = {
   password: "Theme-Audit-Aa1!",
   name: "主题验收账号",
 };
+const ACCEPTANCE_SKIN = "mercury";
 
 type Mode = "light" | "dark";
 type Width = 1440 | 390;
@@ -64,7 +65,7 @@ function appearanceCookie(mode: Mode): string {
     JSON.stringify({
       v: 1,
       mode,
-      skin: "porcelain",
+      skin: ACCEPTANCE_SKIN,
       fontPairing: "fluent-native",
     }),
   );
@@ -85,7 +86,7 @@ async function addAppearanceCookie(context: BrowserContext, mode: Mode): Promise
 
 async function setUserMode(page: Page, mode: Mode): Promise<void> {
   const response = await page.request.put(`${WEB_URL}/v1/me/appearance`, {
-    data: { mode, skin: "porcelain", fontPairing: "fluent-native" },
+    data: { mode, skin: ACCEPTANCE_SKIN, fontPairing: "fluent-native" },
   });
   expect(response.status(), await response.text()).toBe(200);
 }
@@ -224,7 +225,7 @@ test("enterprise product pages are usable at 1440/390 in light/dark", async ({ b
         for (const surface of surfaces) {
           await page.goto(`${WEB_URL}${surface.path}`, { waitUntil: "domcontentloaded" });
           await expect(page.locator("html")).toHaveAttribute("data-mode", mode);
-          await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+          await expect(page.locator("html")).toHaveAttribute("data-skin", ACCEPTANCE_SKIN);
           await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
           await readSurface(page, surface.name, mode, width);
           await expectNoHorizontalOverflow(page, `${surface.name} ${mode} ${width}`);

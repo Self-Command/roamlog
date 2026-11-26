@@ -7,6 +7,7 @@
  * attributes before hydration, which is the no-flash contract.
  */
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { SKIN_CATALOG } from "@roamlog/contracts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -23,16 +24,9 @@ const MODES = [
   { id: "dark", label: "深色" },
 ] as const;
 
-const SKINS = [
-  { id: "mist", label: "Mist 雾蓝" },
-  { id: "geist", label: "Geist 单色" },
-  { id: "iris", label: "Iris 鸢尾" },
-  { id: "sandstone", label: "Sandstone 砂岩" },
-  { id: "porcelain", label: "Porcelain 原生瓷白" },
-  { id: "fluent", label: "Fluent 2 原生企业" },
-  { id: "carbon", label: "IBM Carbon" },
-  { id: "carbon-soft", label: "Carbon 柔和灰阶" },
-] as const;
+const SKINS = SKIN_CATALOG.filter((entry) => entry.status === "active").map(
+  ({ id, label }) => ({ id, label }),
+);
 
 const FONT_PAIRINGS = [
   { id: "primer-system", label: "Primer 系统" },
@@ -207,7 +201,7 @@ test.describe("user appearance and public share", () => {
     await context?.close();
   });
 
-  test("eight enterprise themes and four local font pairings persist without flash", async () => {
+  test("every enterprise theme and local font pairing persists without flash", async () => {
     await page.goto(`${WEB_URL}/w/${workspaceSlug}/settings/appearance`, {
       waitUntil: "domcontentloaded",
     });
@@ -286,10 +280,10 @@ test.describe("user appearance and public share", () => {
     }
 
     await chooseRadio(page, "显示模式", "浅色");
-    await chooseRadio(page, "主题", "Porcelain 原生瓷白");
+    await chooseRadio(page, "主题", "Mercury 墨紫");
     await chooseRadio(page, "字体配对", "Fluent 原生");
     await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
-    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "mercury");
     await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
     await page.getByRole("button", { name: "保存外观", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "外观设置已保存" })).toBeVisible({
@@ -298,12 +292,12 @@ test.describe("user appearance and public share", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
-    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "mercury");
     await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
     const saved = await readUserAppearance(page);
     expect(saved).toMatchObject({
       mode: "light",
-      skin: "porcelain",
+      skin: "mercury",
       fontPairing: "fluent-native",
       source: "user",
     });
@@ -333,7 +327,7 @@ test.describe("user appearance and public share", () => {
     ]);
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
-    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "mercury");
     await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
 
     await page.setViewportSize({ width: 390, height: 844 });

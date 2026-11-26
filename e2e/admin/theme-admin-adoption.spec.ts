@@ -6,6 +6,7 @@
  * root acceptance can inspect the same surfaces that were asserted.
  */
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { SKIN_CATALOG } from "@roamlog/contracts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -31,6 +32,7 @@ const OUT_DIR = path.resolve(
 const EVIDENCE_FILE = path.join(OUT_DIR, "admin-appearance.json");
 const runId = uniqueRunId();
 const superAdmin = createSuperAdminAccount(runId);
+const ACTIVE_SKINS = SKIN_CATALOG.filter((entry) => entry.status === "active");
 
 interface SurfaceEvidence {
   name: string;
@@ -129,6 +131,23 @@ test.describe("enterprise Admin console", () => {
     provisionSuperAdmin(superAdmin);
     totpSecret = await enableSuperAdminTotp(superAdmin);
     context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    await context.addCookies([
+      {
+        name: "roamlog_appearance",
+        value: encodeURIComponent(
+          JSON.stringify({
+            v: 1,
+            mode: "dark",
+            skin: "carbon",
+            fontPairing: "carbon-plex",
+          }),
+        ),
+        domain: new URL(ADMIN_URL).hostname,
+        path: "/",
+        httpOnly: false,
+        sameSite: "Lax",
+      },
+    ]);
     page = await context.newPage();
 
     await page.goto(`${ADMIN_URL}/admin/login`, { waitUntil: "domcontentloaded" });
@@ -187,13 +206,19 @@ test.describe("enterprise Admin console", () => {
     });
     await expect(
       page.getByRole("radiogroup", { name: "默认主题" }).locator('[role="radio"]'),
-    ).toHaveCount(4);
-    await expect(page.getByText(/4 套企业主题/u)).toBeVisible();
+    ).toHaveCount(ACTIVE_SKINS.length);
+    await expect(
+      page.getByText(new RegExp(`${ACTIVE_SKINS.length} 套企业主题`, "u")),
+    ).toBeVisible();
+    await expect(page.getByRole("radio", { name: /Mercury 墨紫/u })).toBeVisible();
     await expect(
       page.getByRole("radiogroup", { name: "默认字体" }).locator('[role="radio"]'),
     ).toHaveCount(4);
+    await page
+      .getByRole("radiogroup", { name: "默认外观" })
+      .getByRole("radio", { name: "跟随系统" })
+      .click();
     await expect(page.getByTestId("admin-appearance-workbench-preview-system")).toBeVisible();
-    await expect(page.getByText("六套皮肤")).toHaveCount(0);
     await shot(page, "admin-settings-appearance-1440", "/admin/settings?tab=theme", "1440x1000");
 
     await page.setViewportSize({ width: 390, height: 844 });

@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ACTIVE_SKIN_IDS,
+  DEFAULT_SKIN_ID,
   SETTINGS_GROUPS,
   type AdminSettingItem,
   type AdminSettingUpdate,
@@ -55,18 +57,9 @@ function themeItems(overrides: Partial<Record<string, SettingValue>> = {}): Admi
       "theme.defaultSkin",
       "string",
       "默认皮肤",
-      "mist",
-      overrides["theme.defaultSkin"] ?? "mist",
-      [
-        "mist",
-        "geist",
-        "iris",
-        "sandstone",
-        "porcelain",
-        "fluent",
-        "carbon",
-        "carbon-soft",
-      ],
+      DEFAULT_SKIN_ID,
+      overrides["theme.defaultSkin"] ?? DEFAULT_SKIN_ID,
+      [...ACTIVE_SKIN_IDS],
     ),
     makeThemeItem(
       "theme.defaultFont",
@@ -152,7 +145,7 @@ afterEach(() => {
 });
 
 describe("AppearanceDefaults", () => {
-  it("loads the four controls and the enterprise skin/font choices", async () => {
+  it("loads the four controls and every enterprise skin/font choice", async () => {
     const fake = fakeApi();
     render(<AppearanceDefaults role="super_admin" api={fake.api} />);
 
@@ -169,7 +162,11 @@ describe("AppearanceDefaults", () => {
     );
     expect(
       within(screen.getByRole("radiogroup", { name: "默认主题" })).getAllByRole("radio"),
-    ).toHaveLength(8);
+    ).toHaveLength(ACTIVE_SKIN_IDS.length);
+    expect(screen.getByRole("radio", { name: /Mercury/u })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     expect(
       within(screen.getByRole("radiogroup", { name: "默认字体" })).getAllByRole("radio"),
     ).toHaveLength(4);

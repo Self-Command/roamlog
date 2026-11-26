@@ -15,6 +15,7 @@ import {
 
 const tokenCss = readFileSync(new URL("./tokens.css", import.meta.url), "utf8");
 const ACTIVE_THEME_SKINS = [
+  "mercury",
   "mist",
   "geist",
   "iris",

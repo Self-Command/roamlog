@@ -106,6 +106,42 @@
   color-scheme: light dark;
 }
 
+[data-skin="mercury"] {
+  --skin-canvas: light-dark(#fbfcfd, #171721);
+  --skin-surface-1: light-dark(#ffffff, #1e1e2a);
+  --skin-surface-2: light-dark(#f7f6fd, #232333);
+  --skin-surface-deep: light-dark(#f0eff9, #111119);
+  --skin-overlay: light-dark(rgba(255, 255, 255, 0.92), rgba(30, 30, 42, 0.92));
+  --skin-ink: light-dark(#28253b, #ededf3);
+  --skin-body: light-dark(#554e7b, #c3c3cc);
+  --skin-muted: light-dark(#70707d, #9c9cab);
+  --skin-ash: light-dark(#8b8b99, #7f7f91);
+  --skin-stone: light-dark(#70707d, #b0b0c0);
+  --skin-accent-primary: light-dark(#5266eb, #9cb4e8);
+  --skin-accent-warm: light-dark(#5266eb, #9cb4e8);
+  --skin-accent-blue: light-dark(#5266eb, #9cb4e8);
+  --skin-accent-green: light-dark(#1d7f3e, #5fd18a);
+  --skin-accent-red: light-dark(#c13d3d, #ff8a8a);
+  --skin-accent-yellow: light-dark(#9a6a16, #e5bf78);
+  --skin-accent-slate: light-dark(#70707d, #9c9cab);
+  --skin-accent-contrast: light-dark(#ffffff, #171721);
+  --skin-focus-ring: light-dark(#5266eb, #9cb4e8);
+  --skin-focus-ring-outer: light-dark(#5266eb, #9cb4e8);
+  --skin-focus-ring-inner: light-dark(#ffffff, rgba(23, 23, 33, 0.65));
+  --skin-success: light-dark(#1d7f3e, #5fd18a);
+  --skin-warning: light-dark(#9a6a16, #e5bf78);
+  --skin-danger: light-dark(#c13d3d, #ff8a8a);
+  --skin-info: light-dark(#5266eb, #9cb4e8);
+  --skin-hairline: light-dark(rgba(40, 37, 59, 0.08), rgba(255, 255, 255, 0.08));
+  --skin-hairline-strong: light-dark(rgba(40, 37, 59, 0.14), rgba(255, 255, 255, 0.14));
+  --skin-radius-card: 16px;
+  --skin-radius-control: 12px;
+  --skin-shadow-card-light: 0 6px 18px rgba(40, 37, 59, 0.05), 0 1px 2px rgba(40, 37, 59, 0.04);
+  --skin-shadow-overlay-light: 0 24px 64px rgba(40, 37, 59, 0.18);
+  --skin-shadow-card-dark: 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --skin-shadow-overlay-dark: 0 24px 64px rgba(0, 0, 0, 0.50);
+}
+
 [data-skin="porcelain"] {
   --skin-canvas: light-dark(#f6f5f2, #141416);
   --skin-surface-1: light-dark(#fcfbf9, #1c1b1f);
@@ -405,6 +441,17 @@
   --skin-shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.46);
 }
 
+[data-skin="mercury"][data-mode="light"],
+[data-skin="mercury"][data-mode="system"] {
+  --skin-shadow-card: 0 6px 18px rgba(40, 37, 59, 0.05), 0 1px 2px rgba(40, 37, 59, 0.04);
+  --skin-shadow-overlay: 0 24px 64px rgba(40, 37, 59, 0.18);
+}
+
+[data-skin="mercury"][data-mode="dark"] {
+  --skin-shadow-card: 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --skin-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.50);
+}
+
 [data-skin="mist"][data-mode="light"],
 [data-skin="mist"][data-mode="system"],
 [data-skin="geist"][data-mode="light"],
@@ -504,7 +551,8 @@
   [data-skin="mist"][data-mode="system"],
   [data-skin="geist"][data-mode="system"],
   [data-skin="iris"][data-mode="system"],
-  [data-skin="sandstone"][data-mode="system"] {
+  [data-skin="sandstone"][data-mode="system"],
+  [data-skin="mercury"][data-mode="system"] {
     --skin-shadow-card: var(--skin-shadow-card-dark);
     --skin-shadow-overlay: var(--skin-shadow-overlay-dark);
   }
@@ -660,7 +708,7 @@
   --skin-info: light-dark(#3a94c5, #7fbbb3);
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) body {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) body {
   background-color: var(--canvas) !important;
   background-image:
     radial-gradient(
@@ -681,15 +729,15 @@ html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-
   background-attachment: fixed !important;
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) body > div.flex.min-h-dvh {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) body > div.flex.min-h-dvh {
   background: transparent !important;
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) main {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) main {
   background: transparent !important;
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) header {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) header {
   background: color-mix(in srgb, var(--surface-1) 78%, transparent) !important;
   border-color: var(--hairline) !important;
   box-shadow: inset 0 -1px 0 var(--hairline) !important;
@@ -697,14 +745,14 @@ html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-
   -webkit-backdrop-filter: blur(18px) saturate(135%) !important;
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) aside {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) aside {
   background: color-mix(in srgb, var(--surface-deep) 72%, transparent) !important;
   border-color: var(--hairline) !important;
   backdrop-filter: blur(22px) saturate(135%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(135%) !important;
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) .surface-card {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) .surface-card {
   background: color-mix(in srgb, var(--surface-1) 86%, transparent) !important;
   border-color: var(--hairline) !important;
   box-shadow: var(--shadow-card) !important;
@@ -712,7 +760,7 @@ html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-
   -webkit-backdrop-filter: blur(14px) saturate(125%) !important;
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) [role="dialog"] {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) [role="dialog"] {
   background: color-mix(in srgb, var(--surface-overlay) 88%, transparent) !important;
   border-color: var(--hairline-strong) !important;
   box-shadow: var(--shadow-overlay) !important;
@@ -720,14 +768,14 @@ html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-
   -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) [data-testid="composer-root"] {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) [data-testid="composer-root"] {
   background: color-mix(in srgb, var(--surface-1) 86%, transparent) !important;
   border-color: var(--hairline) !important;
   backdrop-filter: blur(20px) saturate(130%) !important;
   -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
 }
 
-html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) nav[aria-label="移动端主导航"] {
+html:is([data-skin="mercury"], [data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) nav[aria-label="移动端主导航"] {
   background: color-mix(in srgb, var(--surface-1) 84%, transparent) !important;
   border-color: var(--hairline) !important;
   backdrop-filter: blur(22px) saturate(135%) !important;

@@ -13,6 +13,7 @@ export type UpdateMyAppearanceBodySkin =
   (typeof UpdateMyAppearanceBodySkin)[keyof typeof UpdateMyAppearanceBodySkin] | null;
 
 export const UpdateMyAppearanceBodySkin = {
+  mercury: "mercury",
   mist: "mist",
   geist: "geist",
   iris: "iris",

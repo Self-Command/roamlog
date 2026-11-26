@@ -25134,6 +25134,7 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "mercury",
                         "mist",
                         "geist",
                         "iris",
@@ -25200,6 +25201,7 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "mercury",
                             "mist",
                             "geist",
                             "iris",
@@ -25330,6 +25332,7 @@
                       "null"
                     ],
                     "enum": [
+                      "mercury",
                       "mist",
                       "geist",
                       "iris",
@@ -25392,6 +25395,7 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "mercury",
                         "mist",
                         "geist",
                         "iris",
@@ -25458,6 +25462,7 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "mercury",
                             "mist",
                             "geist",
                             "iris",
@@ -25602,6 +25607,7 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "mercury",
                         "mist",
                         "geist",
                         "iris",
@@ -25668,6 +25674,7 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "mercury",
                             "mist",
                             "geist",
                             "iris",

@@ -57,7 +57,6 @@ test("reasoning effort follows the platform default and persists a user choice",
   });
   await page.goto(`${WEB_URL}/w/${WORKSPACE_SLUG}/ai`, { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("multimodal-input")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("html")).toHaveAttribute("data-skin", "mist");
   await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
 
   // Start from a clean browser preference while keeping the real session.

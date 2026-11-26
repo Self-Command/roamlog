@@ -6,6 +6,7 @@
  * the first paint and is also valid on `/login`.
  */
 import { expect, test, type BrowserContext } from "@playwright/test";
+import { DEFAULT_SKIN_ID, SKIN_CATALOG } from "@roamlog/contracts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -15,12 +16,11 @@ import { expectNoHorizontalOverflow } from "../support/helpers";
 const OUT_DIR = path.join(process.cwd(), ".audit", "theme-enterprise", "foundation");
 const EVIDENCE_FILE = path.join(OUT_DIR, "enterprise-foundation.json");
 
-const THEMES = [
-  { skin: "porcelain", font: "fluent-native", label: "porcelain" },
-  { skin: "fluent", font: "fluent-native", label: "fluent" },
-  { skin: "carbon", font: "carbon-plex", label: "carbon" },
-  { skin: "carbon-soft", font: "primer-cjk", label: "carbon-soft" },
-] as const;
+const THEMES = SKIN_CATALOG.filter((entry) => entry.status === "active").map(({ id }) => ({
+  skin: id,
+  font: "fluent-native" as const,
+  label: id,
+}));
 
 interface Evidence {
   generatedAt: string;
@@ -79,7 +79,7 @@ test.describe("enterprise theme foundation", () => {
     writeFileSync(EVIDENCE_FILE, `${JSON.stringify(evidence, null, 2)}\n`);
   });
 
-  test("defaults to Porcelain + native sans before hydration", async ({ browser }) => {
+  test("defaults to Mercury + native sans before hydration", async ({ browser }) => {
     const context = await browser.newContext({
       javaScriptEnabled: false,
       viewport: { width: 1440, height: 1000 },
@@ -92,7 +92,7 @@ test.describe("enterprise theme foundation", () => {
     try {
       await page.goto(`${WEB_URL}/login`, { waitUntil: "domcontentloaded" });
       await expect(page.locator("html")).toHaveAttribute("data-mode", "system");
-      await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+      await expect(page.locator("html")).toHaveAttribute("data-skin", DEFAULT_SKIN_ID);
       await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
       evidence.defaultAttributes = await page.locator("html").evaluate((node) => ({
         mode: node.getAttribute("data-mode") ?? "",
@@ -148,7 +148,7 @@ test.describe("enterprise theme foundation", () => {
     }
   });
 
-  test("renders every enterprise theme at 1440 and keeps 390px usable", async ({ browser }) => {
+  test("renders every active skin at 1440 and keeps 390px usable", async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
       for (const theme of THEMES) {

@@ -7,6 +7,7 @@ import { expectNoHorizontalOverflow } from "../support/helpers";
 
 const OUT_DIR = path.join(process.cwd(), ".audit", "theme-enterprise", "product-adoption");
 const EVIDENCE_FILE = path.join(OUT_DIR, "product-adoption.json");
+const ACCEPTANCE_SKIN = "mercury";
 
 test.use({ trace: "off", video: "off" });
 test.describe.configure({ mode: "serial" });
@@ -83,14 +84,33 @@ test.afterAll(() => {
 
 test("enterprise product surfaces use compact sans chrome and no glow", async ({ page }) => {
   test.setTimeout(180_000);
+  await page.context().addCookies([
+    {
+      name: "roamlog_appearance",
+      value: encodeURIComponent(
+        JSON.stringify({
+          v: 1,
+          mode: "light",
+          skin: ACCEPTANCE_SKIN,
+          fontPairing: "fluent-native",
+        }),
+      ),
+      domain: new URL(WEB_URL).hostname,
+      path: "/",
+      httpOnly: false,
+      sameSite: "Lax",
+    },
+  ]);
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto(`${WEB_URL}/login`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("html")).toHaveAttribute("data-skin", ACCEPTANCE_SKIN);
   await capture(page, "auth-1440-light");
 
   await loginOnWeb(page, OWNER_ACCOUNT);
   const workspace = await findWorkspace(page.request);
 
   await page.goto(`${WEB_URL}/w/${workspace.slug}`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("html")).toHaveAttribute("data-skin", ACCEPTANCE_SKIN);
   await capture(page, "dashboard-1440-light");
 
   await forceDark(page);
