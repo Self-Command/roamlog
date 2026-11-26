@@ -11,11 +11,20 @@ export const AppearanceModeSchema = z.enum(APPEARANCE_MODES);
 export type AppearanceMode = z.infer<typeof AppearanceModeSchema>;
 
 /**
- * Enterprise skins shown in the primary picker. Porcelain is the current
- * native default; the other enterprise skins remain available for users who
+ * Enterprise skins shown in the primary picker. Mist is the current native
+ * default; the other enterprise skins remain available for users who
  * explicitly selected them.
  */
-export const ACTIVE_SKIN_IDS = ["porcelain", "fluent", "carbon", "carbon-soft"] as const;
+export const ACTIVE_SKIN_IDS = [
+  "mist",
+  "geist",
+  "iris",
+  "sandstone",
+  "porcelain",
+  "fluent",
+  "carbon",
+  "carbon-soft",
+] as const;
 export type ActiveSkinId = (typeof ACTIVE_SKIN_IDS)[number];
 
 /**
@@ -38,7 +47,7 @@ export type LegacySkinId = (typeof LEGACY_SKIN_IDS)[number];
 export const SKIN_IDS = [...ACTIVE_SKIN_IDS, ...LEGACY_SKIN_IDS] as const;
 export const SkinIdSchema = z.enum(SKIN_IDS);
 export type SkinId = z.infer<typeof SkinIdSchema>;
-export const DEFAULT_SKIN_ID: SkinId = "porcelain";
+export const DEFAULT_SKIN_ID: SkinId = "mist";
 
 export const LEGACY_SKIN_TARGETS: Readonly<Record<LegacySkinId, ActiveSkinId>> = {
   primer: "fluent",
@@ -127,6 +136,46 @@ export interface SkinCatalogEntry {
  * Porcelain is marked internal because Roamlog owns the approved palette.
  */
 export const SKIN_CATALOG = [
+  {
+    id: "mist",
+    status: "active",
+    label: "Mist 雾蓝",
+    description: "冷灰蓝表面、低饱和靛蓝动作色与柔和玻璃层次，克制的现代产品感。",
+    lightPreview: { canvas: "#f8fafc", ink: "#1e293b", accent: "#5b5bd6" },
+    darkPreview: { canvas: "#0f172a", ink: "#e2e8f0", accent: "#818cf8" },
+    sourceId: "tweakcn-clean-slate@a3b47b3",
+    licenseId: "Apache-2.0",
+  },
+  {
+    id: "geist",
+    status: "active",
+    label: "Geist 单色",
+    description: "黑灰单色层级、清晰产品排版与蓝色焦点环，安静而高效。",
+    lightPreview: { canvas: "#ffffff", ink: "#333333", accent: "#333333" },
+    darkPreview: { canvas: "#171717", ink: "#e5e5e5", accent: "#e5e5e5" },
+    sourceId: "tweakcn-modern-minimal@a3b47b3",
+    licenseId: "Apache-2.0",
+  },
+  {
+    id: "iris",
+    status: "active",
+    label: "Iris 鸢尾",
+    description: "Radix mauve 中性色与 iris 紫罗兰焦点，圆润、低对比、柔和。",
+    lightPreview: { canvas: "#fdfcfd", ink: "#211f26", accent: "#5b5bd6" },
+    darkPreview: { canvas: "#121113", ink: "#eeeef0", accent: "#7c78ff" },
+    sourceId: "radix-colors@dbdb854",
+    licenseId: "MIT",
+  },
+  {
+    id: "sandstone",
+    status: "active",
+    label: "Sandstone 砂岩",
+    description: "暖砂纸中性色与克制琥珀棕强调，轻松、有触感的编辑气质。",
+    lightPreview: { canvas: "#f5f1e6", ink: "#4a3f35", accent: "#8d6e4c" },
+    darkPreview: { canvas: "#2d2621", ink: "#ece5d8", accent: "#c0a080" },
+    sourceId: "tweakcn-vintage-paper@a3b47b3",
+    licenseId: "Apache-2.0",
+  },
   {
     id: "porcelain",
     status: "active",

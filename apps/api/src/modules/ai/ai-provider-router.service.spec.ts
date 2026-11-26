@@ -65,7 +65,7 @@ function harness(input: {
     ownedBy?: string | null;
     enabled?: boolean;
     isDefault?: boolean;
-    capabilities?: Record<string, boolean>;
+    capabilities?: Record<string, unknown>;
   }>;
   legacy?: AiSettings;
 }) {
@@ -164,8 +164,18 @@ describe("AiProviderRouter", () => {
         }),
       ],
       models: [
-        { providerId: PROVIDER_A, modelId: "a-default", isDefault: true },
-        { providerId: PROVIDER_B, modelId: "b-default", isDefault: true },
+        {
+          providerId: PROVIDER_A,
+          modelId: "a-default",
+          isDefault: true,
+          capabilities: { reasoningEfforts: ["low", "medium", "high"] },
+        },
+        {
+          providerId: PROVIDER_B,
+          modelId: "b-default",
+          isDefault: true,
+          capabilities: { reasoningEfforts: ["low", "medium", "high"] },
+        },
       ],
       legacy: settings({ reasoningEffort: "low" }),
     });
@@ -249,7 +259,12 @@ describe("AiProviderRouter", () => {
         }),
       ],
       models: [
-        { providerId: PROVIDER_A, modelId: "a-default", isDefault: true },
+        {
+          providerId: PROVIDER_A,
+          modelId: "a-default",
+          isDefault: true,
+          capabilities: { reasoningEfforts: ["low", "high"] },
+        },
         { providerId: PROVIDER_B, modelId: "a-default", isDefault: false },
         { providerId: PROVIDER_B, modelId: "b-default", isDefault: true },
       ],
@@ -259,6 +274,8 @@ describe("AiProviderRouter", () => {
 
     expect(models.defaultModel).toBe("a-default");
     expect(models.models.map((model) => model.id)).toEqual(["a-default", "b-default"]);
+    expect(models.models[0]?.reasoningEfforts).toEqual(["low", "high"]);
+    expect(models.models[1]?.reasoningEfforts).toEqual([]);
     expect(models.reasoningSupported).toBe(true);
   });
 

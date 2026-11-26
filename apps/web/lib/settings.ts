@@ -313,6 +313,9 @@ export function resolveDefaultSkin(input: {
   if (typeof input.storedSkin === "string") {
     return normalizeSkinId(input.storedSkin);
   }
+  if (input.legacyAccent === undefined || input.legacyAccent === null) {
+    return DEFAULT_SKIN_ID;
+  }
   return LEGACY_THEME_ACCENT_TO_SKIN[resolveThemeAccent(input.legacyAccent)];
 }
 

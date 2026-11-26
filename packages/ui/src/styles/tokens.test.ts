@@ -14,7 +14,17 @@ import {
 } from "./theme-catalog";
 
 const tokenCss = readFileSync(new URL("./tokens.css", import.meta.url), "utf8");
-const ACTIVE_THEME_SKINS = ["porcelain", "primer", "fluent", "carbon", "carbon-soft"] as const;
+const ACTIVE_THEME_SKINS = [
+  "mist",
+  "geist",
+  "iris",
+  "sandstone",
+  "porcelain",
+  "primer",
+  "fluent",
+  "carbon",
+  "carbon-soft",
+] as const;
 
 const paletteVariableNames: Record<string, string> = {
   canvas: "canvas",
@@ -100,7 +110,7 @@ function paletteRole(
   }
 }
 
-describe("six-skin semantic token system", () => {
+describe("trendy enterprise semantic token system", () => {
   it("publishes every catalog palette in CSS as a light-dark pair", () => {
     for (const skin of THEME_SKINS) {
       const block = skinBlock(skin);

@@ -217,6 +217,32 @@ describe("remote thread list adapter", () => {
     expect(url).toBe(`/v1/workspaces/${WORKSPACE_ID}/ai/conversations/${CONVERSATION_ID}/messages`);
   });
 
+  it("history load() ignores a persisted status on user messages", async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeResponse({
+        headId: "client-1",
+        messages: [
+          {
+            parentId: null,
+            message: {
+              ...makeMessage("client-1", "user", "你好"),
+              status: { type: "complete" },
+            },
+          },
+        ],
+      }),
+    );
+
+    const history = createRemoteHistoryAdapter(WORKSPACE_ID, () => CONVERSATION_ID);
+    const repository = await history.load();
+
+    expect(repository.messages[0]?.message).toMatchObject({
+      id: "client-1",
+      role: "user",
+    });
+    expect(repository.messages[0]?.message?.status).toBeUndefined();
+  });
+
   it("history load() uses persisted client ids for deletion, not server UUIDs", async () => {
     const serverId1 = "01942f30-1200-7000-8000-0000000000d1";
     const serverId2 = "01942f30-1200-7000-8000-0000000000d2";
@@ -236,7 +262,9 @@ describe("remote thread list adapter", () => {
               },
             },
             {
-              parentId: "client-1",
+              // The API persists the parent as the server UUID; the branch
+              // repository must translate it to the child's client id.
+              parentId: serverId1,
               message: {
                 id: serverId2,
                 role: "assistant",

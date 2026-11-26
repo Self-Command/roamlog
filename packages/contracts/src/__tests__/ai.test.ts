@@ -38,6 +38,7 @@ import {
   UpdateAiConversationRequestSchema,
   UpsertAiMessageRequestSchema,
   confirmBriefRevisionText,
+  resolveReasoningEffort,
   isConfirmBriefConfirmed,
   isHumanToolCancellation,
   isReadOnlyAiTool,
@@ -1160,18 +1161,34 @@ describe("AI chat attachments, model and reasoning depth", () => {
     expect(parsed.attachments).toBeUndefined();
   });
 
-  it("uses exactly the upstream reasoning values and nothing else", () => {
-    expect(AI_REASONING_EFFORTS).toEqual(["none", "minimal", "low", "medium", "high"]);
+  it("uses the complete reasoning vocabulary and rejects unknown values", () => {
+    expect(AI_REASONING_EFFORTS).toEqual([
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
     for (const effort of AI_REASONING_EFFORTS) {
       expect(
         AiChatRequestSchema.safeParse({ message: "hi", reasoningEffort: effort }).success,
       ).toBe(true);
     }
-    for (const effort of ["max", "xhigh", "off", 1]) {
+    for (const effort of ["off", "highest", 1]) {
       expect(
         AiChatRequestSchema.safeParse({ message: "hi", reasoningEffort: effort }).success,
       ).toBe(false);
     }
+  });
+
+  it("resolves the platform default against one model's real capability list", () => {
+    expect(resolveReasoningEffort("max", ["low", "high"], "high")).toBe("high");
+    expect(resolveReasoningEffort(undefined, ["low", "medium", "high"], "high")).toBe("high");
+    expect(resolveReasoningEffort(undefined, ["low", "medium"], "high")).toBe("medium");
+    expect(resolveReasoningEffort("xhigh", ["high", "xhigh", "max"], "high")).toBe("xhigh");
+    expect(resolveReasoningEffort(undefined, [], "high")).toBeUndefined();
   });
 
   it("caps attachments at 5 and each at 20 MB on the image whitelist", () => {
@@ -1224,6 +1241,7 @@ describe("AI chat attachments, model and reasoning depth", () => {
           name: "GPT-4o mini",
           provider: "openai",
           reasoning: true,
+          reasoningEfforts: ["low", "medium", "high"],
           vision: true,
         },
       ],
@@ -1244,6 +1262,9 @@ describe("AI chat attachments, model and reasoning depth", () => {
 
   it("publishes the two new error codes", () => {
     expect(AI_ERROR_CODES.modelNotAllowed).toBe("AI_MODEL_NOT_ALLOWED");
+    expect(AI_ERROR_CODES.reasoningEffortUnsupported).toBe(
+      "AI_REASONING_EFFORT_UNSUPPORTED",
+    );
     expect(AI_ERROR_CODES.attachmentInvalid).toBe("AI_ATTACHMENT_INVALID");
   });
 });

@@ -401,14 +401,76 @@ export type AiChatAttachments = z.infer<typeof AiChatAttachmentsSchema>;
 /**
  * Reasoning-depth values.
  *
- * Taken verbatim from vercel/chatbot `lib/ai/models.ts` L23:
- * `reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high"`, passed to
- * the gateway as `openai: { reasoningEffort }` at
- * `app/(chat)/api/chat/route.ts` L301–L302. Nothing is invented here.
+ * The original five values came from vercel/chatbot `lib/ai/models.ts` L23.
+ * Models have since exposed additional tiers (`xhigh`, `max`); the complete
+ * vocabulary is taken from the MIT-licensed models.dev catalog
+ * (`reasoning_options[type=effort]`), revision
+ * `5192a691eea9a5e890caa31ec47983a2da31f7e6`. The global list is only the
+ * validation vocabulary — the selector must render the subset returned for the
+ * currently selected model, never this whole list.
  */
-export const AI_REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high"] as const;
+export const AI_REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
 export const AiReasoningEffortSchema = z.enum(AI_REASONING_EFFORTS);
 export type AiReasoningEffort = z.infer<typeof AiReasoningEffortSchema>;
+
+/** `high` is the platform default, not the maximum. */
+export const AI_DEFAULT_REASONING_EFFORT = "high" satisfies AiReasoningEffort;
+
+const REASONING_EFFORT_RANK: Readonly<Record<AiReasoningEffort, number>> = Object.freeze({
+  none: 0,
+  minimal: 1,
+  low: 2,
+  medium: 3,
+  high: 4,
+  xhigh: 5,
+  max: 6,
+});
+
+/**
+ * Resolve a requested depth against one model's real capability list.
+ *
+ * - an exactly supported request wins;
+ * - otherwise the platform default is preferred when supported;
+ * - otherwise the closest supported tier is chosen, preferring the higher tier
+ *   on a tie;
+ * - an empty capability list means "this model has no effort parameter".
+ *
+ * This is shared by the API (request/response defaults) and the Web selector so
+ * they can never disagree about what a model supports.
+ */
+export function resolveReasoningEffort(
+  requested: AiReasoningEffort | null | undefined,
+  supported: readonly AiReasoningEffort[],
+  fallback: AiReasoningEffort = AI_DEFAULT_REASONING_EFFORT,
+): AiReasoningEffort | undefined {
+  const unique = [...new Set(supported)];
+  if (unique.length === 0) return undefined;
+  if (requested && unique.includes(requested)) return requested;
+
+  const targetRank = REASONING_EFFORT_RANK[fallback];
+  let best = unique[0]!;
+  let bestDistance = Math.abs(REASONING_EFFORT_RANK[best] - targetRank);
+  for (const candidate of unique.slice(1)) {
+    const distance = Math.abs(REASONING_EFFORT_RANK[candidate] - targetRank);
+    if (
+      distance < bestDistance ||
+      (distance === bestDistance &&
+        REASONING_EFFORT_RANK[candidate] > REASONING_EFFORT_RANK[best])
+    ) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
 
 /**
  * Platform defaults for the prompt suggestions shown before a conversation
@@ -416,7 +478,6 @@ export type AiReasoningEffort = z.infer<typeof AiReasoningEffortSchema>;
  * replace the list, but the code default must still be understandable without
  * any knowledge of the planner.
  */
-export const AI_DEFAULT_REASONING_EFFORT = "high" satisfies AiReasoningEffort;
 export const AI_DEFAULT_SUGGESTED_PROMPTS = [
   "帮我规划一次旅行",
   "比较几个目的地",
@@ -461,8 +522,19 @@ export const AiChatModelSchema = z
     name: z.string().min(1).max(80),
     description: z.string().max(200).optional(),
     provider: z.string().min(1).max(40),
-    /** `true` when the operator allows `reasoningEffort` for this model. */
+    /**
+     * `true` when this exact model can accept a reasoning-depth parameter.
+     * Derived from `reasoningEfforts.length > 0`, kept for older clients.
+     */
     reasoning: z.boolean(),
+    /**
+     * The effort tiers this exact model advertises. Empty means the model has
+     * no effort parameter (or the capability source cannot prove one); the UI
+     * must not invent tiers outside this list.
+     */
+    reasoningEfforts: z.array(AiReasoningEffortSchema).max(AI_REASONING_EFFORTS.length),
+    /** Optional model-specific default, used only when the platform default is unsupported. */
+    defaultReasoningEffort: AiReasoningEffortSchema.optional(),
     /**
      * `true` only when the operator explicitly enabled image input for this
      * deployment (`AI_VISION_SUPPORTED`; default `false`).
@@ -525,7 +597,8 @@ export const AiChatRequestSchema = z
      * Per-turn reasoning depth. Forwarded verbatim to protocols that define the
      * parameter (`reasoning_effort` for OpenAI Chat Completions, `reasoning.effort`
      * for the Responses API); ignored for Anthropic Messages, which has no
-     * equivalent field.
+     * equivalent field. The API validates this against the selected model's
+     * `reasoningEfforts`, not merely against the global vocabulary.
      */
     reasoningEffort: AiReasoningEffortSchema.optional(),
     /** Media already uploaded through the media presign→PUT→complete pipeline. */
@@ -933,6 +1006,8 @@ export const AI_ERROR_CODES = {
   conversationBusy: "AI_CONVERSATION_BUSY",
   /** The requested per-turn model is not on this deployment's allow-list. */
   modelNotAllowed: "AI_MODEL_NOT_ALLOWED",
+  /** The requested depth is not advertised by the selected model. */
+  reasoningEffortUnsupported: "AI_REASONING_EFFORT_UNSUPPORTED",
   /** An attachment reference is unknown, not ready, too large or unreadable. */
   attachmentInvalid: "AI_ATTACHMENT_INVALID",
 } as const;

@@ -5,9 +5,14 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { ProviderModelCapabilitiesPropertyDefaultReasoningEffort } from "./providerModelCapabilitiesPropertyDefaultReasoningEffort";
+import type { ProviderModelCapabilitiesPropertyReasoningEffortsItem } from "./providerModelCapabilitiesPropertyReasoningEffortsItem";
 
 export type ProviderModelCapabilitiesProperty = {
   vision?: boolean;
   reasoning?: boolean;
   tools?: boolean;
+  /** @maxItems 8 */
+  reasoningEfforts?: ProviderModelCapabilitiesPropertyReasoningEffortsItem[];
+  defaultReasoningEffort?: ProviderModelCapabilitiesPropertyDefaultReasoningEffort;
 };

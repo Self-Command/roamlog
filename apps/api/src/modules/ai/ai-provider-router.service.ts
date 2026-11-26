@@ -1,13 +1,19 @@
 import { HttpException, HttpStatus, Inject, Injectable } from "@nestjs/common";
 import {
   AI_DEFAULT_REASONING_EFFORT,
+  AI_REASONING_EFFORTS,
   UuidV7Schema,
+  resolveReasoningEffort,
   type AiChatModel,
   type AiChatModelsResponse,
   type AiReasoningEffort,
   type ProviderModelCapabilities,
 } from "@roamlog/contracts";
 
+import {
+  defaultReasoningEffortForModel,
+  reasoningEffortsForModel,
+} from "../../common/ai-model-capabilities.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import {
@@ -31,13 +37,7 @@ const DEFAULT_MAX_ATTEMPTS = 3;
 const MAX_ALLOWED_MODELS = 20;
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 4_096;
-const REASONING_EFFORTS: ReadonlySet<string> = new Set<AiReasoningEffort>([
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-]);
+const REASONING_EFFORTS: ReadonlySet<string> = new Set<AiReasoningEffort>(AI_REASONING_EFFORTS);
 
 export interface AiProviderModel {
   readonly modelId: string;
@@ -100,10 +100,23 @@ function capabilitiesOf(value: unknown): ProviderModelCapabilities {
     return {};
   }
   const source = value as Record<string, unknown>;
+  const reasoningEfforts = Array.isArray(source.reasoningEfforts)
+    ? source.reasoningEfforts.filter(
+        (effort): effort is AiReasoningEffort =>
+          typeof effort === "string" && REASONING_EFFORTS.has(effort),
+      )
+    : undefined;
+  const defaultReasoningEffort =
+    typeof source.defaultReasoningEffort === "string" &&
+    REASONING_EFFORTS.has(source.defaultReasoningEffort)
+      ? (source.defaultReasoningEffort as AiReasoningEffort)
+      : undefined;
   return {
     ...(typeof source.vision === "boolean" ? { vision: source.vision } : {}),
     ...(typeof source.reasoning === "boolean" ? { reasoning: source.reasoning } : {}),
     ...(typeof source.tools === "boolean" ? { tools: source.tools } : {}),
+    ...(reasoningEfforts && reasoningEfforts.length > 0 ? { reasoningEfforts } : {}),
+    ...(defaultReasoningEffort ? { defaultReasoningEffort } : {}),
   };
 }
 
@@ -199,11 +212,23 @@ export class AiProviderRouter {
           continue;
         }
         seen.add(model.modelId);
+        const reasoningEfforts = reasoningEffortsForModel({
+          modelId: model.modelId,
+          provider: model.ownedBy ?? entry.runtime.preset ?? entry.runtime.adapter,
+          ownedBy: model.ownedBy,
+          protocol: entry.runtime.adapter,
+          declared: model.capabilities,
+        });
+        const defaultReasoningEffort = defaultReasoningEffortForModel(model.capabilities);
         models.push({
           id: model.modelId,
           name: model.displayName.slice(0, 80),
           provider: (model.ownedBy ?? entry.runtime.preset ?? entry.runtime.adapter).slice(0, 40),
-          reasoning: entry.runtime.adapter !== "anthropic-messages",
+          reasoning: reasoningEfforts.length > 0,
+          reasoningEfforts,
+          ...(defaultReasoningEffort && reasoningEfforts.includes(defaultReasoningEffort)
+            ? { defaultReasoningEffort }
+            : {}),
           vision: model.capabilities.vision === true,
         });
         if (models.length >= MAX_ALLOWED_MODELS) {
@@ -221,7 +246,7 @@ export class AiProviderRouter {
     return {
       models,
       defaultModel,
-      reasoningSupported: models.some((model) => model.reasoning),
+      reasoningSupported: models.some((model) => model.reasoningEfforts.length > 0),
     };
   }
 
@@ -528,6 +553,21 @@ export class AiProviderRouter {
     model: string,
   ): AiSettings {
     const config = entry.runtime.config;
+    const protocol = entry.runtime.adapter as AiProtocol;
+    const reasoningEfforts = reasoningEffortsForModel({
+      modelId: selected.modelId,
+      provider: selected.ownedBy ?? entry.runtime.preset ?? entry.runtime.adapter,
+      ownedBy: selected.ownedBy,
+      protocol,
+      declared: selected.capabilities,
+    });
+    const resolvedReasoningEffort = resolveReasoningEffort(
+      reasoningEffort(config.reasoningEffort) ??
+        entry.platformReasoningEffort ??
+        AI_DEFAULT_REASONING_EFFORT,
+      reasoningEfforts,
+      AI_DEFAULT_REASONING_EFFORT,
+    );
     const allowed = [...new Set([...entry.models.map((item) => item.modelId), model])].slice(
       0,
       MAX_ALLOWED_MODELS,
@@ -535,15 +575,16 @@ export class AiProviderRouter {
     if (entry.legacySettings) {
       return {
         ...entry.legacySettings,
-        protocol: entry.runtime.adapter as AiProtocol,
+        protocol,
         model,
         allowedModels: allowed.length > 0 ? allowed : [model],
         configured: true,
         vision: selected.capabilities.vision === true,
+        reasoningEffort: resolvedReasoningEffort,
       };
     }
     return {
-      protocol: entry.runtime.adapter as AiProtocol,
+      protocol,
       baseUrl: safeString(config.baseUrl),
       apiKey: safeString(entry.runtime.secrets.apiKey),
       model,
@@ -553,10 +594,7 @@ export class AiProviderRouter {
       dailyQuota: 0,
       vision: selected.capabilities.vision === true,
       configured: Boolean(safeString(config.baseUrl) && model),
-      reasoningEffort:
-        reasoningEffort(config.reasoningEffort) ??
-        entry.platformReasoningEffort ??
-        AI_DEFAULT_REASONING_EFFORT,
+      reasoningEffort: resolvedReasoningEffort,
     };
   }
 

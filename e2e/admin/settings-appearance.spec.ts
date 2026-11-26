@@ -304,4 +304,23 @@ test.describe("admin appearance defaults", () => {
     await expectNoHorizontalOverflow(page, "admin appearance 390");
     evidence.screenshots.push(await shot(page, "admin-appearance-defaults-390.png"));
   });
+
+  test("quick appearance switcher changes the Admin shell and survives reload", async () => {
+    await page.goto(`${ADMIN_URL}/admin`, { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByRole("navigation", { name: "管理后台主导航" }),
+    ).toBeVisible({ timeout: 30_000 });
+
+    await page.getByTestId("quick-appearance-trigger").click();
+    await expect(page.getByTestId("quick-appearance-menu")).toBeVisible();
+    await page.getByRole("radio", { name: "浅色", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
+
+    await page.getByRole("radio", { name: /Porcelain 原生瓷白/u }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.locator("html")).toHaveAttribute("data-mode", "light");
+    await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+  });
 });

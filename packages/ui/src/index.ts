@@ -105,5 +105,7 @@ export type {
 } from "./patterns/sidebar";
 export { Topbar } from "./patterns/topbar";
 export type { Breadcrumb, TopbarProps } from "./patterns/topbar";
+export { QuickAppearanceMenu } from "./patterns/quick-appearance-menu";
+export type { QuickAppearanceMenuProps } from "./patterns/quick-appearance-menu";
 export { MobileNav } from "./patterns/mobile-nav";
 export type { MobileNavItem, MobileNavProps } from "./patterns/mobile-nav";

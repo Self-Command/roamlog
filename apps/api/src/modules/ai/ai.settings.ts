@@ -24,7 +24,11 @@
  */
 
 import { Inject, Injectable, Optional } from "@nestjs/common";
-import { AI_DEFAULT_REASONING_EFFORT, type AiReasoningEffort } from "@roamlog/contracts";
+import {
+  AI_DEFAULT_REASONING_EFFORT,
+  AI_REASONING_EFFORTS,
+  type AiReasoningEffort,
+} from "@roamlog/contracts";
 
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { SETTINGS_BY_KEY } from "../settings/settings.registry.js";
@@ -143,18 +147,9 @@ function booleanFromValue(value: unknown): boolean | undefined {
   return undefined;
 }
 
-/** The upstream reasoning-depth union, restated for the environment parser. */
-const REASONING_EFFORTS: readonly AiReasoningEffort[] = [
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-];
-
 function reasoningEffortFromValue(value: string | undefined): AiReasoningEffort | undefined {
   const raw = text(value)?.toLowerCase();
-  return raw && (REASONING_EFFORTS as readonly string[]).includes(raw)
+  return raw && (AI_REASONING_EFFORTS as readonly string[]).includes(raw)
     ? (raw as AiReasoningEffort)
     : undefined;
 }

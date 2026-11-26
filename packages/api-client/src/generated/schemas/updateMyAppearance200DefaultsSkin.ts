@@ -10,6 +10,10 @@ export type UpdateMyAppearance200DefaultsSkin =
   (typeof UpdateMyAppearance200DefaultsSkin)[keyof typeof UpdateMyAppearance200DefaultsSkin];
 
 export const UpdateMyAppearance200DefaultsSkin = {
+  mist: "mist",
+  geist: "geist",
+  iris: "iris",
+  sandstone: "sandstone",
   porcelain: "porcelain",
   fluent: "fluent",
   carbon: "carbon",

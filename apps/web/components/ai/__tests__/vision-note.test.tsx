@@ -27,6 +27,7 @@ const MODELS: AiChatModelsResponse = {
       name: "Deepseek V4.1 Flash",
       provider: "auto",
       reasoning: true,
+      reasoningEfforts: ["low", "medium", "high"],
       vision: false,
     },
     {
@@ -34,6 +35,7 @@ const MODELS: AiChatModelsResponse = {
       name: "Vision Model",
       provider: "auto",
       reasoning: true,
+      reasoningEfforts: ["low", "medium", "high"],
       vision: true,
     },
   ],

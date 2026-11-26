@@ -592,11 +592,22 @@ integration("AI conversation persistence on real PostgreSQL", () => {
 
       const message = await requiredClient().aiMessage.findFirstOrThrow({
         where: { conversationId: conversation.id, clientId: `assistant-${entry.reason}` },
-        select: { content: true, status: true, metadata: true },
+        select: { content: true, status: true, metadata: true, parentId: true },
       });
       expect(message.content).toEqual([{ type: "text", text: `answer-${entry.reason}` }]);
       expect(message.status).toEqual(entry.status);
       expect(message.metadata).toMatchObject({ finishReason: entry.reason });
+      // The final assistant row must stay on the same branch as the user row.
+      // A NULL parent turns the row into a new root; reload then starts at the
+      // orphan and the earlier conversation appears to have vanished.
+      expect(message.parentId).toBe(user.messageId);
+
+      const history = await service.listMessages(USER.owner, WORKSPACE.home, conversation.id);
+      expect(history.messages.map((entry) => entry.message.clientId)).toEqual([
+        user.clientId,
+        `assistant-${entry.reason}`,
+      ]);
+      expect(history.headId).toBe(`assistant-${entry.reason}`);
     }
   });
 

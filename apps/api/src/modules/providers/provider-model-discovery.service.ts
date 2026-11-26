@@ -9,6 +9,7 @@ import {
   type ProviderModelDiscoveryResponse,
 } from "@roamlog/contracts";
 
+import { reasoningCapabilitiesForModel } from "../../common/ai-model-capabilities.js";
 import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
 import { parseRequest } from "../../common/services/request-validation.js";
 import { AuditService } from "../audit/audit.service.js";
@@ -497,7 +498,16 @@ export class ProviderModelDiscoveryService {
           "The provider did not return a JSON model catalog.",
         );
       }
-      return parseProviderCatalog(payload, context.adapter.adapter);
+      return parseProviderCatalog(payload, context.adapter.adapter).map((model) => ({
+        ...model,
+        capabilities: reasoningCapabilitiesForModel({
+          modelId: model.modelId,
+          provider: model.ownedBy ?? context.preset.preset,
+          ownedBy: model.ownedBy,
+          protocol: context.adapter.adapter,
+          declared: model.capabilities,
+        }),
+      }));
     } finally {
       clearTimeout(timer);
     }

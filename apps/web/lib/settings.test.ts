@@ -251,13 +251,14 @@ describe("resolveThemePresentation", () => {
     expect(resolveThemeMode("sepia")).toBe("system");
     expect(resolveThemeAccent("chartreuse")).toBe("white");
     expect(resolveDefaultSkin({ storedSkin: "not-a-skin", legacyAccent: "rose" })).toBe(
-      "porcelain",
+      "mist",
     );
     expect(resolveThemeFont("not-a-font")).toBe(DEFAULT_THEME_FONT);
   });
 
   it("maps legacy accents only when no explicit skin is present", () => {
     expect(resolveDefaultSkin({ storedSkin: null, legacyAccent: "rose" })).toBe("porcelain");
+    expect(resolveDefaultSkin({ storedSkin: null })).toBe("mist");
     expect(resolveDefaultSkin({ storedSkin: "kanagawa", legacyAccent: "rose" })).toBe(
       "carbon-soft",
     );

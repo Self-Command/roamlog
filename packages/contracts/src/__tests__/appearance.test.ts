@@ -18,9 +18,18 @@ import {
 } from "../api/appearance";
 
 describe("appearance contracts", () => {
-  it("freezes four enterprise choices with legacy IDs still parseable", () => {
+  it("freezes the active enterprise choices with legacy IDs still parseable", () => {
     expect(APPEARANCE_MODES).toEqual(["system", "light", "dark"]);
-    expect(ACTIVE_SKIN_IDS).toEqual(["porcelain", "fluent", "carbon", "carbon-soft"]);
+    expect(ACTIVE_SKIN_IDS).toEqual([
+      "mist",
+      "geist",
+      "iris",
+      "sandstone",
+      "porcelain",
+      "fluent",
+      "carbon",
+      "carbon-soft",
+    ]);
     expect(ACTIVE_FONT_PAIRING_IDS).toEqual([
       "fluent-native",
       "primer-system",
@@ -28,6 +37,10 @@ describe("appearance contracts", () => {
       "carbon-plex",
     ]);
     expect(SKIN_IDS).toEqual([
+      "mist",
+      "geist",
+      "iris",
+      "sandstone",
       "porcelain",
       "fluent",
       "carbon",
@@ -82,7 +95,7 @@ describe("appearance contracts", () => {
     expect(normalizeSkinId("catppuccin")).toBe("fluent");
     expect(normalizeSkinId("tokyo-night")).toBe("carbon");
     expect(normalizeSkinId("kanagawa")).toBe("carbon-soft");
-    expect(normalizeSkinId("unknown")).toBe("porcelain");
+    expect(normalizeSkinId("unknown")).toBe("mist");
     expect(normalizeFontPairingId("editorial-classic")).toBe("fluent-native");
     expect(normalizeFontPairingId("cjk-editorial")).toBe("fluent-native");
     expect(normalizeFontPairingId("unknown")).toBe("fluent-native");
@@ -145,11 +158,11 @@ describe("appearance contracts", () => {
       updatedAt: null,
       defaults: {
         mode: "system",
-        skin: "fluent",
+        skin: "mist",
         fontPairing: "fluent-native",
       },
     });
     expect(APPEARANCE_SOURCES).toContain(parsed.source);
-    expect(parsed.defaults.skin).toBe("fluent");
+    expect(parsed.defaults.skin).toBe("mist");
   });
 });

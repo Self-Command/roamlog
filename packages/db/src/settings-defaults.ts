@@ -31,7 +31,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   "seo.sitemapEnabled": true,
 
   "theme.accent": "white",
-  "theme.defaultSkin": "porcelain",
+  "theme.defaultSkin": "mist",
   "theme.defaultMode": "system",
   "theme.defaultFont": "fluent-native",
   "theme.allowUserOverride": true,

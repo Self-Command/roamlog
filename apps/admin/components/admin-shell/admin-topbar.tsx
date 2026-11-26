@@ -4,6 +4,7 @@ import { Command, Menu, Search } from "lucide-react";
 
 import { Avatar, Badge, IconButton } from "@roamlog/ui";
 
+import { QuickAppearanceControl } from "../appearance/quick-appearance-control";
 import { ADMIN_ROLE_LABELS } from "../../lib/labels";
 import { cn } from "./cn";
 import { getBreadcrumbs } from "./admin-nav";
@@ -93,6 +94,8 @@ export function AdminTopbar({
           >
             <Search aria-hidden="true" />
           </IconButton>
+
+          <QuickAppearanceControl />
 
           {environment ? (
             <Badge tone="slate" className="hidden sm:inline-flex">

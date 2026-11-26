@@ -457,7 +457,7 @@ export class AiConversationService implements AiConversationServiceContract {
     await this.requireConversation(input.workspaceId, input.conversationId);
     const stream = await this.prisma.client.aiStream.findFirst({
       where: { id: input.streamId, conversationId: input.conversationId },
-      select: { id: true },
+      select: { id: true, messageId: true, createdAt: true },
     });
     if (!stream) {
       throw conversationNotFound();
@@ -475,8 +475,38 @@ export class AiConversationService implements AiConversationServiceContract {
     await this.prisma.client.$transaction(async (tx) => {
       const existing = await tx.aiMessage.findFirst({
         where: { conversationId: input.conversationId, clientId: input.clientId },
-        select: { id: true },
+        select: { id: true, parentId: true },
       });
+
+      // The final assistant row must branch from the user message that started
+      // this stream. `AiStream.messageId` points at that user row until this
+      // method overwrites it with the assistant row below. If an older stream
+      // was already finalized, fall back to the newest preceding user row so a
+      // retry/repair cannot create a second branch root. Without this parent,
+      // `GET .../messages` returns an orphan assistant row as `headId` and the
+      // reloaded thread appears empty.
+      const parentFromStream = stream.messageId
+        ? await tx.aiMessage.findFirst({
+            where: {
+              id: stream.messageId,
+              conversationId: input.conversationId,
+              role: "user",
+            },
+            select: { id: true },
+          })
+        : null;
+      const parentMessage =
+        parentFromStream ??
+        (await tx.aiMessage.findFirst({
+          where: {
+            conversationId: input.conversationId,
+            role: "user",
+            createdAt: { lte: stream.createdAt },
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: { id: true },
+        }));
+      const parentId = parentMessage?.id ?? null;
 
       const data = {
         content: json(input.content),
@@ -488,7 +518,13 @@ export class AiConversationService implements AiConversationServiceContract {
       const message = existing
         ? await tx.aiMessage.update({
             where: { id: existing.id, conversationId: input.conversationId },
-            data,
+            data: {
+              ...data,
+              ...(parentId !== null &&
+              (existing.parentId === null || existing.parentId === undefined)
+                ? { parentId }
+                : {}),
+            },
             select: { id: true },
           })
         : await tx.aiMessage.create({
@@ -496,6 +532,7 @@ export class AiConversationService implements AiConversationServiceContract {
               conversationId: input.conversationId,
               role: "assistant",
               clientId: input.clientId,
+              parentId,
               ...data,
             },
             select: { id: true },

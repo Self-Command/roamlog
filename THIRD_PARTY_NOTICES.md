@@ -49,9 +49,14 @@ Fluent's Segoe UI stack is a system-font fallback and is not redistributed.
 | `@fluentui/react-theme` | `9.2.2` (`2dd2a9a96210919c35b210a1aa8e873ab67dbada`) | MIT | Fluent 2 neutral, brand and status roles |
 | `@carbon/themes` | `11.86.0` (`4c2a5622e18ba209282ca0d70c23b1b34be8dc8e`) | Apache-2.0 | Carbon White/Gray 10/90/100 roles |
 | `@carbon/type` | `11.71.0` | Apache-2.0 | Plex typography scale and font families |
+| `tweakcn` | `a3b47b37cba97dd637de517aab52c45ec0f83456` | Apache-2.0 | Mist/Geist/Sandstone neutral, accent and radius roles |
+| `radix-ui/colors` | `dbdb85470547c7d34b9001f48fddb08ded335979` | MIT | Iris/mauve and shared status roles |
 
 Roamlog copies token values into its own semantic variables. It does not add a
-Primer, Fluent or Carbon runtime dependency.
+Primer, Fluent, Carbon, tweakcn or Radix runtime dependency. The Apache-2.0
+license text for the tweakcn source is the same license already copied at
+`LICENSES/vercel-chatbot-Apache-2.0.txt`; the Radix source is MIT and is listed
+with its pinned revision in the table above.
 
 ## Modified source ports
 
@@ -96,3 +101,16 @@ Primer, Fluent or Carbon runtime dependency.
   `@roamlog/ui` components and Roamlog color tokens; component state,
   keyboard/accessibility behavior and render branches are retained. Each ported
   file carries its upstream path and revision.
+
+### models.dev
+
+- Source: https://github.com/anomalyco/models.dev
+- Revision: `5192a691eea9a5e890caa31ec47983a2da31f7e6`
+- License: MIT
+- Copied license notice: `LICENSES/models-dev-MIT.txt`
+- Usage: the generated reasoning-effort snapshot under
+  `apps/api/src/common/data/models-dev-reasoning.generated.ts` is produced from
+  `https://models.dev/api.json` by
+  `tooling/scripts/generate-ai-model-capabilities.mjs`. It contains only model
+  ids, canonical ids and `reasoning_options` effort values; no upstream code is
+  executed at runtime.

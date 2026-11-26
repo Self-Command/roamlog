@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { IsoTimestampSchema, JsonObjectSchema, UuidV7Schema } from "../common/ids";
+import { AiReasoningEffortSchema } from "./ai";
 
 export const PROVIDER_GROUPS = ["ai", "places", "mail", "storage"] as const;
 export const ProviderGroupSchema = z.enum(PROVIDER_GROUPS);
@@ -182,6 +183,9 @@ export const ProviderModelCapabilitiesSchema = z
     vision: z.boolean().optional(),
     reasoning: z.boolean().optional(),
     tools: z.boolean().optional(),
+    /** Capability tiers copied from the model catalog, not operator input. */
+    reasoningEfforts: z.array(AiReasoningEffortSchema).max(8).optional(),
+    defaultReasoningEffort: AiReasoningEffortSchema.optional(),
   })
   .strict();
 export type ProviderModelCapabilities = z.infer<typeof ProviderModelCapabilitiesSchema>;

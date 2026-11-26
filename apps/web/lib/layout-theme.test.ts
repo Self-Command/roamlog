@@ -141,7 +141,7 @@ describe("root layout runtime theme", () => {
     );
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "light",
-      themeColor: "#f6f5f2",
+      themeColor: "#f8fafc",
     });
 
     vi.stubGlobal(
@@ -151,8 +151,8 @@ describe("root layout runtime theme", () => {
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "light dark",
       themeColor: [
-        { media: "(prefers-color-scheme: light)", color: "#f6f5f2" },
-        { media: "(prefers-color-scheme: dark)", color: "#141416" },
+        { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+        { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
       ],
     });
 
@@ -162,7 +162,7 @@ describe("root layout runtime theme", () => {
     );
     await expect(generateViewport()).resolves.toEqual({
       colorScheme: "dark",
-      themeColor: "#141416",
+      themeColor: "#0f172a",
     });
   });
 
@@ -178,7 +178,7 @@ describe("root layout runtime theme", () => {
 
     expect(html.props["data-theme"]).toBe("system");
     expect(html.props["data-mode"]).toBe("system");
-    expect(html.props["data-skin"]).toBe("porcelain");
+    expect(html.props["data-skin"]).toBe("mist");
     expect(html.props["data-font"]).toBe("fluent-native");
     expect(html.props["data-accent"]).toBe("white");
     expect(html.props.style?.colorScheme).toBe("light dark");

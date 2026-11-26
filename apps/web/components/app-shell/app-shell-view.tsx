@@ -19,6 +19,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { getNextTrip } from "@/lib/trip-presentation";
 
+import { QuickAppearanceControl } from "../appearance/quick-appearance-control";
 import { breadcrumbFor, buildShellNavigation } from "./app-shell-nav";
 import { CommandPalette } from "./command-palette";
 import { NextTripCard } from "./next-trip-card";
@@ -191,6 +192,8 @@ export function AppShellView({
               />
             </div>
           ) : null}
+
+          <QuickAppearanceControl workspaceSlug={currentWorkspace.slug} />
 
           <NotificationBell
             href={`${workspaceRoot}/notifications`}

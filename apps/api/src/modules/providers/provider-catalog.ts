@@ -1,4 +1,5 @@
 import type {
+  AiReasoningEffort,
   ProviderAdapterDescriptor,
   ProviderCatalog,
   ProviderConfigField,
@@ -6,6 +7,7 @@ import type {
   ProviderPreset as ProviderPresetContract,
   ProviderSecretFieldDescriptor,
 } from "@roamlog/contracts";
+import { AI_REASONING_EFFORTS } from "@roamlog/contracts";
 
 import {
   type ProviderAdapter,
@@ -36,6 +38,16 @@ const GROUP_ROUTING_MODES: Readonly<Record<ProviderGroup, readonly string[]>> = 
   places: ["merge", "priority_failover"],
   mail: ["single"],
   storage: ["single"],
+});
+
+const REASONING_EFFORT_LABELS: Readonly<Record<AiReasoningEffort, string>> = Object.freeze({
+  none: "无",
+  minimal: "极低",
+  low: "低",
+  medium: "中",
+  high: "高",
+  xhigh: "极高",
+  max: "最高",
 });
 
 function field(
@@ -74,13 +86,7 @@ const AI_CONFIG_FIELDS: readonly ProviderConfigField[] = [
     default: 4_096,
   }),
   field("reasoningEffort", "select", "推理强度", false, {
-    options: [
-      option("none", "none"),
-      option("minimal", "minimal"),
-      option("low", "low"),
-      option("medium", "medium"),
-      option("high", "high"),
-    ],
+    options: AI_REASONING_EFFORTS.map((value) => option(value, REASONING_EFFORT_LABELS[value])),
   }),
 ];
 

@@ -201,7 +201,9 @@ function toThreadMessageLike(message: AiThreadMessage): ThreadMessageLike {
     role: message.role,
     content: message.content as ThreadMessageLike["content"],
     createdAt: new Date(message.createdAt),
-    ...(message.status !== undefined
+    // assistant-ui rejects `status` on user messages, even though the API
+    // contract allows the optional field on every stored row.
+    ...(message.status !== undefined && message.role === "assistant"
       ? { status: message.status as NonNullable<ThreadMessageLike["status"]> }
       : {}),
     ...(message.metadata !== undefined
@@ -517,8 +519,19 @@ function makeHistoryAdapter(
 
       try {
         const response = await listConversationMessages(gateway.workspaceId, remoteId);
+        // `parentId` is the persisted server UUID, while `ThreadMessageLike.id`
+        // is the client-facing idempotency key. The branch repository compares
+        // parent and child ids in the same namespace, so translate the parent
+        // through the persisted row before rebuilding the branch. Without this,
+        // a perfectly linked database history loads as an orphan assistant.
+        const clientIdByPersistedId = new Map(
+          response.messages.map(({ message }) => [message.id, message.clientId ?? message.id]),
+        );
         const items = response.messages.map(({ parentId, message }) => ({
-          parentId,
+          parentId:
+            parentId === null
+              ? null
+              : (clientIdByPersistedId.get(parentId) ?? parentId),
           message: toThreadMessageLike(message),
         }));
         return ExportedMessageRepository.fromBranchableArray(items, {

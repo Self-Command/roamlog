@@ -115,7 +115,7 @@ describe("ProviderModelDiscoveryService", () => {
         modelId: "gpt-4o",
         displayName: "GPT-4o",
         ownedBy: "openai",
-        capabilities: {},
+        capabilities: { reasoning: false },
       },
     ]);
     expect(result.manualEntryRequired).toBe(false);

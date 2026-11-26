@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { ProviderGroup } from "@roamlog/contracts";
+import { AiReasoningEffortSchema, type ProviderGroup } from "@roamlog/contracts";
 
 export type ProviderAdapter =
   | "openai-chat"
@@ -71,7 +71,7 @@ export const aiProviderConfigSchema = z
     defaultModel: modelId.optional(),
     timeoutMs: timeoutMs.default(60_000),
     maxOutputTokens: maxOutputTokens.default(4_096),
-    reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high"]).optional(),
+    reasoningEffort: AiReasoningEffortSchema.optional(),
   })
   .strict();
 

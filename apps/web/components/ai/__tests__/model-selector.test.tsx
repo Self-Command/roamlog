@@ -18,6 +18,7 @@ const MODELS: AiChatModelsResponse = {
       name: "DeepSeek Chat",
       provider: "deepseek",
       reasoning: true,
+      reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
       vision: false,
     },
     {
@@ -26,6 +27,7 @@ const MODELS: AiChatModelsResponse = {
       name: "GPT-5",
       provider: "openai",
       reasoning: true,
+      reasoningEfforts: ["minimal", "low", "medium", "high"],
       vision: true,
     },
   ],
@@ -112,6 +114,22 @@ describe("ModelSelectorCompact", () => {
 
     await waitFor(() => {
       expect(aiChatSelectionStore(WORKSPACE_ID).get().model).toBe("openai/gpt-5");
+    });
+  });
+
+  it("clamps a saved reasoning tier when switching to a model with fewer tiers", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(jsonResponse(MODELS));
+    const store = aiChatSelectionStore(WORKSPACE_ID);
+    store.set({ model: "deepseek/deepseek-chat", reasoningEffort: "max" });
+
+    render(<ModelSelectorCompact workspaceId={WORKSPACE_ID} />);
+    await user.click(await screen.findByTestId("model-selector"));
+    await user.click(await screen.findByTestId("model-option-openai/gpt-5"));
+
+    await waitFor(() => {
+      expect(store.get().model).toBe("openai/gpt-5");
+      expect(store.get().reasoningEffort).toBe("high");
     });
   });
 

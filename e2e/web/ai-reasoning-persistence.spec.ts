@@ -35,9 +35,29 @@ test("reasoning effort follows the platform default and persists a user choice",
     data: { mode: null, skin: null, fontPairing: null },
   });
   expect(resetAppearance.status(), await resetAppearance.text()).toBe(200);
+  await page.route("**/v1/workspaces/*/ai/models", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        defaultModel: "stub/reasoning-model",
+        reasoningSupported: true,
+        models: [
+          {
+            id: "stub/reasoning-model",
+            name: "Stub Reasoning",
+            provider: "stub",
+            reasoning: true,
+            reasoningEfforts: ["low", "medium", "high"],
+            vision: false,
+          },
+        ],
+      }),
+    });
+  });
   await page.goto(`${WEB_URL}/w/${WORKSPACE_SLUG}/ai`, { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("multimodal-input")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("html")).toHaveAttribute("data-skin", "porcelain");
+  await expect(page.locator("html")).toHaveAttribute("data-skin", "mist");
   await expect(page.locator("html")).toHaveAttribute("data-font", "fluent-native");
 
   // Start from a clean browser preference while keeping the real session.

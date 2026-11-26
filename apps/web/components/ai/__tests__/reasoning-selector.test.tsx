@@ -3,23 +3,26 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReasoningSelectorCompact } from "../chat-controls";
-import { resetAiChatSelectionStores } from "../chat-selection";
+import { aiChatSelectionStore, resetAiChatSelectionStores } from "../chat-selection";
 import { resetAiChatModelStoresForTests } from "../model-selector";
 import { resetAiReasoningDefaultForTests } from "../use-ai-reasoning";
 
 const WORKSPACE_ID = "018f0a00-0000-7000-8000-0000000000aa";
+const FIVE_EFFORTS = ["none", "minimal", "low", "medium", "high"] as const;
+const MAX_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
-function modelsResponse(reasoningSupported = true): Response {
+function modelsResponse(reasoningEfforts: readonly string[] = FIVE_EFFORTS): Response {
   return new Response(
     JSON.stringify({
       defaultModel: "auto/test",
-      reasoningSupported,
+      reasoningSupported: reasoningEfforts.length > 0,
       models: [
         {
           id: "auto/test",
           name: "Test model",
           provider: "auto",
-          reasoning: reasoningSupported,
+          reasoning: reasoningEfforts.length > 0,
+          reasoningEfforts,
           vision: false,
         },
       ],
@@ -31,7 +34,10 @@ function modelsResponse(reasoningSupported = true): Response {
   );
 }
 
-function installFetch(platformDefault: string, reasoningSupported = true): void {
+function installFetch(
+  platformDefault: string,
+  reasoningEfforts: readonly string[] = FIVE_EFFORTS,
+): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -45,7 +51,7 @@ function installFetch(platformDefault: string, reasoningSupported = true): void 
           },
         );
       }
-      return modelsResponse(reasoningSupported);
+      return modelsResponse(reasoningEfforts);
     }),
   );
 }
@@ -112,11 +118,45 @@ describe("ReasoningSelectorCompact", () => {
   });
 
   it("disables the selector with user-facing copy when the model has no reasoning control", async () => {
-    installFetch("high", false);
+    installFetch("high", []);
     render(<ReasoningSelectorCompact workspaceId={WORKSPACE_ID} />);
 
     const trigger = await screen.findByTestId("reasoning-selector");
     expect(trigger).toBeDisabled();
-    expect(trigger).toHaveAttribute("title", "当前 AI 服务不支持调整思考强度");
+    expect(trigger).toHaveAttribute("title", "当前模型不支持调整思考强度");
+  });
+
+  it("renders the model's higher tiers, including xhigh and max", async () => {
+    installFetch("high", MAX_EFFORTS);
+    const user = userEvent.setup();
+    render(<ReasoningSelectorCompact workspaceId={WORKSPACE_ID} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reasoning-selector-current")).toHaveTextContent("高");
+    });
+    await user.click(screen.getByTestId("reasoning-selector"));
+
+    expect(screen.getByTestId("reasoning-option-xhigh")).toHaveTextContent("极高");
+    expect(screen.getByTestId("reasoning-option-max")).toHaveTextContent("最高");
+    expect(screen.queryByTestId("reasoning-option-none")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("reasoning-option-max"));
+    await waitFor(() => {
+      expect(screen.getByTestId("reasoning-selector-current")).toHaveTextContent("最高");
+    });
+  });
+
+  it("clamps a saved unsupported tier to the closest supported tier", async () => {
+    window.localStorage.setItem(
+      `roamlog.ai.reasoning.v1:${WORKSPACE_ID}`,
+      JSON.stringify("max"),
+    );
+    installFetch("high", ["low", "medium", "high"]);
+    render(<ReasoningSelectorCompact workspaceId={WORKSPACE_ID} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reasoning-selector-current")).toHaveTextContent("高");
+    });
+    expect(aiChatSelectionStore(WORKSPACE_ID).get().reasoningEffort).toBe("high");
   });
 });

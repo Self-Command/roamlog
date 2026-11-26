@@ -38,11 +38,15 @@ function renderForm(overrides: Partial<AppearancePickerFormProps> = {}) {
 }
 
 describe("AppearancePickerForm", () => {
-  it("renders four enterprise themes and four locally bundled font pairings", () => {
+  it("renders the active enterprise themes and four locally bundled font pairings", () => {
     renderForm();
 
-    expect(screen.getAllByRole("radio")).toHaveLength(11);
+    expect(screen.getAllByRole("radio")).toHaveLength(15);
     expect(screen.queryByRole("radio", { name: /Primer 企业中性/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Mist/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Geist/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Iris/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Sandstone/ })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Porcelain/ })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Fluent 2/ })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /IBM Carbon/ })).toBeInTheDocument();

@@ -17,17 +17,10 @@
  * closure from mount.
  */
 
-import type { AiReasoningEffort } from "@roamlog/contracts";
+import { AI_REASONING_EFFORTS, type AiReasoningEffort } from "@roamlog/contracts";
 import { useSyncExternalStore } from "react";
 
 const REASONING_STORAGE_PREFIX = "roamlog.ai.reasoning.v1";
-const REASONING_EFFORTS: readonly AiReasoningEffort[] = [
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-];
 
 export interface AiChatSelection {
   /** `undefined` means "let the server use its configured default". */
@@ -54,7 +47,7 @@ function readPersistedReasoningEffort(workspaceId: string): AiReasoningEffort | 
     if (!value) return undefined;
     const parsed: unknown = JSON.parse(value);
     return typeof parsed === "string" &&
-      (REASONING_EFFORTS as readonly string[]).includes(parsed)
+      (AI_REASONING_EFFORTS as readonly string[]).includes(parsed)
       ? (parsed as AiReasoningEffort)
       : undefined;
   } catch {

@@ -15,4 +15,6 @@ export const CreateAiChatBodyReasoningEffort = {
   low: "low",
   medium: "medium",
   high: "high",
+  xhigh: "xhigh",
+  max: "max",
 } as const;

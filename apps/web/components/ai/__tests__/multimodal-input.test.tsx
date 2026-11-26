@@ -100,6 +100,7 @@ function modelResponse(vision = true): Response {
           name: "GPT-5",
           provider: "openai",
           reasoning: true,
+          reasoningEfforts: ["minimal", "low", "medium", "high"],
           vision,
         },
       ],

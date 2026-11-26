@@ -55,9 +55,18 @@ function themeItems(overrides: Partial<Record<string, SettingValue>> = {}): Admi
       "theme.defaultSkin",
       "string",
       "默认皮肤",
-      "porcelain",
-      overrides["theme.defaultSkin"] ?? "porcelain",
-      ["porcelain", "fluent", "carbon", "carbon-soft"],
+      "mist",
+      overrides["theme.defaultSkin"] ?? "mist",
+      [
+        "mist",
+        "geist",
+        "iris",
+        "sandstone",
+        "porcelain",
+        "fluent",
+        "carbon",
+        "carbon-soft",
+      ],
     ),
     makeThemeItem(
       "theme.defaultFont",
@@ -143,7 +152,7 @@ afterEach(() => {
 });
 
 describe("AppearanceDefaults", () => {
-  it("loads the four controls and the native enterprise skin/font choices", async () => {
+  it("loads the four controls and the enterprise skin/font choices", async () => {
     const fake = fakeApi();
     render(<AppearanceDefaults role="super_admin" api={fake.api} />);
 
@@ -160,7 +169,7 @@ describe("AppearanceDefaults", () => {
     );
     expect(
       within(screen.getByRole("radiogroup", { name: "默认主题" })).getAllByRole("radio"),
-    ).toHaveLength(4);
+    ).toHaveLength(8);
     expect(
       within(screen.getByRole("radiogroup", { name: "默认字体" })).getAllByRole("radio"),
     ).toHaveLength(4);

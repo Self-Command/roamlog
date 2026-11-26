@@ -14286,6 +14286,34 @@
               },
               "tools": {
                 "type": "boolean"
+              },
+              "reasoningEfforts": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "minimal",
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max"
+                  ]
+                },
+                "maxItems": 8
+              },
+              "defaultReasoningEffort": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ]
               }
             },
             "additionalProperties": false
@@ -14700,6 +14728,34 @@
               },
               "tools": {
                 "type": "boolean"
+              },
+              "reasoningEfforts": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "minimal",
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max"
+                  ]
+                },
+                "maxItems": 8
+              },
+              "defaultReasoningEffort": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ]
               }
             },
             "additionalProperties": false
@@ -14740,6 +14796,34 @@
           },
           "tools": {
             "type": "boolean"
+          },
+          "reasoningEfforts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "none",
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
+            },
+            "maxItems": 8
+          },
+          "defaultReasoningEffort": {
+            "type": "string",
+            "enum": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
           }
         },
         "additionalProperties": false
@@ -14831,6 +14915,34 @@
                     },
                     "tools": {
                       "type": "boolean"
+                    },
+                    "reasoningEfforts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "minimal",
+                          "low",
+                          "medium",
+                          "high",
+                          "xhigh",
+                          "max"
+                        ]
+                      },
+                      "maxItems": 8
+                    },
+                    "defaultReasoningEffort": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max"
+                      ]
                     }
                   },
                   "additionalProperties": false
@@ -22093,6 +22205,34 @@
               },
               "tools": {
                 "type": "boolean"
+              },
+              "reasoningEfforts": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "minimal",
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max"
+                  ]
+                },
+                "maxItems": 8
+              },
+              "defaultReasoningEffort": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ]
               }
             },
             "additionalProperties": false
@@ -24994,6 +25134,10 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "mist",
+                        "geist",
+                        "iris",
+                        "sandstone",
                         "porcelain",
                         "fluent",
                         "carbon",
@@ -25056,6 +25200,10 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "mist",
+                            "geist",
+                            "iris",
+                            "sandstone",
                             "porcelain",
                             "fluent",
                             "carbon",
@@ -25182,6 +25330,10 @@
                       "null"
                     ],
                     "enum": [
+                      "mist",
+                      "geist",
+                      "iris",
+                      "sandstone",
                       "porcelain",
                       "fluent",
                       "carbon",
@@ -25240,6 +25392,10 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "mist",
+                        "geist",
+                        "iris",
+                        "sandstone",
                         "porcelain",
                         "fluent",
                         "carbon",
@@ -25302,6 +25458,10 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "mist",
+                            "geist",
+                            "iris",
+                            "sandstone",
                             "porcelain",
                             "fluent",
                             "carbon",
@@ -25442,6 +25602,10 @@
                     "skin": {
                       "type": "string",
                       "enum": [
+                        "mist",
+                        "geist",
+                        "iris",
+                        "sandstone",
                         "porcelain",
                         "fluent",
                         "carbon",
@@ -25504,6 +25668,10 @@
                         "skin": {
                           "type": "string",
                           "enum": [
+                            "mist",
+                            "geist",
+                            "iris",
+                            "sandstone",
                             "porcelain",
                             "fluent",
                             "carbon",
@@ -36113,7 +36281,9 @@
                       "minimal",
                       "low",
                       "medium",
-                      "high"
+                      "high",
+                      "xhigh",
+                      "max"
                     ]
                   },
                   "attachments": {
@@ -36910,7 +37080,9 @@
                       "minimal",
                       "low",
                       "medium",
-                      "high"
+                      "high",
+                      "xhigh",
+                      "max"
                     ]
                   },
                   "attachments": {

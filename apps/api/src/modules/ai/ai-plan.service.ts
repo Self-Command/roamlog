@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { HttpException, HttpStatus, Inject, Injectable, Optional } from "@nestjs/common";
 import {
   AI_ATTACHMENT_MAX_BYTES,
+  AI_DEFAULT_REASONING_EFFORT,
   AI_ERROR_CODES,
   AI_TOOL_NAMES,
   AiAskUserArgsSchema,
@@ -13,6 +14,7 @@ import {
   isHumanToolCancellation,
   isHumanToolName,
   isReadOnlyAiTool,
+  resolveReasoningEffort,
   type AiAttachment,
   type AiChatModelsResponse,
   type AiChatRequest,
@@ -33,6 +35,7 @@ import {
   type AiUsage,
 } from "@roamlog/contracts";
 
+import { reasoningEffortsForModel } from "../../common/ai-model-capabilities.js";
 import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
 import type { WorkspaceMembershipAccess } from "../../common/services/workspace-access.service.js";
 import { parseRequest } from "../../common/services/request-validation.js";
@@ -486,9 +489,10 @@ export class AiPlanService {
       const candidates = await this.providerRouter.candidates(body.model);
       await this.consumeQuota(actor);
       const result = await this.providerRouter.runWithFailover(candidates, async (candidate) => {
+        const reasoningEffort = this.reasoningEffortForCandidate(candidate, body.reasoningEffort);
         const settings: AiSettings = {
           ...candidate.settings,
-          ...(body.reasoningEffort === undefined ? {} : { reasoningEffort: body.reasoningEffort }),
+          ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
         };
         const adapter = this.adapterFactory(settings);
         this.assertConfigured(settings, adapter);
@@ -1334,11 +1338,13 @@ export class AiPlanService {
     readonly state: { runId?: string };
     readonly signal?: AbortSignal;
   }): AsyncGenerator<AiStreamEvent, PlanLoopOutcome, void> {
+    const reasoningEffort = this.reasoningEffortForCandidate(
+      input.candidate,
+      input.body.reasoningEffort,
+    );
     const settings: AiSettings = {
       ...input.candidate.settings,
-      ...(input.body.reasoningEffort === undefined
-        ? {}
-        : { reasoningEffort: input.body.reasoningEffort }),
+      ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
     };
     const adapter = this.adapterFactory(settings);
     this.assertConfigured(settings, adapter);
@@ -1461,6 +1467,34 @@ export class AiPlanService {
    * back: a client that asked for model X must not receive answers from model Y
    * without noticing.
    */
+  private reasoningEffortForCandidate(
+    candidate: AiProviderCandidate,
+    requested: AiReasoningEffort | undefined,
+  ): AiReasoningEffort | undefined {
+    const supported = reasoningEffortsForModel({
+      modelId: candidate.model.modelId,
+      provider: candidate.model.ownedBy ?? candidate.runtime.preset ?? candidate.runtime.adapter,
+      ownedBy: candidate.model.ownedBy,
+      protocol: candidate.settings.protocol,
+      declared: candidate.model.capabilities,
+    });
+    if (requested === undefined) {
+      return candidate.settings.reasoningEffort;
+    }
+    if (!supported.includes(requested)) {
+      throw new HttpException(
+        {
+          code: "AI_REASONING_EFFORT_UNSUPPORTED",
+          message: "That reasoning effort is not supported by the selected model.",
+          model: candidate.model.modelId,
+          supportedReasoningEfforts: supported,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return requested;
+  }
+
   private async resolveAdapter(
     overrides: { model?: string; reasoningEffort?: AiReasoningEffort } = {},
   ): Promise<{
@@ -1482,12 +1516,43 @@ export class AiPlanService {
 
     // The adapter reads one snapshot; the override is expressed there, exactly
     // like the upstream route passes `model: getLanguageModel(chatModel)`.
-    const effective: AiSettings = {
+    const base: AiSettings = {
       ...settings,
       ...(model === undefined ? {} : { model }),
       ...(overrides.reasoningEffort === undefined
         ? {}
         : { reasoningEffort: overrides.reasoningEffort }),
+    };
+    const supportedReasoningEfforts = reasoningEffortsForModel({
+      modelId: base.model,
+      provider: base.model.includes("/") ? base.model.split("/")[0] : null,
+      protocol: base.protocol,
+    });
+    if (
+      overrides.reasoningEffort !== undefined &&
+      !supportedReasoningEfforts.includes(overrides.reasoningEffort)
+    ) {
+      throw new HttpException(
+        {
+          code: "AI_REASONING_EFFORT_UNSUPPORTED",
+          message: "That reasoning effort is not supported by the selected model.",
+          model: base.model,
+          supportedReasoningEfforts,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const fallbackReasoningEffort = base.reasoningEffort ?? AI_DEFAULT_REASONING_EFFORT;
+    const resolvedReasoningEffort = resolveReasoningEffort(
+      overrides.reasoningEffort ?? fallbackReasoningEffort,
+      supportedReasoningEfforts,
+      fallbackReasoningEffort,
+    );
+    const effective: AiSettings = {
+      ...base,
+      ...(resolvedReasoningEffort === undefined
+        ? { reasoningEffort: undefined }
+        : { reasoningEffort: resolvedReasoningEffort }),
     };
     const adapter = this.adapterFactory(effective);
     this.assertConfigured(effective, adapter);
@@ -1500,12 +1565,14 @@ export class AiPlanService {
       return this.providerRouter.chatModels();
     }
     const settings = await this.settingsSource.resolve();
-    // Only the OpenAI-family protocols define a reasoning-effort parameter; the
-    // Anthropic Messages adapter ignores it (see its `toMessage`).
-    const reasoningSupported = settings.protocol !== "anthropic-messages";
     const displayNames = await this.gatewayModelNames(settings);
-    return {
-      models: settings.allowedModels.map((id) => ({
+    const models = settings.allowedModels.map((id) => {
+      const reasoningEfforts = reasoningEffortsForModel({
+        modelId: id,
+        provider: id.includes("/") ? id.split("/")[0] : null,
+        protocol: settings.protocol,
+      });
+      return {
         id,
         // Upstream's selector renders `ChatModel.name` (`lib/ai/models.ts` L17–L24),
         // a human name curated next to the id. Roamlog has no curated table, so
@@ -1513,7 +1580,8 @@ export class AiPlanService {
         // derivation of the id is the fallback — never a hard-coded frontend map.
         name: (displayNames.get(id) ?? readableModelName(id)).slice(0, 80),
         provider: id.includes("/") ? id.split("/")[0]! : "gateway",
-        reasoning: reasoningSupported,
+        reasoning: reasoningEfforts.length > 0,
+        reasoningEfforts,
         // Operator-declared, default off. This used to be a hard-coded `true`
         // (and the contract says vision is "declared, never guessed"), yet the
         // model still could not read images: the gateway advertises
@@ -1522,9 +1590,12 @@ export class AiPlanService {
         // the selector and the composer never promise something the model
         // does not have.
         vision: settings.vision === true,
-      })),
+      };
+    });
+    return {
+      models,
       defaultModel: settings.model,
-      reasoningSupported,
+      reasoningSupported: models.some((model) => model.reasoningEfforts.length > 0),
     };
   }
 

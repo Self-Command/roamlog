@@ -138,6 +138,134 @@
   --skin-radius-control: 8px;
 }
 
+[data-skin="mist"] {
+  --skin-canvas: light-dark(#f8fafc, #0f172a);
+  --skin-surface-1: light-dark(#ffffff, #1e293b);
+  --skin-surface-2: light-dark(#f3f4f6, #152032);
+  --skin-surface-deep: light-dark(#e5e7eb, #0b1220);
+  --skin-overlay: light-dark(rgba(255, 255, 255, 0.86), rgba(30, 41, 59, 0.86));
+  --skin-ink: light-dark(#1e293b, #e2e8f0);
+  --skin-body: light-dark(#374151, #cbd5e1);
+  --skin-muted: light-dark(#6b7280, #94a3b8);
+  --skin-ash: light-dark(#9ca3af, #64748b);
+  --skin-stone: light-dark(#6b7280, #94a3b8);
+  --skin-accent-primary: light-dark(#5b5bd6, #818cf8);
+  --skin-accent-warm: light-dark(#5b5bd6, #818cf8);
+  --skin-accent-blue: light-dark(#4f46e5, #70b8ff);
+  --skin-accent-green: light-dark(#218358, #3dd68c);
+  --skin-accent-red: light-dark(#ce2c31, #ff9592);
+  --skin-accent-yellow: light-dark(#ab6400, #ffca16);
+  --skin-accent-slate: light-dark(#6b7280, #94a3b8);
+  --skin-accent-contrast: light-dark(#ffffff, #0f172a);
+  --skin-focus-ring: light-dark(#6366f1, #818cf8);
+  --skin-focus-ring-outer: light-dark(#6366f1, #818cf8);
+  --skin-focus-ring-inner: light-dark(#ffffff, rgba(15, 23, 42, 0.65));
+  --skin-success: light-dark(#218358, #3dd68c);
+  --skin-warning: light-dark(#ab6400, #ffca16);
+  --skin-danger: light-dark(#ce2c31, #ff9592);
+  --skin-info: light-dark(#0d74ce, #70b8ff);
+  --skin-hairline: light-dark(rgba(30, 41, 59, 0.08), rgba(226, 232, 240, 0.10));
+  --skin-hairline-strong: light-dark(rgba(30, 41, 59, 0.14), rgba(226, 232, 240, 0.16));
+  --skin-radius-card: 20px;
+  --skin-radius-control: 12px;
+}
+
+[data-skin="geist"] {
+  --skin-canvas: light-dark(#ffffff, #171717);
+  --skin-surface-1: light-dark(#ffffff, #262626);
+  --skin-surface-2: light-dark(#f3f4f6, #1f1f1f);
+  --skin-surface-deep: light-dark(#e5e7eb, #0f0f0f);
+  --skin-overlay: light-dark(rgba(255, 255, 255, 0.88), rgba(38, 38, 38, 0.90));
+  --skin-ink: light-dark(#333333, #e5e5e5);
+  --skin-body: light-dark(#4b5563, #d4d4d4);
+  --skin-muted: light-dark(#6b7280, #a3a3a3);
+  --skin-ash: light-dark(#9ca3af, #737373);
+  --skin-stone: light-dark(#6b7280, #a3a3a3);
+  --skin-accent-primary: light-dark(#333333, #e5e5e5);
+  --skin-accent-warm: light-dark(#333333, #e5e5e5);
+  --skin-accent-blue: light-dark(#0d74ce, #70b8ff);
+  --skin-accent-green: light-dark(#218358, #3dd68c);
+  --skin-accent-red: light-dark(#ce2c31, #ff9592);
+  --skin-accent-yellow: light-dark(#ab6400, #ffca16);
+  --skin-accent-slate: light-dark(#6b7280, #a3a3a3);
+  --skin-accent-contrast: light-dark(#ffffff, #171717);
+  --skin-focus-ring: light-dark(#3b82f6, #3b82f6);
+  --skin-focus-ring-outer: light-dark(#3b82f6, #3b82f6);
+  --skin-focus-ring-inner: light-dark(#ffffff, rgba(23, 23, 23, 0.65));
+  --skin-success: light-dark(#218358, #3dd68c);
+  --skin-warning: light-dark(#ab6400, #ffca16);
+  --skin-danger: light-dark(#ce2c31, #ff9592);
+  --skin-info: light-dark(#0d74ce, #70b8ff);
+  --skin-hairline: light-dark(rgba(51, 51, 51, 0.08), rgba(229, 229, 229, 0.10));
+  --skin-hairline-strong: light-dark(rgba(51, 51, 51, 0.14), rgba(229, 229, 229, 0.16));
+  --skin-radius-card: 16px;
+  --skin-radius-control: 10px;
+}
+
+[data-skin="iris"] {
+  --skin-canvas: light-dark(#fdfcfd, #121113);
+  --skin-surface-1: light-dark(#faf9fb, #1a191b);
+  --skin-surface-2: light-dark(#f2eff3, #232225);
+  --skin-surface-deep: light-dark(#eae7ec, #0e0d0f);
+  --skin-overlay: light-dark(rgba(250, 249, 251, 0.86), rgba(26, 25, 27, 0.90));
+  --skin-ink: light-dark(#211f26, #eeeef0);
+  --skin-body: light-dark(#65636d, #c9c7cf);
+  --skin-muted: light-dark(#65636d, #b5b2bc);
+  --skin-ash: light-dark(#8e8c99, #8e8c99);
+  --skin-stone: light-dark(#65636d, #b5b2bc);
+  --skin-accent-primary: light-dark(#5b5bd6, #7c78ff);
+  --skin-accent-warm: light-dark(#5b5bd6, #7c78ff);
+  --skin-accent-blue: light-dark(#5753c6, #b1a9ff);
+  --skin-accent-green: light-dark(#218358, #3dd68c);
+  --skin-accent-red: light-dark(#ce2c31, #ff9592);
+  --skin-accent-yellow: light-dark(#ab6400, #ffca16);
+  --skin-accent-slate: light-dark(#65636d, #b5b2bc);
+  --skin-accent-contrast: light-dark(#ffffff, #13131e);
+  --skin-focus-ring: light-dark(#5b5bd6, #b1a9ff);
+  --skin-focus-ring-outer: light-dark(#5b5bd6, #b1a9ff);
+  --skin-focus-ring-inner: light-dark(#ffffff, rgba(18, 17, 19, 0.65));
+  --skin-success: light-dark(#218358, #3dd68c);
+  --skin-warning: light-dark(#ab6400, #ffca16);
+  --skin-danger: light-dark(#ce2c31, #ff9592);
+  --skin-info: light-dark(#0d74ce, #70b8ff);
+  --skin-hairline: light-dark(rgba(33, 31, 38, 0.08), rgba(238, 238, 240, 0.10));
+  --skin-hairline-strong: light-dark(rgba(33, 31, 38, 0.14), rgba(238, 238, 240, 0.16));
+  --skin-radius-card: 22px;
+  --skin-radius-control: 14px;
+}
+
+[data-skin="sandstone"] {
+  --skin-canvas: light-dark(#f5f1e6, #2d2621);
+  --skin-surface-1: light-dark(#fffcf5, #3a322c);
+  --skin-surface-2: light-dark(#ece5d8, #312b26);
+  --skin-surface-deep: light-dark(#e2d8c3, #1f1a16);
+  --skin-overlay: light-dark(rgba(255, 252, 245, 0.88), rgba(58, 50, 44, 0.90));
+  --skin-ink: light-dark(#4a3f35, #ece5d8);
+  --skin-body: light-dark(#5c4d3f, #d8cfc2);
+  --skin-muted: light-dark(#7d6b56, #c5bcac);
+  --skin-ash: light-dark(#a67c52, #a67c52);
+  --skin-stone: light-dark(#7d6b56, #c5bcac);
+  --skin-accent-primary: light-dark(#8d6e4c, #c0a080);
+  --skin-accent-warm: light-dark(#8d6e4c, #c0a080);
+  --skin-accent-blue: light-dark(#8d6e4c, #b3906f);
+  --skin-accent-green: light-dark(#218358, #3dd68c);
+  --skin-accent-red: light-dark(#ce2c31, #ff9592);
+  --skin-accent-yellow: light-dark(#ab6400, #ffca16);
+  --skin-accent-slate: light-dark(#7d6b56, #c5bcac);
+  --skin-accent-contrast: light-dark(#ffffff, #2d2621);
+  --skin-focus-ring: light-dark(#a67c52, #c0a080);
+  --skin-focus-ring-outer: light-dark(#a67c52, #c0a080);
+  --skin-focus-ring-inner: light-dark(#ffffff, rgba(45, 38, 33, 0.65));
+  --skin-success: light-dark(#218358, #3dd68c);
+  --skin-warning: light-dark(#ab6400, #ffca16);
+  --skin-danger: light-dark(#ce2c31, #ff9592);
+  --skin-info: light-dark(#0d74ce, #70b8ff);
+  --skin-hairline: light-dark(rgba(74, 63, 53, 0.10), rgba(236, 229, 216, 0.10));
+  --skin-hairline-strong: light-dark(rgba(74, 63, 53, 0.16), rgba(236, 229, 216, 0.16));
+  --skin-radius-card: 20px;
+  --skin-radius-control: 12px;
+}
+
 [data-skin="primer"] {
   --skin-canvas: light-dark(#ffffff, #0d1117);
   --skin-surface-1: light-dark(#f6f8fa, #151b23);
@@ -277,6 +405,54 @@
   --skin-shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.46);
 }
 
+[data-skin="mist"][data-mode="light"],
+[data-skin="mist"][data-mode="system"],
+[data-skin="geist"][data-mode="light"],
+[data-skin="geist"][data-mode="system"],
+[data-skin="iris"][data-mode="light"],
+[data-skin="iris"][data-mode="system"],
+[data-skin="sandstone"][data-mode="light"],
+[data-skin="sandstone"][data-mode="system"] {
+  --skin-shadow-card: var(--skin-shadow-card-light);
+  --skin-shadow-overlay: var(--skin-shadow-overlay-light);
+}
+
+[data-skin="mist"][data-mode="dark"],
+[data-skin="geist"][data-mode="dark"],
+[data-skin="iris"][data-mode="dark"],
+[data-skin="sandstone"][data-mode="dark"] {
+  --skin-shadow-card: var(--skin-shadow-card-dark);
+  --skin-shadow-overlay: var(--skin-shadow-overlay-dark);
+}
+
+[data-skin="mist"] {
+  --skin-shadow-card-light: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --skin-shadow-overlay-light: 0 24px 64px rgba(15, 23, 42, 0.16), 0 8px 20px rgba(15, 23, 42, 0.08);
+  --skin-shadow-card-dark: 0 1px 2px rgba(0, 0, 0, 0.24), 0 12px 32px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --skin-shadow-overlay-dark: 0 28px 72px rgba(0, 0, 0, 0.55);
+}
+
+[data-skin="geist"] {
+  --skin-shadow-card-light: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.70);
+  --skin-shadow-overlay-light: 0 20px 56px rgba(0, 0, 0, 0.14);
+  --skin-shadow-card-dark: 0 1px 2px rgba(0, 0, 0, 0.28), 0 10px 28px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --skin-shadow-overlay-dark: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+[data-skin="iris"] {
+  --skin-shadow-card-light: 0 2px 4px rgba(33, 31, 38, 0.04), 0 12px 32px rgba(33, 31, 38, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --skin-shadow-overlay-light: 0 28px 72px rgba(33, 31, 38, 0.18);
+  --skin-shadow-card-dark: 0 2px 4px rgba(0, 0, 0, 0.24), 0 14px 36px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --skin-shadow-overlay-dark: 0 30px 80px rgba(0, 0, 0, 0.58);
+}
+
+[data-skin="sandstone"] {
+  --skin-shadow-card-light: 0 2px 4px rgba(74, 63, 53, 0.05), 0 10px 28px rgba(74, 63, 53, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --skin-shadow-overlay-light: 0 24px 64px rgba(74, 63, 53, 0.16);
+  --skin-shadow-card-dark: 0 2px 4px rgba(0, 0, 0, 0.26), 0 12px 30px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --skin-shadow-overlay-dark: 0 28px 72px rgba(0, 0, 0, 0.58);
+}
+
 [data-skin="primer"][data-mode="light"],
 [data-skin="primer"][data-mode="system"] {
   --skin-shadow-card: 0 1px 1px 0 #25292e1a, 0 3px 6px 0 #25292e1f;
@@ -323,6 +499,14 @@
   [data-skin="carbon"][data-mode="system"],
   [data-skin="carbon-soft"][data-mode="system"] {
     --skin-shadow-overlay: 0 8px 16px rgba(0, 0, 0, .24);
+  }
+
+  [data-skin="mist"][data-mode="system"],
+  [data-skin="geist"][data-mode="system"],
+  [data-skin="iris"][data-mode="system"],
+  [data-skin="sandstone"][data-mode="system"] {
+    --skin-shadow-card: var(--skin-shadow-card-dark);
+    --skin-shadow-overlay: var(--skin-shadow-overlay-dark);
   }
 }
 
@@ -476,7 +660,7 @@
   --skin-info: light-dark(#3a94c5, #7fbbb3);
 }
 
-html[data-skin="porcelain"] body {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) body {
   background-color: var(--canvas) !important;
   background-image:
     radial-gradient(
@@ -497,15 +681,15 @@ html[data-skin="porcelain"] body {
   background-attachment: fixed !important;
 }
 
-html[data-skin="porcelain"] body > div.flex.min-h-dvh {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) body > div.flex.min-h-dvh {
   background: transparent !important;
 }
 
-html[data-skin="porcelain"] main {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) main {
   background: transparent !important;
 }
 
-html[data-skin="porcelain"] header {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) header {
   background: color-mix(in srgb, var(--surface-1) 78%, transparent) !important;
   border-color: var(--hairline) !important;
   box-shadow: inset 0 -1px 0 var(--hairline) !important;
@@ -513,14 +697,14 @@ html[data-skin="porcelain"] header {
   -webkit-backdrop-filter: blur(18px) saturate(135%) !important;
 }
 
-html[data-skin="porcelain"] aside {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) aside {
   background: color-mix(in srgb, var(--surface-deep) 72%, transparent) !important;
   border-color: var(--hairline) !important;
   backdrop-filter: blur(22px) saturate(135%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(135%) !important;
 }
 
-html[data-skin="porcelain"] .surface-card {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) .surface-card {
   background: color-mix(in srgb, var(--surface-1) 86%, transparent) !important;
   border-color: var(--hairline) !important;
   box-shadow: var(--shadow-card) !important;
@@ -528,7 +712,7 @@ html[data-skin="porcelain"] .surface-card {
   -webkit-backdrop-filter: blur(14px) saturate(125%) !important;
 }
 
-html[data-skin="porcelain"] [role="dialog"] {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) [role="dialog"] {
   background: color-mix(in srgb, var(--surface-overlay) 88%, transparent) !important;
   border-color: var(--hairline-strong) !important;
   box-shadow: var(--shadow-overlay) !important;
@@ -536,14 +720,14 @@ html[data-skin="porcelain"] [role="dialog"] {
   -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
 }
 
-html[data-skin="porcelain"] [data-testid="composer-root"] {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) [data-testid="composer-root"] {
   background: color-mix(in srgb, var(--surface-1) 86%, transparent) !important;
   border-color: var(--hairline) !important;
   backdrop-filter: blur(20px) saturate(130%) !important;
   -webkit-backdrop-filter: blur(20px) saturate(130%) !important;
 }
 
-html[data-skin="porcelain"] nav[aria-label="移动端主导航"] {
+html:is([data-skin="porcelain"], [data-skin="mist"], [data-skin="geist"], [data-skin="iris"], [data-skin="sandstone"]) nav[aria-label="移动端主导航"] {
   background: color-mix(in srgb, var(--surface-1) 84%, transparent) !important;
   border-color: var(--hairline) !important;
   backdrop-filter: blur(22px) saturate(135%) !important;

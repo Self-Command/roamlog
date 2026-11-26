@@ -17,7 +17,11 @@
  *   `VisionNote` share one request, matching upstream SWR's dedupe behavior.
  */
 
-import type { AiChatModel, AiChatModelsResponse } from "@roamlog/contracts";
+import {
+  resolveReasoningEffort,
+  type AiChatModel,
+  type AiChatModelsResponse,
+} from "@roamlog/contracts";
 import {
   Button,
   Popover,
@@ -33,6 +37,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import { fetchAiModels } from "../../lib/api/ai";
 import { aiChatSelectionStore, useAiChatSelection } from "./chat-selection";
+import { useAiReasoningDefault } from "./use-ai-reasoning";
 import {
   Command,
   CommandEmpty,
@@ -277,6 +282,7 @@ export function ModelSelectorCompact({
   const { models, error, loading, refetch } = useAiChatModels(workspaceId);
   const selection = useAiChatSelection(workspaceId);
   const store = aiChatSelectionStore(workspaceId);
+  const platformDefault = useAiReasoningDefault();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const restoredCookie = useRef(false);
   const focusTimeoutRef = useRef<number | null>(null);
@@ -325,16 +331,34 @@ export function ModelSelectorCompact({
   useEffect(() => {
     if (!models || restoredCookie.current) return;
     restoredCookie.current = true;
-    if (selection.model) return;
+    if (selection.model && models.models.some((model) => model.id === selection.model)) return;
     const cookie = readModelCookie();
-    if (cookie && models.models.some((model) => model.id === cookie)) {
-      store.set({ ...selection, model: cookie });
+    const next =
+      cookie && models.models.some((model) => model.id === cookie)
+        ? cookie
+        : models.models.some((model) => model.id === models.defaultModel)
+          ? models.defaultModel
+          : models.models[0]?.id;
+    if (next && next !== selection.model) {
+      store.set({ ...selection, model: next });
     }
   }, [models, selection, store]);
 
   const selectModel = useCallback(
     (model: AiChatModel) => {
-      store.set({ ...selection, model: model.id });
+      const reasoningEffort =
+        selection.reasoningEffort === undefined
+          ? undefined
+          : resolveReasoningEffort(
+              selection.reasoningEffort,
+              model.reasoningEfforts,
+              platformDefault,
+            );
+      store.set({
+        ...selection,
+        model: model.id,
+        ...(selection.reasoningEffort === undefined ? {} : { reasoningEffort }),
+      });
       writeModelCookie(model.id);
       setOpen(false);
       if (focusTimeoutRef.current !== null) window.clearTimeout(focusTimeoutRef.current);
@@ -343,7 +367,7 @@ export function ModelSelectorCompact({
         document.querySelector<HTMLTextAreaElement>("[data-testid='multimodal-input']")?.focus();
       }, 50);
     },
-    [selection, setOpen, store],
+    [platformDefault, selection, setOpen, store],
   );
 
   return (
