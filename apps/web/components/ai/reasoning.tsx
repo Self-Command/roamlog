@@ -233,29 +233,22 @@ export type ReasoningContentProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const ReasoningContent = memo(({ className, children, ...props }: ReasoningContentProps) => {
-  const { isStreaming, isOpen } = useReasoning();
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isStreaming && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [children, isStreaming]);
+  const { isOpen } = useReasoning();
 
   if (!isOpen) return null;
 
   return (
     <div
       className={cn(
-        "mt-2 text-[11px] leading-relaxed text-muted [overflow-anchor:none]",
+        "mt-2 text-[13px] leading-6 text-body",
         className,
       )}
+      data-testid="reasoning-content"
       {...props}
     >
       <div
-        className="max-h-[200px] overflow-y-auto rounded-card border border-hairline bg-surface-2 px-3 py-2"
-        ref={scrollRef}
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        className="rounded-card border border-hairline bg-surface-2 px-3 py-2"
+        data-testid="reasoning-body"
       >
         <Markdown text={children} />
       </div>
@@ -302,11 +295,14 @@ export function MessageReasoning({ isLoading, reasoning }: MessageReasoningProps
             ? languageNote
             : `${languageNote} · 已思考 ${String(duration)} 秒`}
       </ChainOfThoughtHeader>
-      <ChainOfThoughtContent aria-busy={isLoading}>
-        <p className="px-1 text-[11px] leading-5 text-stone">
+      <ChainOfThoughtContent aria-busy={isLoading} data-testid="reasoning-content">
+        <p className="px-1 text-xs leading-5 text-stone">
           以下是模型返回的原始思考，不是最终答案，也不会被翻译或改写。
         </p>
-        <div className="max-h-[240px] overflow-y-auto rounded-card border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-relaxed text-muted">
+        <div
+          className="rounded-card border border-hairline bg-surface-2 px-3 py-2 text-[13px] leading-6 text-body"
+          data-testid="reasoning-body"
+        >
           <Markdown text={reasoning} />
         </div>
       </ChainOfThoughtContent>

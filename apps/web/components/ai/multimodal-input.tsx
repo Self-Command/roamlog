@@ -36,6 +36,8 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { cancelAiStream, fetchAiStreamStatus } from "@/lib/api/ai";
+
 import { AttachmentPreview } from "./attachment-preview";
 import { ReasoningSelectorCompact } from "./chat-controls";
 import { cn } from "./cn";
@@ -63,17 +65,70 @@ export interface MultimodalInputProps {
   onModelSelectorOpenChange?: (open: boolean) => void;
 }
 
-function StopButton() {
+export async function stopActiveAiRun({
+  workspaceId,
+  conversationId,
+  cancelLocal,
+}: {
+  workspaceId: string;
+  conversationId: string | null;
+  cancelLocal: () => void;
+}): Promise<boolean> {
+  let cancelledOnServer = false;
+  if (conversationId) {
+    try {
+      const status = await fetchAiStreamStatus(workspaceId, conversationId);
+      if (status.active && status.streamId) {
+        cancelledOnServer = await cancelAiStream(
+          workspaceId,
+          conversationId,
+          status.streamId,
+        );
+      }
+    } catch {
+      // The local stop still has to work when the status probe fails. The
+      // resumable producer is the only thing that may survive, and the next
+      // page load will reconcile it through useAutoResume.
+    }
+  }
+  try {
+    cancelLocal();
+  } catch {
+    // The runtime may already be gone while the page is being torn down.
+  }
+  return cancelledOnServer;
+}
+
+function StopButton({ workspaceId }: { workspaceId: string }) {
   const aui = useAui();
   const running = useAuiState((state) => state.thread.isRunning);
+  const conversationId = useAuiState((state) => {
+    const mainThreadId = state.threads.mainThreadId;
+    if (!mainThreadId) return null;
+    return (
+      state.threads.threadItems.find((item) => item.id === mainThreadId)?.remoteId ?? null
+    );
+  });
+  const [stopping, setStopping] = useState(false);
+
   if (!running) return null;
 
   return (
     <Button
       aria-label="停止生成"
+      aria-busy={stopping}
       className="shrink-0"
       data-testid="stop-button"
-      onClick={() => aui.thread.cancelRun()}
+      disabled={stopping}
+      onClick={() => {
+        if (stopping) return;
+        setStopping(true);
+        void stopActiveAiRun({
+          workspaceId,
+          conversationId,
+          cancelLocal: () => aui.thread.cancelRun(),
+        }).finally(() => setStopping(false));
+      }}
       size="sm"
       type="button"
       variant="outline"
@@ -427,7 +482,7 @@ export function MultimodalInput({
 
             <div className="ml-auto flex shrink-0 items-center gap-1.5">
               {running ? (
-                <StopButton />
+                <StopButton workspaceId={workspaceId} />
               ) : (
                 <ComposerPrimitive.Send asChild>
                   <Button

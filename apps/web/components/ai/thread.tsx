@@ -213,19 +213,6 @@ export function ChatThread({ workspaceId, onOpenSidebar, onDeleteAll }: ChatThre
     [aui, status],
   );
 
-  // Leaving the thread must abort the in-flight run, otherwise the server keeps
-  // generating into a socket nobody watches.
-  useEffect(
-    () => () => {
-      try {
-        aui.thread.cancelRun();
-      } catch {
-        // The runtime can already be torn down during navigation.
-      }
-    },
-    [aui],
-  );
-
   const commands = useMemo<SlashCommandHandlers>(
     () => ({
       new: () => {

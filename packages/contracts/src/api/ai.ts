@@ -1697,6 +1697,7 @@ export type SetAiArtifactSuggestionRequest = z.infer<typeof SetAiArtifactSuggest
 /** Idempotent append/update keyed by the assistant-ui message id (`clientId`). */
 export const UpsertAiMessageRequestSchema = z
   .object({
+    role: z.enum(["user", "assistant", "system"]),
     content: RequiredUnknownSchema,
     parentId: z.string().min(1).max(128).nullable().optional(),
     status: z.unknown().optional(),

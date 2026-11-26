@@ -322,6 +322,7 @@ describe("remote thread list adapter", () => {
     );
     expect(init.method).toBe("PUT");
     expect(JSON.parse(String(init.body))).toEqual({
+      role: "user",
       content: "你好",
       parentId: null,
     });

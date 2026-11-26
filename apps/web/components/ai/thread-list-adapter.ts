@@ -426,6 +426,7 @@ class ConversationGateway {
     // stores `content` only, so flatten them in or a reloaded conversation loses
     // its thumbnails (`contentWithAttachmentParts`).
     const body: UpsertAiConversationMessageBody = {
+      role: item.message.role,
       content: contentWithAttachmentParts(
         item.message.content,
         item.message.attachments,
@@ -476,6 +477,7 @@ class ConversationGateway {
   async flushWrites(): Promise<void> {
     for (const [clientId, entry] of [...this.pendingUpserts]) {
       const body: UpsertAiConversationMessageBody = {
+        role: entry.item.message.role,
         content: contentWithAttachmentParts(
           entry.item.message.content,
           entry.item.message.attachments,

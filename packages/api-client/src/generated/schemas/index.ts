@@ -929,6 +929,7 @@ export * from "./updateWorkspaceRequestSettingsNotificationDefaults";
 export * from "./upsertAiConversationMessage200";
 export * from "./upsertAiConversationMessage200Role";
 export * from "./upsertAiConversationMessageBody";
+export * from "./upsertAiConversationMessageBodyRole";
 export * from "./user";
 export * from "./userPlatformRole";
 export * from "./userStatus";

@@ -40237,6 +40237,14 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "assistant",
+                      "system"
+                    ]
+                  },
                   "content": {},
                   "parentId": {
                     "type": [
@@ -40249,6 +40257,7 @@
                   "status": {}
                 },
                 "required": [
+                  "role",
                   "content"
                 ],
                 "additionalProperties": false

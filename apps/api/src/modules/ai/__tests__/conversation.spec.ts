@@ -347,6 +347,7 @@ integration("AI conversation persistence on real PostgreSQL", () => {
       conversation.id,
       "assistant-client-1",
       {
+        role: "assistant",
         content: [{ type: "text", text: "第一版" }],
         status: { type: "running" },
       },
@@ -357,6 +358,7 @@ integration("AI conversation persistence on real PostgreSQL", () => {
       conversation.id,
       "assistant-client-1",
       {
+        role: "assistant",
         content: [{ type: "text", text: "最终版" }],
         status: { type: "complete", reason: "stop" },
       },
@@ -376,6 +378,30 @@ integration("AI conversation persistence on real PostgreSQL", () => {
       select: { role: true },
     });
     expect(row.role).toBe("assistant");
+  });
+
+  it("persists the client-supplied role instead of defaulting to assistant", async () => {
+    const service = makeService();
+    const conversation = await createConversation();
+
+    const saved = await service.upsertMessage(
+      USER.owner,
+      WORKSPACE.home,
+      conversation.id,
+      "user-client-1",
+      {
+        role: "user",
+        content: "这是用户消息",
+        parentId: null,
+      },
+    );
+
+    expect(saved.role).toBe("user");
+    const row = await requiredClient().aiMessage.findFirstOrThrow({
+      where: { conversationId: conversation.id, clientId: "user-client-1" },
+      select: { role: true },
+    });
+    expect(row.role).toBe("user");
   });
 
   it("pages five conversations with limit=2 across three pages without duplicates", async () => {
@@ -458,6 +484,16 @@ integration("AI conversation persistence on real PostgreSQL", () => {
       });
     }
 
+    await requiredClient().aiMessage.create({
+      data: {
+        conversationId: conversation.id,
+        role: "assistant",
+        clientId: "failed-empty-assistant",
+        content: [],
+        status: { type: "incomplete", reason: "error" },
+      },
+    });
+
     const other = await createConversation();
     await appendUser(service, other.id, "另一个会话不应出现", "other-context-user");
 
@@ -478,6 +514,10 @@ integration("AI conversation persistence on real PostgreSQL", () => {
     expect(visible[0]?.content).toBe("第2轮用户");
     expect(visible[1]?.content).toBe("第2轮回答");
     expect(visible[2]?.content).toBe("第3轮用户");
+    expect(JSON.stringify(recent.messages)).not.toContain("failed-empty-assistant");
+    expect(visible.some((message) => message.role === "assistant" && message.content === "")).toBe(
+      false,
+    );
     expect(JSON.stringify(recent.messages)).not.toContain("另一个会话不应出现");
     expect(recent.facts.lastCreatedTripId).toBe(TRIP_ID);
 

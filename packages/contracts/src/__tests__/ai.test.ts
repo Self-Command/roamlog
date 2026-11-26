@@ -1116,17 +1116,29 @@ describe("AI conversation persistence DTOs", () => {
   it("accepts an open but present content in the upsert request", () => {
     expect(
       UpsertAiMessageRequestSchema.safeParse({
+        role: "assistant",
         content: [{ type: "text", text: "hi" }],
         parentId: "msg_0",
         status: { type: "running" },
       }).success,
     ).toBe(true);
-    expect(UpsertAiMessageRequestSchema.safeParse({ content: "hi", parentId: null }).success).toBe(
-      true,
-    );
+    expect(
+      UpsertAiMessageRequestSchema.safeParse({
+        role: "user",
+        content: "hi",
+        parentId: null,
+      }).success,
+    ).toBe(true);
     expect(UpsertAiMessageRequestSchema.safeParse({}).success).toBe(false);
     expect(
-      UpsertAiMessageRequestSchema.safeParse({ content: "hi", messageId: "forged" }).success,
+      UpsertAiMessageRequestSchema.safeParse({
+        role: "user",
+        content: "hi",
+        messageId: "forged",
+      }).success,
+    ).toBe(false);
+    expect(
+      UpsertAiMessageRequestSchema.safeParse({ role: "tool", content: "hi" }).success,
     ).toBe(false);
   });
 });

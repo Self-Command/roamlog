@@ -30,6 +30,7 @@ import { isHumanToolName, PublicAiChatResponseSchema } from "@roamlog/contracts"
 
 import { AppConfigService } from "../../config/app-config.service.js";
 import { AI_ADAPTER_FACTORY, type AiAdapterFactory } from "./adapters/index.js";
+import { AiProviderRouter } from "./ai-provider-router.service.js";
 import { AiSettingsResolver, AI_CLOCK, type AiClock, type AiSettings } from "./ai.settings.js";
 import { MediaUrlService, type SignedMediaUrls } from "../media/media-url.service.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
@@ -213,6 +214,9 @@ export class AiConversationService implements AiConversationServiceContract {
     @Optional()
     @Inject(MediaUrlService)
     private readonly mediaUrls?: MediaUrlService,
+    @Optional()
+    @Inject(AiProviderRouter)
+    private readonly providerRouter?: AiProviderRouter,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -996,6 +1000,7 @@ export class AiConversationService implements AiConversationServiceContract {
         ? await this.prisma.client.aiMessage.update({
             where: { id: existing.id, conversationId },
             data: {
+              role: input.role,
               content: json(input.content),
               ...(input.status !== undefined ? { status: json(input.status) } : {}),
               ...(input.parentId !== undefined ? { parentId: parentId ?? null } : {}),
@@ -1006,7 +1011,7 @@ export class AiConversationService implements AiConversationServiceContract {
             data: {
               conversationId,
               clientId,
-              role: "assistant",
+              role: input.role,
               content: json(input.content),
               ...(input.status !== undefined ? { status: json(input.status) } : {}),
               parentId: parentId ?? null,
@@ -1100,8 +1105,19 @@ export class AiConversationService implements AiConversationServiceContract {
       return { title: conversation.title };
     }
 
-    const settings = await this.settingsResolver.resolve();
-    const adapter = this.adapterFactory(settings);
+    let settings = await this.settingsResolver.resolve();
+    let adapter = this.adapterFactory(settings);
+    if ((!settings.configured || !adapter) && this.providerRouter) {
+      try {
+        const candidate = (await this.providerRouter.candidates())[0];
+        if (candidate) {
+          settings = candidate.settings;
+          adapter = this.adapterFactory(settings);
+        }
+      } catch {
+        // Fall through to the existing fallback/error path when no provider is runnable.
+      }
+    }
     if (!settings.configured || !adapter) {
       this.logger.warn(
         {
@@ -1612,10 +1628,32 @@ function contentToText(content: unknown): string {
   return typeof content === "string" ? content : JSON.stringify(content ?? "");
 }
 
-function messageFromRow(row: MessageRow): Record<string, unknown> {
+function assistantModelText(content: unknown): string {
+  if (typeof content === "string") {
+    return content.trim();
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content
+    .map((part) => {
+      if (typeof part !== "object" || part === null) return "";
+      const record = part as { type?: unknown; text?: unknown };
+      return record.type === "text" && typeof record.text === "string" ? record.text : "";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+function messageFromRow(row: MessageRow): Record<string, unknown> | null {
   if (row.role === "assistant") {
-    const text = contentToText(row.content);
-    return { role: "assistant", content: text || null, toolCalls: [] };
+    const text = assistantModelText(row.content);
+    // An aborted/error turn may persist an empty assistant row. Sending it back
+    // to OpenAI-compatible gateways produces an empty assistant message, which
+    // some providers reject with HTTP 400. It carries no model information, so
+    // omit the failed turn entirely.
+    return text.length > 0 ? { role: "assistant", content: text, toolCalls: [] } : null;
   }
   if (row.role === "user") {
     return { role: "user", content: contentToText(row.content) };
@@ -1653,12 +1691,15 @@ function buildTurns(rows: MessageRow[]): Turn[] {
         }
         turns.push({ messages, createdAt: row.createdAt });
       } else {
-        const messages: unknown[] = [];
-        if (pendingUser) {
-          messages.push(pendingUser);
+        const assistant = messageFromRow(row);
+        if (assistant) {
+          const messages: unknown[] = [];
+          if (pendingUser) {
+            messages.push(pendingUser);
+          }
+          messages.push(assistant);
+          turns.push({ messages, createdAt: row.createdAt });
         }
-        messages.push(messageFromRow(row));
-        turns.push({ messages, createdAt: row.createdAt });
       }
       pendingUser = null;
       continue;
@@ -1668,7 +1709,10 @@ function buildTurns(rows: MessageRow[]): Turn[] {
       turns.push({ messages: [pendingUser], createdAt: row.createdAt });
       pendingUser = null;
     }
-    turns.push({ messages: [messageFromRow(row)], createdAt: row.createdAt });
+    const message = messageFromRow(row);
+    if (message) {
+      turns.push({ messages: [message], createdAt: row.createdAt });
+    }
   }
 
   if (pendingUser) {

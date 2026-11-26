@@ -16,10 +16,12 @@ import {
   describesMultipleDays,
   planCurrencyConflict,
   systemPrompt,
+  toConversationMessages,
 } from "../ai-plan.service.js";
 import { formatDateOnly } from "../ai-dates.js";
 import { staticAiSettingsSource, type AiSettings } from "../ai.settings.js";
 import { AiToolbox } from "../ai-tools.js";
+import { AiUpstreamError } from "../adapters/http.js";
 import {
   actorStub,
   aiSettings,
@@ -178,6 +180,24 @@ async function expectHttp(
   expect((exception.getResponse() as { code?: string }).code).toBe(code);
   return exception;
 }
+
+describe("model history sanitation", () => {
+  it("drops empty assistant turns before they reach the provider", () => {
+    const messages = toConversationMessages([
+      { role: "user", content: "第一次请求" },
+      { role: "assistant", content: "" },
+      { role: "user", content: "重试请求" },
+      { role: "assistant", content: null, toolCalls: [] },
+      { role: "assistant", content: "有效回答", toolCalls: [] },
+    ]);
+
+    expect(messages).toEqual([
+      { role: "user", content: "第一次请求" },
+      { role: "user", content: "重试请求" },
+      { role: "assistant", content: "有效回答", toolCalls: [] },
+    ]);
+  });
+});
 
 describe("plan currency guard", () => {
   const calls: AiToolCall[] = [
@@ -1504,6 +1524,59 @@ describe("AiPlanService plan phase", () => {
     expect(attemptEvents).not.toContain("provider-good:meta");
     expect(factory).toHaveBeenCalledWith(expect.objectContaining({ model: "broken-model" }));
     expect(factory).toHaveBeenCalledWith(expect.objectContaining({ model: "good-model" }));
+  });
+
+  it("turns a provider 400 after meta into error + done without rejecting", async () => {
+    const settings = aiSettings();
+    const adapter = scriptedAdapter([{ text: "unused", toolCalls: [] }]);
+    const conversations = conversationMocks();
+    const candidate = providerCandidate("deepseek-flash", "provider-deepseek");
+    const providerRouter = {
+      candidates: vi.fn().mockResolvedValue([candidate]),
+      streamWithFailover: vi.fn(async function* () {
+        const error = new AiUpstreamError("http", 400);
+        if (error) {
+          throw error;
+        }
+        yield { candidate, event: { type: "text.delta", delta: "unreachable" } };
+      }),
+    };
+    const service = new AiPlanService(
+      staticAiSettingsSource(settings),
+      () => adapter,
+      new AiToolbox(
+        toolServiceMocks().places as never,
+        toolServiceMocks().trips as never,
+        toolServiceMocks().stops as never,
+        toolServiceMocks().itinerary as never,
+        toolServiceMocks().packing as never,
+      ),
+      quotaStub() as never,
+      runStoreStub() as never,
+      loggerStub() as never,
+      fixedClock(),
+      conversations as never,
+      undefined,
+      undefined,
+      providerRouter as never,
+    );
+
+    const events: AiStreamEvent[] = [];
+    for await (const event of service.streamChat(actorStub(), membershipStub(), {
+      message: "Kyoto",
+    })) {
+      events.push(event);
+    }
+
+    expect(events[0]?.type).toBe("meta");
+    expect(events.at(-2)).toMatchObject({
+      type: "error",
+      code: AI_ERROR_CODES.providerStreamFailed,
+    });
+    expect(events.at(-1)).toMatchObject({ type: "done", finishReason: "error" });
+    expect(conversations.finishAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ finishReason: "error" }),
+    );
   });
 
   it("preserves a post-commit business error instead of reporting a provider stream failure", async () => {

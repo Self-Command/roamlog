@@ -5,8 +5,10 @@
  * Contract-first API for Roamlog collaborative travel journals. All IDs are UUIDv7, business reads are Workspace-scoped, money uses integer minor units, and editable aggregates require optimistic versions.
  * OpenAPI spec version: 1.0.0
  */
+import type { UpsertAiConversationMessageBodyRole } from "./upsertAiConversationMessageBodyRole";
 
 export type UpsertAiConversationMessageBody = {
+  role: UpsertAiConversationMessageBodyRole;
   content: unknown;
   /**
    * @minLength 1

@@ -596,6 +596,31 @@ describe("openai-chat streamStep", () => {
     expect(body.stream).toBe(true);
     expect(body.stream_options).toEqual({ include_usage: true });
   });
+
+  it("omits empty assistant turns and empty tool_calls from the provider payload", async () => {
+    const fetchMock = stubFetch(sseResponse(OPENAI_CHAT_CHUNKS));
+    const adapter = new OpenAiChatAdapter(settings("openai-chat"));
+
+    await adapter.streamStep(
+      {
+        ...INPUT,
+        messages: [
+          { role: "user", content: "第一轮" },
+          { role: "assistant", content: "有效回答", toolCalls: [] },
+          { role: "user", content: "第二轮" },
+        ],
+      },
+      {},
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as {
+      messages: Array<Record<string, unknown>>;
+    };
+    const assistant = body.messages.find((message) => message.role === "assistant");
+    expect(assistant).toEqual({ role: "assistant", content: "有效回答" });
+    expect(assistant).not.toHaveProperty("tool_calls");
+  });
 });
 
 describe("openai-responses streamStep", () => {

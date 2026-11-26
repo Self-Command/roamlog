@@ -352,15 +352,27 @@ function toMessages(
       content: result.content,
     }));
   }
+  const toolCalls = message.toolCalls.map((call) => ({
+    id: call.id,
+    type: "function",
+    function: { name: toolNames.toWire(call.name), arguments: JSON.stringify(call.input) },
+  }));
+  const content = message.content ?? "";
+  if (content.trim().length === 0 && toolCalls.length === 0) {
+    // A failed/aborted turn can persist an empty assistant row. Some
+    // OpenAI-compatible providers reject `assistant: ""` or `tool_calls: []`
+    // with HTTP 400, and it carries no information for the next turn.
+    return [];
+  }
   return [
     {
       role: "assistant",
-      content: message.content ?? "",
-      tool_calls: message.toolCalls.map((call) => ({
-        id: call.id,
-        type: "function",
-        function: { name: toolNames.toWire(call.name), arguments: JSON.stringify(call.input) },
-      })),
+      // Tool-call-only assistant turns use `null`, matching the OpenAI wire
+      // shape; an empty string is rejected by some compatible gateways.
+      content: content.trim().length > 0 ? content : null,
+      // Omit the key entirely when there are no calls: DeepSeek and several
+      // OpenAI-compatible gateways reject an empty `tool_calls` array.
+      ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
     },
   ];
 }

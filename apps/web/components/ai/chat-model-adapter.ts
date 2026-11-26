@@ -14,7 +14,6 @@ import type {
 
 import {
   aiFailureKind,
-  cancelAiStream,
   createAiIdempotencyKey,
   createAiPlan,
   executeAiRun,
@@ -59,22 +58,6 @@ import { attachmentsFromMessage } from "./media-attachment-adapter";
 
 export const PLAN_TOOL_NAME = "roamlog.plan";
 export const EXECUTE_TOOL_NAME = "roamlog.execute";
-
-/**
- * `pagehide` fires for refresh, tab close and bfcache. The runtime's unmount
- * cleanup also calls `cancelRun()`, so without this marker a refresh would
- * issue the explicit-stop endpoint and defeat auto-resume. A user pressing
- * Stop (no pagehide) still cancels the server producer.
- */
-let pageIsUnloading = false;
-if (typeof window !== "undefined") {
-  window.addEventListener("pagehide", () => {
-    pageIsUnloading = true;
-  });
-  window.addEventListener("pageshow", () => {
-    pageIsUnloading = false;
-  });
-}
 
 type PlanEvent = Extract<AiStreamEvent, { type: "plan" }>;
 
@@ -842,9 +825,6 @@ export function createAiChatModelAdapter({
         }
       } catch (error) {
         if (abortSignal.aborted) {
-          if (!pageIsUnloading && streamId && conversationId) {
-            void cancelAiStream(workspaceId, conversationId, streamId).catch(() => undefined);
-          }
           return;
         }
 
@@ -901,9 +881,6 @@ export function createAiChatModelAdapter({
       }
 
       if (abortSignal.aborted) {
-        if (!pageIsUnloading && streamId && conversationId) {
-          void cancelAiStream(workspaceId, conversationId, streamId).catch(() => undefined);
-        }
         return;
       }
 
@@ -1035,7 +1012,6 @@ export function createAiResumeStream({
     let doneEvent: Extract<AiStreamEvent, { type: "done" }> | undefined;
     let progressShown = false;
     let reasoningShown = false;
-    let streamId: string | undefined;
 
     try {
       const records = resumeAiPlanStream(
@@ -1047,7 +1023,6 @@ export function createAiResumeStream({
       for await (const record of records) {
         const event = record.event;
         if (event.type === "meta") {
-          streamId = event.streamId;
           continue;
         }
         switch (event.type) {
@@ -1154,9 +1129,6 @@ export function createAiResumeStream({
       }
     } catch (error) {
       if (options.abortSignal.aborted) {
-        if (!pageIsUnloading && streamId) {
-          void cancelAiStream(workspaceId, conversationId, streamId).catch(() => undefined);
-        }
         return;
       }
       const recovered = await recoverPersistedAssistantMessage(
@@ -1182,9 +1154,6 @@ export function createAiResumeStream({
     }
 
     if (options.abortSignal.aborted) {
-      if (!pageIsUnloading && streamId) {
-        void cancelAiStream(workspaceId, conversationId, streamId).catch(() => undefined);
-      }
       return;
     }
 

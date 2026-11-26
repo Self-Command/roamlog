@@ -5,7 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MultimodalInput, type MultimodalInputProps } from "../multimodal-input";
+import {
+  MultimodalInput,
+  stopActiveAiRun,
+  type MultimodalInputProps,
+} from "../multimodal-input";
 import { resetAiChatModelStoresForTests } from "../model-selector";
 import { resetAiChatSelectionStores } from "../chat-selection";
 import { VISION_UNAVAILABLE_NOTE } from "../vision-note";
@@ -112,6 +116,13 @@ function modelResponse(vision = true): Response {
   );
 }
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 beforeEach(() => {
   resetAiChatModelStoresForTests();
   resetAiChatSelectionStores();
@@ -128,6 +139,57 @@ afterEach(() => {
 });
 
 describe("MultimodalInput", () => {
+  it("stops the active server stream before aborting the local run", async () => {
+    const streamId = "018f0a00-0000-7000-8000-0000000000dd";
+    const conversationId = "018f0a00-0000-7000-8000-0000000000cc";
+    const cancelLocal = vi.fn();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/stream/status")) {
+        return jsonResponse({ active: true, streamId });
+      }
+      if (url.includes("/stream/cancel")) {
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({ streamId });
+        return jsonResponse({ cancelled: true });
+      }
+      return modelResponse();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      stopActiveAiRun({
+        workspaceId: WORKSPACE_ID,
+        conversationId,
+        cancelLocal,
+      }),
+    ).resolves.toBe(true);
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/stream/status"))).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/stream/cancel"))).toBe(true);
+    expect(cancelLocal).toHaveBeenCalledTimes(1);
+  });
+
+  it("still aborts the local run when the status probe fails", async () => {
+    const cancelLocal = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("offline");
+      }),
+    );
+
+    await expect(
+      stopActiveAiRun({
+        workspaceId: WORKSPACE_ID,
+        conversationId: "018f0a00-0000-7000-8000-0000000000cc",
+        cancelLocal,
+      }),
+    ).resolves.toBe(false);
+
+    expect(cancelLocal).toHaveBeenCalledTimes(1);
+  });
+
   it("does not render starter prompts above the composer", () => {
     render(<Harness />);
 

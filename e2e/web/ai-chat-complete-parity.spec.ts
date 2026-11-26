@@ -53,7 +53,7 @@ async function openAiPage(page: Page): Promise<void> {
   await page.goto(`${WEB_URL}/w/${WORKSPACE_SLUG}/ai`, {
     waitUntil: "domcontentloaded",
   });
-  await expect(page.getByRole("heading", { name: "先计划，后写入" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "AI 旅行助手" })).toBeVisible({
     timeout: 30_000,
   });
 }
@@ -286,6 +286,59 @@ test.describe("AI chat parity (real stack)", () => {
       messages: Array<{ message: { role: string } }>;
     };
     expect(body.messages.filter((message) => message.message.role === "assistant")).toHaveLength(1);
+  });
+
+  test("switching conversations keeps the active run in the background", async ({ page }) => {
+    test.setTimeout(420_000);
+    await openAiPage(page);
+    const prompt = `帮我做一份五天四晚的关西行程，包含每天三个节点、交通、预算和注意事项 ${Date.now()}`;
+    await sendPrompt(page, prompt);
+    const conversationId = await conversationIdFromUrl(page);
+    const workspaceId = await workspaceIdFor(page);
+    await expect(page.getByRole("button", { name: "停止生成" })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    const cancelRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST" && request.url().includes("/stream/cancel")) {
+        cancelRequests.push(request.url());
+      }
+    });
+
+    await page.getByRole("button", { name: "新建会话" }).click();
+    await expect(page.getByLabel("给 AI 助手发消息")).toHaveValue("");
+    await expect(page).toHaveURL(new RegExp(`/w/${WORKSPACE_SLUG}/ai$`, "u"));
+    expect(cancelRequests).toHaveLength(0);
+
+    await page.goto(
+      `${WEB_URL}/w/${WORKSPACE_SLUG}/ai?conversation=${encodeURIComponent(conversationId)}`,
+      { waitUntil: "domcontentloaded" },
+    );
+    await expect(page.getByLabel("给 AI 助手发消息")).toBeVisible({ timeout: 30_000 });
+
+    await expect
+      .poll(
+        async () => {
+          const response = await page.request.get(
+            `${WEB_URL}/v1/workspaces/${workspaceId}/ai/conversations/${conversationId}/messages`,
+          );
+          if (response.status() !== 200) return 0;
+          const body = (await response.json()) as {
+            messages: Array<{ message: { role: string } }>;
+          };
+          return body.messages.filter((message) => message.message.role === "assistant").length;
+        },
+        { timeout: 240_000, intervals: [500, 1_000, 2_000] },
+      )
+      .toBeGreaterThanOrEqual(1);
+
+    await waitForRunEnd(page);
+    await expect(page.getByTestId("message-assistant").first()).toBeVisible({
+      timeout: 30_000,
+    });
+    expect(cancelRequests).toHaveLength(0);
+    await shot(page, "08b-background-switch-1440");
   });
 
   test("error state is readable and does not leave a spinner behind", async ({ page }) => {

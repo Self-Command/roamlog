@@ -376,8 +376,11 @@ function validateHumanToolResult(
   return { ok: true };
 }
 
-/** Keeps `loadContext` output (unknown[]) assignable to the adapter contract. */
-function toConversationMessages(messages: readonly unknown[]): AiConversationMessage[] {
+/**
+ * Keeps `loadContext` output (unknown[]) assignable to the adapter contract.
+ * Exported for the history-shape regression test.
+ */
+export function toConversationMessages(messages: readonly unknown[]): AiConversationMessage[] {
   const result: AiConversationMessage[] = [];
   for (const message of messages) {
     if (typeof message !== "object" || message === null) {
@@ -392,10 +395,19 @@ function toConversationMessages(messages: readonly unknown[]): AiConversationMes
       record.role === "assistant" &&
       (typeof record.content === "string" || record.content === null)
     ) {
+      const toolCalls = Array.isArray(record.toolCalls)
+        ? (record.toolCalls as AiToolCallRequest[])
+        : [];
+      if (
+        toolCalls.length === 0 &&
+        (record.content === null || record.content.trim().length === 0)
+      ) {
+        continue;
+      }
       result.push({
         role: "assistant",
         content: record.content,
-        toolCalls: Array.isArray(record.toolCalls) ? (record.toolCalls as AiToolCallRequest[]) : [],
+        toolCalls,
       });
       continue;
     }
@@ -879,6 +891,10 @@ export class AiPlanService {
         selectedSettings = initialCandidate.settings;
         firstByteMs = Date.now() - startedAt;
         yield metaFor(selectedSettings);
+        // `meta` is the commit point for the transport. From here on, provider
+        // failures are terminal SSE events, never exceptions after headers have
+        // been flushed.
+        committed = true;
         this.logger.log(
           {
             event: "ai.stream_started",
