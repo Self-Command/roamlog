@@ -307,6 +307,10 @@ test.describe("admin appearance defaults", () => {
   });
 
   test("quick appearance switcher changes the Admin shell and survives reload", async () => {
+    // The previous test ends at 390px to capture the mobile layout. This test
+    // reuses the same page, so restore the desktop viewport before looking for
+    // the desktop navigation labels.
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`${ADMIN_URL}/admin`, { waitUntil: "domcontentloaded" });
     await expect(
       page.getByRole("navigation", { name: "管理后台主导航" }),
