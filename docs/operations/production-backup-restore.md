@@ -8,7 +8,7 @@ The backup set contains:
 
 - a PostgreSQL custom-format dump;
 - a mirror of the private S3/MinIO bucket;
-- a copy of `/opt/roamlog/config/.env.staging`;
+- a copy of `/opt/roamlog/config/.env.production`;
 - a manifest and SHA-256 checksums.
 
 The env file is included because an application restore is incomplete without
@@ -20,7 +20,8 @@ or attach the env backup.
 ## Prerequisites
 
 - The deployment stack is running, including `postgres` and `minio`.
-- Docker Compose can read `/opt/roamlog/config/.env.staging`.
+- Docker Compose can read `/opt/roamlog/config/.env.production` and
+  `/opt/roamlog/repo/docker/compose.production.yml`.
 - The operator has root access, or an approved equivalent that can read the env
   file without exposing it to another account.
 - There is enough free space for a full object-store mirror plus the PostgreSQL
@@ -48,11 +49,21 @@ The defaults are:
 | `BACKUP_ROOT`           | `/opt/roamlog/backups`             | Parent directory for timestamped runs                |
 | `BACKUP_RETENTION_DAYS` | `14`                               | Delete only completed runs older than this many days |
 | `ROAMLOG_REPO_DIR`      | `/opt/roamlog/repo`                | Checkout containing the compose files                |
-| `ROAMLOG_ENV_FILE`      | `/opt/roamlog/config/.env.staging` | Compose env and env backup source                    |
+| `ROAMLOG_COMPOSE_FILE`  | `<repo>/docker/compose.production.yml` | Production Compose file                          |
+| `ROAMLOG_ENV_FILE`      | `/opt/roamlog/config/.env.production`  | Compose env and env backup source               |
+| `ROAMLOG_COMPOSE_PROJECT_NAME` | `roamlog`                    | Docker Compose project name                         |
+| `BACKUP_MC_IMAGE`       | pinned `chainguard/minio-client` image | Shell-free MinIO client used only for backup   |
+| `BACKUP_MC_HOST`        | derived from `S3_*` values          | Optional pre-encoded `MC_HOST` alias            |
 
-`ROAMLOG_ENV_FILE` must remain the path used by
-`docker/compose.server.yml`; changing it only for this script would make the
-backup use a different configuration from the deployed containers.
+The standard Compose overrides `COMPOSE_FILE` (colon-separated file list),
+`COMPOSE_ENV_FILE`, and `COMPOSE_PROJECT_NAME` are also supported. The
+production defaults match `docker/compose.production.yml` and the operator env
+file used by the deployed containers.
+
+The backup deliberately runs the pinned MinIO client image directly instead of
+the `minio-init` service. That keeps backups independent of the bucket
+bootstrap image and avoids provider-registry availability becoming a backup
+outage.
 
 The script does not modify cron or systemd. Schedule it only after operational
 approval and ensure the scheduler runs it as root. A successful run ends with a
@@ -65,11 +76,12 @@ The script prints the run directory and size only. Inspect the metadata and
 checksums without opening `env`:
 
 ```bash
-backup=/opt/roamlog/backups/roamlog-YYYYMMDDTHHMMSSZ.XXXXXX
+backup=/opt/roamlog/backups/roamlog-YYYYMMDDTHHMMSSZ
 sudo chmod 600 "$backup/COMPLETE"
-sudo sha256sum -c "$backup/SHA256SUMS"
+(cd "$backup" && sudo sha256sum -c SHA256SUMS)
 sudo test -s "$backup/postgres.dump"
 sudo test -s "$backup/env"
+sudo docker exec -i roamlog-postgres-1 pg_restore --list < "$backup/postgres.dump" >/dev/null
 sudo find "$backup" -type f -printf '%m %p\n' | sort
 ```
 
@@ -95,22 +107,23 @@ For an in-place restore:
 
 ## Restore PostgreSQL into an isolated database
 
-The compose command must be the same two-file server command used by the app:
+The compose command must be the production command used by the app:
 
 ```bash
 compose() {
   docker compose \
-    --env-file /opt/roamlog/config/.env.staging \
-    -f /opt/roamlog/repo/docker/compose.staging.yml \
-    -f /opt/roamlog/repo/docker/compose.server.yml \
-    --profile app "$@"
+    --project-directory /opt/roamlog/repo \
+    --project-name roamlog \
+    --env-file /opt/roamlog/config/.env.production \
+    -f /opt/roamlog/repo/docker/compose.production.yml \
+    --profile init "$@"
 }
 ```
 
 Create a restore database and restore the dump:
 
 ```bash
-backup=/opt/roamlog/backups/roamlog-YYYYMMDDTHHMMSSZ.XXXXXX
+backup=/opt/roamlog/backups/roamlog-YYYYMMDDTHHMMSSZ
 compose exec -T postgres sh -lc \
   'createdb -U "$POSTGRES_USER" roamlog_restore'
 compose exec -T postgres sh -lc \
@@ -129,7 +142,7 @@ Stop writes to the target bucket before an in-place restore. For an isolated
 restore, use a different bucket:
 
 ```bash
-backup=/opt/roamlog/backups/roamlog-YYYYMMDDTHHMMSSZ.XXXXXX
+backup=/opt/roamlog/backups/roamlog-YYYYMMDDTHHMMSSZ
 RESTORE_BUCKET=roamlog-restore
 compose run --rm --no-deps --user 0:0 \
   -v "$backup/minio:/backup:ro" \
@@ -153,12 +166,13 @@ starting traffic. Never make the bucket public as a recovery shortcut.
 Only after comparing the backup with the current deployment configuration:
 
 ```bash
-sudo install -m 600 "$backup/env" /opt/roamlog/config/.env.staging
+sudo install -m 600 "$backup/env" /opt/roamlog/config/.env.production
 sudo docker compose \
-  --env-file /opt/roamlog/config/.env.staging \
-  -f /opt/roamlog/repo/docker/compose.staging.yml \
-  -f /opt/roamlog/repo/docker/compose.server.yml \
-  --profile app config --quiet
+  --project-directory /opt/roamlog/repo \
+  --project-name roamlog \
+  --env-file /opt/roamlog/config/.env.production \
+  -f /opt/roamlog/repo/docker/compose.production.yml \
+  --profile init config --quiet
 ```
 
 Treat a restored env file as a credential-bearing artifact. Rotate any secret

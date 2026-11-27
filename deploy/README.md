@@ -269,6 +269,22 @@ a `0600` env copy into a `0700` timestamped directory under
 `/opt/roamlog/backups`. It prunes only completed runs older than the configured
 retention period. It does not install cron or systemd units.
 
+Its production defaults are
+`/opt/roamlog/repo/docker/compose.production.yml` and
+`/opt/roamlog/config/.env.production`. Override them with
+`ROAMLOG_COMPOSE_FILE` / `ROAMLOG_ENV_FILE`, or the standard
+`COMPOSE_FILE` / `COMPOSE_ENV_FILE` / `COMPOSE_PROJECT_NAME` variables.
+Only a run whose PostgreSQL dump passes `pg_restore --list`, whose MinIO mirror
+and checksums complete, and which reaches the `COMPLETE` marker receives the
+readable `roamlog-<timestamp>` name. Failed runs remain under
+`.roamlog-incomplete-*` for inspection and are never pruned automatically.
+
+The mocked fixture suite runs as root (or with passwordless sudo):
+
+```bash
+bash deploy/tests/backup-roamlog.test.sh
+```
+
 See [production backup and restore](../docs/operations/production-backup-restore.md)
 for verification, isolated restore, and drill requirements.
 
