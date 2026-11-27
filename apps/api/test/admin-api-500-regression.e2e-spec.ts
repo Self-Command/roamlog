@@ -172,7 +172,10 @@ integrationDescribe("admin audit/trips regression against PostgreSQL", () => {
       .overrideProvider(PrismaService)
       .useValue(database)
       .overrideProvider(RedisService)
-      .useValue({ ping: async () => undefined })
+      .useValue({
+        ping: async () => undefined,
+        subscribeChannel: () => ({ close: async () => undefined }),
+      })
       .overrideProvider(StorageService)
       .useValue({ checkHealth: async () => undefined })
       .overrideProvider(AdminQueueService)

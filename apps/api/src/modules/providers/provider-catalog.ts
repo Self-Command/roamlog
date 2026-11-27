@@ -90,27 +90,40 @@ const AI_CONFIG_FIELDS: readonly ProviderConfigField[] = [
   }),
 ];
 
-const PLACES_COMMON_FIELDS: readonly ProviderConfigField[] = [
-  field("baseUrl", "url", "Base URL", true),
-  field("timeoutMs", "integer", "超时（毫秒）", false, {
-    min: 1_000,
-    max: 30_000,
-    default: 2_000,
-  }),
-  field("regions", "multi-select", "适用区域", true, {
-    options: [option("cn", "中国"), option("global", "全球")],
-  }),
-  field("dailyQuota", "integer", "每日配额", false, {
-    min: 0,
-    max: 1_000_000,
-    default: 0,
-  }),
-  field("cacheTtlSeconds", "integer", "缓存秒数", false, {
-    min: 60,
-    max: 86_400,
-    default: 900,
-  }),
-];
+function placesConfigFields(
+  timeoutDefaultMs: number,
+  options: { readonly includeDailyQuota?: boolean } = {},
+): readonly ProviderConfigField[] {
+  return [
+    field("baseUrl", "url", "Base URL", true),
+    field("timeoutMs", "integer", "超时（毫秒）", false, {
+      min: 1_000,
+      max: 30_000,
+      default: timeoutDefaultMs,
+    }),
+    field("regions", "multi-select", "适用区域", true, {
+      options: [option("cn", "中国"), option("global", "全球")],
+    }),
+    ...(options.includeDailyQuota === false
+      ? []
+      : [
+          field("dailyQuota", "integer", "每日配额", false, {
+            min: 0,
+            max: 1_000_000,
+            default: 0,
+          }),
+        ]),
+    field("cacheTtlSeconds", "integer", "缓存秒数", false, {
+      min: 60,
+      max: 86_400,
+      default: 900,
+    }),
+  ];
+}
+
+const TENCENT_CONFIG_FIELDS = placesConfigFields(2_000);
+const GEOAPIFY_CONFIG_FIELDS = placesConfigFields(5_000);
+const PHOTON_CONFIG_FIELDS = placesConfigFields(2_500, { includeDailyQuota: false });
 
 const MAIL_FROM_FIELD = field("from", "text", "发件地址", true);
 const SMTP_FIELDS: readonly ProviderConfigField[] = [
@@ -286,7 +299,7 @@ const PROVIDER_ADAPTER_DEFINITIONS: readonly ProviderAdapterDefinition[] = Objec
       },
     ],
     configSchema: tencentProviderConfigSchema,
-    configFields: PLACES_COMMON_FIELDS,
+    configFields: TENCENT_CONFIG_FIELDS,
     secretFields: MAP_API_KEY_FIELDS,
     capabilities: ["probe", "merge", "priority"],
   },
@@ -307,7 +320,7 @@ const PROVIDER_ADAPTER_DEFINITIONS: readonly ProviderAdapterDefinition[] = Objec
       },
     ],
     configSchema: geoapifyProviderConfigSchema,
-    configFields: PLACES_COMMON_FIELDS,
+    configFields: GEOAPIFY_CONFIG_FIELDS,
     secretFields: MAP_API_KEY_FIELDS,
     capabilities: ["probe", "merge", "priority"],
   },
@@ -328,7 +341,7 @@ const PROVIDER_ADAPTER_DEFINITIONS: readonly ProviderAdapterDefinition[] = Objec
       },
     ],
     configSchema: photonProviderConfigSchema,
-    configFields: PLACES_COMMON_FIELDS.filter((entry) => entry.key !== "dailyQuota"),
+    configFields: PHOTON_CONFIG_FIELDS,
     secretFields: [],
     capabilities: ["probe", "merge", "priority"],
   },

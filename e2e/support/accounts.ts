@@ -159,6 +159,11 @@ export function deleteSuperAdmin(email: string): void {
   runProvisionScript(["--action=delete", `--email=${email}`]);
 }
 
+/** Best-effort cleanup for any run-scoped `@roamlog.test` account. */
+export function deleteSmokeAccount(email: string): void {
+  runProvisionScript(["--action=delete", `--email=${email}`]);
+}
+
 interface SignInResponse {
   redirect?: boolean;
   twoFactorRedirect?: boolean;
@@ -358,12 +363,13 @@ export async function loginOnAdmin(
 /** Workspace lookup shared by the web journeys (id is not hardcoded). */
 export async function findWorkspace(
   request: APIRequestContext,
+  slug: string = WORKSPACE_SLUG,
 ): Promise<{ id: string; slug: string; name: string }> {
   const response = await request.get(`${API_URL}/v1/me/workspaces`);
   expect(response.status(), await response.text()).toBe(200);
   const workspaces = (await response.json()) as Array<{ id: string; slug: string; name: string }>;
-  const workspace = workspaces.find((entry) => entry.slug === WORKSPACE_SLUG);
-  expect(workspace, `workspace ${WORKSPACE_SLUG} must be visible to the signed-in account`).toBeTruthy();
+  const workspace = workspaces.find((entry) => entry.slug === slug);
+  expect(workspace, `workspace ${slug} must be visible to the signed-in account`).toBeTruthy();
   return workspace as { id: string; slug: string; name: string };
 }
 

@@ -65,7 +65,10 @@ describe("trip origin normalization", () => {
       .overrideProvider(PrismaService)
       .useValue({ client: {}, healthCheck: vi.fn() })
       .overrideProvider(RedisService)
-      .useValue({ ping: vi.fn() })
+      .useValue({
+        ping: vi.fn(),
+        subscribeChannel: () => ({ close: async () => undefined }),
+      })
       .overrideProvider(StorageService)
       .useValue({ checkHealth: vi.fn() })
       .overrideProvider(ActivitiesService)

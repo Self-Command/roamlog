@@ -39,7 +39,6 @@ class FakeRedisBroker {
     set: this.set,
     incr: this.incr,
     publish: this.publish,
-    duplicate: () => this.createSubscriber(),
   };
 
   private createSubscriber() {
@@ -65,6 +64,23 @@ class FakeRedisBroker {
       disconnect: vi.fn(),
     };
   }
+
+  readonly subscribeChannel = vi.fn(
+    (channel: string, onMessage: (message: string) => void) => {
+      const subscriber = this.createSubscriber();
+      subscriber.on("message", (received, message) => {
+        if (received === channel) {
+          onMessage(message);
+        }
+      });
+      void subscriber.subscribe(channel);
+      return {
+        close: async () => {
+          await subscriber.quit();
+        },
+      };
+    },
+  );
 
   failAll(): void {
     const failure = new Error("redis down");
@@ -181,7 +197,7 @@ function setup(
   };
   const service = new SettingsService(
     prisma as never,
-    { client: redis.client } as never,
+    { client: redis.client, subscribeChannel: redis.subscribeChannel } as never,
     config as never,
     logger as never,
     audit as never,

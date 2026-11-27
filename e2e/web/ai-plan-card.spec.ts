@@ -40,6 +40,12 @@ test.beforeAll(() => {
 
 async function login(page: Page): Promise<void> {
   await page.goto(`${WEB_URL}/login`, { waitUntil: "domcontentloaded" });
+  // The login submit button is disabled until the client hydrates. Waiting for
+  // it first prevents Playwright from filling controlled inputs that the
+  // hydration pass then resets to empty.
+  await expect(page.getByRole("button", { name: "登录", exact: true })).toBeEnabled({
+    timeout: 30_000,
+  });
   await page.getByLabel("邮箱").fill(OWNER_ACCOUNT.email);
   await page.getByLabel("密码").fill(OWNER_ACCOUNT.password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
@@ -80,6 +86,7 @@ async function sendAndWait(page: Page, prompt: string): Promise<"plan" | "error"
 
   const assistant = page.getByTestId("message-assistant").last();
   const card = assistant.getByLabel("计划确认卡");
+  const confirmBrief = page.getByRole("button", { name: "确认并生成计划" }).last();
   const failure = assistant
     .getByTestId("ai-message-error")
     .or(
@@ -98,8 +105,25 @@ async function sendAndWait(page: Page, prompt: string): Promise<"plan" | "error"
       .waitFor({ state: "visible", timeout: PLAN_TIMEOUT_MS })
       .then(() => "error" as const)
       .catch(() => "timeout" as const),
+    confirmBrief
+      .waitFor({ state: "visible", timeout: PLAN_TIMEOUT_MS })
+      .then(() => "confirm" as const)
+      .catch(() => "timeout" as const),
   ]);
-  return settled;
+  if (settled !== "confirm") return settled;
+
+  // This edit flow is deliberately human-in-the-loop: confirm the brief
+  // before the planner may queue any writes.
+  await confirmBrief.click();
+  await expect(page.getByRole("button", { name: "停止生成" })).toHaveCount(0, {
+    timeout: PLAN_TIMEOUT_MS,
+  });
+  const confirmedCard = page.getByLabel("计划确认卡").last();
+  const confirmed = await confirmedCard
+    .waitFor({ state: "visible", timeout: PLAN_TIMEOUT_MS })
+    .then(() => "plan" as const)
+    .catch(() => "timeout" as const);
+  return confirmed;
 }
 
 test.describe("enterprise plan preview (real stack)", () => {
@@ -148,7 +172,7 @@ test.describe("enterprise plan preview (real stack)", () => {
         await page.goto(`${WEB_URL}/w/${WORKSPACE_SLUG}/ai`, {
           waitUntil: "domcontentloaded",
         });
-        await expect(page.getByRole("heading", { name: "先计划，后写入" })).toBeVisible({
+        await expect(page.getByTestId("multimodal-input")).toBeVisible({
           timeout: 30_000,
         });
 

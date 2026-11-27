@@ -2,7 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { setWorkerUrl, type Map as MapLibreMap } from "maplibre-gl";
+import type { Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Map, {
   NavigationControl,
@@ -22,6 +22,7 @@ import {
   pointsToGeoJson,
 } from "./cluster-points-source";
 import { moveCamera } from "./map-camera";
+import { installMapLibreWorker } from "./maplibre-worker";
 import { photoFocus, photoGroupKey, photosToGeoJson, type PhotoPoint } from "./photo-points";
 import { PlacesAttribution } from "./places-attribution";
 import { useThemeColor } from "./use-theme-color";
@@ -45,9 +46,7 @@ export { pointsToGeoJson } from "./cluster-points-source";
 const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 // Same worker wiring as map-canvas.tsx; the globe chunk can load first.
-if (typeof window !== "undefined") {
-  setWorkerUrl("https://cdn.jsdelivr.net/npm/maplibre-gl@6.18.0/dist/maplibre-gl-worker.mjs");
-}
+installMapLibreWorker();
 
 export const GLOBE_ZOOM = 2.2;
 export const CITY_ZOOM = 11;

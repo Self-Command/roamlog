@@ -44,6 +44,20 @@ const NARA: TripDestinationInput = {
   lng: 135.8048,
 };
 
+const BEIJING_TENCENT: TripDestinationInput = {
+  ...KYOTO,
+  name: "北京市",
+  provider: "tencent",
+  providerPlaceId: "tencent:beijing",
+  address: "北京市",
+  country: "中国",
+  countryCode: "CN",
+  lat: 39.9042,
+  lng: 116.4074,
+  timeZone: "Asia/Shanghai",
+  bbox: [115.4234, 39.4427, 117.5082, 41.0608],
+};
+
 function tripRow(overrides: Partial<TripRecord> = {}): TripRecord {
   return {
     id: TRIP_ID,
@@ -285,6 +299,32 @@ describe("TripsService structured destinations", () => {
     expect(repository.createDestinations.mock.calls[0]?.[1]).toEqual([]);
     expect(trip.destinations).toEqual(["东京"]);
     expect(trip.destinationsV2).toEqual([]);
+  });
+
+  it("persists a Tencent destination selected from the native place search", async () => {
+    const { service, repository } = build();
+
+    const trip = await service.create(
+      actor,
+      membership(),
+      createInput({ destinationsV2: [BEIJING_TENCENT] }),
+    );
+
+    const writeRows = repository.createDestinations.mock.calls[0]?.[1] as Array<
+      Record<string, unknown>
+    >;
+    expect(writeRows[0]).toMatchObject({
+      name: "北京市",
+      provider: "tencent",
+      providerPlaceId: "tencent:beijing",
+      countryCode: "CN",
+      lat: 39.9042,
+      lng: 116.4074,
+    });
+    expect(trip.destinationsV2?.[0]).toMatchObject({
+      name: "北京市",
+      provider: "tencent",
+    });
   });
 
   it("replaces the whole group on update and soft-deletes the previous rows", async () => {

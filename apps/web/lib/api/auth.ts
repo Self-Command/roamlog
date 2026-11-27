@@ -270,11 +270,11 @@ export async function changeEmail(newEmail: string, callbackURL?: string): Promi
 }
 
 /**
- * `POST /v1/auth/revoke-sessions` — signs every *other* device out and keeps the
- * current one. Used by "退出所有其他设备".
+ * `POST /v1/auth/revoke-other-sessions` — signs every *other* device out and
+ * keeps the current session. Used by "退出所有其他设备".
  */
 export async function revokeOtherSessions(): Promise<void> {
-  await authRequest("/v1/auth/revoke-sessions", jsonInit("POST", {}));
+  await authRequest("/v1/auth/revoke-other-sessions", jsonInit("POST", {}));
 }
 
 export async function verifyEmail(token: string): Promise<void> {

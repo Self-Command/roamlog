@@ -187,6 +187,45 @@ test.afterAll(async () => {
   await ownerApi.dispose();
 });
 
+test("password share never submits before hydration", async ({ page }) => {
+  await page.route("**/_next/static/**/*.js", (route) => route.abort());
+  await page.goto(`/share/${shareToken}`, { waitUntil: "domcontentloaded" });
+
+  const form = page.locator("form").first();
+  const submit = form.locator('button[type="submit"]');
+  await expect(form).toHaveAttribute("method", "post");
+  await expect(submit).toBeDisabled();
+
+  await page.getByLabel("分享密码").fill(PASSWORD);
+  await page.screenshot({
+    path: path.join(OUT_DIR, "share-password-prehydration-1440.png"),
+    fullPage: false,
+    animations: "disabled",
+  });
+
+  const navigated = page
+    .waitForEvent("framenavigated", {
+      predicate: (frame) => frame === page.mainFrame(),
+      timeout: 1_500,
+    })
+    .then(() => true)
+    .catch(() => false);
+  await page.getByLabel("分享密码").press("Enter");
+
+  expect(await navigated).toBe(false);
+  await expect(page).toHaveURL(`${WEB_URL}/share/${shareToken}`);
+  expect(page.url()).not.toContain(PASSWORD);
+  expect(page.url()).not.toContain(encodeURIComponent(PASSWORD));
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page, "password share prehydration 390");
+  await page.screenshot({
+    path: path.join(OUT_DIR, "share-password-prehydration-390.png"),
+    fullPage: false,
+    animations: "disabled",
+  });
+});
+
 test("SSR password gate, wrong/correct password, locked reload and responsive layout", async ({
   browser,
   page,

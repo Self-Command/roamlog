@@ -11,6 +11,8 @@ import {
   DialogTitle,
   ErrorState,
   FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
   Input,
   PageHeader,
   Separator,
@@ -401,7 +403,7 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
       </Dialog>
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
-        <form className="surface-card p-5" onSubmit={requestPasswordChange}>
+        <HydrationSafeForm className="surface-card p-5" onSubmit={requestPasswordChange}>
           <div className="flex items-center gap-3 border-b border-hairline pb-4">
             <span className="flex size-9 items-center justify-center rounded-control border border-hairline bg-surface-2 text-body">
               <KeyRound aria-hidden="true" className="size-4" />
@@ -456,17 +458,16 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
             </div>
           ) : null}
 
-          <Button
-            type="submit"
+          <HydrationSafeSubmitButton
             variant="primary"
             className="mt-5"
             disabled={passwordMutation.isPending}
           >
             {passwordMutation.isPending ? "保存中…" : "修改密码"}
-          </Button>
-        </form>
+          </HydrationSafeSubmitButton>
+        </HydrationSafeForm>
 
-        <form className="surface-card p-5" onSubmit={requestEmailChange}>
+        <HydrationSafeForm className="surface-card p-5" onSubmit={requestEmailChange}>
           <div className="flex items-center gap-3 border-b border-hairline pb-4">
             <span className="flex size-9 items-center justify-center rounded-control border border-hairline bg-surface-2 text-body">
               <Mail aria-hidden="true" className="size-4" />
@@ -514,15 +515,14 @@ export function SecuritySettings({ workspaceSlug }: { workspaceSlug: string }) {
             </div>
           ) : null}
 
-          <Button
-            type="submit"
+          <HydrationSafeSubmitButton
             variant="primary"
             className="mt-5"
             disabled={emailMutation.isPending}
           >
             {emailMutation.isPending ? "发送中…" : "修改邮箱"}
-          </Button>
-        </form>
+          </HydrationSafeSubmitButton>
+        </HydrationSafeForm>
       </div>
 
       <section className="surface-card p-5" aria-label="两步验证">

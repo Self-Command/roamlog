@@ -235,7 +235,12 @@ async function main(): Promise<void> {
     .overrideProvider(SessionGuard)
     .useValue(headerSessionGuard())
     .overrideProvider(RedisService)
-    .useValue({ ping: async () => undefined, get: async () => null, set: async () => "OK" })
+    .useValue({
+      ping: async () => undefined,
+      get: async () => null,
+      set: async () => "OK",
+      subscribeChannel: () => ({ close: async () => undefined }),
+    })
     .overrideProvider(StorageService)
     .useValue({
       checkHealth: async () => undefined,

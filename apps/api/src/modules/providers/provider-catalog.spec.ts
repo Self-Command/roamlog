@@ -91,6 +91,21 @@ describe("provider catalog", () => {
     expect(providerAdapterDefinition("photon")?.secretFields).toEqual([]);
   });
 
+  it("uses a production-safe timeout default per map adapter", () => {
+    const timeoutDefault = (adapter: "tencent" | "geoapify" | "photon") =>
+      providerAdapterDefinition(adapter)?.configFields.find((field) => field.key === "timeoutMs")
+        ?.default;
+
+    expect(timeoutDefault("tencent")).toBe(2_000);
+    expect(timeoutDefault("geoapify")).toBe(5_000);
+    expect(timeoutDefault("photon")).toBe(2_500);
+    expect(
+      parseProviderConfig("geoapify", {
+        baseUrl: "https://api.geoapify.com/v1/geocode/autocomplete",
+      }),
+    ).toMatchObject({ timeoutMs: 5_000 });
+  });
+
   it("keeps the legacy display-name sender syntax valid for mail providers", () => {
     expect(
       parseProviderConfig("resend", {

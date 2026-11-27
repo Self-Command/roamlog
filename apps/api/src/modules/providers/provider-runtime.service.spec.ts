@@ -102,10 +102,24 @@ function harness(
   });
   const redis = {
     client: {
-      duplicate: vi.fn(() => subscriber),
       publish: vi.fn().mockResolvedValue(1),
       set: vi.fn().mockResolvedValue("OK"),
     },
+    subscribeChannel: vi.fn(
+      (channel: string, onMessage: (message: string) => void) => {
+        subscriber.on("message", (received: string, message: string) => {
+          if (received === channel) {
+            onMessage(message);
+          }
+        });
+        void subscriber.subscribe(channel);
+        return {
+          close: async () => {
+            await subscriber.quit();
+          },
+        };
+      },
+    ),
   } as unknown as RedisService;
 
   const logger = {

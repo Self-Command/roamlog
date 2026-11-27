@@ -5,6 +5,12 @@ import Redis from "ioredis";
 import { withTimeout } from "../../common/utils/with-timeout.js";
 import { AppConfigService } from "../../config/app-config.service.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
+import {
+  createRedisChannelSubscription,
+  type RedisChannelFailure,
+  type RedisChannelSubscriber,
+  type RedisChannelSubscription,
+} from "./redis-channel.js";
 
 /**
  * Redis is a cache / rate-limit / quota / idempotency dependency, never a source
@@ -63,6 +69,16 @@ export function redisRetryStrategy(times: number): number | null {
   return Math.min(REDIS_RETRY_BASE_DELAY_MS * 2 ** (times - 1), REDIS_RETRY_MAX_DELAY_MS);
 }
 
+/**
+ * Long-lived subscriber connections must survive the initial handshake and
+ * every later outage. They are dedicated connections and are not used on the
+ * request path, so unlike {@link redisRetryStrategy} this one never gives up.
+ */
+export function redisSubscriberRetryStrategy(times: number): number {
+  const exponent = Math.min(Math.max(times - 1, 0), 16);
+  return Math.min(REDIS_RETRY_BASE_DELAY_MS * 2 ** exponent, REDIS_RETRY_MAX_DELAY_MS);
+}
+
 /** Outcome of a NX acquisition. `unavailable` means "we could not ask Redis". */
 export type RedisAcquisition = "acquired" | "taken" | "unavailable";
 
@@ -73,6 +89,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   readonly required: boolean;
   private degraded = false;
   private readonly lastWarnAt = new Map<string, number>();
+  private readonly channelSubscriptions = new Set<RedisChannelSubscription>();
   private revivalTimer?: NodeJS.Timeout;
   private destroying = false;
 
@@ -152,6 +169,43 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.noteFailure("ping", error);
       throw error;
     }
+  }
+
+  /**
+   * Creates a resilient pub/sub subscription owned by this service. The
+   * subscriber gets its own connection because a Redis client in subscriber
+   * mode cannot execute ordinary commands.
+   */
+  subscribeChannel(
+    channel: string,
+    onMessage: (message: string) => void,
+    onFailure?: (failure: RedisChannelFailure) => void,
+  ): RedisChannelSubscription {
+    const subscription = createRedisChannelSubscription({
+      channel,
+      onMessage,
+      createSubscriber: () =>
+        this.client.duplicate({
+          enableOfflineQueue: true,
+          maxRetriesPerRequest: null,
+          retryStrategy: redisSubscriberRetryStrategy,
+          autoResubscribe: true,
+          connectionName: `roamlog-api:subscriber:${channel}`,
+        }) as unknown as RedisChannelSubscriber,
+      onFailure: (failure) => {
+        onFailure?.(failure);
+        this.noteFailure(`subscription:${failure.operation}:${channel}`, failure.error);
+      },
+    });
+
+    const tracked: RedisChannelSubscription = {
+      close: async () => {
+        this.channelSubscriptions.delete(tracked);
+        await subscription.close();
+      },
+    };
+    this.channelSubscriptions.add(tracked);
+    return tracked;
   }
 
   /**
@@ -238,6 +292,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     this.destroying = true;
     this.clearRevival();
+    const subscriptions = [...this.channelSubscriptions];
+    this.channelSubscriptions.clear();
+    await Promise.allSettled(subscriptions.map((subscription) => subscription.close()));
 
     if (this.client.status === "end") {
       return;

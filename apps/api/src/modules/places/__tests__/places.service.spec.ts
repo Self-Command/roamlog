@@ -19,7 +19,9 @@ import {
 import { PlacesQuotaService } from "../places-quota.service.js";
 import { PlacesService, eligibleSources, routeFor } from "../places.service.js";
 import { TencentClient } from "../tencent.client.js";
+import type { ProviderHealthService } from "../../providers/provider-health.service.js";
 import {
+  abortAwareFetch,
   asLogger,
   fakeRedis,
   geoapifyFeature,
@@ -42,6 +44,7 @@ function setup(
     settings?: Partial<PlacesSettings>;
     redis?: FakeRedis;
     runtimeMode?: PlacesRoutingMode;
+    providerHealth?: Pick<ProviderHealthService, "recordFailure" | "recordSuccess">;
   } = {},
 ): {
   settings: PlacesSettings;
@@ -49,6 +52,7 @@ function setup(
   redis: FakeRedis;
   cache: PlacesCacheService;
   service: PlacesService;
+  providerHealth?: Pick<ProviderHealthService, "recordFailure" | "recordSuccess">;
 } {
   const settings = testSettings(options.settings);
   const source = staticPlacesSettingsSource(settings);
@@ -65,8 +69,9 @@ function setup(
     asLogger(logger),
     source,
     staticPlacesProviderRuntimeSource(settings, options.runtimeMode),
+    options.providerHealth as ProviderHealthService | undefined,
   );
-  return { settings, logger, redis, cache, service };
+  return { settings, logger, redis, cache, service, providerHealth: options.providerHealth };
 }
 
 interface ProviderHandlers {
@@ -489,6 +494,60 @@ describe("PlacesService — multi-source recall", () => {
       cache.key({ ...base, providerSignature: "v2:geoapify@10" }),
     );
     expect(cache.key(base)).toMatch(/^places:v4:global:[a-f0-9]{64}$/);
+  });
+
+  it("writes a real Geoapify timeout to provider health and returns an actionable fallback", async () => {
+    vi.stubGlobal("fetch", abortAwareFetch());
+    const providerHealth = {
+      recordFailure: vi.fn(async () => undefined),
+      recordSuccess: vi.fn(async () => undefined),
+    };
+    const { service } = setup({
+      settings: {
+        provider: "geoapify",
+        sources: ["geoapify"],
+        sourceOrder: ["geoapify"],
+        geoapifyTimeoutMs: 20,
+      },
+      providerHealth,
+    });
+
+    const response = await service.search({ q: "Kyoto", limit: 3 });
+
+    expect(response).toEqual({
+      items: [],
+      provider: "geoapify",
+      degraded: true,
+      cached: false,
+      fallback: "map_pick",
+    });
+    expect(providerHealth.recordFailure).toHaveBeenCalledWith("static:places:geoapify", {
+      code: "TIMEOUT",
+      retryable: true,
+    });
+    expect(providerHealth.recordSuccess).not.toHaveBeenCalled();
+  });
+
+  it("marks an unknown provider healthy after a successful upstream response", async () => {
+    const fetchMock = providerFetch({
+      geoapify: () => jsonResponse(beijingGeoapifyPayload()),
+      photon: () => jsonResponse(beijingPhotonPayload()),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const providerHealth = {
+      recordFailure: vi.fn(async () => undefined),
+      recordSuccess: vi.fn(async () => undefined),
+    };
+    const { service } = setup({
+      settings: { provider: "geoapify", sources: ["geoapify"], sourceOrder: ["geoapify"] },
+      providerHealth,
+    });
+
+    const response = await service.search({ q: "北京", limit: 3 });
+
+    expect(response.items.length).toBeGreaterThan(0);
+    expect(providerHealth.recordSuccess).toHaveBeenCalledWith("static:places:geoapify");
+    expect(providerHealth.recordFailure).not.toHaveBeenCalled();
   });
 });
 

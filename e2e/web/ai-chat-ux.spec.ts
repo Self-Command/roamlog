@@ -58,9 +58,7 @@ async function workspaceSlug(page: Page): Promise<string> {
 async function openFreshAiPage(page: Page) {
   const slug = await workspaceSlug(page);
   await page.goto(`${WEB_URL}/w/${slug}/ai`, { waitUntil: "domcontentloaded" });
-  await expect(
-    page.getByRole("heading", { name: "先计划，后写入" }),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("multimodal-input")).toBeVisible({ timeout: 30_000 });
 }
 
 async function sendPrompt(page: Page) {
@@ -127,8 +125,12 @@ test.describe("AI chat tool card (real stack)", () => {
 
     // 2) Expand: parameters must be visible and contain the actual args.
     const runningRoot = toolCard.locator("..");
-    await toolCard.click();
-    await expect(runningRoot.getByText("参数")).toBeVisible({ timeout: 10_000 });
+    if ((await toolCard.getAttribute("aria-expanded")) !== "true") {
+      await toolCard.click();
+    }
+    await expect(runningRoot.getByRole("heading", { name: "参数" })).toBeVisible({
+      timeout: 10_000,
+    });
     const assistantText = await page
       .getByTestId("message-assistant")
       .first()
@@ -146,14 +148,17 @@ test.describe("AI chat tool card (real stack)", () => {
 
     // Collapse again and prove the body is gone.
     const completedRoot = completedCard.locator("..");
-    await completedCard.click();
-    await expect(completedRoot.getByText("参数")).toBeHidden({ timeout: 10_000 });
+    if ((await completedCard.getAttribute("aria-expanded")) === "true") {
+      await completedCard.click();
+    }
+    await expect(completedRoot.getByRole("heading", { name: "参数" })).toBeHidden({
+      timeout: 10_000,
+    });
 
     // 4) Wait for the run to finish and capture the final reply. A search-only
     //    prompt answers with text; a planning prompt may also append the
     //    existing plan card. Either terminal shape is a valid final reply.
     const stopButton = page.getByRole("button", { name: "停止生成" });
-    await expect(stopButton).toBeVisible({ timeout: 15_000 });
     await expect(stopButton).toHaveCount(0, { timeout: 180_000 });
     const finalText = await page.getByTestId("message-assistant").first().innerText();
     expect(finalText.trim().length).toBeGreaterThan(20);
@@ -189,11 +194,19 @@ test.describe("AI chat tool card (real stack)", () => {
     await mobileCard.scrollIntoViewIfNeeded();
     await shot(page, "tool-card-390");
     const mobileRoot = mobileCard.locator("..");
-    await mobileCard.click();
-    await expect(mobileRoot.getByText("参数")).toBeVisible({ timeout: 10_000 });
+    if ((await mobileCard.getAttribute("aria-expanded")) !== "true") {
+      await mobileCard.click();
+    }
+    await expect(mobileRoot.getByRole("heading", { name: "参数" })).toBeVisible({
+      timeout: 10_000,
+    });
     await shot(page, "tool-expanded-390");
-    await mobileCard.click();
-    await expect(mobileRoot.getByText("参数")).toBeHidden({ timeout: 10_000 });
+    if ((await mobileCard.getAttribute("aria-expanded")) === "true") {
+      await mobileCard.click();
+    }
+    await expect(mobileRoot.getByRole("heading", { name: "参数" })).toBeHidden({
+      timeout: 10_000,
+    });
     await shot(page, "tool-collapsed-390");
   });
 

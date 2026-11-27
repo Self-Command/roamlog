@@ -38,6 +38,44 @@ function loginDocuments(): Array<{
   ];
 }
 
+interface SensitiveFormDocument {
+  name: string;
+  path: string;
+  fields: Array<{ label: string; value: string }>;
+}
+
+function sensitiveFormDocuments(): SensitiveFormDocument[] {
+  return [
+    {
+      name: "register",
+      path: "/register",
+      fields: [
+        { label: "名字", value: "Prehydration User" },
+        { label: "邮箱", value: "prehydration-register@roamlog.test" },
+        { label: "密码", value: "Register-Should-Never-Leak-Aa1!" },
+      ],
+    },
+    {
+      name: "forgot-password",
+      path: "/forgot-password",
+      fields: [{ label: "邮箱", value: "prehydration-forgot@roamlog.test" }],
+    },
+    {
+      name: "reset-password",
+      path: "/reset-password?token=dummy-token",
+      fields: [
+        { label: "新密码", value: "Reset-Should-Never-Leak-Aa1!" },
+        { label: "再次输入", value: "Reset-Should-Never-Leak-Aa1!" },
+      ],
+    },
+    {
+      name: "verify-email",
+      path: "/verify-email",
+      fields: [{ label: "邮箱", value: "prehydration-verify@roamlog.test" }],
+    },
+  ];
+}
+
 for (const surface of loginDocuments()) {
   test(`${surface.name} login activates after hydration`, async ({ page }) => {
     await page.goto(surface.url, { waitUntil: "domcontentloaded" });
@@ -100,3 +138,55 @@ test("login pages fit a 390px viewport", async ({ page }) => {
     await shot(page, `${surface.name}-login-390`);
   }
 });
+
+for (const sensitive of sensitiveFormDocuments()) {
+  test(`${sensitive.name} activates after hydration`, async ({ page }) => {
+    await page.goto(`${WEB_URL}${sensitive.path}`, { waitUntil: "domcontentloaded" });
+
+    await expect(
+      page.locator("form").first().locator('button[type="submit"]'),
+    ).toBeEnabled({ timeout: 30_000 });
+  });
+
+  test(`${sensitive.name} cannot submit sensitive fields before hydration`, async ({ page }) => {
+    const url = `${WEB_URL}${sensitive.path}`;
+    await page.route("**/_next/static/**/*.js", (route) => route.abort());
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+
+    const form = page.locator("form").first();
+    const submit = form.locator('button[type="submit"]');
+    await expect(form).toHaveAttribute("method", "post");
+    await expect(submit).toBeDisabled();
+
+    for (const field of sensitive.fields) {
+      await page.getByLabel(field.label, { exact: true }).fill(field.value);
+    }
+    await shot(page, `${sensitive.name}-prehydration-1440`);
+
+    const lastField = page.getByLabel(sensitive.fields.at(-1)?.label ?? "", { exact: true });
+    const navigated = page
+      .waitForEvent("framenavigated", {
+        predicate: (frame) => frame === page.mainFrame(),
+        timeout: 1_500,
+      })
+      .then(() => true)
+      .catch(() => false);
+    await lastField.press("Enter");
+
+    expect(await navigated).toBe(false);
+    await expect(page).toHaveURL(url);
+    for (const field of sensitive.fields) {
+      expect(page.url()).not.toContain(field.value);
+      expect(page.url()).not.toContain(encodeURIComponent(field.value));
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const overflow = await page.evaluate(
+      () =>
+        Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) -
+        document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+    await shot(page, `${sensitive.name}-prehydration-390`);
+  });
+}

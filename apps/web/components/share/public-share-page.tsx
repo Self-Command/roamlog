@@ -1,6 +1,14 @@
 "use client";
 
-import { Button, ErrorState, FormField, Input, Skeleton } from "@roamlog/ui";
+import {
+  Button,
+  ErrorState,
+  FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
+  Input,
+  Skeleton,
+} from "@roamlog/ui";
 import { Link2Off, LockKeyhole, RefreshCcw } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
@@ -116,7 +124,6 @@ export function PublicSharePage({
     </div>
   );
 }
-
 function ShareLoading() {
   return (
     <div
@@ -160,7 +167,7 @@ function ShareGate({
           分享者设置了密码。密码只用于本次阅读，不会保存在浏览器中。
         </p>
 
-        <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
+        <HydrationSafeForm onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
           <FormField
             label="分享密码"
             id="share-password"
@@ -176,13 +183,11 @@ function ShareGate({
               autoFocus
             />
           </FormField>
-          <Button type="submit" variant="primary" disabled={!password.trim() || pending}>
+          <HydrationSafeSubmitButton variant="primary" disabled={!password.trim() || pending}>
             {pending ? "验证中…" : "打开分享"}
-          </Button>
-        </form>
+          </HydrationSafeSubmitButton>
+        </HydrationSafeForm>
       </div>
     </div>
   );
 }
-
-

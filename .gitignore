@@ -46,6 +46,9 @@ e2e/screenshots/
 tmp/
 *.rdb
 
+# Generated from the installed maplibre-gl package before dev/build
+apps/web/public/maplibre-gl-worker.mjs
+
 # CodeGraph local index (regenerate with `codegraph init`)
 .codegraph/
 

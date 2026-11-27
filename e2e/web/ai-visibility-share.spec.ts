@@ -45,6 +45,7 @@ async function createConversationWithMessages(
     `${WEB_URL}/v1/workspaces/${workspaceId}/ai/conversations/${conversation.id}/messages/e2e-share-assistant`,
     {
       data: {
+        role: "assistant",
         content: [
           {
             type: "text",

@@ -1,11 +1,20 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AdminAuthTransport } from "../../lib/admin-auth";
 import { TwoFactorEnrollmentPanel } from "./two-factor-enrollment";
 
 describe("TwoFactorEnrollmentPanel", () => {
+  it("renders a disabled POST form before hydration", () => {
+    const html = renderToStaticMarkup(<TwoFactorEnrollmentPanel />);
+    const document = new DOMParser().parseFromString(html, "text/html");
+
+    expect(document.querySelector("form")?.getAttribute("method")).toBe("post");
+    expect(document.querySelector('button[type="submit"]')?.hasAttribute("disabled")).toBe(true);
+  });
+
   it("renders totpURI, a local QR, backup codes, and verifies enrollment in API mode", async () => {
     const user = userEvent.setup();
     const onComplete = vi.fn();

@@ -14,6 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
   FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
   Input,
   Label,
   Select,
@@ -266,7 +268,11 @@ function ShareTabBody({ tripId }: { tripId: string }) {
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent>
-          <form onSubmit={(event) => void submit(event)} className="space-y-4" noValidate>
+          <HydrationSafeForm
+            onSubmit={(event) => void submit(event)}
+            className="space-y-4"
+            noValidate
+          >
             <DialogHeader>
               <DialogTitle>创建分享链接</DialogTitle>
               <DialogDescription>
@@ -341,11 +347,11 @@ function ShareTabBody({ tripId }: { tripId: string }) {
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                 取消
               </Button>
-              <Button type="submit" variant="primary" disabled={pending}>
+              <HydrationSafeSubmitButton variant="primary" disabled={pending}>
                 {pending ? "创建中…" : "创建分享链接"}
-              </Button>
+              </HydrationSafeSubmitButton>
             </DialogFooter>
-          </form>
+          </HydrationSafeForm>
         </DialogContent>
       </Dialog>
 

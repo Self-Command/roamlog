@@ -3,7 +3,15 @@
 import { Check, Copy, KeyRound, QrCode, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { Badge, Button, FormField, Input, Separator } from "@roamlog/ui";
+import {
+  Badge,
+  Button,
+  FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
+  Input,
+  Separator,
+} from "@roamlog/ui";
 
 import {
   authBackupCodes,
@@ -108,7 +116,7 @@ export function TwoFactorEnrollmentPanel({
             <KeyRound aria-hidden="true" className="size-4 text-muted" />
             <h2 className="text-[13px] font-medium text-ink">确认当前密码</h2>
           </div>
-          <form
+          <HydrationSafeForm
             className="mt-4 max-w-md space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
@@ -133,11 +141,11 @@ export function TwoFactorEnrollmentPanel({
                 {message}
               </p>
             ) : null}
-            <Button type="submit" variant="primary" disabled={isSubmitting}>
+            <HydrationSafeSubmitButton variant="primary" disabled={isSubmitting}>
               <QrCode aria-hidden="true" />
               {isSubmitting ? "正在生成…" : "开始绑定验证器"}
-            </Button>
-          </form>
+            </HydrationSafeSubmitButton>
+          </HydrationSafeForm>
         </section>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -193,7 +201,7 @@ export function TwoFactorEnrollmentPanel({
               </ul>
             </div>
 
-            <form
+            <HydrationSafeForm
               className="rounded-card border border-hairline-strong bg-surface-1 p-5"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -224,16 +232,15 @@ export function TwoFactorEnrollmentPanel({
                   {message}
                 </p>
               ) : null}
-              <Button
-                type="submit"
+              <HydrationSafeSubmitButton
                 variant="primary"
                 className="mt-4 w-full"
                 disabled={code.length !== 6 || isSubmitting}
               >
                 <ShieldCheck aria-hidden="true" />
                 {isSubmitting ? "正在验证…" : "完成两步验证"}
-              </Button>
-            </form>
+              </HydrationSafeSubmitButton>
+            </HydrationSafeForm>
           </section>
         </div>
       )}

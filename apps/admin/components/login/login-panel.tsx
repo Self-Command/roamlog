@@ -3,7 +3,15 @@
 import { ArrowLeft, Fingerprint, KeyRound, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
-import { Badge, Button, FormField, Input, Separator, useHydrated } from "@roamlog/ui";
+import {
+  Badge,
+  Button,
+  FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
+  Input,
+  Separator,
+} from "@roamlog/ui";
 
 import {
   authErrorMessage,
@@ -39,8 +47,6 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const hydrated = useHydrated();
-
   function completeAuthentication() {
     if (onAuthenticated) {
       onAuthenticated();
@@ -88,9 +94,8 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
               <Separator className="my-7" />
 
               {step === "credentials" ? (
-                <form
+                <HydrationSafeForm
                   className="space-y-4"
-                  method="post"
                   onSubmit={async (event) => {
                     event.preventDefault();
                     if (!email.trim() || !password.trim()) {
@@ -157,26 +162,24 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     </p>
                   ) : null}
 
-                  <Button
-                    type="submit"
+                  <HydrationSafeSubmitButton
                     variant="primary"
                     className="w-full"
-                    disabled={!hydrated || isSubmitting}
+                    disabled={isSubmitting}
                   >
                     <KeyRound aria-hidden="true" />
                     {isSubmitting ? "正在登录…" : "登录"}
-                  </Button>
+                  </HydrationSafeSubmitButton>
                   <a
                     href="/admin/2fa/enroll"
                     className="block rounded-control text-center text-[11px] text-muted underline-offset-4 outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring"
                   >
                     已登录但尚未完成两步验证？
                   </a>
-                </form>
+                </HydrationSafeForm>
               ) : (
-                <form
+                <HydrationSafeForm
                   className="space-y-4"
-                  method="post"
                   onSubmit={async (event) => {
                     event.preventDefault();
                     if (!/^\d{6}$/.test(code)) {
@@ -231,15 +234,14 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     </p>
                   ) : null}
 
-                  <Button
-                    type="submit"
+                  <HydrationSafeSubmitButton
                     variant="primary"
                     className="w-full"
-                    disabled={!hydrated || code.length !== 6 || isSubmitting}
+                    disabled={code.length !== 6 || isSubmitting}
                   >
                     <ShieldCheck aria-hidden="true" />
                     {isSubmitting ? "正在验证…" : "验证并进入控制台"}
-                  </Button>
+                  </HydrationSafeSubmitButton>
                   <Button
                     type="button"
                     variant="ghost"
@@ -253,7 +255,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     <ArrowLeft aria-hidden="true" />
                     更换账户
                   </Button>
-                </form>
+                </HydrationSafeForm>
               )}
             </div>
           </div>

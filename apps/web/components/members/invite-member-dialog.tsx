@@ -9,6 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
   FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
   Input,
   Select,
   Textarea,
@@ -104,7 +106,7 @@ export function InviteMemberDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
-        <form
+        <HydrationSafeForm
           aria-describedby={error ? ERROR_ID : undefined}
           className="space-y-4"
           onSubmit={(event) => void handleSubmit(event)}
@@ -168,12 +170,12 @@ export function InviteMemberDialog({
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               取消
             </Button>
-            <Button type="submit" variant="primary" disabled={busy}>
+            <HydrationSafeSubmitButton variant="primary" disabled={busy}>
               <Mail aria-hidden="true" />
               {busy ? "发送中…" : "发送邀请"}
-            </Button>
+            </HydrationSafeSubmitButton>
           </DialogFooter>
-        </form>
+        </HydrationSafeForm>
       </DialogContent>
     </Dialog>
   );

@@ -83,6 +83,7 @@ describe("PlacesProviderRuntimeService", () => {
     expect(snapshot.providers.map((entry) => entry.adapter)).toEqual(["tencent", "geoapify"]);
     expect(snapshot.providers[0]?.settings.tencentApiKey).toBe("tencent-key");
     expect(snapshot.providers[1]?.settings.geoapifyApiKey).toBe("geo-key");
+    expect(snapshot.providers[0]?.health.status).toBe("unknown");
   });
 
   it("excludes a China-only provider from a global query", async () => {

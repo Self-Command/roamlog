@@ -207,7 +207,9 @@ test.describe("AI workflow acceptance", () => {
       const detailText = await details.innerText();
       expect(detailText.length).toBeGreaterThan(200);
       expect(detailText).toMatch(/2027-04-0[2-6]|4\s*\/\s*[2-6]/u);
-      expect(detailText).toMatch(/第\s*[一二三四五1-5]\s*天|2027-04-0[2-6]/u);
+      // The plan card formats each day as `4/2 周五`; accept that real UI
+      // presentation as well as the raw ISO date.
+      expect(detailText).toMatch(/第\s*[一二三四五1-5]\s*天|2027-04-0[2-6]|4\s*\/\s*[2-6]/u);
       expect(detailText).toMatch(/\d{1,2}:\d{2}|上午|下午|晚上/u);
       expect(detailText).toMatch(/交通|地铁|公交|步行|HARUKA|机场|住宿|酒店/u);
       expect(detailText).toMatch(/预算|CNY|8,000/u);

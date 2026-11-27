@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, FormField, Input } from "@roamlog/ui";
+import { FormField, HydrationSafeForm, HydrationSafeSubmitButton, Input } from "@roamlog/ui";
 import { ArrowRight, UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -59,7 +59,7 @@ export function RegisterForm() {
         注册后会发送验证邮件。完成邮箱验证后，即可创建工作区或接受邀请。
       </p>
 
-      <form noValidate onSubmit={handleSubmit} className="mt-8 space-y-5">
+      <HydrationSafeForm noValidate onSubmit={handleSubmit} className="mt-8 space-y-5">
         <FormField label="名字" error={errors.name}>
           <Input
             name="name"
@@ -123,12 +123,17 @@ export function RegisterForm() {
           </p>
         ) : null}
 
-        <Button type="submit" variant="primary" size="lg" className="w-full" disabled={submitting}>
+        <HydrationSafeSubmitButton
+          variant="primary"
+          size="lg"
+          className="w-full"
+          disabled={submitting}
+        >
           <UserPlus aria-hidden="true" />
           {submitting ? "正在创建…" : "创建账号"}
           <ArrowRight aria-hidden="true" />
-        </Button>
-      </form>
+        </HydrationSafeSubmitButton>
+      </HydrationSafeForm>
 
       <p className="mt-6 text-center text-xs text-muted">
         已有账号？{" "}

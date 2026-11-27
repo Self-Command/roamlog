@@ -17,6 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
   FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
   Input,
   Label,
   Select,
@@ -175,7 +177,7 @@ export function ShareLinkDialog({
               </p>
             </div>
           ) : (
-            <form onSubmit={submit} className="space-y-4" noValidate>
+            <HydrationSafeForm onSubmit={submit} className="space-y-4" noValidate>
               <FormField
                 label="访问密码（可选）"
                 hint="至少 8 个字符。留空表示任何人拿到链接即可阅读。"
@@ -229,11 +231,11 @@ export function ShareLinkDialog({
                 <Button type="button" variant="ghost" onClick={() => changeOpen(false)}>
                   取消
                 </Button>
-                <Button type="submit" variant="primary" disabled={pending}>
+                <HydrationSafeSubmitButton variant="primary" disabled={pending}>
                   {pending ? "创建中…" : "创建链接"}
-                </Button>
+                </HydrationSafeSubmitButton>
               </DialogFooter>
-            </form>
+            </HydrationSafeForm>
           )}
         </DialogContent>
       </Dialog>

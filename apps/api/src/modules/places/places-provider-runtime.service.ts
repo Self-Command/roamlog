@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import type { ProviderHealth } from "@roamlog/contracts";
 
 import {
   geoapifyProviderConfigSchema,
@@ -23,6 +24,7 @@ export interface PlacesRuntimeProvider {
   readonly priority: number;
   readonly regions: readonly ("cn" | "global")[];
   readonly settings: PlacesSettings;
+  readonly health: ProviderHealth;
 }
 
 export interface PlacesRuntimeSnapshot {
@@ -182,6 +184,7 @@ export class PlacesProviderRuntimeService implements PlacesProviderRuntimeSource
         priority: provider.priority,
         regions: configured.regions,
         settings: configured.settings,
+        health: provider.health,
       });
     }
 
@@ -211,6 +214,12 @@ export function staticPlacesProviderRuntimeSource(
   settings: PlacesSettings,
   mode: PlacesRoutingMode = "merge",
 ): PlacesProviderRuntimeSource {
+  const unknownHealth: ProviderHealth = {
+    status: "unknown",
+    lastCheckedAt: null,
+    lastErrorCode: null,
+    cooldownUntil: null,
+  };
   const providers: PlacesRuntimeProvider[] = [];
   for (const adapter of settings.sourceOrder) {
     if (!settings.sources.includes(adapter)) {
@@ -227,6 +236,7 @@ export function staticPlacesProviderRuntimeSource(
       adapter,
       priority: (providers.length + 1) * 10,
       regions: adapter === "tencent" ? ["cn"] : ["global"],
+      health: unknownHealth,
       settings: {
         ...settings,
         sources: [adapter],

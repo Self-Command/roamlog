@@ -41,10 +41,10 @@ export const DEFAULT_GEOAPIFY_URL = "https://api.geoapify.com/v1/geocode/autocom
  * The original single-provider design used 1.2 s. Multi-source recall needs the
  * global provider to answer Han city names too: measured 2026-11-20,
  * `text=京都&lang=zh` consistently takes ~3.0 s from this network while
- * `东京`/`Paris` take <1 s. 4 s keeps `京都` reachable; a slower provider still
+ * `东京`/`Paris` take <1 s. 5 s keeps `京都` reachable; a slower provider still
  * degrades independently and never blocks Tencent/Photon.
  */
-export const DEFAULT_GEOAPIFY_TIMEOUT_MS = 4_000;
+export const DEFAULT_GEOAPIFY_TIMEOUT_MS = 5_000;
 /** Geoapify's free plan allows 3,000 requests per day. */
 export const DEFAULT_GEOAPIFY_DAILY_LIMIT = 3_000;
 export const DEFAULT_PLACES_FALLBACK_TO_PHOTON = true;

@@ -81,7 +81,10 @@ describe("admin route wiring", () => {
         healthCheck: async () => undefined,
       })
       .overrideProvider(RedisService)
-      .useValue({ ping: async () => undefined })
+      .useValue({
+        ping: async () => undefined,
+        subscribeChannel: () => ({ close: async () => undefined }),
+      })
       .overrideProvider(StorageService)
       .useValue({ checkHealth: async () => undefined })
       .overrideProvider(AdminQueueService)

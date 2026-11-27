@@ -2,7 +2,6 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { setWorkerUrl } from "maplibre-gl";
 import { ImageOff } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import Map, {
@@ -25,6 +24,7 @@ import {
 } from "./cluster-points-source";
 import { moveCamera } from "./map-camera";
 import type { MapPoint } from "./map-types";
+import { installMapLibreWorker } from "./maplibre-worker";
 import { photoFocus, photoGroupKey, photosToGeoJson, type PhotoPoint } from "./photo-points";
 import { PlacesAttribution } from "./places-attribution";
 import { useThemeColor } from "./use-theme-color";
@@ -64,9 +64,7 @@ export interface MapCanvasProps {
 
 const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
-if (typeof window !== "undefined") {
-  setWorkerUrl("https://cdn.jsdelivr.net/npm/maplibre-gl@6.18.0/dist/maplibre-gl-worker.mjs");
-}
+installMapLibreWorker();
 
 export default function MapCanvas({
   points,

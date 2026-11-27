@@ -15,6 +15,7 @@ export interface TestDependencyMocks {
   };
   redis: {
     ping: ReturnType<typeof vi.fn>;
+    subscribeChannel: ReturnType<typeof vi.fn>;
   };
   storage: {
     checkHealth: ReturnType<typeof vi.fn>;
@@ -31,6 +32,9 @@ export async function createTestApp(): Promise<{
     },
     redis: {
       ping: vi.fn().mockResolvedValue(undefined),
+      subscribeChannel: vi.fn(() => ({
+        close: async () => undefined,
+      })),
     },
     storage: {
       checkHealth: vi.fn().mockResolvedValue(undefined),

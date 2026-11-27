@@ -4,6 +4,8 @@ import {
   Badge,
   Button,
   FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
   Input,
   Separator,
   Skeleton,
@@ -371,7 +373,7 @@ export function TwoFactorSecurityView({
                 ) : null}
 
                 {panel === "enroll-password" ? (
-                  <form onSubmit={startEnrollment} className="max-w-md space-y-4">
+                  <HydrationSafeForm onSubmit={startEnrollment} className="max-w-md space-y-4">
                     <div>
                       <p className="type-eyebrow">第 1 步：确认密码</p>
                       <h3 className="mt-1 text-sm font-medium text-ink">确认当前密码</h3>
@@ -398,15 +400,15 @@ export function TwoFactorSecurityView({
                       </p>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
-                      <Button type="submit" variant="primary" disabled={busy}>
+                      <HydrationSafeSubmitButton variant="primary" disabled={busy}>
                         <QrCode aria-hidden="true" />
                         {busy ? "正在生成…" : "生成验证器密钥"}
-                      </Button>
+                      </HydrationSafeSubmitButton>
                       <Button type="button" variant="ghost" onClick={closePanel}>
                         取消
                       </Button>
                     </div>
-                  </form>
+                  </HydrationSafeForm>
                 ) : null}
 
                 {panel === "enrollment" && enrollment ? (
@@ -477,7 +479,7 @@ export function TwoFactorSecurityView({
                           </Button>
                         </div>
                       ) : (
-                        <form
+                        <HydrationSafeForm
                           onSubmit={verifyEnrollment}
                           className="rounded-control border border-hairline-strong bg-surface-1 p-4"
                         >
@@ -512,23 +514,22 @@ export function TwoFactorSecurityView({
                               {error}
                             </p>
                           ) : null}
-                          <Button
-                            type="submit"
+                          <HydrationSafeSubmitButton
                             variant="primary"
                             className="mt-4 w-full"
                             disabled={busy || code.length !== 6}
                           >
                             <ShieldCheck aria-hidden="true" />
                             {busy ? "正在验证…" : "验证并启用两步验证"}
-                          </Button>
-                        </form>
+                          </HydrationSafeSubmitButton>
+                        </HydrationSafeForm>
                       )}
                     </div>
                   </div>
                 ) : null}
 
                 {panel === "disable" ? (
-                  <form onSubmit={disable} className="max-w-md space-y-4">
+                  <HydrationSafeForm onSubmit={disable} className="max-w-md space-y-4">
                     <div>
                       <p className="type-eyebrow">关闭前先验证</p>
                       <h3 className="mt-1 text-sm font-medium text-ink">关闭前验证密码和动态码</h3>
@@ -563,15 +564,18 @@ export function TwoFactorSecurityView({
                       </p>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
-                      <Button type="submit" variant="danger" disabled={busy || code.length !== 6}>
+                      <HydrationSafeSubmitButton
+                        variant="danger"
+                        disabled={busy || code.length !== 6}
+                      >
                         <ShieldOff aria-hidden="true" />
                         {busy ? "正在关闭…" : "确认关闭两步验证"}
-                      </Button>
+                      </HydrationSafeSubmitButton>
                       <Button type="button" variant="ghost" onClick={closePanel}>
                         取消
                       </Button>
                     </div>
-                  </form>
+                  </HydrationSafeForm>
                 ) : null}
 
                 {panel === "regenerate" ? (
@@ -596,7 +600,7 @@ export function TwoFactorSecurityView({
                         </Button>
                       </>
                     ) : (
-                      <form onSubmit={regenerateBackupCodes} className="space-y-4">
+                      <HydrationSafeForm onSubmit={regenerateBackupCodes} className="space-y-4">
                         <div>
                           <p className="type-eyebrow">重新生成备用码</p>
                           <h3 className="mt-1 text-sm font-medium text-ink">生成一组新的备用码</h3>
@@ -618,15 +622,15 @@ export function TwoFactorSecurityView({
                           </p>
                         ) : null}
                         <div className="flex flex-wrap gap-2">
-                          <Button type="submit" variant="primary" disabled={busy}>
+                          <HydrationSafeSubmitButton variant="primary" disabled={busy}>
                             <RefreshCw aria-hidden="true" />
                             {busy ? "正在生成…" : "替换备用码"}
-                          </Button>
+                          </HydrationSafeSubmitButton>
                           <Button type="button" variant="ghost" onClick={closePanel}>
                             取消
                           </Button>
                         </div>
-                      </form>
+                      </HydrationSafeForm>
                     )}
                   </div>
                 ) : null}

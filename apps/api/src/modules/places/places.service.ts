@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import {
   PlaceSearchQuerySchema,
   PlaceSearchResponseSchema,
@@ -8,6 +8,10 @@ import {
 
 import { parseRequest } from "../../common/services/request-validation.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
+import {
+  ProviderHealthService,
+  type ProviderHealthFailure,
+} from "../providers/provider-health.service.js";
 import { GeoapifyClient } from "./geoapify.client.js";
 import { PhotonClient } from "./photon.client.js";
 import { PlacesCacheService, type PlacesCacheRoute } from "./places-cache.service.js";
@@ -138,6 +142,37 @@ function failureOf(outcome: {
   };
 }
 
+const NON_HEALTH_FAILURES = new Set(["not_configured", "quota_exceeded", "invalid_request"]);
+
+/**
+ * Maps a recall failure to the provider-health vocabulary. Request-specific
+ * failures and business quotas are not availability incidents; transport,
+ * authentication, rate-limit and upstream failures are.
+ */
+function healthFailure(
+  failure: ProviderFailureInfo | undefined,
+): ProviderHealthFailure | undefined {
+  if (!failure || NON_HEALTH_FAILURES.has(failure.reason)) {
+    return undefined;
+  }
+
+  const httpStatus = failure.httpStatus ?? failure.upstreamStatus;
+  const reason = failure.reason.toLowerCase();
+  const retryable =
+    reason === "timeout" ||
+    reason === "network_error" ||
+    reason === "rate_limited" ||
+    reason === "unknown_status" ||
+    reason === "upstream_error" ||
+    (reason === "http_error" &&
+      (httpStatus === undefined || httpStatus === 408 || httpStatus === 429 || httpStatus >= 500));
+
+  return {
+    code: failure.code?.toUpperCase() ?? reason.toUpperCase(),
+    retryable,
+  };
+}
+
 function withRank(candidates: readonly ProviderCandidate[], offset: number): ProviderCandidate[] {
   return candidates.map((candidate, index) => ({ ...candidate, providerRank: offset + index }));
 }
@@ -181,6 +216,9 @@ export class PlacesService {
     @Inject(PLACES_SETTINGS) private readonly settings: PlacesSettingsSource,
     @Inject(PlacesProviderRuntimeService)
     private readonly providerRuntime: PlacesProviderRuntimeSource,
+    @Optional()
+    @Inject(ProviderHealthService)
+    private readonly providerHealth?: ProviderHealthService,
   ) {}
 
   async search(rawQuery: unknown): Promise<PlaceSearchResponse> {
@@ -373,13 +411,67 @@ export class PlacesService {
     provider: PlacesRuntimeProvider,
     input: RecallInput,
   ): Promise<ProviderRecall> {
+    let recall: ProviderRecall;
     switch (provider.adapter) {
       case "tencent":
-        return this.recallTencent(input, provider);
+        recall = await this.recallTencent(input, provider);
+        break;
       case "geoapify":
-        return this.recallGeoapify(input, provider);
+        recall = await this.recallGeoapify(input, provider);
+        break;
       case "photon":
-        return this.recallPhoton(input, provider);
+        recall = await this.recallPhoton(input, provider);
+        break;
+    }
+    await this.recordProviderHealth(provider, recall);
+    return recall;
+  }
+
+  private async recordProviderHealth(
+    provider: PlacesRuntimeProvider,
+    recall: ProviderRecall,
+  ): Promise<void> {
+    if (!this.providerHealth) {
+      return;
+    }
+
+    const succeeded = recall.failure === undefined || recall.candidates.length > 0;
+    if (succeeded) {
+      if (provider.health.status === "healthy") {
+        return;
+      }
+      await this.writeProviderHealth("success", provider, () =>
+        this.providerHealth!.recordSuccess(provider.id),
+      );
+      return;
+    }
+
+    const failure = healthFailure(recall.failure);
+    if (!failure) {
+      return;
+    }
+    await this.writeProviderHealth("failure", provider, () =>
+      this.providerHealth!.recordFailure(provider.id, failure),
+    );
+  }
+
+  private async writeProviderHealth(
+    outcome: "success" | "failure",
+    provider: PlacesRuntimeProvider,
+    write: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await write();
+    } catch (error) {
+      this.logger.warn(
+        {
+          event: "places.provider_health_write_failed",
+          outcome,
+          providerId: provider.id,
+          reason: error instanceof Error ? error.name : "UnknownError",
+        },
+        "places.provider_health_write_failed",
+      );
     }
   }
 

@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RegisterForm } from "./register-form";
@@ -9,6 +10,14 @@ afterEach(() => {
 });
 
 describe("RegisterForm", () => {
+  it("renders a disabled POST form before hydration", () => {
+    const html = renderToStaticMarkup(<RegisterForm />);
+    const document = new DOMParser().parseFromString(html, "text/html");
+
+    expect(document.querySelector("form")?.getAttribute("method")).toBe("post");
+    expect(document.querySelector('button[type="submit"]')?.hasAttribute("disabled")).toBe(true);
+  });
+
   it("describes the next step without internal workspace terminology", () => {
     const { container } = render(<RegisterForm />);
 

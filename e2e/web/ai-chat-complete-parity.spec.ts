@@ -33,7 +33,7 @@ test.use({
 test.describe.configure({ retries: 1 });
 
 const OUT_DIR = path.resolve(process.cwd(), ".audit", "ai-port", "chat-parity");
-const WORKSPACE_SLUG = process.env.E2E_AI_WORKSPACE_SLUG ?? "verify-crew";
+const WORKSPACE_SLUG = process.env.E2E_AI_WORKSPACE_SLUG ?? "roamlog-crew";
 const PNG_1PX = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -142,7 +142,13 @@ test.describe("AI chat parity (real stack)", () => {
       mimeType: "image/png",
       name: "parity.png",
     });
-    await expect(page.getByTestId("input-attachment-preview").first()).toBeVisible();
+    const preview = page.getByTestId("input-attachment-preview").first();
+    await expect(preview).toBeVisible();
+    // Upstream only exposes the remove button after the upload settles; while
+    // `status=running` the spinner intentionally covers the tile.
+    await expect(preview).toHaveAttribute("data-attachment-status", "requires-action", {
+      timeout: 30_000,
+    });
     await page.getByTestId("input-attachment-remove").first().click();
     await expect(page.getByTestId("input-attachment-preview")).toHaveCount(0);
     await shot(page, "03-composer-1440");
@@ -249,7 +255,7 @@ test.describe("AI chat parity (real stack)", () => {
   test("refresh resumes the active run without duplicating the conversation", async ({ page }) => {
     test.setTimeout(420_000);
     await openAiPage(page);
-    const prompt = `帮我创建一份京都五天旅行计划，包含每天三个节点、交通和预算明细 ${Date.now()}`;
+    const prompt = `帮我创建一份京都五天旅行计划，包含每天三个节点、交通和预算明细 [slow-stream] ${Date.now()}`;
     await sendPrompt(page, prompt);
     const conversationId = await conversationIdFromUrl(page);
     const workspaceId = await workspaceIdFor(page);

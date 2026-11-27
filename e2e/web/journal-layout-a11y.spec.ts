@@ -13,7 +13,7 @@ import {
 import { API_URL, OWNER_ACCOUNT, signInViaApi } from "../support/accounts";
 import { expectNoHorizontalOverflow } from "../support/helpers";
 
-const WORKSPACE_SLUG = "verify-crew";
+const WORKSPACE_SLUG = process.env.E2E_JOURNAL_WORKSPACE_SLUG ?? "roamlog-crew";
 const IMAGE_ORIGIN = "https://journal-a11y.roamlog.test";
 const OUT_DIR = path.join(process.cwd(), ".audit", "journal-layout");
 const RUN_ID = `${Date.now()}`;

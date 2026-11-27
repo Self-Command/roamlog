@@ -23,7 +23,6 @@ import {
   type UpdateAdminSettingsResponse,
 } from "@roamlog/contracts";
 import { Prisma } from "@roamlog/db";
-import type Redis from "ioredis";
 
 import type { AuthenticatedActor } from "../../common/guards/actor-context.js";
 import { parseRequest } from "../../common/services/request-validation.js";
@@ -31,6 +30,7 @@ import { AppConfigService } from "../../config/app-config.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import type { RedisChannelSubscription } from "../redis/redis-channel.js";
 import { RedisService } from "../redis/redis.service.js";
 import { assertAdminAction } from "../admin/admin-access.js";
 import { uuidV7FromString } from "../admin/admin-ids.js";
@@ -78,8 +78,7 @@ export class SettingsService implements OnModuleInit, OnModuleDestroy {
   private readonly definitions: ReadonlyMap<string, SettingDefinition>;
   private readonly registry: readonly SettingDefinition[];
   private readonly processCache = new Map<string, ProcessCacheEntry>();
-  /** Legacy values already warned about, so each key logs at most once. */
-  private subscriber: Redis | undefined;
+  private subscription: RedisChannelSubscription | undefined;
   private secretBox: SecretBox | undefined;
 
   constructor(
@@ -97,38 +96,18 @@ export class SettingsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
-    try {
-      const subscriber = this.redis.client.duplicate();
-      subscriber.on("error", (error: Error) => this.warnRedis("subscriber_error", error));
-      subscriber.on("message", (channel: string) => {
-        if (channel === SETTINGS_INVALIDATION_CHANNEL) {
-          this.processCache.clear();
-        }
-      });
-      // Store before awaiting so a temporarily unavailable Redis still gets a
-      // client that reconnects (and re-subscribes) on its own.
-      this.subscriber = subscriber;
-      await subscriber.subscribe(SETTINGS_INVALIDATION_CHANNEL);
-    } catch (error) {
-      this.warnRedis("subscribe_failed", error);
-    }
+    this.subscription = this.redis.subscribeChannel(SETTINGS_INVALIDATION_CHANNEL, () => {
+      this.processCache.clear();
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
-    const subscriber = this.subscriber;
-    this.subscriber = undefined;
-    if (!subscriber) {
+    const subscription = this.subscription;
+    this.subscription = undefined;
+    if (!subscription) {
       return;
     }
-    try {
-      if (subscriber.status === "ready") {
-        await subscriber.quit();
-      } else {
-        subscriber.disconnect();
-      }
-    } catch {
-      subscriber.disconnect();
-    }
+    await subscription.close();
   }
 
   /** Test/ops hook; normal invalidation arrives through the pub/sub channel. */

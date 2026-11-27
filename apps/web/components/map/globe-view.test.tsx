@@ -26,7 +26,7 @@ const { fakeMap, mapProps } = vi.hoisted(() => ({
   mapProps: { current: null as Record<string, unknown> | null },
 }));
 
-vi.mock("maplibre-gl", () => ({ setWorkerUrl: vi.fn() }));
+vi.mock("maplibre-gl", () => ({ getVersion: () => "test", setWorkerUrl: vi.fn() }));
 
 vi.mock("react-map-gl/maplibre", async () => {
   const React = await import("react");

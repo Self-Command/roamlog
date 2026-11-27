@@ -14,6 +14,7 @@ import {
   findWorkspace,
   signInViaApi,
 } from "../support/accounts";
+import { AI_WORKSPACE_SLUG } from "../ai-workflow-support";
 
 const OUT_DIR = path.resolve(
   process.cwd(),
@@ -44,7 +45,7 @@ async function openFreshThread(page: import("@playwright/test").Page): Promise<v
 test("ChatGPT-style starter prompts render inside the empty AI page", async ({ page }) => {
   test.setTimeout(120_000);
   await signInViaApi(page.request, OWNER_ACCOUNT, WEB_URL, API_URL);
-  const workspace = await findWorkspace(page.request);
+  const workspace = await findWorkspace(page.request, AI_WORKSPACE_SLUG);
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${WEB_URL}/w/${workspace.slug}/ai`, { waitUntil: "domcontentloaded" });

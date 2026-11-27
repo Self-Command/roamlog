@@ -1,4 +1,12 @@
 import { defineConfig } from "@playwright/test";
+import { existsSync } from "node:fs";
+
+// `pnpm e2e` must work on a clean developer checkout without asking the user
+// to export the same variables the dev stack already wrote to `.env.local`.
+// Explicit process env still wins, which keeps CI/staging commands unchanged.
+if (!process.env.DATABASE_URL && existsSync(".env.local")) {
+  process.loadEnvFile(".env.local");
+}
 
 const webBaseURL = process.env.E2E_WEB_URL ?? "http://localhost:3000";
 const adminBaseURL = process.env.E2E_ADMIN_URL ?? "http://localhost:3001";

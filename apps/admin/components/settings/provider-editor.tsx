@@ -22,6 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
   FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
   Input,
   Label,
   Select,
@@ -662,7 +664,7 @@ export function ProviderEditor({
           </DialogDescription>
         </DialogHeader>
 
-        <form
+        <HydrationSafeForm
           noValidate
           className="space-y-5"
           onSubmit={(event) => {
@@ -923,11 +925,11 @@ export function ProviderEditor({
             <Button variant="outline" size="sm" disabled={busy} onClick={requestClose}>
               取消
             </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={busy || !adapter}>
+            <HydrationSafeSubmitButton variant="primary" size="sm" disabled={busy || !adapter}>
               {saving ? "保存中…" : "保存服务商"}
-            </Button>
+            </HydrationSafeSubmitButton>
           </DialogFooter>
-        </form>
+        </HydrationSafeForm>
 
         <Dialog
           open={activeConflictOpen}

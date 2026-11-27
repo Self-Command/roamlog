@@ -205,7 +205,10 @@ integrationDescribe("workspace members against PostgreSQL", () => {
       .overrideProvider(PrismaService)
       .useValue(database)
       .overrideProvider(RedisService)
-      .useValue({ ping: async () => undefined })
+      .useValue({
+        ping: async () => undefined,
+        subscribeChannel: () => ({ close: async () => undefined }),
+      })
       .overrideProvider(StorageService)
       .useValue({ checkHealth: async () => undefined })
       .overrideProvider(AuditService)

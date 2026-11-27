@@ -28,7 +28,7 @@ right) and only need changing during an incident or capacity change:
 | Variable                           | Default                                                | Allowed range |
 | ---------------------------------- | ------------------------------------------------------ | ------------- |
 | `GEOAPIFY_URL`                     | `https://api.geoapify.com/v1/geocode/autocomplete`     | http(s) URL   |
-| `GEOAPIFY_TIMEOUT_MS`              | `1200` (the 1.2 s budget for the primary source)       | 1–30000       |
+| `GEOAPIFY_TIMEOUT_MS`              | `5000` (real Han-query latency is commonly ~2.8 s)     | 1–30000       |
 | `PHOTON_URL`                       | `https://photon.komoot.io/api`                         | http(s) URL   |
 | `PHOTON_TIMEOUT_MS`                | `2500`                                                 | 1–30000       |
 | `PLACES_CACHE_TTL_SECONDS`         | `900` (15 minutes)                                     | 1–86400       |

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, FormField, Input } from "@roamlog/ui";
+import { FormField, HydrationSafeForm, HydrationSafeSubmitButton, Input } from "@roamlog/ui";
 import { ArrowRight, KeyRound } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -57,7 +57,7 @@ export function ResetPasswordForm({ token }: { token?: string }) {
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit} className="space-y-5">
+    <HydrationSafeForm noValidate onSubmit={handleSubmit} className="space-y-5">
       <FormField label="新密码" error={errors.password}>
         <Input
           type="password"
@@ -107,11 +107,16 @@ export function ResetPasswordForm({ token }: { token?: string }) {
         </p>
       ) : null}
 
-      <Button type="submit" variant="primary" size="lg" className="w-full" disabled={submitting}>
+      <HydrationSafeSubmitButton
+        variant="primary"
+        size="lg"
+        className="w-full"
+        disabled={submitting}
+      >
         <KeyRound aria-hidden="true" />
         {submitting ? "正在更新…" : "更新密码"}
         <ArrowRight aria-hidden="true" />
-      </Button>
-    </form>
+      </HydrationSafeSubmitButton>
+    </HydrationSafeForm>
   );
 }

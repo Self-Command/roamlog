@@ -1,6 +1,12 @@
 "use client";
 
-import { Button, FormField, Input, useHydrated } from "@roamlog/ui";
+import {
+  Button,
+  FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
+  Input,
+} from "@roamlog/ui";
 import { ArrowLeft, ArrowRight, KeyRound, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -49,8 +55,6 @@ export function LoginFormView({
   const [backupCode, setBackupCode] = useState("");
   const [challengeError, setChallengeError] = useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const hydrated = useHydrated();
-
   function completeAuthentication() {
     if (onAuthenticated) {
       onAuthenticated();
@@ -155,7 +159,7 @@ export function LoginFormView({
           <p className="mt-1.5 break-all text-[13px] text-ink">{challengeEmail}</p>
         </div>
 
-        <form method="post" onSubmit={handleChallenge} className="space-y-5">
+        <HydrationSafeForm onSubmit={handleChallenge} className="space-y-5">
           <div
             role="group"
             aria-label="选择验证方式"
@@ -245,13 +249,11 @@ export function LoginFormView({
             </div>
           ) : null}
 
-          <Button
-            type="submit"
+          <HydrationSafeSubmitButton
             variant="primary"
             size="lg"
             className="w-full"
             disabled={
-              !hydrated ||
               submitting ||
               (factor === "totp" ? totpCode.length !== 6 : backupCode.trim().length === 0)
             }
@@ -259,12 +261,12 @@ export function LoginFormView({
             <ShieldCheck aria-hidden="true" />
             {submitting ? "正在验证…" : "完成验证"}
             <ArrowRight aria-hidden="true" />
-          </Button>
+          </HydrationSafeSubmitButton>
           <Button type="button" variant="ghost" className="w-full" onClick={resetChallenge}>
             <ArrowLeft aria-hidden="true" />
             更换账户
           </Button>
-        </form>
+        </HydrationSafeForm>
 
         <p className="mt-6 text-center text-xs leading-5 text-muted">
           找不到备用码？打开{" "}
@@ -289,7 +291,7 @@ export function LoginFormView({
         </p>
       </div>
 
-      <form noValidate method="post" onSubmit={handleSubmit} className="space-y-5">
+      <HydrationSafeForm noValidate onSubmit={handleSubmit} className="space-y-5">
         <FormField label="邮箱" error={errors.email}>
           <Input
             type="email"
@@ -349,18 +351,17 @@ export function LoginFormView({
           </p>
         ) : null}
 
-        <Button
-          type="submit"
+        <HydrationSafeSubmitButton
           variant="primary"
           size="lg"
           className="w-full"
-          disabled={!hydrated || submitting}
+          disabled={submitting}
         >
           <Mail aria-hidden="true" />
           {submitting ? "正在登录…" : "登录"}
           <ArrowRight aria-hidden="true" />
-        </Button>
-      </form>
+        </HydrationSafeSubmitButton>
+      </HydrationSafeForm>
 
       <p className="mt-6 text-center text-xs text-muted">
         还没有账号？{" "}

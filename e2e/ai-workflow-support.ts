@@ -2,7 +2,13 @@ import { expect, type Page } from "@playwright/test";
 
 import { OWNER_ACCOUNT, WEB_URL, loginOnWeb } from "./support/accounts";
 
-export const AI_WORKSPACE_SLUG = process.env.E2E_AI_WORKSPACE_SLUG ?? "verify-crew";
+/**
+ * `roamlog-crew` is part of the committed seed. `verify-crew` was a manual
+ * leftover in an earlier developer database and made these journeys fail on a
+ * clean checkout. Keep the override for staging/production, but never depend
+ * on unseeded local state.
+ */
+export const AI_WORKSPACE_SLUG = process.env.E2E_AI_WORKSPACE_SLUG ?? "roamlog-crew";
 
 export interface AnswerProfile {
   destination: string;

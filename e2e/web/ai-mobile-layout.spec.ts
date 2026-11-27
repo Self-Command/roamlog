@@ -13,6 +13,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
+import { AI_WORKSPACE_SLUG } from "../ai-workflow-support";
 import { OWNER_ACCOUNT, WEB_URL, findWorkspace, loginOnWeb } from "../support/accounts";
 
 const OUT_DIR = path.resolve(process.cwd(), ".audit", "ai-port", "chat-mobile");
@@ -32,6 +33,7 @@ async function createSeededConversation(
     `${WEB_URL}/v1/workspaces/${workspaceId}/ai/conversations/${conversation.id}/messages/mobile-e2e-assistant`,
     {
       data: {
+        role: "assistant",
         content: [{ type: "text", text: "移动端消息区保持可滚动，输入区始终在底部导航上方。" }],
       },
     },
@@ -84,7 +86,7 @@ test.describe("AI mobile shell", () => {
 
     try {
       await loginOnWeb(page, OWNER_ACCOUNT);
-      const workspace = await findWorkspace(page.request);
+      const workspace = await findWorkspace(page.request, AI_WORKSPACE_SLUG);
       workspaceId = workspace.id;
 
       for (const viewport of [
@@ -93,7 +95,7 @@ test.describe("AI mobile shell", () => {
       ]) {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await page.goto(`${WEB_URL}/w/${workspace.slug}/ai`, { waitUntil: "domcontentloaded" });
-        await expect(page.getByRole("heading", { name: "先计划，后写入" })).toBeVisible({
+        await expect(page.getByRole("heading", { name: "从一个目标开始" })).toBeVisible({
           timeout: 30_000,
         });
         await assertControlsInsideViewport(page, viewport);

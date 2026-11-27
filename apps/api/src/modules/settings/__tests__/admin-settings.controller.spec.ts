@@ -108,6 +108,9 @@ function fakePrisma() {
 function fakeRedis() {
   const values = new Map<string, string>();
   const client = {
+    subscribeChannel: vi.fn(() => ({
+      close: async () => undefined,
+    })),
     get: vi.fn(async (key: string) => values.get(key) ?? null),
     set: vi.fn(async (key: string, value: string) => {
       values.set(key, value);
@@ -127,7 +130,7 @@ function fakeRedis() {
       disconnect: vi.fn(),
     }),
   };
-  return { client, values };
+  return { client, values, subscribeChannel: client.subscribeChannel };
 }
 
 const apps: INestApplication[] = [];

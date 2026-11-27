@@ -258,7 +258,7 @@ test.describe("artifact complete port", () => {
       await expect(panel.getByRole("button", { name: "应用" })).toBeVisible();
       await shot(page, "01-auto-open-1440");
 
-      const editor = panel.getByLabel("Artifact 正文");
+      const editor = panel.getByLabel("文档正文");
       await expect(editor).toBeVisible();
       const userDraft = `${INITIAL_CONTENT}\n\n自动化保存的文字。`;
       const saveResponse = page.waitForResponse(

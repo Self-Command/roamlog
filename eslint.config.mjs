@@ -11,6 +11,8 @@ export default tseslint.config(
       "**/coverage/**",
       "**/src/generated/**",
       "**/openapi.json",
+      // Vendored MapLibre worker copied from node_modules before dev/build.
+      "**/public/maplibre-gl-worker.mjs",
     ],
   },
   eslint.configs.recommended,

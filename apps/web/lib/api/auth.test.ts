@@ -9,6 +9,7 @@ import {
   accountSecurityErrorMessage,
   authErrorMessage,
   enableTwoFactor,
+  revokeOtherSessions,
   sendVerificationEmail,
   signUp,
   twoFactorErrorMessage,
@@ -145,6 +146,28 @@ describe("mail delivery copy", () => {
   it("is readable without implementation terms", () => {
     expectUserFacingCopy(MAIL_NOT_CONFIGURED_MESSAGE);
     expectUserFacingCopy(CHANGE_EMAIL_NOT_CONFIGURED_MESSAGE);
+  });
+});
+
+describe("revokeOtherSessions", () => {
+  it("uses Better Auth's endpoint that keeps the current session", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ status: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await revokeOtherSessions();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/auth/revoke-other-sessions",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: "{}",
+      }),
+    );
   });
 });
 

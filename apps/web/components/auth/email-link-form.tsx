@@ -1,6 +1,11 @@
 "use client";
 
-import { Button, FormField, Input } from "@roamlog/ui";
+import {
+  FormField,
+  HydrationSafeForm,
+  HydrationSafeSubmitButton,
+  Input,
+} from "@roamlog/ui";
 import { ArrowRight, Mail } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -53,7 +58,7 @@ export function EmailLinkForm({
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit} className="space-y-5">
+    <HydrationSafeForm noValidate onSubmit={handleSubmit} className="space-y-5">
       <FormField label="邮箱" error={error}>
         <Input
           type="email"
@@ -87,11 +92,16 @@ export function EmailLinkForm({
         </p>
       ) : null}
 
-      <Button type="submit" variant="primary" size="lg" className="w-full" disabled={submitting}>
+      <HydrationSafeSubmitButton
+        variant="primary"
+        size="lg"
+        className="w-full"
+        disabled={submitting}
+      >
         <Mail aria-hidden="true" />
         {submitting ? "正在发送…" : submitLabel}
         <ArrowRight aria-hidden="true" />
-      </Button>
-    </form>
+      </HydrationSafeSubmitButton>
+    </HydrationSafeForm>
   );
 }

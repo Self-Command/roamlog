@@ -128,8 +128,13 @@ async function main(): Promise<void> {
         console.log(JSON.stringify({ deleted: false, email }));
         return;
       }
-      // Sessions and credential accounts cascade; audit rows keep a null actor.
-      await prisma.user.delete({ where: { id: user.id } });
+      // The app creates a personal workspace on first login. Remove those
+      // run-owned aggregates before the user row so the owner FK cannot block
+      // cleanup; sessions and credential accounts still cascade.
+      await prisma.$transaction([
+        prisma.workspace.deleteMany({ where: { ownerId: user.id } }),
+        prisma.user.delete({ where: { id: user.id } }),
+      ]);
       console.log(JSON.stringify({ deleted: true, email, userId: user.id }));
       return;
     }

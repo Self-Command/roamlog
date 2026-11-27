@@ -10,13 +10,13 @@ import {
   type ProviderProblemCode,
   type ProviderRoutingMode,
 } from "@roamlog/contracts";
-import type Redis from "ioredis";
 
 import { AppConfigService } from "../../config/app-config.service.js";
 import { resolveAiSettingsFromStored } from "../ai/ai.settings.js";
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
 import { resolvePlacesSettingsFromStored, type PlacesSource } from "../places/places.settings.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import type { RedisChannelSubscription } from "../redis/redis-channel.js";
 import { RedisService } from "../redis/redis.service.js";
 import { SETTINGS_BY_KEY } from "../settings/settings.registry.js";
 import { SettingsService } from "../settings/settings.service.js";
@@ -165,7 +165,7 @@ function orderedPlacesSources(sources: readonly PlacesSource[], order: readonly 
 @Injectable()
 export class ProviderRuntimeService implements OnModuleInit, OnModuleDestroy {
   private readonly cache = new Map<ProviderGroup, CachedSnapshot>();
-  private subscriber: Redis | undefined;
+  private subscription: RedisChannelSubscription | undefined;
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
@@ -187,36 +187,21 @@ export class ProviderRuntimeService implements OnModuleInit, OnModuleDestroy {
       },
       "provider.runtime.mode",
     );
-    try {
-      const subscriber = this.redis.client.duplicate();
-      subscriber.on("error", (error: Error) => this.warnRedis("subscriber_error", error));
-      subscriber.on("message", (channel: string, message: string) => {
-        if (channel === PROVIDER_RUNTIME_INVALIDATION_CHANNEL) {
-          this.handleInvalidation(message);
-        }
-      });
-      this.subscriber = subscriber;
-      await subscriber.subscribe(PROVIDER_RUNTIME_INVALIDATION_CHANNEL);
-    } catch (error) {
-      this.warnRedis("subscribe_failed", error);
-    }
+    this.subscription = this.redis.subscribeChannel(
+      PROVIDER_RUNTIME_INVALIDATION_CHANNEL,
+      (message) => {
+        this.handleInvalidation(message);
+      },
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
-    const subscriber = this.subscriber;
-    this.subscriber = undefined;
-    if (!subscriber) {
+    const subscription = this.subscription;
+    this.subscription = undefined;
+    if (!subscription) {
       return;
     }
-    try {
-      if (subscriber.status === "ready") {
-        await subscriber.quit();
-      } else {
-        subscriber.disconnect();
-      }
-    } catch {
-      subscriber.disconnect();
-    }
+    await subscription.close();
   }
 
   async resolveGroup(

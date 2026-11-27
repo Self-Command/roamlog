@@ -47,6 +47,19 @@ function publicTrip() {
 }
 
 describe("PublicSharePage SSR", () => {
+  it("renders a disabled POST password gate before hydration", () => {
+    const html = renderToStaticMarkup(
+      <PublicSharePage
+        token="password-token"
+        initialScreen={{ kind: "password", invalid: false }}
+      />,
+    );
+    const document = new DOMParser().parseFromString(html, "text/html");
+
+    expect(document.querySelector("form")?.getAttribute("method")).toBe("post");
+    expect(document.querySelector('button[type="submit"]')?.hasAttribute("disabled")).toBe(true);
+  });
+
   it("renders the article in the first server HTML instead of a loading shell", () => {
     const html = renderToStaticMarkup(
       <PublicSharePage

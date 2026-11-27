@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { MapPoint } from "./map-types";
 import MapCanvas from "./map-canvas";
 
-vi.mock("maplibre-gl", () => ({ setWorkerUrl: vi.fn() }));
+vi.mock("maplibre-gl", () => ({ getVersion: () => "test", setWorkerUrl: vi.fn() }));
 
 vi.mock("react-map-gl/maplibre", () => {
   function MockMap({ children }: { children?: ReactNode }) {

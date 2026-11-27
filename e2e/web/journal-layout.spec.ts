@@ -10,10 +10,17 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { API_URL, OWNER_ACCOUNT, signInViaApi, type SmokeAccount } from "../support/accounts";
+import {
+  API_URL,
+  OWNER_ACCOUNT,
+  deleteSmokeAccount,
+  provisionWorkspaceMember,
+  signInViaApi,
+  type SmokeAccount,
+} from "../support/accounts";
 import { expectNoHorizontalOverflow } from "../support/helpers";
 
-const WORKSPACE_SLUG = "verify-crew";
+const WORKSPACE_SLUG = process.env.E2E_JOURNAL_WORKSPACE_SLUG ?? "roamlog-crew";
 const IMAGE_ORIGIN = "https://journal-e2e.roamlog.test";
 const OUT_DIR = path.join(process.cwd(), ".audit", "journal-layout");
 const RUN_ID = `${Date.now()}`;
@@ -348,6 +355,10 @@ test.beforeAll(async () => {
   workspaceId = workspaces.find((workspace) => workspace.slug === WORKSPACE_SLUG)?.id ?? "";
   expect(workspaceId, `workspace ${WORKSPACE_SLUG} must exist`).toBeTruthy();
 
+  // The journal viewer is a real account in the same workspace. Provision it
+  // per run instead of relying on a manually-created local account.
+  provisionWorkspaceMember(VIEWER_ACCOUNT, WORKSPACE_SLUG, "viewer");
+
   const tripResponse = await ownerApi.post(`/v1/workspaces/${workspaceId}/trips`, {
     data: {
       title: TRIP_TITLE,
@@ -391,6 +402,7 @@ test.afterAll(async () => {
     expect([200, 204], await response.text()).toContain(response.status());
   }
   await ownerApi.dispose();
+  deleteSmokeAccount(VIEWER_ACCOUNT.email);
 });
 
 test("persists image, gallery and multi-column layout through the real stack", async ({

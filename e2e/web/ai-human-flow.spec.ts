@@ -8,7 +8,7 @@ test.use({ trace: "off", video: "off" });
 test.describe.configure({ mode: "serial", retries: 0 });
 
 const OUT_DIR = path.resolve(process.cwd(), ".audit", "ai-workflow-port", "human-tool");
-const WORKSPACE_SLUG = process.env.E2E_AI_WORKSPACE_SLUG ?? "verify-crew";
+const WORKSPACE_SLUG = process.env.E2E_AI_WORKSPACE_SLUG ?? "roamlog-crew";
 
 test.beforeAll(() => {
   mkdirSync(OUT_DIR, { recursive: true });

@@ -119,7 +119,7 @@ async function login(page: Page, account: SmokeAccount): Promise<void> {
 
 async function openAiPage(page: Page): Promise<void> {
   await page.goto(`${WEB_URL}/w/${WORKSPACE_SLUG}/ai`, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "先计划，后写入" })).toBeVisible({
+  await expect(page.getByTestId("multimodal-input")).toBeVisible({
     timeout: 30_000,
   });
 }

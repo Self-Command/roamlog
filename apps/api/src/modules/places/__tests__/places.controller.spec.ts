@@ -12,6 +12,7 @@ import { ProblemDetailsFilter } from "../../../common/filters/problem-details.fi
 import { AuthService } from "../../auth/auth.service.js";
 import { PinoLoggerService } from "../../observability/pino-logger.service.js";
 import { PrismaService } from "../../prisma/prisma.service.js";
+import { ProviderHealthService } from "../../providers/provider-health.service.js";
 import { RedisService } from "../../redis/redis.service.js";
 import { GeoapifyClient } from "../geoapify.client.js";
 import { PhotonClient } from "../photon.client.js";
@@ -30,6 +31,7 @@ import { TencentClient } from "../tencent.client.js";
 import { PLACES_SETTINGS, staticPlacesSettingsSource } from "../places.settings.js";
 import { LIMITS_SETTINGS } from "../../settings/limits-settings.consumer.js";
 import {
+  abortAwareFetch,
   asLogger,
   fakeRedis,
   jsonResponse,
@@ -48,10 +50,15 @@ const TEST_USER = {
 
 const apps: INestApplication[] = [];
 
-async function createApp(options: { authenticated: boolean; redis?: FakeRedis }) {
+async function createApp(options: {
+  authenticated: boolean;
+  redis?: FakeRedis;
+  settings?: Partial<ReturnType<typeof testSettings>>;
+  providerHealth?: Pick<ProviderHealthService, "recordFailure" | "recordSuccess">;
+}) {
   const logger = makeLogger();
   const redis = options.redis ?? fakeRedis();
-  const settings = testSettings();
+  const settings = testSettings(options.settings);
   // Mutable so a test can change `limits.searchPerMinute` between requests and
   // prove the guard re-reads it instead of using a startup snapshot.
   const limits = { searchPerMinute: 30, uploadPerMinute: 20 };
@@ -72,6 +79,9 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
         provide: PrismaService,
         useValue: { client: { user: { findUnique: vi.fn() } } },
       },
+      ...(options.providerHealth
+        ? [{ provide: ProviderHealthService, useValue: options.providerHealth }]
+        : []),
       GeoapifyClient,
       PhotonClient,
       TencentClient,
@@ -103,7 +113,7 @@ async function createApp(options: { authenticated: boolean; redis?: FakeRedis })
   );
   await app.init();
   apps.push(app);
-  return { app, logger, redis, limits };
+  return { app, logger, redis, limits, providerHealth: options.providerHealth };
 }
 
 afterEach(async () => {
@@ -230,6 +240,40 @@ describe("GET /v1/places/search", () => {
       expect.objectContaining({ event: "places.upstream_failed", httpStatus: 503 }),
       "places.search_degraded",
     );
+  });
+
+  it("returns a degraded 200 and persists a Geoapify timeout in provider health", async () => {
+    vi.stubGlobal("fetch", abortAwareFetch());
+    const providerHealth = {
+      recordFailure: vi.fn(async () => undefined),
+      recordSuccess: vi.fn(async () => undefined),
+    };
+    const { app } = await createApp({
+      authenticated: true,
+      settings: {
+        provider: "geoapify",
+        sources: ["geoapify"],
+        sourceOrder: ["geoapify"],
+        geoapifyTimeoutMs: 20,
+      },
+      providerHealth,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get("/v1/places/search?q=Kyoto&limit=6")
+      .expect(200);
+
+    expect(response.body).toEqual({
+      items: [],
+      provider: "geoapify",
+      degraded: true,
+      cached: false,
+      fallback: "map_pick",
+    });
+    expect(providerHealth.recordFailure).toHaveBeenCalledWith("static:places:geoapify", {
+      code: "TIMEOUT",
+      retryable: true,
+    });
   });
 
   it("returns 429 when the per-user window is exhausted", async () => {

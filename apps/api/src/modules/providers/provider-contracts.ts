@@ -92,7 +92,10 @@ export const tencentProviderConfigSchema = z
 export const geoapifyProviderConfigSchema = z
   .object({
     baseUrl: url,
-    timeoutMs: mapTimeoutMs.default(4_000),
+    // Geoapify autocomplete regularly replies around 2.8 s for Han queries.
+    // The old 2 s form default aborted those real responses before they could
+    // be normalized and merged.
+    timeoutMs: mapTimeoutMs.default(5_000),
     regions: regions.default(["global"]),
     dailyQuota: dailyQuota.default(0),
     cacheTtlSeconds: cacheTtlSeconds.default(900),

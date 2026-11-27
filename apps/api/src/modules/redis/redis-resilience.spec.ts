@@ -6,6 +6,7 @@ import {
   REDIS_MAX_RECONNECT_ATTEMPTS,
   REDIS_RETRY_MAX_DELAY_MS,
   RedisService,
+  redisSubscriberRetryStrategy,
   type RedisRetryStrategy,
 } from "./redis.service.js";
 
@@ -140,4 +141,13 @@ describe("RedisService client options", () => {
       await redis.onModuleDestroy();
     }
   }, 15_000);
+
+  it("keeps subscriber reconnects alive beyond the request-client retry budget", () => {
+    for (let attempt = 1; attempt <= 50; attempt += 1) {
+      const delay = redisSubscriberRetryStrategy(attempt);
+      expect(delay).toBeGreaterThan(0);
+      expect(delay).toBeLessThanOrEqual(REDIS_RETRY_MAX_DELAY_MS);
+    }
+    expect(redisSubscriberRetryStrategy(REDIS_MAX_RECONNECT_ATTEMPTS + 1)).toBeGreaterThan(0);
+  });
 });
