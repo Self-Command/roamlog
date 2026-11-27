@@ -25,6 +25,7 @@ import { ProviderSecretService } from "./provider-secret.service.js";
 
 const PROBE_TIMEOUT_MS = 5_000;
 const MAX_PROBE_BYTES = 256 * 1_024;
+const RESEND_PROBE_URL = "https://api.resend.com/domains";
 
 interface ProbeCandidate {
   readonly providerId: string | null;
@@ -83,6 +84,27 @@ function requiredSecretsPresent(candidate: ProbeCandidate): string[] {
   return candidate.adapter.secretFields
     .filter((field) => field.required && !candidate.secrets[field.key])
     .map((field) => field.key);
+}
+
+function smtpProbeCode(error: unknown, startedAt: number): string {
+  const failure = (typeof error === "object" && error !== null ? error : {}) as {
+    code?: unknown;
+    responseCode?: unknown;
+  };
+  const code = typeof failure.code === "string" ? failure.code.trim().toUpperCase() : "";
+  const status = typeof failure.responseCode === "number" ? failure.responseCode : undefined;
+  if (code === "EAUTH" || status === 530 || status === 535) {
+    return "AUTH_FAILED";
+  }
+  if (
+    code === "ETIMEDOUT" ||
+    code === "ESOCKET" ||
+    code === "ECONNECTION" ||
+    Date.now() - startedAt >= PROBE_TIMEOUT_MS
+  ) {
+    return "PROVIDER_PROBE_TIMEOUT";
+  }
+  return "PROVIDER_PROBE_FAILED";
 }
 
 @Injectable()
@@ -202,15 +224,7 @@ export class ProviderProbeService {
     } else if (candidate.group === "places") {
       await this.probePlaces(candidate, checks);
     } else if (candidate.group === "mail") {
-      checks.push(
-        check(
-          "Delivery",
-          "skip",
-          null,
-          null,
-          "Use the mail test endpoint after saving to send a real test message.",
-        ),
-      );
+      await this.probeMail(candidate, checks, missingSecrets);
     } else {
       checks.push(
         check(
@@ -223,6 +237,182 @@ export class ProviderProbeService {
       );
     }
     return checks;
+  }
+
+  private async probeMail(
+    candidate: ProbeCandidate,
+    checks: ProviderProbeCheck[],
+    missingSecrets: readonly string[],
+  ): Promise<void> {
+    if (missingSecrets.length > 0) {
+      checks.push(
+        check(
+          "Delivery",
+          "skip",
+          null,
+          null,
+          "Delivery was not attempted because required credentials are missing.",
+        ),
+      );
+      return;
+    }
+
+    if (candidate.adapter.adapter === "resend") {
+      const apiKey = candidate.secrets.apiKey?.trim();
+      if (!apiKey) {
+        checks.push(
+          check("Delivery", "fail", null, "AUTH_FAILED", "The Resend API key is missing."),
+        );
+        return;
+      }
+      checks.push(await this.probeResend(apiKey));
+      return;
+    }
+
+    if (candidate.adapter.adapter !== "smtp") {
+      checks.push(
+        check(
+          "Delivery",
+          "fail",
+          null,
+          "PROVIDER_CONFIG_INVALID",
+          "The mail adapter is not supported.",
+        ),
+      );
+      return;
+    }
+
+    const host = typeof candidate.config.host === "string" ? candidate.config.host.trim() : "";
+    const port = typeof candidate.config.port === "number" ? candidate.config.port : Number.NaN;
+    const user = typeof candidate.config.user === "string" ? candidate.config.user.trim() : "";
+    const password = candidate.secrets.password?.trim();
+    if (!host || !Number.isInteger(port) || port < 1 || port > 65_535) {
+      checks.push(
+        check(
+          "Delivery",
+          "fail",
+          null,
+          "PROVIDER_CONFIG_INVALID",
+          "The SMTP host or port is invalid.",
+        ),
+      );
+      return;
+    }
+    if (user && !password) {
+      checks.push(check("Delivery", "fail", null, "AUTH_FAILED", "The SMTP password is missing."));
+      return;
+    }
+
+    checks.push(
+      await this.probeSmtp({
+        host,
+        port,
+        secure: candidate.config.secure === true || port === 465,
+        ...(user ? { user } : {}),
+        ...(password ? { password } : {}),
+      }),
+    );
+  }
+
+  private async probeSmtp(input: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user?: string;
+    password?: string;
+  }): Promise<ProviderProbeCheck> {
+    const startedAt = Date.now();
+    let transport: { verify(): Promise<boolean>; close?(): void } | undefined;
+    try {
+      const packageName = "nodemailer";
+      const { createTransport } = (await import(packageName)) as {
+        createTransport: (options: Record<string, unknown>) => {
+          verify(): Promise<boolean>;
+          close?(): void;
+        };
+      };
+      transport = createTransport({
+        host: input.host,
+        port: input.port,
+        secure: input.secure,
+        connectionTimeout: PROBE_TIMEOUT_MS,
+        greetingTimeout: PROBE_TIMEOUT_MS,
+        socketTimeout: PROBE_TIMEOUT_MS,
+        ...(input.user ? { auth: { user: input.user, pass: input.password ?? "" } } : {}),
+      });
+      await transport.verify();
+      return check("Delivery", "pass", Date.now() - startedAt);
+    } catch (error) {
+      return check(
+        "Delivery",
+        "fail",
+        Date.now() - startedAt,
+        smtpProbeCode(error, startedAt),
+        "The SMTP server rejected the connection or credentials.",
+      );
+    } finally {
+      try {
+        transport?.close?.();
+      } catch {
+        // A probe transport that refuses to close does not affect the result.
+      }
+    }
+  }
+
+  private async probeResend(apiKey: string): Promise<ProviderProbeCheck> {
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    try {
+      const response = await fetch(RESEND_PROBE_URL, {
+        method: "GET",
+        redirect: "error",
+        signal: controller.signal,
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+      });
+      await response.body?.cancel();
+      if (response.status === 401 || response.status === 403) {
+        return check(
+          "Delivery",
+          "fail",
+          Date.now() - startedAt,
+          "AUTH_FAILED",
+          "The Resend API key was rejected.",
+        );
+      }
+      if (response.status === 429) {
+        return check(
+          "Delivery",
+          "fail",
+          Date.now() - startedAt,
+          "PROVIDER_LIMIT_REACHED",
+          "Resend rate-limited the probe request.",
+        );
+      }
+      if (!response.ok) {
+        return check(
+          "Delivery",
+          "fail",
+          Date.now() - startedAt,
+          "PROVIDER_PROBE_FAILED",
+          "The Resend API rejected the probe request.",
+        );
+      }
+      return check("Delivery", "pass", Date.now() - startedAt);
+    } catch {
+      return check(
+        "Delivery",
+        "fail",
+        Date.now() - startedAt,
+        "PROVIDER_PROBE_TIMEOUT",
+        "The Resend probe could not complete in time.",
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private async probeAi(candidate: ProbeCandidate, checks: ProviderProbeCheck[]): Promise<void> {

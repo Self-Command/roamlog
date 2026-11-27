@@ -37,6 +37,8 @@ interface MailRuntimeCommon {
   readonly from: string;
   /** Layer that supplied the transport identity (host or API key). */
   readonly source: MailRuntimeSource;
+  /** Database provider row in v2 mode; absent for env/settings fallback. */
+  readonly providerId?: string;
 }
 
 export type MailRuntime =
@@ -297,7 +299,14 @@ export class MailSettingsConsumer implements MailSettingsSource {
       if (missing.length > 0 || !parsed.success || !apiKey) {
         return { configured: false, provider: "resend", missing, source: "db" };
       }
-      return { configured: true, provider: "resend", apiKey, from, source: "db" };
+      return {
+        configured: true,
+        provider: "resend",
+        apiKey,
+        from,
+        source: "db",
+        providerId: active.id,
+      };
     }
 
     if (active.adapter === "smtp") {
@@ -328,6 +337,7 @@ export class MailSettingsConsumer implements MailSettingsSource {
         secure: parsed.data.secure || parsed.data.port === SECURE_SMTP_PORT,
         from: parsed.data.from,
         source: "db",
+        providerId: active.id,
       };
     }
 

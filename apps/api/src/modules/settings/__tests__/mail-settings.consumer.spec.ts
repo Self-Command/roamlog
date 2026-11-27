@@ -340,6 +340,7 @@ describe("MailSettingsConsumer", () => {
       expect(runtime.apiKey).toBe("re_provider_sentinel");
       expect(runtime.from).toBe("provider@roamlog.test");
       expect(runtime.source).toBe("db");
+      expect(runtime.providerId).toBe("provider-1");
     }
     expect(settings.getGroup).not.toHaveBeenCalled();
   });
@@ -372,6 +373,7 @@ describe("MailSettingsConsumer", () => {
       expect(runtime.secure).toBe(true);
       expect(runtime.user).toBe("mailer");
       expect(runtime.password).toBe("provider-smtp-password");
+      expect(runtime.providerId).toBe("provider-1");
     }
   });
 

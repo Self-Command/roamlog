@@ -45,6 +45,26 @@ export const CHANGE_EMAIL_NOT_CONFIGURED_MESSAGE =
 export const CHANGE_EMAIL_DELIVERY_FAILED_MESSAGE =
   "确认邮件没有发出。请稍后重试；若持续失败，请联系管理员检查邮件服务。";
 
+/** Registration exists, but the verification link never left the server. */
+export const REGISTRATION_EMAIL_DELIVERY_FAILED_MESSAGE =
+  "账号已创建，但验证邮件没有发出。请到“重新发送验证邮件”页面重试，或联系管理员检查邮件服务。";
+
+export const VERIFICATION_MAIL_NOT_CONFIGURED_MESSAGE =
+  "邮件服务未配置，无法发送验证邮件。请联系管理员配置邮件发送后重试。";
+
+export const VERIFICATION_MAIL_DELIVERY_FAILED_MESSAGE =
+  "验证邮件没有发出。请稍后重试；若持续失败，请联系管理员检查邮件服务。";
+
+/** The account was created, but the first verification mail failed. */
+export class RegistrationEmailDeliveryError extends Error {
+  readonly code = "ACCOUNT_CREATED_EMAIL_DELIVERY_FAILED" as const;
+
+  constructor() {
+    super(REGISTRATION_EMAIL_DELIVERY_FAILED_MESSAGE);
+    this.name = "RegistrationEmailDeliveryError";
+  }
+}
+
 export interface SignInResult {
   twoFactorRedirect: boolean;
   twoFactorMethods: string[];
@@ -103,6 +123,11 @@ function jsonInit(method: string, input: unknown): RequestInit {
   return { method, body: JSON.stringify(input) };
 }
 
+function readEmailDelivery(body: unknown): EmailDeliveryMarker | undefined {
+  const parsed = RequestPasswordResetResponseSchema.safeParse(body);
+  return parsed.success ? parsed.data.emailDelivery : undefined;
+}
+
 export async function signIn(email: string, password: string): Promise<SignInResult> {
   const body = await authRequest(
     "/v1/auth/sign-in/email",
@@ -118,17 +143,39 @@ export async function signIn(email: string, password: string): Promise<SignInRes
 }
 
 export async function signUp(name: string, email: string, password: string): Promise<void> {
-  await authRequest("/v1/auth/sign-up/email", jsonInit("POST", { name, email, password }));
+  const body = await authRequest(
+    "/v1/auth/sign-up/email",
+    jsonInit("POST", { name, email, password }),
+  );
+  const delivery = readEmailDelivery(body);
+  if (delivery) {
+    throw new RegistrationEmailDeliveryError();
+  }
 }
 
 export async function sendVerificationEmail(email: string): Promise<void> {
-  await authRequest(
-    "/v1/auth/send-verification-email",
-    jsonInit("POST", {
-      email,
-      callbackURL: `${window.location.origin}/login`,
-    }),
-  );
+  let body: unknown;
+  try {
+    body = await authRequest(
+      "/v1/auth/send-verification-email",
+      jsonInit("POST", {
+        email,
+        callbackURL: `${window.location.origin}/login`,
+      }),
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "MAIL_NOT_CONFIGURED") {
+      throw new EmailNotConfiguredError(VERIFICATION_MAIL_NOT_CONFIGURED_MESSAGE);
+    }
+    throw error;
+  }
+  const delivery = readEmailDelivery(body);
+  if (delivery === "not_configured") {
+    throw new EmailNotConfiguredError(VERIFICATION_MAIL_NOT_CONFIGURED_MESSAGE);
+  }
+  if (delivery === "failed") {
+    throw new EmailDeliveryFailedError(VERIFICATION_MAIL_DELIVERY_FAILED_MESSAGE);
+  }
 }
 
 /**
@@ -145,10 +192,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
       redirectTo: `${window.location.origin}/reset-password`,
     }),
   );
-  const parsed = RequestPasswordResetResponseSchema.safeParse(body);
-  const delivery: EmailDeliveryMarker | undefined = parsed.success
-    ? parsed.data.emailDelivery
-    : undefined;
+  const delivery = readEmailDelivery(body);
   if (delivery === "not_configured") {
     throw new EmailNotConfiguredError(MAIL_NOT_CONFIGURED_MESSAGE);
   }
@@ -216,10 +260,7 @@ export async function changeEmail(newEmail: string, callbackURL?: string): Promi
       ...(callbackURL ? { callbackURL } : {}),
     }),
   );
-  const parsed = RequestPasswordResetResponseSchema.safeParse(body);
-  const delivery: EmailDeliveryMarker | undefined = parsed.success
-    ? parsed.data.emailDelivery
-    : undefined;
+  const delivery = readEmailDelivery(body);
   if (delivery === "not_configured") {
     throw new EmailNotConfiguredError(CHANGE_EMAIL_NOT_CONFIGURED_MESSAGE);
   }
@@ -299,11 +340,7 @@ export async function enableTwoFactor(password: string): Promise<TwoFactorEnroll
   );
   const container = body as { totpURI?: unknown; backupCodes?: unknown } | null;
   if (typeof container?.totpURI !== "string" || !container.totpURI) {
-    throw new ApiError(
-      200,
-      "登录验证暂时没有完成，请稍后重试。",
-      "INVALID_TWO_FACTOR_RESPONSE",
-    );
+    throw new ApiError(200, "登录验证暂时没有完成，请稍后重试。", "INVALID_TWO_FACTOR_RESPONSE");
   }
   return {
     totpURI: container.totpURI,
@@ -425,19 +462,14 @@ export type AccountSecurityAction = "password" | "email" | "password-verify";
  * Better Auth answers these routes with machine codes rather than prose, and a
  * disabled or unconfigured deployment must never read like a successful change.
  */
-export function accountSecurityErrorMessage(
-  error: unknown,
-  action: AccountSecurityAction,
-): string {
+export function accountSecurityErrorMessage(error: unknown, action: AccountSecurityAction): string {
   if (!(error instanceof ApiError)) {
     return error instanceof Error ? error.message : "请求没有完成，请稍后重试。";
   }
 
   const code = error.code.toUpperCase();
   if (code === "INVALID_PASSWORD") {
-    return action === "password-verify"
-      ? "当前密码不正确。"
-      : "当前密码不正确，密码没有修改。";
+    return action === "password-verify" ? "当前密码不正确。" : "当前密码不正确，密码没有修改。";
   }
   if (code === "CHANGE_EMAIL_DISABLED") {
     return "当前服务没有开启邮箱修改。请联系管理员启用后重试。";

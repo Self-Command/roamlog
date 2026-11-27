@@ -39,6 +39,7 @@ interface ProviderProbePanelProps {
 }
 
 const PROBE_ERROR_COPY: Readonly<Record<string, string>> = {
+  AUTH_FAILED: "认证失败：检查用户名、应用专用密码或 API Key。",
   PROVIDER_PROBE_FAILED: "服务商拒绝了测试请求，请检查连接和凭据。",
   PROVIDER_PROBE_TIMEOUT: "测试超时，请检查服务商地址和网络。",
   PROVIDER_SECRETS_UNAVAILABLE: "密钥服务当前不可用，请稍后重试。",

@@ -101,12 +101,12 @@ export const AuthHandlerParamsSchema = z.object({ path: z.string().min(1).max(20
 export const AccountEmailSchema = EmailSchema;
 
 /**
- * Delivery truth appended by the API gateway to Better Auth's mail routes.
- * Better Auth itself always answers `/request-password-reset` with a generic
- * `{ status: true, message }` body so the endpoint cannot be used to enumerate
- * accounts; without this marker a client cannot tell "a link is on its way"
- * from "no transport exists, nothing was sent". The field is absent whenever a
- * real send was attempted and succeeded.
+ * Delivery truth appended by the API gateway to Better Auth's mail routes
+ * (registration, verification resend, password reset and email change).
+ * Better Auth can answer success even when its mail callback failed; without
+ * this marker a client cannot tell "a link is on its way" from "no transport
+ * exists, nothing was sent". The field is absent whenever a real send was
+ * attempted and succeeded.
  *
  * `not_configured`: the deployment has no usable mail transport, so nothing was
  * attempted. `failed`: a send was attempted and the transport rejected or could

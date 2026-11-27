@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { createHash } from "node:crypto";
 
 import { PinoLoggerService } from "../observability/pino-logger.service.js";
@@ -7,6 +7,7 @@ import {
   type MailRuntime,
   type MailSettingsSource,
 } from "../settings/mail-settings.consumer.js";
+import { ProviderHealthService } from "../providers/provider-health.service.js";
 
 /** A cached SMTP transport is rebuilt after this long, even if config is unchanged. */
 export const MAIL_TRANSPORT_TTL_MS = 30_000;
@@ -23,11 +24,7 @@ export interface MailMessage {
 }
 
 export type MailFailureCode =
-  | "NOT_CONFIGURED"
-  | "AUTH_FAILED"
-  | "CONNECTION_FAILED"
-  | "REJECTED"
-  | "UNKNOWN";
+  "NOT_CONFIGURED" | "AUTH_FAILED" | "CONNECTION_FAILED" | "REJECTED" | "UNKNOWN";
 
 export interface MailFailureDetails {
   readonly provider?: "smtp" | "resend";
@@ -48,11 +45,7 @@ export class MailDeliveryError extends Error {
   readonly provider?: "smtp" | "resend";
   readonly status?: number;
 
-  constructor(
-    code: MailFailureCode,
-    message: string,
-    details: MailFailureDetails = {},
-  ) {
+  constructor(code: MailFailureCode, message: string, details: MailFailureDetails = {}) {
     super(message);
     this.name = "MailDeliveryError";
     this.code = code;
@@ -162,11 +155,19 @@ export function recipientDomain(to: string): string {
   return /^[a-z0-9.-]+$/u.test(trimmed) ? trimmed : "invalid";
 }
 
-function transportFingerprint(runtime: Extract<MailRuntime, { configured: true; provider: "smtp" }>): string {
+function transportFingerprint(
+  runtime: Extract<MailRuntime, { configured: true; provider: "smtp" }>,
+): string {
   const secret = runtime.password
     ? createHash("sha256").update(runtime.password, "utf8").digest("hex").slice(0, 16)
     : "-";
-  return [runtime.host, String(runtime.port), runtime.secure ? "tls" : "starttls", runtime.user ?? "-", secret].join("|");
+  return [
+    runtime.host,
+    String(runtime.port),
+    runtime.secure ? "tls" : "starttls",
+    runtime.user ?? "-",
+    secret,
+  ].join("|");
 }
 
 /**
@@ -179,8 +180,7 @@ function transportFingerprint(runtime: Extract<MailRuntime, { configured: true; 
 @Injectable()
 export class MailService {
   private cachedTransport:
-    | { fingerprint: string; createdAt: number; transport: SmtpTransportLike }
-    | undefined;
+    { fingerprint: string; createdAt: number; transport: SmtpTransportLike } | undefined;
 
   /** Overridable in tests; production uses the platform fetch. */
   protected fetchImpl: typeof fetch = fetch;
@@ -188,6 +188,9 @@ export class MailService {
   constructor(
     @Inject(MailSettingsConsumer) private readonly settings: MailSettingsSource,
     @Inject(PinoLoggerService) private readonly logger: PinoLoggerService,
+    @Optional()
+    @Inject(ProviderHealthService)
+    private readonly providerHealth?: ProviderHealthService,
   ) {}
 
   async resolveRuntime(): Promise<MailRuntime> {
@@ -217,10 +220,27 @@ export class MailService {
       });
     }
 
-    const result =
-      runtime.provider === "smtp"
-        ? await this.sendViaSmtp(runtime, message)
-        : await this.sendViaResend(runtime, message);
+    let result: { providerId?: string };
+    try {
+      result =
+        runtime.provider === "smtp"
+          ? await this.sendViaSmtp(runtime, message)
+          : await this.sendViaResend(runtime, message);
+    } catch (error) {
+      if (error instanceof MailDeliveryError && runtime.providerId) {
+        await this.writeProviderHealth(() =>
+          this.providerHealth!.recordFailure(runtime.providerId!, {
+            code: error.code,
+            retryable: error.retryable,
+          }),
+        );
+      }
+      throw error;
+    }
+
+    if (runtime.providerId) {
+      await this.writeProviderHealth(() => this.providerHealth!.recordSuccess(runtime.providerId!));
+    }
 
     const latencyMs = Math.max(0, Date.now() - startedAt);
     this.logger.log(
@@ -234,7 +254,30 @@ export class MailService {
       "mail.sent",
     );
 
-    return { provider: runtime.provider, latencyMs, ...(result.providerId ? { providerId: result.providerId } : {}) };
+    return {
+      provider: runtime.provider,
+      latencyMs,
+      ...(result.providerId ? { providerId: result.providerId } : {}),
+    };
+  }
+
+  private async writeProviderHealth(write: () => Promise<void>): Promise<void> {
+    if (!this.providerHealth) {
+      return;
+    }
+    try {
+      await write();
+    } catch (error) {
+      // Delivery already succeeded/failed on its own. A health bookkeeping
+      // outage must never change the user-visible outcome.
+      this.logger.warn(
+        {
+          event: "mail.provider_health_write_failed",
+          reason: error instanceof Error ? error.name : "UnknownError",
+        },
+        "mail.provider_health_write_failed",
+      );
+    }
   }
 
   private async sendViaSmtp(
@@ -388,9 +431,7 @@ export class MailService {
       // 465 is implicit TLS; 587 and every other port negotiate STARTTLS.
       secure: runtime.secure,
       // Anonymous relays exist, so auth is only sent when a username is set.
-      ...(runtime.user
-        ? { auth: { user: runtime.user, pass: runtime.password ?? "" } }
-        : {}),
+      ...(runtime.user ? { auth: { user: runtime.user, pass: runtime.password ?? "" } } : {}),
     });
   }
 }

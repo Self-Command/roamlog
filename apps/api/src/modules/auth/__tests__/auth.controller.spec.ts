@@ -83,7 +83,13 @@ function deliveryWith(transport: "sent" | "down"): EmailDeliveryService {
     send:
       transport === "down"
         ? vi.fn().mockRejectedValue(new MailDeliveryError("CONNECTION_FAILED", "unreachable"))
-        : vi.fn().mockResolvedValue({ provider: "smtp", providerId: "<msg@roamlog.test>", latencyMs: 4 }),
+        : vi
+            .fn()
+            .mockResolvedValue({
+              provider: "smtp",
+              providerId: "<msg@roamlog.test>",
+              latencyMs: 4,
+            }),
   };
   return new EmailDeliveryService(
     { apiUrl: "http://localhost:4000" } as unknown as AppConfigService,
@@ -204,9 +210,11 @@ describe("AuthController password reset route", () => {
 
   it("no longer special-cases the removed /v1/auth/forget-password route", async () => {
     const response = expressResponse();
-    const handleWebRequest = vi.fn().mockResolvedValue(
-      new Response("not found", { status: 404, headers: { "content-type": "text/plain" } }),
-    );
+    const handleWebRequest = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("not found", { status: 404, headers: { "content-type": "text/plain" } }),
+      );
     const controllerUnderTest = controller({ configured: false, handleWebRequest });
 
     await controllerUnderTest.handle(
@@ -219,5 +227,76 @@ describe("AuthController password reset route", () => {
     expect(handleWebRequest).toHaveBeenCalledTimes(1);
     expect(response.json).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(404);
+  });
+});
+
+describe("AuthController registration and verification mail", () => {
+  it.each([
+    [
+      "/v1/auth/sign-up/email",
+      201,
+      {
+        token: null,
+        user: { id: "user-1", email: "new@roamlog.test" },
+      },
+    ],
+    ["/v1/auth/send-verification-email", 200, { status: true }],
+  ] as const)(
+    "marks %s failed when Better Auth answers success after the mail transport rejects",
+    async (path, status, body) => {
+      const response = expressResponse();
+      const delivery = deliveryWith("down");
+      const handleWebRequest = vi.fn(async () => {
+        await delivery
+          .sendVerificationEmail(
+            { email: "new@roamlog.test", name: "New User" },
+            "http://localhost:4000/v1/auth/verify-email/token",
+          )
+          .catch(() => undefined);
+        return new Response(JSON.stringify(body), {
+          status,
+          headers: { "content-type": "application/json" },
+        });
+      });
+      const controllerUnderTest = controller({ configured: true, handleWebRequest });
+
+      await controllerUnderTest.handle(
+        request(path, { email: "new@roamlog.test", password: "secret" }),
+        response,
+      );
+
+      expect(response.status).toHaveBeenCalledWith(status);
+      expect(readBody(response)).toMatchObject({ ...body, emailDelivery: "failed" });
+    },
+  );
+
+  it("keeps the successful signup body unmarked when the verification mail was sent", async () => {
+    const response = expressResponse();
+    const delivery = deliveryWith("sent");
+    const handleWebRequest = vi.fn(async () => {
+      await delivery.sendVerificationEmail(
+        { email: "new@roamlog.test", name: "New User" },
+        "http://localhost:4000/v1/auth/verify-email/token",
+      );
+      return new Response(
+        JSON.stringify({
+          token: null,
+          user: { id: "user-1", email: "new@roamlog.test" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    });
+    const controllerUnderTest = controller({ configured: true, handleWebRequest });
+
+    await controllerUnderTest.handle(
+      request("/v1/auth/sign-up/email", {
+        email: "new@roamlog.test",
+        password: "secret",
+      }),
+      response,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(201);
+    expect(readBody(response)).not.toHaveProperty("emailDelivery");
   });
 });

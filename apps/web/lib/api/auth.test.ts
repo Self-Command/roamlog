@@ -3,9 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CHANGE_EMAIL_NOT_CONFIGURED_MESSAGE,
   MAIL_NOT_CONFIGURED_MESSAGE,
+  REGISTRATION_EMAIL_DELIVERY_FAILED_MESSAGE,
+  VERIFICATION_MAIL_DELIVERY_FAILED_MESSAGE,
+  VERIFICATION_MAIL_NOT_CONFIGURED_MESSAGE,
   accountSecurityErrorMessage,
   authErrorMessage,
   enableTwoFactor,
+  sendVerificationEmail,
+  signUp,
   twoFactorErrorMessage,
 } from "./auth";
 import { ApiError } from "./errors";
@@ -140,5 +145,89 @@ describe("mail delivery copy", () => {
   it("is readable without implementation terms", () => {
     expectUserFacingCopy(MAIL_NOT_CONFIGURED_MESSAGE);
     expectUserFacingCopy(CHANGE_EMAIL_NOT_CONFIGURED_MESSAGE);
+  });
+});
+
+describe("mail-dependent account flows", () => {
+  function response(body: string, status = 200): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      text: async () => body,
+      json: async () => JSON.parse(body) as unknown,
+    } as Response;
+  }
+
+  it("does not report a successful registration when the verification mail failed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        response(
+          JSON.stringify({
+            token: null,
+            user: { id: "user-1", email: "new@roamlog.test" },
+            emailDelivery: "failed",
+          }),
+          201,
+        ),
+      ),
+    );
+
+    await expect(signUp("New User", "new@roamlog.test", "Roamlog-Prod-Aa1!")).rejects.toThrow(
+      REGISTRATION_EMAIL_DELIVERY_FAILED_MESSAGE,
+    );
+  });
+
+  it("surfaces a failed verification resend even when the auth route answers 200", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(response(JSON.stringify({ status: true, emailDelivery: "failed" }))),
+    );
+
+    await expect(sendVerificationEmail("new@roamlog.test")).rejects.toThrow(
+      VERIFICATION_MAIL_DELIVERY_FAILED_MESSAGE,
+    );
+  });
+
+  it("uses verification-specific copy when the mail transport is not configured", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        response(
+          JSON.stringify({
+            code: "MAIL_NOT_CONFIGURED",
+            message: "Set the mail provider in Admin settings.",
+          }),
+          503,
+        ),
+      ),
+    );
+
+    await expect(sendVerificationEmail("new@roamlog.test")).rejects.toThrow(
+      VERIFICATION_MAIL_NOT_CONFIGURED_MESSAGE,
+    );
+  });
+
+  it("keeps successful registration and resend responses free of false errors", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(
+          JSON.stringify({
+            token: null,
+            user: { id: "user-1", email: "new@roamlog.test" },
+          }),
+          201,
+        ),
+      )
+      .mockResolvedValueOnce(response(JSON.stringify({ status: true })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      signUp("New User", "new@roamlog.test", "Roamlog-Prod-Aa1!"),
+    ).resolves.toBeUndefined();
+    await expect(sendVerificationEmail("new@roamlog.test")).resolves.toBeUndefined();
   });
 });

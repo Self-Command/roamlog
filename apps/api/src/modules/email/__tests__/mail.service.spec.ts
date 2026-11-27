@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { PinoLoggerService } from "../../observability/pino-logger.service.js";
 import type { MailRuntime, MailSettingsSource } from "../../settings/mail-settings.consumer.js";
+import type { ProviderHealthService } from "../../providers/provider-health.service.js";
 import {
   MailDeliveryError,
   MailService,
@@ -68,6 +69,16 @@ const MESSAGE = {
 
 function installTransport(sendMail: Fn) {
   return createTransportSpy().mockResolvedValue({ sendMail } as never);
+}
+
+function healthRecorder() {
+  return {
+    recordSuccess: vi.fn(async () => undefined),
+    recordFailure: vi.fn(async () => undefined),
+  } as unknown as ProviderHealthService & {
+    recordSuccess: Fn;
+    recordFailure: Fn;
+  };
 }
 
 afterEach(() => {
@@ -185,6 +196,69 @@ describe("MailService", () => {
     });
     expect(everything).not.toContain(password);
     expect(everything).not.toContain("recipient@roamlog.test");
+  });
+
+  it("records AUTH_FAILED on the database provider after a rejected SMTP login", async () => {
+    const providerId = "01942f30-1200-7000-8000-000000000999";
+    const password = "smtp-password-sentinel-value";
+    const log = logger();
+    const health = healthRecorder();
+    installTransport(
+      vi.fn().mockRejectedValue(
+        Object.assign(new Error("535 username and password not accepted"), {
+          code: "EAUTH",
+          responseCode: 535,
+        }),
+      ),
+    );
+    const service = new MailService(
+      sourceReturning(smtpRuntime({ providerId, user: "roamlog", password })),
+      log,
+      health,
+    );
+
+    const error = await service.send(MESSAGE).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(MailDeliveryError);
+    expect((error as MailDeliveryError).code).toBe("AUTH_FAILED");
+    expect(health.recordFailure).toHaveBeenCalledWith(providerId, {
+      code: "AUTH_FAILED",
+      retryable: false,
+    });
+    const recorded = JSON.stringify(health.recordFailure.mock.calls);
+    expect(recorded).not.toContain(password);
+    expect(recorded).not.toContain("recipient@roamlog.test");
+  });
+
+  it("marks the database provider healthy again after a successful send", async () => {
+    const providerId = "01942f30-1200-7000-8000-000000000998";
+    const health = healthRecorder();
+    installTransport(vi.fn().mockResolvedValue({ messageId: "<msg-healthy@roamlog.test>" }));
+    const service = new MailService(sourceReturning(smtpRuntime({ providerId })), logger(), health);
+
+    await service.send(MESSAGE);
+
+    expect(health.recordSuccess).toHaveBeenCalledWith(providerId);
+    expect(health.recordFailure).not.toHaveBeenCalled();
+  });
+
+  it("never replaces the delivery error when provider health bookkeeping fails", async () => {
+    const providerId = "01942f30-1200-7000-8000-000000000997";
+    const health = healthRecorder();
+    health.recordFailure.mockRejectedValueOnce(new Error("database unavailable"));
+    installTransport(
+      vi.fn().mockRejectedValue(Object.assign(new Error("auth"), { code: "EAUTH" })),
+    );
+    const service = new MailService(
+      sourceReturning(smtpRuntime({ providerId, user: "roamlog", password: "secret" })),
+      logger(),
+      health,
+    );
+
+    const error = await service.send(MESSAGE).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(MailDeliveryError);
+    expect((error as MailDeliveryError).code).toBe("AUTH_FAILED");
   });
 
   it("classifies ETIMEDOUT as a retryable connection failure", async () => {

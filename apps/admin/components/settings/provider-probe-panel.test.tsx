@@ -223,7 +223,7 @@ describe("ProviderProbePanel", () => {
           name: "Models",
           status: "fail",
           latencyMs: 12,
-          code: "PROVIDER_PROBE_FAILED",
+          code: "AUTH_FAILED",
           message: "The provider rejected the credentials.",
         },
       ],
@@ -237,6 +237,9 @@ describe("ProviderProbePanel", () => {
     await user.click(screen.getByRole("button", { name: "测试连接" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("测试未通过");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "认证失败：检查用户名、应用专用密码或 API Key。",
+    );
     expect(screen.queryByText("连接正常")).not.toBeInTheDocument();
   });
 

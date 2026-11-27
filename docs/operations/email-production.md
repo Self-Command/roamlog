@@ -127,6 +127,33 @@ After DNS is green, send a real message through a product flow (invite a
 throwaway workspace member or trigger a password reset) and confirm delivery,
 `providerId` on the email log row, and the absence of bounces.
 
+### Gmail SMTP `535` / `EAUTH`
+
+Gmail does not accept the normal Google account password for SMTP. A
+`535 5.7.8 Username and Password not accepted` at `AUTH PLAIN` means the
+configured App Password was revoked, mistyped, or created for a different
+Google Account. Port `465` and implicit TLS are already correct in that case.
+
+1. Open Google Account Security and confirm 2-Step Verification is enabled.
+2. Create a new App Password for Mail, then replace the SMTP provider's
+   `password` secret in Admin → 发信服务. Do not put it in `config`.
+3. Use the provider row's “测试” action for a SMTP handshake/authentication
+   check (no email is sent), or send a real message from the mail settings test
+   endpoint. Either success marks the provider `healthy`; a rejected login marks
+   it `unhealthy` with `lastErrorCode=AUTH_FAILED` and shows the remediation in
+   the provider row.
+4. If Gmail continues to reject a freshly generated App Password, move the
+   deployment to Resend SMTP/API instead of weakening account security.
+
+Official references:
+
+- Google, “Sign in with app passwords”:
+  https://support.google.com/accounts/answer/185833
+- Gmail, “Add Gmail to another email client” (SMTP host and port):
+  https://support.google.com/mail/answer/7126229
+- Resend, “Send emails with SMTP”:
+  https://resend.com/docs/send-with-smtp
+
 ## 6. Verification checklist
 
 ```text
@@ -164,6 +191,9 @@ Mail is not a data migration: rollback is a configuration change.
 
 - Worker SMTP transport is unsupported (see §1). Production worker mail needs
   Resend or an approved dependency change.
+- Live API delivery failures now update the active database provider's health.
+  Provider health is therefore the source of truth after a `535` or other
+  send rejection; the older “last probe” timestamp alone is not sufficient.
 - `S3_PUBLIC_BASE_URL` is reserved in the template but the API still signs media
   URLs with the internal MinIO endpoint; see the "Known integration gap" in
   [`deploy/README.md`](../../deploy/README.md).

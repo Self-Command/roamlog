@@ -88,6 +88,29 @@ describe("ProviderList", () => {
     expect(within(screen.getByTestId("provider-table")).getByText("未设置")).toBeInTheDocument();
   });
 
+  it("shows an actionable AUTH_FAILED reason after real delivery failures", () => {
+    renderList([
+      provider({
+        group: "mail",
+        adapter: "smtp",
+        preset: "smtp",
+        label: "SMTP",
+        health: {
+          status: "unhealthy",
+          lastCheckedAt: "2026-11-27T07:00:00.000Z",
+          lastErrorCode: "AUTH_FAILED",
+          cooldownUntil: "2026-11-27T07:00:30.000Z",
+        },
+      }),
+    ]);
+
+    const table = screen.getByTestId("provider-table");
+    expect(within(table).getByText("异常")).toBeInTheDocument();
+    expect(
+      within(table).getByText("认证失败：检查用户名、应用专用密码或 API Key。"),
+    ).toBeInTheDocument();
+  });
+
   it("disables mutations for a non-super-admin role", () => {
     renderList([provider()], "analyst");
     const table = screen.getByTestId("provider-table");

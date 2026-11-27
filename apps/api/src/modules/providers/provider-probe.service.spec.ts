@@ -9,29 +9,47 @@ import { ProviderProbeService } from "./provider-probe.service.js";
 import type { ProviderSecretService } from "./provider-secret.service.js";
 
 const PROVIDER_ID = "01942f30-1200-7000-8000-000000000901";
+const mailer = vi.hoisted(() => ({ verify: vi.fn(async () => true) }));
 
-function setup(options: { fetch?: ReturnType<typeof vi.fn>; blocked?: boolean } = {}) {
+vi.mock("nodemailer", () => ({
+  createTransport: () => ({
+    verify: mailer.verify,
+    close: vi.fn(),
+  }),
+}));
+
+function setup(
+  options: {
+    fetch?: ReturnType<typeof vi.fn>;
+    blocked?: boolean;
+    row?: Record<string, unknown>;
+    secrets?: Record<string, string>;
+  } = {},
+) {
   const prisma = {
     client: {
       providerConnection: {
-        findUnique: vi.fn(async () => ({
-          id: PROVIDER_ID,
-          group: "places",
-          adapter: "geoapify",
-          preset: "geoapify",
-          config: {
-            baseUrl: "https://api.geoapify.com/v1/geocode/autocomplete",
-            regions: ["global"],
-          },
-          version: 3,
-          deletedAt: null,
-        })),
+        findUnique: vi.fn(
+          async () =>
+            options.row ?? {
+              id: PROVIDER_ID,
+              group: "places",
+              adapter: "geoapify",
+              preset: "geoapify",
+              config: {
+                baseUrl: "https://api.geoapify.com/v1/geocode/autocomplete",
+                regions: ["global"],
+              },
+              version: 3,
+              deletedAt: null,
+            },
+        ),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
     },
   } as unknown as PrismaService;
   const secrets = {
-    resolvePlaintext: vi.fn(async () => ({ apiKey: "geo-secret" })),
+    resolvePlaintext: vi.fn(async () => options.secrets ?? { apiKey: "geo-secret" }),
   } as unknown as ProviderSecretService;
   const egress = {
     assertAllowed: options.blocked
@@ -54,6 +72,8 @@ function setup(options: { fetch?: ReturnType<typeof vi.fn>; blocked?: boolean } 
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  mailer.verify.mockReset();
+  mailer.verify.mockResolvedValue(true);
 });
 
 describe("ProviderProbeService", () => {
@@ -121,5 +141,83 @@ describe("ProviderProbeService", () => {
     await expect(service.probeSaved(makeActor(), PROVIDER_ID, 3)).rejects.toMatchObject({
       code: "PROVIDER_EGRESS_BLOCKED",
     });
+  });
+
+  it("marks the saved SMTP provider unhealthy when the relay rejects AUTH", async () => {
+    mailer.verify.mockRejectedValueOnce(
+      Object.assign(new Error("535 username and password not accepted"), {
+        code: "EAUTH",
+        responseCode: 535,
+      }),
+    );
+    const { service, prisma } = setup({
+      row: {
+        id: PROVIDER_ID,
+        group: "mail",
+        adapter: "smtp",
+        preset: "smtp",
+        config: {
+          from: "Roamlog <verify@example.com>",
+          host: "smtp.example.com",
+          port: 465,
+          secure: true,
+          user: "mailer",
+        },
+        version: 3,
+        deletedAt: null,
+      },
+      secrets: { password: "secret" },
+    });
+
+    const result = await service.probeSaved(makeActor(), PROVIDER_ID, 3);
+
+    expect(result.ok).toBe(false);
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({
+        name: "Delivery",
+        status: "fail",
+        code: "AUTH_FAILED",
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain("secret");
+    expect(
+      prisma.client.providerConnection.updateMany as ReturnType<typeof vi.fn>,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          healthStatus: "unhealthy",
+          lastErrorCode: "AUTH_FAILED",
+        }),
+      }),
+    );
+  });
+
+  it("does not send an email during the SMTP provider probe", async () => {
+    const { service } = setup({
+      row: {
+        id: PROVIDER_ID,
+        group: "mail",
+        adapter: "smtp",
+        preset: "smtp",
+        config: {
+          from: "Roamlog <verify@example.com>",
+          host: "smtp.example.com",
+          port: 587,
+          secure: false,
+          user: "mailer",
+        },
+        version: 3,
+        deletedAt: null,
+      },
+      secrets: { password: "secret" },
+    });
+
+    const result = await service.probeSaved(makeActor(), PROVIDER_ID, 3);
+
+    expect(result.ok).toBe(true);
+    expect(mailer.verify).toHaveBeenCalledTimes(1);
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({ name: "Delivery", status: "pass" }),
+    );
   });
 });

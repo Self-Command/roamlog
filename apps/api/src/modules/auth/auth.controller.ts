@@ -25,6 +25,12 @@ const SEND_VERIFICATION_PATH = "/v1/auth/send-verification-email";
  */
 const CHANGE_EMAIL_PATH = "/v1/auth/change-email";
 const MAIL_NOT_CONFIGURED_CODE = "MAIL_NOT_CONFIGURED";
+const EMAIL_DELIVERY_TRACKED_PATHS = new Set([
+  SIGN_UP_PATH,
+  SEND_VERIFICATION_PATH,
+  REQUEST_PASSWORD_RESET_PATH,
+  CHANGE_EMAIL_PATH,
+]);
 
 const SKIPPED_REQUEST_HEADERS = new Set([
   "connection",
@@ -168,7 +174,8 @@ export class AuthController {
     }
     if (
       webResponse.ok &&
-      (target.pathname === REQUEST_PASSWORD_RESET_PATH || target.pathname === CHANGE_EMAIL_PATH) &&
+      mailConfigured &&
+      EMAIL_DELIVERY_TRACKED_PATHS.has(target.pathname) &&
       outcome === "failed"
     ) {
       this.logger.warn(

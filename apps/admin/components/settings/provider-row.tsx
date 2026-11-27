@@ -44,6 +44,14 @@ const DISABLED_HEALTH: HealthView = {
   icon: PauseCircle,
 };
 
+const HEALTH_ERROR_COPY: Readonly<Record<string, string>> = {
+  AUTH_FAILED: "认证失败：检查用户名、应用专用密码或 API Key。",
+  PROVIDER_PROBE_FAILED: "服务商拒绝了验证请求，请检查凭据和地址。",
+  PROVIDER_PROBE_TIMEOUT: "连接超时，请检查服务商地址和网络。",
+  PROVIDER_LIMIT_REACHED: "服务商限流，请稍后重新验证。",
+  PROVIDER_EGRESS_BLOCKED: "地址被安全策略阻止，请改用公开服务地址。",
+};
+
 export interface ProviderRowActions {
   onEdit: (provider: ProviderConnection) => void;
   onProbe: (provider: ProviderConnection) => void;
@@ -69,6 +77,17 @@ export function providerHealthView(provider: ProviderConnection): HealthView {
   return provider.enabled
     ? (HEALTH_VIEWS[provider.health.status] ?? HEALTH_VIEWS.unknown)
     : DISABLED_HEALTH;
+}
+
+export function providerHealthDetail(provider: ProviderConnection): string | null {
+  if (!provider.enabled || provider.health.status === "healthy") {
+    return null;
+  }
+  const code = provider.health.lastErrorCode?.trim();
+  if (!code) {
+    return null;
+  }
+  return HEALTH_ERROR_COPY[code] ?? `最近错误：${code}`;
 }
 
 export function providerSecretLabel(provider: ProviderConnection): string {
@@ -176,6 +195,14 @@ export function ProviderTableRow({
       </td>
       <td className="px-3 py-4">
         <HealthBadge provider={provider} />
+        {providerHealthDetail(provider) ? (
+          <p
+            className="mt-1 max-w-[220px] text-[10px] leading-4 text-accent-red"
+            data-testid={`provider-health-detail-${provider.id}`}
+          >
+            {providerHealthDetail(provider)}
+          </p>
+        ) : null}
       </td>
       <td className="px-3 py-4 font-mono text-[10px] text-body">{providerSecretLabel(provider)}</td>
       <td className="px-3 py-4 font-mono text-[9px] text-muted">{lastCheckedLabel(provider)}</td>
@@ -237,6 +264,14 @@ export function ProviderMobileCard({
           <dt className="type-eyebrow">状态</dt>
           <dd className="mt-1">
             <HealthBadge provider={provider} />
+            {providerHealthDetail(provider) ? (
+              <p
+                className="mt-1 text-[10px] leading-4 text-accent-red"
+                data-testid={`provider-health-detail-${provider.id}`}
+              >
+                {providerHealthDetail(provider)}
+              </p>
+            ) : null}
           </dd>
         </div>
         <div>

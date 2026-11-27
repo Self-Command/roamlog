@@ -10,6 +10,7 @@ import { SettingsModule } from "../settings/settings.module.js";
 import { ProviderCatalogController } from "./provider-catalog.controller.js";
 import { ProviderConfigService } from "./provider-config.service.js";
 import { ProviderGroupsController } from "./provider-groups.controller.js";
+import { ProviderHealthService } from "./provider-health.service.js";
 import { ProviderEgressGuard } from "./provider-egress.js";
 import { ProviderModelDiscoveryService } from "./provider-model-discovery.service.js";
 import { ProviderModelService } from "./provider-model.service.js";
@@ -32,6 +33,7 @@ import { ProvidersController } from "./providers.controller.js";
     PlatformTwoFactorGuard,
     ProviderConfigService,
     ProviderSecretService,
+    ProviderHealthService,
     ProviderEgressGuard,
     ProviderModelDiscoveryService,
     ProviderModelService,
@@ -41,6 +43,7 @@ import { ProvidersController } from "./providers.controller.js";
   exports: [
     ProviderConfigService,
     ProviderSecretService,
+    ProviderHealthService,
     ProviderEgressGuard,
     ProviderModelDiscoveryService,
     ProviderModelService,
