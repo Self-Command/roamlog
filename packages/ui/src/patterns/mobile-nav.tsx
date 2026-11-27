@@ -37,7 +37,7 @@ export function MobileNav({
     <nav
       aria-label={label}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-30 border-t border-hairline-strong bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden",
+        "fixed inset-x-0 bottom-0 z-30 border-t border-hairline-strong bg-surface-1/95 pb-[var(--roamlog-mobile-safe-area-bottom)] backdrop-blur-xl md:hidden",
         className,
       )}
       {...props}
@@ -47,7 +47,7 @@ export function MobileNav({
           <div className="pointer-events-auto">{quickAction}</div>
         </div>
       ) : null}
-      <div className="flex h-16 items-center justify-around px-2">
+      <div className="flex h-[var(--roamlog-mobile-nav-height)] items-center justify-around px-2">
         {visibleItems.map((item) => {
           const Icon = item.icon;
           return (

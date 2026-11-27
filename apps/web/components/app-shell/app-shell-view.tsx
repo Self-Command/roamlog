@@ -213,7 +213,7 @@ export function AppShellView({
           </Button>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] flex-1 overflow-x-clip px-4 pb-28 pt-6 sm:px-6 md:pb-10 lg:px-8 lg:pt-8">
+        <main className="mx-auto w-full max-w-[1440px] flex-1 overflow-x-clip px-4 pb-[var(--roamlog-mobile-content-inset)] pt-6 sm:px-6 md:pb-10 lg:px-8 lg:pt-8">
           {children}
         </main>
       </div>

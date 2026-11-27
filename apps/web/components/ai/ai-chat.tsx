@@ -366,7 +366,7 @@ export function AiChat({
             bordered in-page card.
           */}
           <div
-            className="fixed inset-x-0 top-16 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 flex overflow-hidden border-y border-hairline-strong bg-surface-1 md:static md:z-auto md:h-full md:min-h-0 md:rounded-card md:border"
+            className="fixed inset-x-0 top-16 bottom-[var(--roamlog-mobile-action-offset)] z-10 flex overflow-hidden border-y border-hairline-strong bg-surface-1 md:static md:z-auto md:h-full md:min-h-0 md:rounded-card md:border"
             data-testid="ai-chat-shell"
           >
             {collapsed ? null : (

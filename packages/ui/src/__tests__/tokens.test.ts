@@ -80,4 +80,15 @@ describe("Roamlog design tokens", () => {
     expect(tokenCss).toContain("@media (prefers-reduced-motion: reduce)");
     expect(tokenCss).toContain("html.reduce-motion");
   });
+
+  it("publishes one mobile bottom-navigation inset contract", () => {
+    expect(tokenCss).toContain("--roamlog-mobile-nav-height: 4rem;");
+    expect(tokenCss).toContain(
+      "--roamlog-mobile-safe-area-bottom: env(safe-area-inset-bottom, 0px);",
+    );
+    expect(tokenCss).toContain("--roamlog-mobile-nav-offset:");
+    expect(tokenCss).toContain("--roamlog-mobile-content-inset:");
+    expect(tokenCss).toContain("--roamlog-mobile-fab-clearance:");
+    expect(tokenCss).toContain("--roamlog-mobile-action-offset:");
+  });
 });

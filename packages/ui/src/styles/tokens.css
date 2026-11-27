@@ -68,6 +68,13 @@
   --roamlog-text-trip-title: 2rem;
   --roamlog-text-journal-title: 1.75rem;
 
+  --roamlog-mobile-nav-height: 4rem;
+  --roamlog-mobile-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --roamlog-mobile-nav-offset: calc(var(--roamlog-mobile-nav-height) + var(--roamlog-mobile-safe-area-bottom));
+  --roamlog-mobile-content-inset: calc(var(--roamlog-mobile-nav-offset) + 3rem);
+  --roamlog-mobile-fab-clearance: 2.5rem;
+  --roamlog-mobile-action-offset: calc(var(--roamlog-mobile-nav-offset) + var(--roamlog-mobile-fab-clearance));
+
   --surface-overlay: light-dark(#ffffff, #292929);
   --accent-primary: light-dark(#0f6cbd, #115ea3);
   --accent-solid: var(--accent-primary);

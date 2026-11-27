@@ -1102,7 +1102,10 @@ export function TripForm(props: TripFormProps) {
           </aside>
         </div>
 
-        <div className="sticky bottom-0 z-10 mt-10 -mx-4 border-t border-hairline bg-canvas/95 px-4 py-4 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div
+          className="sticky bottom-[var(--roamlog-mobile-action-offset)] z-10 mt-10 -mx-4 border-t border-hairline bg-canvas/95 px-4 py-4 backdrop-blur-sm sm:-mx-6 sm:px-6 md:bottom-0 lg:-mx-8 lg:px-8"
+          data-testid="trip-form-actions"
+        >
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="type-meta text-stone" role="status">
               {pending
