@@ -283,6 +283,11 @@ async function waitForApi(request: APIRequestContext): Promise<void> {
 export async function loginOnWeb(page: Page, account: SmokeAccount): Promise<void> {
   await waitForApi(page.request);
   await page.goto(`${WEB_URL}/login`);
+  // Hydration resets controlled inputs; wait until the submit button is
+  // enabled (the app disables it until hydrated) before filling.
+  await expect(page.getByRole("button", { name: "登录", exact: true })).toBeEnabled({
+    timeout: 30_000,
+  });
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     await page.getByLabel("邮箱").fill(account.email);

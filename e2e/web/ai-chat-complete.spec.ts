@@ -111,6 +111,9 @@ function crc32(buffer: Buffer): number {
 
 async function login(page: Page, account: SmokeAccount): Promise<void> {
   await page.goto(`${WEB_URL}/login`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("button", { name: "登录", exact: true })).toBeEnabled({
+    timeout: 30_000,
+  });
   await page.getByLabel("邮箱").fill(account.email);
   await page.getByLabel("密码").fill(account.password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
