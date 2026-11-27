@@ -23,11 +23,17 @@ NEXT_PUBLIC_ADMIN_ASSET_PREFIX=/admin-assets
 NEXT_PUBLIC_ADMIN_LOGIN_PATH=/admin/login
 ```
 
-These are public build-time values. The asset prefix keeps Admin's `_next`
-files out of Web's root asset namespace; the login path keeps internal login
-links inside `/admin/*`. The reverse proxy must route both `/admin/*` and
-`/admin-assets/*` to the Admin container. No Next.js `basePath` is configured,
-so the existing Admin route paths stay unchanged.
+These values must be present during `next build` **and** in the `next start`
+runtime environment because `next start` evaluates `next.config.ts` again.
+Missing them at runtime makes server-rendered HTML fall back to root
+`/_next/*` URLs, which the reverse proxy routes to Web instead of Admin.
+`docker/admin.Dockerfile` therefore declares the same defaults in both stages.
+
+The asset prefix keeps Admin's `_next` files out of Web's root asset namespace;
+the login path keeps internal login links inside `/admin/*`. The reverse proxy
+must route both `/admin/*` and `/admin-assets/*` to the Admin container. No
+Next.js `basePath` is configured, so the existing Admin route paths stay
+unchanged.
 
 ## Data boundary
 
@@ -62,6 +68,16 @@ pnpm --filter @roamlog/admin typecheck
 pnpm --filter @roamlog/admin build
 pnpm --filter @roamlog/admin dev
 ```
+
+Verify a running production server never emits unprefixed Admin assets:
+
+```powershell
+$env:NEXT_PUBLIC_ADMIN_ASSET_PREFIX='/admin-assets'
+pnpm admin:verify-assets http://127.0.0.1:3000
+```
+
+The same check is the container healthcheck. It fails if the HTML contains any
+root `/_next` asset URL or if a sampled Admin JS/CSS asset does not return 2xx.
 
 The Admin console has no fallback data source; run the API (or point the proxy at
 it) before opening a page.

@@ -128,9 +128,12 @@ CORS_ORIGINS=https://we.spacedo.org
 SESSION_COOKIE_DOMAIN=.we.spacedo.org
 ```
 
-Admin uses the same origin with build-time asset prefix `/admin-assets` and login
-path `/admin/login`. The Admin env/build values must remain aligned with the
-release image.
+Admin uses the same origin with asset prefix `/admin-assets` and login path
+`/admin/login`. These values must be present during both `next build` and
+`next start`: Next re-evaluates `next.config.ts` at runtime, and a missing
+runtime value makes part of the server-rendered HTML request root `/_next/*`
+from the Web container. `docker/admin.Dockerfile` declares matching defaults in
+the build and runtime stages.
 
 ## Compose command
 
@@ -184,6 +187,8 @@ certbot --nginx -d we.spacedo.org \
 The Nginx server block handles only `we.spacedo.org`. Admin page paths stay under
 `/admin/*`; `/admin-assets/<asset>` is rewritten to `/_next/<asset>` only for
 the Admin upstream. Web's root `/_next/*` namespace is not shared with Admin.
+After deployment, run `pnpm admin:verify-assets https://we.spacedo.org`; it must
+report `ok: true` with zero root `/_next` URLs.
 
 ## Deploy a published RC
 

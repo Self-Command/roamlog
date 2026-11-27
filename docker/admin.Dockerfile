@@ -43,6 +43,16 @@ RUN pnpm install --frozen-lockfile \
 
 FROM base AS runtime
 
+# `next start` evaluates next.config.ts again. The asset prefix must therefore
+# be present in the runtime stage as well as at build time, otherwise the
+# server-rendered HTML mixes `/admin-assets/_next/...` with root `/_next/...`
+# URLs that the reverse proxy sends to the Web container.
+ARG NEXT_PUBLIC_ADMIN_ASSET_PREFIX=
+ARG NEXT_PUBLIC_ADMIN_LOGIN_PATH=
+
+ENV NEXT_PUBLIC_ADMIN_ASSET_PREFIX=${NEXT_PUBLIC_ADMIN_ASSET_PREFIX} \
+    NEXT_PUBLIC_ADMIN_LOGIN_PATH=${NEXT_PUBLIC_ADMIN_LOGIN_PATH}
+
 RUN groupadd --system --gid 10001 roamlog \
     && useradd --system --uid 10001 --gid roamlog --home-dir /home/roamlog --shell /usr/sbin/nologin roamlog
 
@@ -50,6 +60,7 @@ WORKDIR /app
 
 COPY --from=build --chown=roamlog:roamlog /out/admin ./
 COPY --from=build --chown=root:root /workspace/tsconfig.base.json /tsconfig.base.json
+COPY --from=build --chown=root:root /workspace/tooling/scripts/verify-admin-assets.mjs /app/verify-admin-assets.mjs
 
 RUN mkdir -p /app/.next/cache \
     && chown -R roamlog:roamlog /app/.next
@@ -58,7 +69,7 @@ USER 10001:10001
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/login').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
+  CMD ["node", "/app/verify-admin-assets.mjs", "http://127.0.0.1:3000", "--internal-assets", "--sample=3"]
 
 CMD ["node", "node_modules/next/dist/bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]

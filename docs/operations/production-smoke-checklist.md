@@ -30,6 +30,8 @@ reason.
 - [ ] `GET /admin` and `/admin/login` return the Admin app.
 - [ ] An Admin static asset under `/admin-assets/_next/...` returns `200` with
       the expected CSS/JS content type.
+- [ ] `pnpm admin:verify-assets https://we.spacedo.org` reports `ok: true` and
+      the Admin HTML contains no root `/_next/...` URLs.
 - [ ] `GET /v1/health` returns `200` with
       `{"status":"ok","version":"<semver>","uptimeSeconds":<int>}`. It must
       parse as `HealthResponseSchema` (`.strict()`, all three fields required);
