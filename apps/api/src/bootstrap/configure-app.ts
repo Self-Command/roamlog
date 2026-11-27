@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 
 import { ProblemDetailsFilter } from "../common/filters/problem-details.filter.js";
+import { noStoreMiddleware } from "../common/middleware/no-store.middleware.js";
 import { createRequestIdMiddleware } from "../common/middleware/request-id.middleware.js";
 import { AppConfigService } from "../config/app-config.service.js";
 import { createHttpLogger } from "../modules/observability/http-logger.middleware.js";
@@ -69,6 +70,7 @@ export function configureApp(app: INestApplication, options: ConfigureAppOptions
     }),
   );
   app.use(cookieParser(config.betterAuthSecret));
+  app.use(noStoreMiddleware());
   app.use(createRequestIdMiddleware());
   app.use(createHttpLogger(logger.logger));
   app.use(requestMetricsMiddleware(metrics));

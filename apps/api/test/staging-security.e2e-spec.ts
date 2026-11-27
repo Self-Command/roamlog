@@ -17,6 +17,18 @@ async function withApp(run: (app: INestApplication) => Promise<void>): Promise<v
 }
 
 describe("staging security regressions", () => {
+  it("marks API responses as non-cacheable for browser clients", async () => {
+    await withApp(async (app) => {
+      const health = await request(app.getHttpServer()).get("/v1/health");
+      expect(health.status).toBe(200);
+      expect(health.headers["cache-control"]).toBe("no-store");
+
+      const unauthorized = await request(app.getHttpServer()).get("/v1/me");
+      expect(unauthorized.status).toBe(401);
+      expect(unauthorized.headers["cache-control"]).toBe("no-store");
+    });
+  });
+
   it("does not rate limit normal Better Auth session reads", async () => {
     await withApp(async (app) => {
       const statuses: number[] = [];
