@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getAdminPostLoginPath } from "../../lib/admin-paths";
@@ -11,6 +12,17 @@ afterEach(() => {
 });
 
 describe("LoginPanel", () => {
+  it("renders a disabled POST form before client hydration", () => {
+    const html = renderToStaticMarkup(<LoginPanel />);
+    const document = new DOMParser().parseFromString(html, "text/html");
+    const form = document.querySelector("form");
+
+    expect(form?.getAttribute("method")).toBe("post");
+    expect(
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement | null)?.disabled,
+    ).toBe(true);
+  });
+
   it("does not prefill a fixture email by default", () => {
     render(<LoginPanel />);
 
@@ -25,13 +37,10 @@ describe("LoginPanel", () => {
 
     expect(screen.getByLabelText(/管理员邮箱/)).toHaveValue("demo@roamlog.local");
     expect(screen.getByText("演示模式")).toBeInTheDocument();
-    expect(
-      screen.getByText("演示模式：已填入示例账号，请勿用于生产。"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("演示模式：已填入示例账号，请勿用于生产。")).toBeInTheDocument();
     // The env var name is a build-time detail; it must not reach the screen.
     expect(screen.queryByText(/NEXT_PUBLIC_ADMIN_DEMO/)).not.toBeInTheDocument();
   });
-
 
   it("uses Better Auth twoFactorRedirect and verifies the TOTP challenge in API mode", async () => {
     const user = userEvent.setup();

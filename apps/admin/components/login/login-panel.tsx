@@ -3,7 +3,7 @@
 import { ArrowLeft, Fingerprint, KeyRound, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
-import { Badge, Button, FormField, Input, Separator } from "@roamlog/ui";
+import { Badge, Button, FormField, Input, Separator, useHydrated } from "@roamlog/ui";
 
 import {
   authErrorMessage,
@@ -39,6 +39,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
 
   function completeAuthentication() {
     if (onAuthenticated) {
@@ -89,6 +90,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
               {step === "credentials" ? (
                 <form
                   className="space-y-4"
+                  method="post"
                   onSubmit={async (event) => {
                     event.preventDefault();
                     if (!email.trim() || !password.trim()) {
@@ -113,9 +115,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                       }
                     } catch (error) {
                       setMessage(
-                        error instanceof Error
-                          ? error.message
-                          : "无法连接认证服务，请稍后重试。",
+                        error instanceof Error ? error.message : "无法连接认证服务，请稍后重试。",
                       );
                     } finally {
                       setIsSubmitting(false);
@@ -126,11 +126,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     id="admin-email"
                     label="管理员邮箱"
                     required
-                    hint={
-                      demoEnabled
-                        ? "演示模式：已填入示例账号，请勿用于生产。"
-                        : undefined
-                    }
+                    hint={demoEnabled ? "演示模式：已填入示例账号，请勿用于生产。" : undefined}
                   >
                     <Input
                       autoComplete="username"
@@ -165,21 +161,22 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     type="submit"
                     variant="primary"
                     className="w-full"
-                    disabled={isSubmitting}
+                    disabled={!hydrated || isSubmitting}
                   >
                     <KeyRound aria-hidden="true" />
                     {isSubmitting ? "正在登录…" : "登录"}
                   </Button>
                   <a
-                      href="/admin/2fa/enroll"
-                      className="block rounded-control text-center text-[11px] text-muted underline-offset-4 outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring"
-                    >
+                    href="/admin/2fa/enroll"
+                    className="block rounded-control text-center text-[11px] text-muted underline-offset-4 outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring"
+                  >
                     已登录但尚未完成两步验证？
                   </a>
                 </form>
               ) : (
                 <form
                   className="space-y-4"
+                  method="post"
                   onSubmit={async (event) => {
                     event.preventDefault();
                     if (!/^\d{6}$/.test(code)) {
@@ -197,9 +194,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                       completeAuthentication();
                     } catch (error) {
                       setMessage(
-                        error instanceof Error
-                          ? error.message
-                          : "无法连接认证服务，请稍后重试。",
+                        error instanceof Error ? error.message : "无法连接认证服务，请稍后重试。",
                       );
                     } finally {
                       setIsSubmitting(false);
@@ -240,7 +235,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
                     type="submit"
                     variant="primary"
                     className="w-full"
-                    disabled={code.length !== 6 || isSubmitting}
+                    disabled={!hydrated || code.length !== 6 || isSubmitting}
                   >
                     <ShieldCheck aria-hidden="true" />
                     {isSubmitting ? "正在验证…" : "验证并进入控制台"}
@@ -264,9 +259,7 @@ export function LoginPanel({ onAuthenticated, transport }: LoginPanelProps) {
           </div>
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-4">
-            <p className="font-ui text-[10px] tracking-[0.04em] text-muted">
-              统一认证 · 同源接入
-            </p>
+            <p className="font-ui text-[10px] tracking-[0.04em] text-muted">统一认证 · 同源接入</p>
             <p className="font-ui text-[10px] text-stone">独立管理应用</p>
           </footer>
         </section>

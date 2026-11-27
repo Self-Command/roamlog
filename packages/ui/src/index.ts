@@ -21,6 +21,7 @@ export {
 
 export { buttonVariants, Button } from "./primitives/button";
 export type { ButtonProps } from "./primitives/button";
+export { useHydrated } from "./lib/use-hydrated";
 export { IconButton } from "./primitives/icon-button";
 export type { IconButtonProps } from "./primitives/icon-button";
 export { Checkbox, FormField, Input, Label, Select, Switch, Textarea } from "./primitives/form";

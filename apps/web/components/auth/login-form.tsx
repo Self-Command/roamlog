@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, FormField, Input } from "@roamlog/ui";
+import { Button, FormField, Input, useHydrated } from "@roamlog/ui";
 import { ArrowLeft, ArrowRight, KeyRound, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -49,6 +49,7 @@ export function LoginFormView({
   const [backupCode, setBackupCode] = useState("");
   const [challengeError, setChallengeError] = useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
+  const hydrated = useHydrated();
 
   function completeAuthentication() {
     if (onAuthenticated) {
@@ -154,7 +155,7 @@ export function LoginFormView({
           <p className="mt-1.5 break-all text-[13px] text-ink">{challengeEmail}</p>
         </div>
 
-        <form onSubmit={handleChallenge} className="space-y-5">
+        <form method="post" onSubmit={handleChallenge} className="space-y-5">
           <div
             role="group"
             aria-label="选择验证方式"
@@ -250,6 +251,7 @@ export function LoginFormView({
             size="lg"
             className="w-full"
             disabled={
+              !hydrated ||
               submitting ||
               (factor === "totp" ? totpCode.length !== 6 : backupCode.trim().length === 0)
             }
@@ -287,7 +289,7 @@ export function LoginFormView({
         </p>
       </div>
 
-      <form noValidate onSubmit={handleSubmit} className="space-y-5">
+      <form noValidate method="post" onSubmit={handleSubmit} className="space-y-5">
         <FormField label="邮箱" error={errors.email}>
           <Input
             type="email"
@@ -347,7 +349,13 @@ export function LoginFormView({
           </p>
         ) : null}
 
-        <Button type="submit" variant="primary" size="lg" className="w-full" disabled={submitting}>
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          className="w-full"
+          disabled={!hydrated || submitting}
+        >
           <Mail aria-hidden="true" />
           {submitting ? "正在登录…" : "登录"}
           <ArrowRight aria-hidden="true" />

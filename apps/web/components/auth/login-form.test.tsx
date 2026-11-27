@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api";
@@ -29,6 +30,17 @@ function transport(overrides: Partial<TwoFactorAuthTransport> = {}): TwoFactorAu
 }
 
 describe("LoginFormView", () => {
+  it("renders a disabled POST form before client hydration", () => {
+    const html = renderToStaticMarkup(<LoginFormView />);
+    const document = new DOMParser().parseFromString(html, "text/html");
+    const form = document.querySelector("form");
+
+    expect(form?.getAttribute("method")).toBe("post");
+    expect(
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement | null)?.disabled,
+    ).toBe(true);
+  });
+
   it("associates required and format errors with the login fields", async () => {
     const user = userEvent.setup();
     render(<LoginFormView />);
@@ -81,9 +93,7 @@ describe("LoginFormView", () => {
     });
     const onAuthenticated = vi.fn();
 
-    const { container } = render(
-      <LoginFormView auth={auth} onAuthenticated={onAuthenticated} />,
-    );
+    const { container } = render(<LoginFormView auth={auth} onAuthenticated={onAuthenticated} />);
 
     await user.type(screen.getByLabelText("邮箱"), "lin.mo@roamlog.local");
     await user.type(screen.getByLabelText("密码"), "roamlog-demo");
