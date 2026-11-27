@@ -16,6 +16,7 @@ import { presentAdminAuditLog } from "./admin.presenters.js";
 import { auditSelect } from "./admin-selects.js";
 
 const CSV_MAX_ROWS = 50_000;
+const UUID_SEARCH_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CSV_COLUMNS = [
   "id",
   "createdAt",
@@ -39,6 +40,24 @@ function csvValue(value: unknown): string {
         : String(value);
   const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
   return `"${safe.replaceAll('"', '""')}"`;
+}
+
+function textSearch(q: string): Record<string, unknown> {
+  const search = q.trim();
+  if (!search) {
+    return {};
+  }
+
+  const or: Record<string, unknown>[] = [
+    { action: { contains: search } },
+    { targetType: { contains: search } },
+  ];
+  // Prisma UUID columns do not support `contains`; only exact matches are
+  // valid. Keep identifier search available when the operator pastes an id.
+  if (UUID_SEARCH_PATTERN.test(search)) {
+    or.push({ actorId: { equals: search } }, { targetId: { equals: search } });
+  }
+  return { OR: or };
 }
 
 @Injectable()
@@ -90,16 +109,7 @@ export class AdminAuditService {
       ...(query.action ? { action: query.action } : {}),
       ...(query.targetType ? { targetType: query.targetType } : {}),
       ...(query.ip ? { ip: { contains: query.ip } } : {}),
-      ...(query.q
-        ? {
-            OR: [
-              { action: { contains: query.q } },
-              { targetType: { contains: query.q } },
-              { actorId: { contains: query.q } },
-              { targetId: { contains: query.q } },
-            ],
-          }
-        : {}),
+      ...(query.q ? textSearch(query.q) : {}),
       ...(query.from || query.to
         ? {
             createdAt: {

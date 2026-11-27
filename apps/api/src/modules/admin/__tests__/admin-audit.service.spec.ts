@@ -16,6 +16,23 @@ describe("AdminAuditService export", () => {
     return { prisma, service };
   }
 
+  function auditRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "01942f30-1200-7000-8000-000000000501",
+      actorId: USER_ADMIN_ID,
+      actorType: "admin",
+      action: "admin.user.updated",
+      targetType: "user",
+      targetId: "01942f30-1200-7000-8000-000000000502",
+      workspaceId: null,
+      ip: "127.0.0.1",
+      userAgent: "vitest",
+      metadata: { source: "test" },
+      createdAt: NOW,
+      ...overrides,
+    };
+  }
+
   it("exports the documented CSV columns with UTF-8 encoding", async () => {
     const { prisma, service } = setup();
     prisma.client.auditLog.findMany.mockResolvedValue([
@@ -83,6 +100,57 @@ describe("AdminAuditService export", () => {
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.id).toBe(legacyId);
     expect(csv).toContain(`"${legacyId}"`);
+  });
+
+  it("uses text contains for q and shares the same filter between list and export", async () => {
+    const { prisma, service } = setup();
+    prisma.client.auditLog.findMany.mockResolvedValue([auditRow()]);
+    const actor = makeActor(USER_ADMIN_ID, { platformRole: "analyst" });
+
+    const page = await service.list(actor, { q: "admin.user.updated" });
+    await service.exportCsv(actor, { q: "admin.user.updated" });
+
+    expect(page.items).toHaveLength(1);
+    const listWhere = prisma.client.auditLog.findMany.mock.calls[0]?.[0]?.where;
+    const exportWhere = prisma.client.auditLog.findMany.mock.calls[1]?.[0]?.where;
+    const expected = {
+      OR: [
+        { action: { contains: "admin.user.updated" } },
+        { targetType: { contains: "admin.user.updated" } },
+      ],
+    };
+    expect(listWhere).toEqual(expected);
+    expect(exportWhere).toEqual(expected);
+  });
+
+  it("uses exact UUID equality when q is an identifier", async () => {
+    const { prisma, service } = setup();
+    prisma.client.auditLog.findMany.mockResolvedValue([]);
+    const searchedId = "9f1d7a2e-3b4c-4d5e-8f60-123456789abc";
+
+    await service.exportCsv(makeActor(USER_ADMIN_ID, { platformRole: "analyst" }), {
+      q: searchedId,
+    });
+
+    expect(prisma.client.auditLog.findMany.mock.calls[0]?.[0]?.where).toEqual({
+      OR: [
+        { action: { contains: searchedId } },
+        { targetType: { contains: searchedId } },
+        { actorId: { equals: searchedId } },
+        { targetId: { equals: searchedId } },
+      ],
+    });
+  });
+
+  it("neutralises spreadsheet formulas in exported values", async () => {
+    const { prisma, service } = setup();
+    prisma.client.auditLog.findMany.mockResolvedValue([
+      auditRow({ action: '=HYPERLINK("https://attacker.invalid")' }),
+    ]);
+
+    const csv = await service.exportCsv(makeActor(USER_ADMIN_ID, { platformRole: "analyst" }), {});
+
+    expect(csv).toContain(`"'=HYPERLINK(""https://attacker.invalid"")"`);
   });
 
   it("still rejects audit ids that are not UUIDs", async () => {

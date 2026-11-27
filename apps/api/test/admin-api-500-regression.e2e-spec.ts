@@ -265,6 +265,25 @@ integrationDescribe("admin audit/trips regression against PostgreSQL", () => {
     expect(response.text).toContain(auditAction);
   });
 
+  it("filters list and export by q without applying contains to UUID columns", async () => {
+    const list = await request(app.getHttpServer())
+      .get("/v1/admin/audit")
+      .query({ q: auditAction, limit: 100 })
+      .set("x-test-role", "super_admin");
+    expect(list.status, JSON.stringify(list.body)).toBe(200);
+    expect(list.body.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: auditAction })]),
+    );
+
+    const exported = await request(app.getHttpServer())
+      .get("/v1/admin/audit/export")
+      .query({ q: auditAction, sort: "createdAt:desc" })
+      .set("x-test-role", "super_admin");
+    expect(exported.status, exported.text.slice(0, 500)).toBe(200);
+    expect(exported.headers["content-type"]).toContain("text/csv");
+    expect(exported.text).toContain(auditAction);
+  });
+
   it("GET /v1/admin/trips returns 200 with presentable rows (no index-as-cover)", async () => {
     const scoped = await request(app.getHttpServer())
       .get("/v1/admin/trips")
