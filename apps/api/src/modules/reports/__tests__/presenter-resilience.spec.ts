@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AdminMediaSchema,
   CommentSchema,
   JournalEntrySchema,
-  MediaSchema,
   TripSchema,
 } from "@roamlog/contracts";
 import { makeEntry, makeMedia, makeTrip } from "@roamlog/db/factories";
@@ -90,8 +90,9 @@ describe("presenters ignore undeclared database columns", () => {
       },
     });
 
-    expect(() => MediaSchema.parse(presented)).not.toThrow();
+    expect(() => AdminMediaSchema.parse(presented)).not.toThrow();
     expect(presented.moderatedAt).toBe("2026-11-19T08:00:00.000Z");
+    expect(presented.originalFileName).toBe(record.originalFileName);
     expect(presented).not.toHaveProperty("someFutureColumn");
     expect(presented.variants.thumb).toMatchObject({
       url: "https://media.spacedo.org/roamlog/workspace/entry/thumb.webp?X-Amz-Signature=test",
