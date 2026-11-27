@@ -1,28 +1,12 @@
 "use client";
 
 import type { WorkspaceRole } from "@roamlog/contracts";
-import {
-  Avatar,
-  Badge,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  ErrorState,
-  FormField,
-  Input,
-  PageHeader,
-  Select,
-  Skeleton,
-  Textarea,
-} from "@roamlog/ui";
+import { Avatar, Badge, Button, ErrorState, PageHeader, Select, Skeleton } from "@roamlog/ui";
 import { Crown, Mail, PenLine, Shield, Trash2, UserPlus, Users } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
 
 import { isForbidden } from "@/lib/api";
+import type { InvitationInput } from "@/lib/api/types";
 import { shortDate } from "@/lib/demo-format";
 import {
   useInvitationsQuery,
@@ -34,6 +18,7 @@ import {
   useUpdateMemberMutation,
   useWorkspaceBySlug,
 } from "@/lib/query";
+import { InviteMemberDialog } from "./invite-member-dialog";
 
 const roleLabels: Record<WorkspaceRole, string> = {
   owner: "所有者",
@@ -53,9 +38,6 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
   const revokeInvitation = useRevokeInvitationMutation();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
-  const [message, setMessage] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,31 +62,15 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
   }
 
   if (!workspace) {
-    return (
-      <ErrorState title="工作区不可用" description="当前账号无法加载这个工作区的成员列表。" />
-    );
+    return <ErrorState title="工作区不可用" description="当前账号无法加载这个工作区的成员列表。" />;
   }
 
-  async function submitInvite(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitInvite(input: InvitationInput) {
     if (!workspace) return;
-    setError(null);
-    try {
-      await inviteMember.mutateAsync({
-        workspaceId: workspace.id,
-        input: { email: email.trim(), role, ...(message.trim() ? { message: message.trim() } : {}) },
-      });
-      setNotice(`已向 ${email.trim()} 发送 ${roleLabels[role]} 邀请。`);
-      setEmail("");
-      setMessage("");
-      setDialogOpen(false);
-    } catch (cause) {
-      setError(
-        isForbidden(cause)
-          ? "你没有邀请成员的权限。请联系工作区所有者或管理员。"
-          : "邀请发送失败，请稍后重试。",
-      );
-    }
+    setNotice(null);
+    await inviteMember.mutateAsync({ workspaceId: workspace.id, input });
+    setNotice(`已向 ${input.email} 发送 ${roleLabels[input.role]} 邀请。`);
+    setDialogOpen(false);
   }
 
   async function changeRole(memberId: string, nextRole: WorkspaceRole) {
@@ -167,7 +133,14 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
         description="所有者和管理员可以管理成员；只读成员可以阅读内容并发表评论。"
         actions={
           canManage ? (
-            <Button type="button" variant="primary" onClick={() => setDialogOpen(true)}>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                setError(null);
+                setDialogOpen(true);
+              }}
+            >
               <UserPlus aria-hidden="true" />
               邀请成员
             </Button>
@@ -200,9 +173,8 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
           { label: "成员总数", value: members.length, hint: "所有者与成员", icon: Users },
           {
             label: "可编辑",
-            value: members.filter((member) =>
-              ["owner", "admin", "editor"].includes(member.role),
-            ).length,
+            value: members.filter((member) => ["owner", "admin", "editor"].includes(member.role))
+              .length,
             hint: "所有者、管理员和编辑者",
             icon: PenLine,
           },
@@ -334,7 +306,8 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
                 <div>
                   <p className="text-[13px] text-ink">{invitation.email}</p>
                   <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-stone">
-                    {roleLabels[invitation.role]} · 到期 {shortDate(invitation.expiresAt.slice(0, 10))}
+                    {roleLabels[invitation.role]} · 到期{" "}
+                    {shortDate(invitation.expiresAt.slice(0, 10))}
                   </p>
                 </div>
                 {canManage ? (
@@ -354,54 +327,12 @@ export function MembersLive({ workspaceSlug }: { workspaceSlug: string }) {
         </section>
       ) : null}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <form onSubmit={(event) => void submitInvite(event)} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle>邀请成员</DialogTitle>
-              <DialogDescription>
-                邀请会发送到邮箱。对方需要先登录，然后接受邀请进入工作区。
-              </DialogDescription>
-            </DialogHeader>
-            <FormField label="邮箱">
-              <Input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="traveler@example.com"
-                required
-              />
-            </FormField>
-            <FormField label="角色">
-              <Select
-                value={role}
-                onChange={(event) => setRole(event.target.value as typeof role)}
-              >
-                <option value="admin">管理员</option>
-                <option value="editor">编辑者</option>
-                <option value="viewer">只读成员</option>
-              </Select>
-            </FormField>
-            <FormField label="留言（可选）">
-              <Textarea
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                placeholder="一起补上这趟旅行的日志吧。"
-                rows={3}
-              />
-            </FormField>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                取消
-              </Button>
-              <Button type="submit" variant="primary" disabled={inviteMember.isPending}>
-                <Mail aria-hidden="true" />
-                发送邀请
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <InviteMemberDialog
+        open={dialogOpen}
+        pending={inviteMember.isPending}
+        onInvite={submitInvite}
+        onOpenChange={setDialogOpen}
+      />
     </div>
   );
 }
