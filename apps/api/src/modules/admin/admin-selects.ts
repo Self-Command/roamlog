@@ -105,6 +105,7 @@ export const mediaSelect = {
   uploaderId: true,
   bucket: true,
   key: true,
+  originalFileName: true,
   mimeType: true,
   size: true,
   width: true,

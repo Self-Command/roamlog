@@ -85,13 +85,7 @@ function switchableStorage() {
       settings: settings(),
     })),
   };
-  const storage = new StorageService(
-    settings(),
-    createLogger(),
-    undefined,
-    undefined,
-    provider,
-  );
+  const storage = new StorageService(settings(), createLogger(), undefined, undefined, provider);
   return {
     storage,
     internalSend,
@@ -109,6 +103,7 @@ function mediaRow(overrides: Partial<MediaRecord> = {}): MediaRecord {
     uploaderId: USER_ID,
     bucket: BUCKET_A,
     key: `${WORKSPACE_ID}/2026/11/${MEDIA_ID}/original.jpg`,
+    originalFileName: "IMG_0001.jpg",
     mimeType: "image/jpeg",
     size: 2048,
     width: 1200,
@@ -161,14 +156,16 @@ function build(storage: StorageService) {
       const row = rows.find((entry) => entry.id === mediaId && entry.workspaceId === workspaceId);
       return row ?? null;
     }),
-    updateMedia: vi.fn(async (_workspaceId: string, mediaId: string, data: Record<string, unknown>) => {
-      const row = rows.find((entry) => entry.id === mediaId);
-      if (!row) {
-        throw new Error("missing media row");
-      }
-      Object.assign(row, data);
-      return row;
-    }),
+    updateMedia: vi.fn(
+      async (_workspaceId: string, mediaId: string, data: Record<string, unknown>) => {
+        const row = rows.find((entry) => entry.id === mediaId);
+        if (!row) {
+          throw new Error("missing media row");
+        }
+        Object.assign(row, data);
+        return row;
+      },
+    ),
   };
   const queue = { enqueue: vi.fn(async () => ({ jobId: "job" })) };
   const activities = { record: vi.fn(async () => ({ id: "activity" })) };
@@ -195,11 +192,12 @@ describe("changing the storage bucket keeps old media alive", () => {
 
     // 1) bucket=A → upload #1 is recorded and signed against A.
     const first = await service.presign(actor, membership(), {
-      fileName: "IMG_0001.jpg",
+      fileName: "../旅行 京都.jpg",
       mimeType: "image/jpeg",
       size: 2048,
     });
     expect(rows[0]?.bucket).toBe(BUCKET_A);
+    expect(rows[0]?.originalFileName).toBe("旅行 京都.jpg");
     const firstUrl = new URL(first.uploadUrl);
     expect(firstUrl.host).toBe("media.example.test");
     expect(firstUrl.pathname.startsWith(`/${BUCKET_A}/`)).toBe(true);
@@ -257,8 +255,7 @@ describe("changing the storage bucket keeps old media alive", () => {
     await service.complete(actor, membership(), presigned.mediaId, { size: 2048 });
 
     const head = (internalSend.mock.calls.at(-1) as unknown[] | undefined)?.[0] as
-      | { input?: { Bucket?: string } }
-      | undefined;
+      { input?: { Bucket?: string } } | undefined;
     expect(head?.input?.Bucket).toBe(BUCKET_A);
   });
 });

@@ -119,4 +119,10 @@ export type AdminMediaPageItemsItem = {
    * @nullable
    */
   motion?: AdminMediaPageItemsItemMotion;
+  /**
+   * @minLength 1
+   * @maxLength 255
+   * @nullable
+   */
+  originalFileName: string | null;
 };

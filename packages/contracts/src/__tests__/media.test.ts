@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { AdminMediaPageSchema } from "../api/admin";
 import { MediaListQuerySchema } from "../api/media";
 import {
   CompleteMediaMotionRequestSchema,
@@ -104,18 +105,34 @@ describe("Media live-photo contract", () => {
     expect(MediaSchema.safeParse(media({ motionKey: "x" })).success).toBe(false);
     expect(MediaSchema.safeParse(media({ bucketKey: "x" })).success).toBe(false);
     expect(
-      MediaSchema.safeParse(media({ motion: { url: null, mimeType: "video/mp4", durationMs: 1, key: "x" } }))
-        .success,
+      MediaSchema.safeParse(
+        media({ motion: { url: null, mimeType: "video/mp4", durationMs: 1, key: "x" } }),
+      ).success,
     ).toBe(false);
   });
 
   it("keeps MediaPage aligned with the entity", () => {
     const page = MediaPageSchema.parse({
-      items: [media({ livePhoto: true, motion: { url: null, mimeType: "video/mp4", durationMs: 0 } })],
+      items: [
+        media({ livePhoto: true, motion: { url: null, mimeType: "video/mp4", durationMs: 0 } }),
+      ],
       nextCursor: null,
       hasMore: false,
     });
     expect(page.items[0]?.motion?.mimeType).toBe("video/mp4");
+  });
+
+  it("requires the Admin page to carry the uploader-facing filename", () => {
+    const page = AdminMediaPageSchema.parse({
+      items: [media({ originalFileName: "旅行 京都.jpg" })],
+      nextCursor: null,
+      hasMore: false,
+    });
+    expect(page.items[0]?.originalFileName).toBe("旅行 京都.jpg");
+    expect(
+      AdminMediaPageSchema.safeParse({ items: [media()], nextCursor: null, hasMore: false })
+        .success,
+    ).toBe(false);
   });
 
   it("exposes livePhoto and a signed motion url on the public payload", () => {
@@ -180,15 +197,15 @@ describe("motion request contracts", () => {
       durationMs: null,
     };
     expect(CompleteMediaMotionRequestSchema.safeParse(complete).success).toBe(true);
-    expect(
-      CompleteMediaMotionRequestSchema.safeParse({ ...complete, sizeBytes: 0 }).success,
-    ).toBe(false);
+    expect(CompleteMediaMotionRequestSchema.safeParse({ ...complete, sizeBytes: 0 }).success).toBe(
+      false,
+    );
     expect(
       CompleteMediaMotionRequestSchema.safeParse({ ...complete, storageKey: "" }).success,
     ).toBe(false);
-    expect(
-      CompleteMediaMotionRequestSchema.safeParse({ ...complete, extra: true }).success,
-    ).toBe(false);
+    expect(CompleteMediaMotionRequestSchema.safeParse({ ...complete, extra: true }).success).toBe(
+      false,
+    );
   });
 
   it("returns a strict presign response with the derived key", () => {
@@ -220,14 +237,16 @@ describe("upload ceilings contract (UPLOAD_LIMITS_WIRED)", () => {
   it("moves the size cap off the business value and keeps a loose wire ceiling", () => {
     // The old hardcoded `25 * 1024 * 1024` must be gone: the real ceiling is the
     // `limits.uploadMaxFileBytes` setting, answered with 422, not a schema error.
-    expect(MediaPresignRequestSchema.safeParse({ ...presign, size: 25 * 1024 * 1024 + 1 }).success).toBe(
-      true,
-    );
-    expect(MediaPresignRequestSchema.safeParse({ ...presign, size: MEDIA_UPLOAD_MAX_WIRE_BYTES }).success).toBe(
-      true,
-    );
     expect(
-      MediaPresignRequestSchema.safeParse({ ...presign, size: MEDIA_UPLOAD_MAX_WIRE_BYTES + 1 }).success,
+      MediaPresignRequestSchema.safeParse({ ...presign, size: 25 * 1024 * 1024 + 1 }).success,
+    ).toBe(true);
+    expect(
+      MediaPresignRequestSchema.safeParse({ ...presign, size: MEDIA_UPLOAD_MAX_WIRE_BYTES })
+        .success,
+    ).toBe(true);
+    expect(
+      MediaPresignRequestSchema.safeParse({ ...presign, size: MEDIA_UPLOAD_MAX_WIRE_BYTES + 1 })
+        .success,
     ).toBe(false);
     expect(MediaPresignRequestSchema.safeParse({ ...presign, size: 0 }).success).toBe(false);
     // Same wire cap on the completion callback.

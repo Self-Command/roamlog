@@ -777,48 +777,52 @@ model Activity {
 }
 
 model Media {
-  id              String       @id @default(uuid(7)) @db.Uuid
-  workspaceId     String       @db.Uuid
-  tripId          String?      @db.Uuid
-  uploaderId      String       @db.Uuid
-  bucket          String
-  key             String
-  mimeType        String
-  size            Int
-  width           Int?
-  height          Int?
-  blurhash        String?
-  variants        Json         @default("{}") @db.JsonB
-  status          MediaStatus  @default(pending)
-  error           String?
-  caption         String?
-  date            DateTime?    @db.Date
-  location        String?
+  id               String       @id @default(uuid(7)) @db.Uuid
+  workspaceId      String       @db.Uuid
+  tripId           String?      @db.Uuid
+  uploaderId       String       @db.Uuid
+  bucket           String
+  key              String
+  /// User-facing basename captured at presign time. Storage keys stay opaque;
+  /// this is metadata-only so admin search and moderation can show the file the
+  /// person actually selected. Legacy rows remain null and fall back to `key`.
+  originalFileName String?      @db.VarChar(255)
+  mimeType         String
+  size             Int
+  width            Int?
+  height           Int?
+  blurhash         String?
+  variants         Json         @default("{}") @db.JsonB
+  status           MediaStatus  @default(pending)
+  error            String?
+  caption          String?
+  date             DateTime?    @db.Date
+  location         String?
   /// Structured photo EXIF read from the source `File` *before* the browser
   /// compresses it: a canvas re-encode drops the source EXIF, so there is no
   /// second chance once the derivative is the only object in storage. Keys keep
   /// the `exifr` tag names (`Make`, `FNumber`, `DateTimeOriginal`, …). `null`
   /// means "nothing readable" — the uploader never invents a value, and history
   /// is not backfilled because the original file is gone.
-  exif            Json?        @db.JsonB
+  exif             Json?        @db.JsonB
   /// Denormalized GPS pair (WGS-84), lifted out of `exif` so map queries never
   /// have to parse the JSON blob. `null` when the photo carries no GPS.
-  lat             Float?
-  lng             Float?
-  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
-  deletedAt       DateTime?    @db.Timestamptz(3)
+  lat              Float?
+  lng              Float?
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt        DateTime?    @db.Timestamptz(3)
   /// Admin takedown; `deletedAt` remains the uploader's own delete.
-  moderatedAt     DateTime?    @db.Timestamptz(3)
-  moderatedById   String?      @db.Uuid
-  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  trip            Trip?        @relation(fields: [tripId], references: [id], onDelete: SetNull)
-  uploader        User         @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
-  entryMedia      EntryMedia[]
-  coveredTrips    Trip[]       @relation("TripCover")
-  workspaceLogos  Workspace[]  @relation("WorkspaceLogo")
-  expenseReceipts Expense[]    @relation("ExpenseReceipt")
-  motion          MediaMotion?
+  moderatedAt      DateTime?    @db.Timestamptz(3)
+  moderatedById    String?      @db.Uuid
+  workspace        Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trip             Trip?        @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  uploader         User         @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  entryMedia       EntryMedia[]
+  coveredTrips     Trip[]       @relation("TripCover")
+  workspaceLogos   Workspace[]  @relation("WorkspaceLogo")
+  expenseReceipts  Expense[]    @relation("ExpenseReceipt")
+  motion           MediaMotion?
 
   @@unique([workspaceId, key])
   @@index([workspaceId, status, createdAt])

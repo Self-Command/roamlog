@@ -1,13 +1,14 @@
 import {
+  AdminMediaSchema,
   CommentSchema,
   EmailLogSchema,
   FeatureFlagSchema,
   MediaSchema,
+  type AdminMedia,
   type AuditLog,
   type Comment,
   type EmailLog,
   type FeatureFlag,
-  type Media,
 } from "@roamlog/contracts";
 
 import { AuditLogReadSchema } from "../audit/audit-read.js";
@@ -87,6 +88,7 @@ export interface AdminMediaRecord {
   uploaderId: string;
   bucket: string;
   key: string;
+  originalFileName?: string | null;
   mimeType: string;
   size: number;
   width: number | null;
@@ -108,9 +110,9 @@ export interface AdminMediaRecord {
 export function presentMedia(
   record: AdminMediaRecord,
   variantUrls: Record<string, MediaVariantView> = {},
-): Media {
+): AdminMedia {
   const variants = { ...jsonObject(record.variants), ...variantUrls };
-  return MediaSchema.parse({
+  const media = MediaSchema.parse({
     id: record.id,
     workspaceId: record.workspaceId,
     tripId: record.tripId,
@@ -133,6 +135,11 @@ export function presentMedia(
     deletedAt: nullableIso(record.deletedAt),
     moderatedAt: record.moderatedAt === undefined ? null : nullableIso(record.moderatedAt),
     moderatedById: record.moderatedById ?? null,
+  });
+  return AdminMediaSchema.parse({
+    ...media,
+    originalFileName:
+      record.originalFileName?.trim() || record.key.split("/").at(-1) || record.key,
   });
 }
 

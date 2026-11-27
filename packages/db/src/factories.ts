@@ -293,6 +293,7 @@ export function makeMedia(overrides: Partial<Media> = {}): Media {
     uploaderId: overrides.uploaderId ?? nextId("user"),
     bucket: "roamlog-local",
     key: `test/media-${nextId("key")}.jpg`,
+    originalFileName: "factory-media.jpg",
     mimeType: "image/jpeg",
     size: 1024,
     width: 1200,

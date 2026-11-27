@@ -347,7 +347,16 @@ export const AdminMediaQuerySchema = CursorQuerySchema.extend({
 });
 export type AdminMediaQuery = z.infer<typeof AdminMediaQuerySchema>;
 
-export const AdminMediaPageSchema = CursorPageSchema(MediaSchema);
+export const AdminMediaSchema = MediaSchema.extend({
+  /**
+   * Uploader-facing basename captured at presign time. Null for legacy rows;
+   * the Admin presenter fills the historical key basename before responding.
+   */
+  originalFileName: z.string().min(1).max(255).nullable(),
+}).strict();
+export type AdminMedia = z.infer<typeof AdminMediaSchema>;
+
+export const AdminMediaPageSchema = CursorPageSchema(AdminMediaSchema);
 export type AdminMediaPage = z.infer<typeof AdminMediaPageSchema>;
 
 export const AdminAuditQuerySchema = CursorQuerySchema.extend({

@@ -1812,6 +1812,14 @@
                   ],
                   "additionalProperties": false,
                   "description": "Paired motion asset; `null` for an ordinary image."
+                },
+                "originalFileName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 255
                 }
               },
               "required": [
@@ -1834,7 +1842,8 @@
                 "location",
                 "createdAt",
                 "updatedAt",
-                "deletedAt"
+                "deletedAt",
+                "originalFileName"
               ],
               "additionalProperties": false
             }

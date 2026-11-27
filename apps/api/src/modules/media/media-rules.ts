@@ -203,6 +203,28 @@ export function sanitizeFileName(fileName: string): string {
   return cleaned && cleaned.length > 0 ? cleaned.slice(0, 120) : "image";
 }
 
+/**
+ * Metadata-only filename normalisation for Admin search and moderation.
+ *
+ * Unlike {@link sanitizeFileName}, this preserves Unicode and spaces because
+ * the value is never used as an object key or filesystem path. Path segments,
+ * control/format characters and Windows-reserved punctuation are removed; the
+ * result is NFC-normalised and capped to the database/contract limit.
+ */
+export function normalizeOriginalFileName(fileName: string): string {
+  const basename = fileName.split(/[/\\]/u).pop() ?? "";
+  const cleaned = basename
+    .normalize("NFC")
+    .replace(/[\p{Cc}\p{Cf}]/gu, "")
+    .replace(/[<>:"/\\|?*]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/^\.+/u, "")
+    .replace(/[.\s]+$/u, "")
+    .trim();
+  return (cleaned.length > 0 ? cleaned : "image").slice(0, 255);
+}
+
 export function assertSafeMediaKey(key: string): void {
   const segments = key.split("/");
   if (
@@ -277,7 +299,11 @@ export function assertSupportedMotion(args: {
       message: "Live Photo motion clips must be video/quicktime (MOV) or video/mp4.",
     });
   }
-  if (!Number.isInteger(args.sizeBytes) || args.sizeBytes <= 0 || args.sizeBytes > MAX_MOTION_BYTES) {
+  if (
+    !Number.isInteger(args.sizeBytes) ||
+    args.sizeBytes <= 0 ||
+    args.sizeBytes > MAX_MOTION_BYTES
+  ) {
     throw new BadRequestException({
       code: "MEDIA_MOTION_TOO_LARGE",
       message: `Live Photo motion clips must be between 1 byte and ${formatMegabytes(MAX_MOTION_BYTES)}.`,

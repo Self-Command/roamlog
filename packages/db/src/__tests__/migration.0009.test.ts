@@ -14,7 +14,10 @@ const sql = rawSql
   .replace(/\s+/g, " ")
   .trim();
 
-const schema = readFileSync(fileURLToPath(new URL("../../prisma/schema.prisma", import.meta.url)), "utf8");
+const schema = readFileSync(
+  fileURLToPath(new URL("../../prisma/schema.prisma", import.meta.url)),
+  "utf8",
+);
 
 describe("0009_media_motion migration", () => {
   it("sorts after 0008 (0010 superseded it as the newest migration)", () => {
@@ -52,7 +55,9 @@ describe("0009_media_motion migration", () => {
   });
 
   it("enforces the 1:1 relation and the cascade delete", () => {
-    expect(sql).toContain('CREATE UNIQUE INDEX "MediaMotion_mediaId_key" ON "MediaMotion"("mediaId")');
+    expect(sql).toContain(
+      'CREATE UNIQUE INDEX "MediaMotion_mediaId_key" ON "MediaMotion"("mediaId")',
+    );
     expect(sql).toContain('FOREIGN KEY ("mediaId") REFERENCES "Media"("id") ON DELETE CASCADE');
   });
 
@@ -85,7 +90,7 @@ describe("0009_media_motion migration", () => {
     expect(schema).toContain("model MediaMotion {");
     // Prisma formatter alignment is not part of the schema contract.
     expect(schema).toMatch(/mediaId\s+String\s+@unique\s+@db\.Uuid/);
-    expect(schema).toContain("motion          MediaMotion?");
+    expect(schema).toMatch(/motion\s+MediaMotion\?/);
     expect(schema).toContain('@@map("MediaMotion")');
   });
 });

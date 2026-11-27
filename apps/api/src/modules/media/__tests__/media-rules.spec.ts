@@ -9,6 +9,7 @@ import {
   assertSupportedMotion,
   buildMediaKey,
   formatMegabytes,
+  normalizeOriginalFileName,
   sanitizeFileName,
 } from "../media-rules.js";
 import { PermissionService } from "../../../common/services/permission.service.js";
@@ -36,6 +37,13 @@ describe("media upload rules", () => {
     expect(key).toBe(
       "01942f30-1200-7000-8000-000000000010/2026/11/01942f30-1200-7000-8000-000000000020/original.jpg",
     );
+  });
+
+  it("keeps a safe Unicode display name without coupling it to the object key", () => {
+    expect(normalizeOriginalFileName("..\\旅行 京都\u0000.jpg")).toBe("旅行 京都.jpg");
+    expect(normalizeOriginalFileName('family<photo>:"summer"?.jpg')).toBe("familyphotosummer.jpg");
+    expect(normalizeOriginalFileName("  .hidden.photo.jpg  ")).toBe("hidden.photo.jpg");
+    expect(normalizeOriginalFileName("x".repeat(400))).toHaveLength(255);
   });
 
   it("rejects traversal or absolute object keys", () => {

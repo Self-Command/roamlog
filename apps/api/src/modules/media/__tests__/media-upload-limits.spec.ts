@@ -18,7 +18,10 @@ import { describe, expect, it, vi } from "vitest";
 import { PermissionService } from "../../../common/services/permission.service.js";
 import type { WorkspaceMembershipAccess } from "../../../common/services/workspace-access.service.js";
 import type { PinoLoggerService } from "../../observability/pino-logger.service.js";
-import type { LimitsRuntime, LimitsSettingsSource } from "../../settings/limits-settings.consumer.js";
+import type {
+  LimitsRuntime,
+  LimitsSettingsSource,
+} from "../../settings/limits-settings.consumer.js";
 import { MediaService } from "../media.service.js";
 import {
   DEFAULT_LIMITS_RUNTIME,
@@ -144,9 +147,7 @@ describe("presign enforces the configured per-file ceiling", () => {
       service.presign(actor, membership(), file({ size: 1_048_576 })),
     ).resolves.toMatchObject({ method: "PUT" });
 
-    const rejected = await codeOf(
-      service.presign(actor, membership(), file({ size: 1_048_577 })),
-    );
+    const rejected = await codeOf(service.presign(actor, membership(), file({ size: 1_048_577 })));
     expect(rejected).toEqual({ status: 422, code: "MEDIA_FILE_TOO_LARGE" });
   });
 
@@ -155,7 +156,9 @@ describe("presign enforces the configured per-file ceiling", () => {
     const { service, repository } = build({ limits: source });
 
     // Default ceiling (25 MiB) accepts a 2 MiB upload...
-    await expect(service.presign(actor, membership(), file({ size: 2 * MiB }))).resolves.toBeTruthy();
+    await expect(
+      service.presign(actor, membership(), file({ size: 2 * MiB })),
+    ).resolves.toBeTruthy();
     expect(repository.createMedia).toHaveBeenCalledTimes(1);
 
     // ...then the operator lowers `limits.uploadMaxFileBytes` to 1 MiB.
@@ -197,13 +200,16 @@ describe("batch presign enforces count, per-file size and batch total", () => {
     expect(new Set(result.items.map((item) => item.mediaId)).size).toBe(3);
     expect(rows).toHaveLength(3);
     expect(rows.map((row) => row.size)).toEqual([1000, 2000, 3000]);
+    expect(rows.map((row) => row.originalFileName)).toEqual(["a.jpg", "b.png", "c.webp"]);
     expect(storage.createPresignedUpload).toHaveBeenCalledTimes(3);
     // All three rows commit together: one `$transaction`, not three.
     expect(transaction).toHaveBeenCalledTimes(1);
   });
 
   it("refuses more files than `limits.uploadMaxFilesPerBatch` with 422", async () => {
-    const { service, repository } = build({ limits: limitsSource({ uploadMaxFilesPerBatch: 20 }).source });
+    const { service, repository } = build({
+      limits: limitsSource({ uploadMaxFilesPerBatch: 20 }).source,
+    });
 
     const rejected = await codeOf(
       service.presignBatch(actor, membership(), {
@@ -451,7 +457,11 @@ describe("per-account presign allowance", () => {
     const headers = new Map<string, string>();
     const context = {
       switchToHttp: () => ({
-        getRequest: () => ({ body: file(), user: { id: USER_ID }, workspaceMembership: membership() }),
+        getRequest: () => ({
+          body: file(),
+          user: { id: USER_ID },
+          workspaceMembership: membership(),
+        }),
         getResponse: () => ({
           setHeader: (name: string, value: string) => headers.set(name, value),
         }),

@@ -26,6 +26,8 @@ export interface MediaRecord {
   uploaderId: string;
   bucket: string;
   key: string;
+  /** Uploader-facing basename; null for rows created before migration 0029. */
+  originalFileName?: string | null;
   mimeType: string;
   size: number;
   width: number | null;

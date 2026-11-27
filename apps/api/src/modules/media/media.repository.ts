@@ -12,6 +12,7 @@ export interface MediaCreateData {
   uploaderId: string;
   bucket: string;
   key: string;
+  originalFileName: string;
   mimeType: string;
   size: number;
   width: number | null;
@@ -129,11 +130,7 @@ export class MediaRepository {
     })) as MediaMotionRecord;
   }
 
-  async softDelete(
-    tx: ContentTransaction,
-    workspaceId: string,
-    mediaId: string,
-  ): Promise<number> {
+  async softDelete(tx: ContentTransaction, workspaceId: string, mediaId: string): Promise<number> {
     const deletedAt = new Date();
     // The paired motion follows the still in the same transaction: leaving it
     // live would keep signing a playable URL for an invisible photo.

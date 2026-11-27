@@ -48,14 +48,12 @@ import {
   assertUploadSizeAllowed,
   buildMediaKey,
   buildMotionKey,
+  normalizeOriginalFileName,
   sanitizeFileName,
 } from "./media-rules.js";
 import type { MediaMotionRecord, MediaRecord } from "./media-records.js";
 import { MediaRepository } from "./media.repository.js";
-import {
-  DEFAULT_LIMITS_RUNTIME,
-  toEffectiveUploadLimits,
-} from "./media-upload-limits.service.js";
+import { DEFAULT_LIMITS_RUNTIME, toEffectiveUploadLimits } from "./media-upload-limits.service.js";
 import { MediaUrlService } from "./media-url.service.js";
 import {
   liveMotion,
@@ -70,10 +68,7 @@ import {
   type LimitsRuntime,
   type LimitsSettingsSource,
 } from "../settings/limits-settings.consumer.js";
-import {
-  assertTripVisible,
-  sortParts,
-} from "../trips/content-values.js";
+import { assertTripVisible, sortParts } from "../trips/content-values.js";
 import { tripVisibilityWhere } from "../trips/trip-access.js";
 import { presentTrip } from "../trips/content-presenters.js";
 import { TripsRepository } from "../trips/trips.repository.js";
@@ -139,6 +134,7 @@ export class MediaService {
     assertUploadSizeAllowed({ size: input.size, maxBytes: limits.maxFileBytes });
     const mime = assertSupportedImage(input.mimeType, input.size, limits.maxFileBytes);
     sanitizeFileName(input.fileName);
+    const originalFileName = normalizeOriginalFileName(input.fileName);
 
     if (input.tripId) {
       const trip = await this.trips.findTrip(membership.workspaceId, input.tripId);
@@ -174,6 +170,7 @@ export class MediaService {
         uploaderId: actor.user.id,
         bucket,
         key,
+        originalFileName,
         mimeType: mime,
         size: input.size,
         width: input.width ?? null,
@@ -246,9 +243,12 @@ export class MediaService {
     }
     assertBatchBytesAllowed({ totalBytes, maxBatchBytes: limits.maxBatchBytes });
 
-    const mimes = input.files.map((file) => {
+    const normalizedFiles = input.files.map((file) => {
       sanitizeFileName(file.fileName);
-      return assertSupportedImage(file.mimeType, file.size, limits.maxFileBytes);
+      return {
+        mimeType: assertSupportedImage(file.mimeType, file.size, limits.maxFileBytes),
+        originalFileName: normalizeOriginalFileName(file.fileName),
+      };
     });
 
     if (input.tripId) {
@@ -268,12 +268,13 @@ export class MediaService {
       const capturedAt = file.date ? new Date(`${file.date}T00:00:00.000Z`) : undefined;
       return {
         mediaId,
-        mime: mimes[index]!,
+        mime: normalizedFiles[index]!.mimeType,
+        originalFileName: normalizedFiles[index]!.originalFileName,
         capturedAt,
         key: buildMediaKey({
           workspaceId: membership.workspaceId,
           mediaId,
-          mimeType: mimes[index]!,
+          mimeType: normalizedFiles[index]!.mimeType,
           variant: "original",
           ...(capturedAt ? { capturedAt } : {}),
         }),
@@ -281,7 +282,9 @@ export class MediaService {
     });
 
     const uploads = await Promise.all(
-      prepared.map((item) => this.storage.createPresignedUpload(item.key, item.mime, undefined, bucket)),
+      prepared.map((item) =>
+        this.storage.createPresignedUpload(item.key, item.mime, undefined, bucket),
+      ),
     );
 
     await this.repository.transaction(async (tx) => {
@@ -295,6 +298,7 @@ export class MediaService {
             uploaderId: actor.user.id,
             bucket,
             key: item.key,
+            originalFileName: item.originalFileName,
             mimeType: item.mime,
             size: file.size,
             width: file.width ?? null,
@@ -567,9 +571,7 @@ export class MediaService {
         workspaceId: membership.workspaceId,
         deletedAt: null,
         ...(query.status ? { status: query.status } : {}),
-        ...(query.tripId
-          ? { tripId: query.tripId }
-          : this.visibilityFilter(membership, actor)),
+        ...(query.tripId ? { tripId: query.tripId } : this.visibilityFilter(membership, actor)),
       },
       orderBy: [{ [field]: direction }, { id: "asc" }],
       ...(cursorId(query.cursor) ? { cursor: cursorId(query.cursor) } : {}),

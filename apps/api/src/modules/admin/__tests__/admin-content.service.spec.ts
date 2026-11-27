@@ -49,6 +49,7 @@ function mediaRecord(overrides: Record<string, unknown> = {}) {
     uploaderId: USER_OWNER_ID,
     bucket: "roamlog-test",
     key: "workspaces/a/photo.jpg",
+    originalFileName: "旅行 京都.jpg",
     mimeType: "image/jpeg",
     size: 1024,
     width: 100,
@@ -85,12 +86,14 @@ describe("AdminContentService", () => {
     const { prisma, service } = setup();
     prisma.client.trip.findMany.mockResolvedValue([]);
 
-    await service.listTrips(
-      makeActor(USER_ADMIN_ID, { platformRole: "admin" }),
-      { workspaceId: WORKSPACE_A_ID, limit: "20" },
-    );
+    await service.listTrips(makeActor(USER_ADMIN_ID, { platformRole: "admin" }), {
+      workspaceId: WORKSPACE_A_ID,
+      limit: "20",
+    });
 
-    const query = prisma.client.trip.findMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+    const query = prisma.client.trip.findMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+    };
     expect(query.where.workspaceId).toBe(WORKSPACE_A_ID);
     expect(query.where.workspaceId).not.toBe(WORKSPACE_B_ID);
   });
@@ -234,10 +237,24 @@ describe("AdminMediaService", () => {
     expect(page.items[0]?.variants.thumb).toMatchObject({
       url: "https://media.spacedo.org/roamlog/workspaces/a/thumb.webp?signature=thumb",
     });
+    expect(page.items[0]?.originalFileName).toBe("旅行 京都.jpg");
     expect(mediaUrls.signKeys).toHaveBeenCalledWith(record, [
       record.key,
       "workspaces/a/thumb.webp",
     ]);
+  });
+
+  it("falls back to the key basename for media created before 0029", async () => {
+    const { prisma, service } = setup();
+    prisma.client.media.findMany.mockResolvedValue([
+      mediaRecord({ originalFileName: null, key: "workspaces/a/legacy-name.jpg" }),
+    ]);
+
+    const page = await service.list(makeActor(USER_ADMIN_ID, { platformRole: "admin" }), {
+      limit: 10,
+    });
+
+    expect(page.items[0]?.originalFileName).toBe("legacy-name.jpg");
   });
 
   it("soft-deletes media and audits the target", async () => {

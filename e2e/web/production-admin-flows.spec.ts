@@ -745,7 +745,7 @@ test("06 media library renders the uploaded image and deletes only that test fil
   test.setTimeout(180_000);
   await gotoAdmin(adminPage, "/admin/media", "媒体库");
   const search = adminPage.getByPlaceholder("文件名或工作区");
-  await search.fill(WORKSPACE_NAME);
+  await search.fill(MEDIA_FILE_NAME);
 
   const card = adminPage
     .locator("article")
@@ -756,7 +756,7 @@ test("06 media library renders the uploaded image and deletes only that test fil
     timeout: 30_000,
   });
   const displayName = (await card.locator("h2").innerText()).trim();
-  expect(displayName.length).toBeGreaterThan(0);
+  expect(displayName).toBe(MEDIA_FILE_NAME);
   await shot(adminPage, "06-media-preview-1440");
 
   await card.getByRole("button", { name: `删除媒体 ${displayName}` }).click();
@@ -774,7 +774,7 @@ test("06 media library renders the uploaded image and deletes only that test fil
   await expect(adminPage.getByRole("heading", { name: "媒体库", level: 1 })).toBeVisible({
     timeout: 30_000,
   });
-  await adminPage.getByPlaceholder("文件名或工作区").fill(WORKSPACE_NAME);
+  await adminPage.getByPlaceholder("文件名或工作区").fill(MEDIA_FILE_NAME);
   await expect(adminPage.getByText("没有匹配媒体")).toBeVisible({ timeout: 30_000 });
 });
 

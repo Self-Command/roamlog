@@ -634,7 +634,7 @@ export function mapAdminMedia(
 ): readonly AdminMediaItem[] {
   return media.map((item) => ({
     id: item.id,
-    fileName: item.key.split("/").at(-1) ?? item.key,
+    fileName: item.originalFileName ?? item.key.split("/").at(-1) ?? item.key,
     workspaceId: item.workspaceId,
     workspaceName: workspaceName(item.workspaceId, workspaces),
     mimeType: item.mimeType,
