@@ -86,6 +86,50 @@ function toolTurn(
   return { text, toolCalls: calls, usage: { inputTokens: 10, outputTokens: 5 } };
 }
 
+const COMPLETE_PLAN_TEXT = [
+  "# 京都五日计划",
+  "## 目标与约束",
+  "- 两个人从上海出发，慢节奏，喜欢古寺和咖啡。",
+  "## 逐日安排",
+  "### 第 1 天（2026-12-10）",
+  "- 上午抵达京都，下午沿鸭川步行。",
+  "### 第 2 天（2026-12-11）",
+  "- 上午清水寺，下午祇园咖啡。",
+  "## 交通与住宿",
+  "- 地铁和步行为主，住京都站附近。",
+  "## 预算",
+  "- 总预算 8000 元，含住宿、交通和餐饮。",
+  "## 风险与备选",
+  "- 热门寺院需要排队，雨天改去博物馆。",
+].join("\n");
+
+/**
+ * Rejects the request shape DeepSeek's non-beta endpoint answers with 400:
+ * a trailing assistant message without `prefix: true`.
+ */
+function strictDeepSeekAdapter(turns: Parameters<typeof scriptedAdapter>[0]) {
+  const scripted = scriptedAdapter(turns);
+  const continuationMessages: Array<AiStepInput["messages"][number]> = [];
+  const adapter: AiProtocolAdapter & { inputs: AiStepInput[] } = {
+    protocol: "openai-chat",
+    inputs: scripted.inputs,
+    async step(input) {
+      if (
+        input.system.includes("Queue the write plan") ||
+        input.system.includes("Complete the write plan")
+      ) {
+        const last = input.messages.at(-1);
+        if (last) continuationMessages.push(last);
+      }
+      if (input.messages.at(-1)?.role === "assistant") {
+        throw new AiUpstreamError("http", 400);
+      }
+      return scripted.step(input);
+    },
+  };
+  return { adapter, continuationMessages };
+}
+
 /**
  * Exercises the planner engine after the human-workflow preconditions are
  * satisfied. Tests in this file cover tool validation/planning; the separate
@@ -470,6 +514,106 @@ describe("AiPlanService plan phase", () => {
     });
     expect(response.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
     expect(runStore.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds a user continuation before a prose-only turn requests the write plan", async () => {
+    const turns = [
+      toolTurn([{ id: "place-1", name: "places.search", input: { q: "京都", limit: 3 } }]),
+      { text: COMPLETE_PLAN_TEXT, toolCalls: [], usage: { inputTokens: 10, outputTokens: 5 } },
+      toolTurn([
+        {
+          id: "trip-1",
+          name: "trips.create",
+          input: {
+            title: "京都五日",
+            startDate: "2026-12-10",
+            endDate: "2026-12-14",
+            budgetAmountMinor: 800_000,
+            budgetCurrency: "CNY",
+          },
+        },
+        {
+          id: "day-1",
+          name: "itinerary.addDay",
+          input: {
+            date: "2026-12-10",
+            title: "第 1 天",
+            items: [{ title: "鸭川散步", time: "14:00", type: "activity" }],
+          },
+        },
+      ]),
+    ];
+    const { adapter, continuationMessages } = strictDeepSeekAdapter(turns);
+    const h = harness(turns, aiSettings(), fixedClock(), adapter);
+
+    const { response } = await confirmedPlan(
+      h,
+      "确认这份京都五日计划，并生成可执行计划。",
+    );
+
+    expect(continuationMessages).toHaveLength(1);
+    expect(continuationMessages[0]).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("Continue the confirmed plan"),
+    });
+    expect(response.plannedCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tool: "trips.create" }),
+        expect.objectContaining({ tool: "itinerary.addDay" }),
+      ]),
+    );
+  });
+
+  it("adds a fresh user continuation for every prose-only completion retry", async () => {
+    const turns = [
+      toolTurn([
+        {
+          id: "trip-1",
+          name: "trips.create",
+          input: {
+            title: "京都五日",
+            startDate: "2026-12-10",
+            endDate: "2026-12-14",
+            budgetAmountMinor: 800_000,
+            budgetCurrency: "CNY",
+          },
+        },
+      ]),
+      { text: COMPLETE_PLAN_TEXT, toolCalls: [], usage: { inputTokens: 10, outputTokens: 5 } },
+      { text: COMPLETE_PLAN_TEXT, toolCalls: [], usage: { inputTokens: 10, outputTokens: 5 } },
+      toolTurn([
+        {
+          id: "day-1",
+          name: "itinerary.addDay",
+          input: {
+            date: "2026-12-10",
+            title: "第 1 天",
+            items: [{ title: "鸭川散步", time: "14:00", type: "activity" }],
+          },
+        },
+      ]),
+    ];
+    const { adapter, continuationMessages } = strictDeepSeekAdapter(turns);
+    const h = harness(turns, aiSettings(), fixedClock(), adapter);
+
+    const { response } = await confirmedPlan(
+      h,
+      "确认这份京都五日计划，并生成可执行计划。",
+    );
+
+    expect(continuationMessages).toHaveLength(2);
+    for (const message of continuationMessages) {
+      expect(message).toMatchObject({
+        role: "user",
+        content: expect.stringContaining("Continue the confirmed plan"),
+      });
+    }
+    expect(response.plannedCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tool: "trips.create" }),
+        expect.objectContaining({ tool: "itinerary.addDay" }),
+      ]),
+    );
   });
 
   it("synthesizes a complete plan before the card and projects bounded details", async () => {

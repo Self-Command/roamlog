@@ -125,6 +125,16 @@ const PLAN_CREATION_COMPLETION_SUFFIX = [
   "You must call trips.create now. Return tool calls only in this completion turn; do not answer with prose and do not stop.",
 ].join("\n");
 
+/**
+ * A system-prompt change alone does not start a new model turn. DeepSeek's
+ * non-beta Chat Completions endpoint rejects a request whose last message is
+ * an assistant message; only its beta prefix-completion endpoint accepts that
+ * shape with `prefix: true`. Every internal completion turn therefore ends
+ * with a real user instruction after the prose-only assistant answer.
+ */
+const COMPLETION_CONTINUATION_PROMPT =
+  "Continue the confirmed plan now. Follow the write-completion instruction in the system message and return the required tool calls only.";
+
 /** Tool subset for the one-shot trip-cascade completion turn. */
 const TRIP_CASCADE_WRITE_TOOLS = new Set([
   "stops.add",
@@ -150,6 +160,27 @@ export class AiAbortedError extends Error {
     super("AI stream aborted by the client.");
     this.name = "AiAbortedError";
   }
+}
+
+function appendCompletionContinuation(
+  messages: AiConversationMessage[],
+  assistantText: string | null,
+): void {
+  const narrative = assistantText?.trim();
+  if (narrative) {
+    messages.push({ role: "assistant", content: narrative, toolCalls: [] });
+  }
+  const last = messages.at(-1);
+  if (last?.role === "user") {
+    messages[messages.length - 1] = {
+      ...last,
+      content: last.content.trim().length
+        ? `${last.content}\n\n${COMPLETION_CONTINUATION_PROMPT}`
+        : COMPLETION_CONTINUATION_PROMPT,
+    };
+    return;
+  }
+  messages.push({ role: "user", content: COMPLETION_CONTINUATION_PROMPT });
 }
 
 /** Everything one planning loop needs; settings/quota are resolved by the caller. */
@@ -1979,11 +2010,7 @@ export class AiPlanService {
           writeCompletionRequested = true;
           writeCompletionCreatesTrip = true;
           writeCompletionAttempts += 1;
-          input.messages.push({
-            role: "assistant",
-            content: turn.text,
-            toolCalls: [],
-          });
+          appendCompletionContinuation(input.messages, turn.text);
           system = `${systemBase}${PLAN_CREATION_COMPLETION_SUFFIX}`;
           continue;
         }
@@ -2001,11 +2028,7 @@ export class AiPlanService {
           writeCompletionRequested = true;
           writeCompletionCreatesTrip = false;
           writeCompletionAttempts += 1;
-          input.messages.push({
-            role: "assistant",
-            content: turn.text,
-            toolCalls: [],
-          });
+          appendCompletionContinuation(input.messages, turn.text);
           system = `${systemBase}${WRITE_COMPLETION_SUFFIX}`;
           continue;
         }
@@ -2018,11 +2041,7 @@ export class AiPlanService {
           describesMultipleDays(turn.text ?? latestCompleteNarrative)
         ) {
           writeCompletionAttempts += 1;
-          input.messages.push({
-            role: "assistant",
-            content: turn.text,
-            toolCalls: [],
-          });
+          appendCompletionContinuation(input.messages, turn.text);
           system = `${systemBase}${WRITE_COMPLETION_SUFFIX}`;
           continue;
         }
